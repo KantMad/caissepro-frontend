@@ -620,7 +620,7 @@ function AppProvider({children}){
   // Sales by seller
   const salesBySeller=useMemo(()=>{const m={};tickets.forEach(t=>{
     const n=t.userName||t.user_name||"?";if(!m[n])m[n]={name:n,count:0,revenue:0,margin:0};
-    m[n].count++;m[n].revenue+=(t.totalTTC||parseFloat(t.total_ttc)||0);m[n].margin+=(t.margin||0);});
+    m[n].count++;m[n].revenue+=(t.totalTTC||parseFloat(t.total_ttc)||0);m[n].margin+=(parseFloat(t.margin)||0);});
     return Object.values(m).sort((a,b)=>b.revenue-a.revenue);},[tickets]);
 
   // Sales by size/color
@@ -674,7 +674,7 @@ function AppProvider({children}){
       const totalTTC=pt.reduce((s,t)=>s+(t.totalTTC||parseFloat(t.total_ttc)||0),0);
       const totalHT=pt.reduce((s,t)=>s+(t.totalHT||parseFloat(t.total_ht)||0),0);
       const totalTVA=pt.reduce((s,t)=>s+(t.totalTVA||parseFloat(t.total_tva)||0),0);
-      const totalMargin=pt.reduce((s,t)=>s+(t.margin||0),0);
+      const totalMargin=pt.reduce((s,t)=>s+(parseFloat(t.margin)||0),0);
       const newGt=gt+totalTTC;
       // NF525: SHA-256 hash chain pour clôtures
       const lastClosureHash=closures.length>0?(closures[0].hash||closures[0].fingerprint||""):"0".repeat(64);
@@ -1524,7 +1524,7 @@ function StatsScreen(){
     const fmt=d=>d.toISOString().split("T")[0];
     return tickets.filter(t=>{const d=(t.date||t.createdAt||t.created_at||"").split("T")[0];return d>=fmt(pFrom)&&d<=fmt(pTo);});},[tickets,dateFrom,dateTo]);
   const stats=useMemo(()=>{const t=fTickets.reduce((s,t)=>s+(t.totalTTC||parseFloat(t.total_ttc)||0),0);const h=fTickets.reduce((s,t)=>s+(t.totalHT||parseFloat(t.total_ht)||0),0);
-    const m=fTickets.reduce((s,t)=>s+(t.margin||0),0);return{tTTC:t,tHT:h,margin:m,avg:fTickets.length?t/fTickets.length:0,count:fTickets.length};},[fTickets]);
+    const m=fTickets.reduce((s,t)=>s+(parseFloat(t.margin)||0),0);return{tTTC:t,tHT:h,margin:m,avg:fTickets.length?t/fTickets.length:0,count:fTickets.length};},[fTickets]);
   const prevStats=useMemo(()=>{const t=prevTickets.reduce((s,t)=>s+(t.totalTTC||parseFloat(t.total_ttc)||0),0);return{tTTC:t,count:prevTickets.length};},[prevTickets]);
   const pctChange=(cur,prev)=>{if(!prev)return null;const pct=((cur-prev)/prev*100);return pct;};
   const PctBadge=({cur,prev})=>{const p=pctChange(cur,prev);if(p===null||!dateFrom)return null;
@@ -1535,7 +1535,7 @@ function StatsScreen(){
     return Object.values(m).sort((a,b)=>b.qty-a.qty);},[fTickets]);
   const fCommissions=useMemo(()=>{const m={};fTickets.forEach(t=>{
     const n=t.userName||t.user_name||"?";if(!m[n])m[n]={name:n,count:0,revenue:0,margin:0};
-    m[n].count++;m[n].revenue+=(t.totalTTC||parseFloat(t.total_ttc)||0);m[n].margin+=(t.margin||0);});
+    m[n].count++;m[n].revenue+=(t.totalTTC||parseFloat(t.total_ttc)||0);m[n].margin+=(parseFloat(t.margin)||0);});
     return Object.values(m).sort((a,b)=>b.revenue-a.revenue).map(s=>({...s,commission:s.margin*0.05,goal:salesGoals[s.name]||0,goalProgress:salesGoals[s.name]?(s.revenue/salesGoals[s.name]*100):0}));},[fTickets,salesGoals]);
   const fByVariant=useMemo(()=>{const bySize={},byColor={};fTickets.forEach(t=>(t.items||[]).forEach(i=>{
     const s=i.variant?.size||i.variant_size||"?";const c=i.variant?.color||i.variant_color||"?";
@@ -2397,7 +2397,7 @@ function ClosureScreen(){
   const cheque=pt.reduce((s,t)=>s+(t.payments?.filter(p=>p.method==="cheque").reduce((a,p)=>a+p.amount,0)||0),0);
   const giftcard=pt.reduce((s,t)=>s+(t.payments?.filter(p=>p.method==="giftcard").reduce((a,p)=>a+p.amount,0)||0),0);
   const totalTTC=pt.reduce((s,t)=>s+(t.totalTTC||parseFloat(t.total_ttc)||0),0);const totalHT=pt.reduce((s,t)=>s+(t.totalHT||parseFloat(t.total_ht)||0),0);
-  const totalTVA=pt.reduce((s,t)=>s+(t.totalTVA||parseFloat(t.total_tva)||0),0);const totalMargin=pt.reduce((s,t)=>s+(t.margin||0),0);
+  const totalTVA=pt.reduce((s,t)=>s+(t.totalTVA||parseFloat(t.total_tva)||0),0);const totalMargin=pt.reduce((s,t)=>s+(parseFloat(t.margin)||0),0);
   const totalReturns=todayAvoirs.reduce((s,a)=>s+(a.totalTTC||parseFloat(a.total_ttc)||0),0);
   const expected=(cashReg?.openingAmount||0)+cash;
   const cashDiff=aCash?(parseFloat(aCash)-expected):null;
@@ -3999,7 +3999,7 @@ function DashboardNav({active,onNav}){
 
 function DashOverview(){
   const{gt,tickets,closures,stockAlerts,bestSellers,perm:p}=useApp();
-  const margin=tickets.reduce((s,t)=>s+(t.margin||0),0);
+  const margin=tickets.reduce((s,t)=>s+(parseFloat(t.margin)||0),0);
   const todayStr=new Date().toISOString().split("T")[0];
   const todayTk=tickets.filter(t=>(t.date||t.createdAt||t.created_at||"").startsWith(todayStr));
   const todayCA=todayTk.reduce((s,t)=>s+(t.totalTTC||parseFloat(t.total_ttc)||0),0);
@@ -4025,7 +4025,7 @@ function DashOverview(){
           <div style={{fontSize:20,fontWeight:900,color:C.primaryDark}}>{todayAvg.toFixed(1)}€</div></div></div></div>
 
     <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:16}}>
-      <SC icon={DollarSign} label="CA (GT)" value={`${gt.toFixed(0)}€`} color={C.primary}/>
+      <SC icon={DollarSign} label="CA (GT)" value={`${(parseFloat(gt)||0).toFixed(0)}€`} color={C.primary}/>
       {p().canViewMargin&&<SC icon={TrendingUp} label="Marge" value={`${margin.toFixed(0)}€`} color="#3B8C5A"/>}
       <SC icon={Receipt} label="Tickets" value={tickets.length} color={C.info}/>
       <SC icon={AlertTriangle} label="Alertes stock" value={stockAlerts.length} color={C.warn}/></div>
