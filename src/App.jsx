@@ -151,13 +151,16 @@ const Numpad=({value,onChange,onEnter,label})=>{
 
 /* ══════════ DATA NORMALIZERS ══════════ */
 /*
- * Variant order system:
- * - Each product has its own variant ordering stored per-product
- * - Key: productSku or productId → array of variant keys (ean or "color|size") in display order
- * - Built from CSV import row order, persisted in localStorage + backend settings
- * - When the normalizer processes a product, it uses this to sort variants
+ * Variant ordering — 2 layers:
+ *  1) CSV import order per product (priority) — stored in variantOrderMap { sku: ["key1","key2",...] }
+ *  2) Global size ranking fallback — stored in sizeRanking { "S":1, "M":2, "L":3, ... }
+ *     Used when a product has NO CSV import order defined.
+ *     Does NOT override the CSV import order.
+ * Both are persisted in localStorage + backend settings.
  */
-let _variantOrderMap=null; // { "PRODUCT_SKU": ["ean1","color|size2",...], ... }
+
+// ─── Per-product CSV import order ───
+let _variantOrderMap=null;
 function getVariantOrderMap(){
   if(_variantOrderMap)return _variantOrderMap;
   try{const s=localStorage.getItem("caissepro_variant_order");if(s){_variantOrderMap=JSON.parse(s);return _variantOrderMap;}}catch(e){}
@@ -166,40 +169,66 @@ function getVariantOrderMap(){
 function saveVariantOrderMap(map){
   _variantOrderMap=map;
   try{localStorage.setItem("caissepro_variant_order",JSON.stringify(map));}catch(e){}
-  // Sync to backend
   try{API.settings.update({variantOrderMap:map}).catch(()=>{});}catch(e){}
 }
-function loadVariantOrderFromSettings(settingsObj){
-  if(settingsObj&&settingsObj.variantOrderMap&&typeof settingsObj.variantOrderMap==="object"){
-    _variantOrderMap=settingsObj.variantOrderMap;
+function loadVariantOrderFromSettings(s){
+  if(s?.variantOrderMap&&typeof s.variantOrderMap==="object"){
+    _variantOrderMap=s.variantOrderMap;
     try{localStorage.setItem("caissepro_variant_order",JSON.stringify(_variantOrderMap));}catch(e){}
   }
+  if(s?.sizeRanking&&typeof s.sizeRanking==="object"){
+    _sizeRanking=s.sizeRanking;
+    try{localStorage.setItem("caissepro_size_ranking",JSON.stringify(_sizeRanking));}catch(e){}
+  }
 }
-function variantKey(v){return v.ean||`${(v.color||"").toLowerCase()}|${(v.size||"").toLowerCase()}`;}
+function variantKey(v){return `${(v.color||"défaut").toLowerCase()}|${(v.size||"tu").toLowerCase()}`;}
 function setProductVariantOrder(productSku,variants){
   const map={...getVariantOrderMap()};
   map[productSku]=variants.map(v=>variantKey(v));
   saveVariantOrderMap(map);
 }
-function getVariantSortIndex(productSku,v){
-  const map=getVariantOrderMap();
-  const order=map[productSku];
-  if(!order)return 9999;
-  const key=variantKey(v);
-  const idx=order.indexOf(key);
-  return idx>=0?idx:9999;
+
+// ─── Global size ranking (fallback) ───
+const DEFAULT_SIZE_RANKING={"XXS":1,"XS":2,"S":3,"M":4,"L":5,"XL":6,"XXL":7,"2XL":7,"3XL":8,"XXXL":8,"4XL":9,"5XL":10,"6XL":11,
+  "TU":0,"U":0,"UNIQUE":0,"34":34,"36":36,"38":38,"40":40,"42":42,"44":44,"46":46,"48":48,"50":50,"52":52};
+let _sizeRanking=null;
+function getSizeRanking(){
+  if(_sizeRanking)return _sizeRanking;
+  try{const s=localStorage.getItem("caissepro_size_ranking");if(s){_sizeRanking=JSON.parse(s);return _sizeRanking;}}catch(e){}
+  _sizeRanking={...DEFAULT_SIZE_RANKING};return _sizeRanking;
 }
+function saveSizeRanking(ranking){
+  _sizeRanking=ranking;
+  try{localStorage.setItem("caissepro_size_ranking",JSON.stringify(ranking));}catch(e){}
+  try{API.settings.update({sizeRanking:ranking}).catch(()=>{});}catch(e){}
+}
+function getSizeRank(size){
+  const r=getSizeRanking();const key=(size||"").toUpperCase().trim();
+  if(r[key]!=null)return r[key];
+  const num=parseFloat(key);if(!isNaN(num))return num;
+  return 9999;
+}
+
+// ─── Normalizer ───
 const norm={
   product(p){
     const sku=p.sku||p.id||"";
+    const csvOrder=(getVariantOrderMap())[sku];// array of keys if CSV import exists for this product
     const variants=(p.variants||[]).map((v,i)=>({...v,stock:parseInt(v.stock||0),stockAlert:parseInt(v.stock_alert||v.stockAlert||5),
       defective:parseInt(v.defective||0)}))
       .sort((a,b)=>{
-        const ia=getVariantSortIndex(sku,a);const ib=getVariantSortIndex(sku,b);
-        if(ia!==ib)return ia-ib;
-        // Fallback: sort_order from DB if present
+        if(csvOrder){
+          // Priority 1: CSV import order for this product
+          const ia=csvOrder.indexOf(variantKey(a));const ib=csvOrder.indexOf(variantKey(b));
+          const sa=ia>=0?ia:9999;const sb=ib>=0?ib:9999;
+          if(sa!==sb)return sa-sb;
+        }
+        // Priority 2: Global size ranking (fallback when no CSV order)
+        const ra=getSizeRank(a.size);const rb=getSizeRank(b.size);
+        if(ra!==rb)return ra-rb;
+        // Priority 3: sort_order from DB
         if(a.sort_order!=null&&b.sort_order!=null)return a.sort_order-b.sort_order;
-        return 0; // keep API order
+        return 0;
       });
     return{...p,price:parseFloat(p.price),costPrice:parseFloat(p.cost_price||p.costPrice||0),
     taxRate:parseFloat(p.tax_rate||p.taxRate||0.20),category:p.category||"",collection:p.collection||"",variants}},
@@ -333,6 +362,8 @@ function AppProvider({children}){
       setProducts(norm.products(prods));setCustomers(norm.customers(custs));setPromos(prms);setSettings(s=>({...s,...setts}));
       // Load variant order mapping from backend settings
       loadVariantOrderFromSettings(setts);
+      // Load CSV column mapping from backend settings
+      if(setts?.csvColumnMapping){try{localStorage.setItem("caissepro_csv_column_mapping",JSON.stringify(setts.csvColumnMapping));}catch(e){}}
       // Synchroniser la liste utilisateurs depuis l'API
       if(apiUsers&&apiUsers.length){const merged=[...apiUsers.map(u=>({id:u.id,name:u.name,role:u.role,pin:"****",apiSynced:true}))];
         const localOnly=users.filter(lu=>!apiUsers.find(au=>au.name===lu.name));
@@ -2633,22 +2664,41 @@ function CSVImportWizard({open,onClose,existingProducts,onImportComplete}){
   const[importResult,setImportResult]=useState(null);
   const[importing,setImporting]=useState(false);
   const[fileName,setFileName]=useState("");
+  const[mappingRestored,setMappingRestored]=useState(false);
   const fileRef=useRef();
 
   const reset=()=>{setStep(0);setRawData([]);setCsvHeaders([]);setMapping({});setParentRefField("sku");
     setUniqueKeyField("ean");setDuplicateAction("update");setProcessed(null);setImportResult(null);setImporting(false);setFileName("");};
   const handleClose=()=>{reset();onClose();};
 
-  // Step 0: File upload
+  // Step 0: File upload — restore saved mapping if column names match
   const handleFile=(e)=>{const file=e.target.files?.[0];if(!file)return;setFileName(file.name);
     Papa.parse(file,{header:true,skipEmptyLines:true,complete:(r)=>{
       setRawData(r.data);setCsvHeaders(r.meta.fields||[]);
-      const auto=csvAutoDetect(r.meta.fields||[]);setMapping(auto);
-      if(auto.sku)setParentRefField("sku");else if(auto.name)setParentRefField("name");
+      // Try to restore saved mapping from last import
+      let restoredMapping=null;
+      try{const saved=localStorage.getItem("caissepro_csv_column_mapping");
+        if(saved){const prev=JSON.parse(saved);
+          // Check if saved mapping columns exist in current file headers
+          const prevValues=Object.values(prev.mapping||{});
+          const matchCount=prevValues.filter(v=>r.meta.fields.includes(v)).length;
+          if(matchCount>=prevValues.length*0.7&&matchCount>=2){
+            restoredMapping=prev.mapping;
+            if(prev.parentRefField)setParentRefField(prev.parentRefField);
+            if(prev.uniqueKeyField)setUniqueKeyField(prev.uniqueKeyField);
+            if(prev.duplicateAction)setDuplicateAction(prev.duplicateAction);
+          }}}catch(e){}
+      if(restoredMapping){setMapping(restoredMapping);setMappingRestored(true);}
+      else{setMappingRestored(false);const auto=csvAutoDetect(r.meta.fields||[]);setMapping(auto);
+        if(auto.sku)setParentRefField("sku");else if(auto.name)setParentRefField("name");}
       setStep(1);}});};
 
-  // Step 2→3: Process data
+  // Step 2→3: Process data — also save column mapping for future imports
   const processData=()=>{
+    // Save mapping to localStorage for next import
+    const csvConfig={mapping,parentRefField,uniqueKeyField,duplicateAction,savedAt:new Date().toISOString()};
+    try{localStorage.setItem("caissepro_csv_column_mapping",JSON.stringify(csvConfig));}catch(e){}
+    try{API.settings.update({csvColumnMapping:csvConfig}).catch(()=>{});}catch(e){}
     const errors=[];const grouped=new Map();
     // Map and validate rows
     rawData.forEach((row,idx)=>{
@@ -2805,6 +2855,8 @@ function CSVImportWizard({open,onClose,existingProducts,onImportComplete}){
 
     {/* Step 1: Column mapping */}
     {step===1&&<div>
+      {mappingRestored&&<div style={{background:C.primaryLight,borderRadius:10,padding:10,marginBottom:12,border:`1.5px solid ${C.primary}33`,display:"flex",alignItems:"center",gap:8}}>
+        <CheckCircle2 size={14} color={C.primary}/><span style={{fontSize:11,color:C.primary,fontWeight:600}}>Mapping restauré depuis votre dernier import. Vérifiez et ajustez si nécessaire.</span></div>}
       <div style={{fontSize:12,color:C.textMuted,marginBottom:12}}>
         <strong>{rawData.length}</strong> lignes détectées avec <strong>{csvHeaders.length}</strong> colonnes. Associez chaque colonne du CSV au champ correspondant.
       </div>
@@ -3149,8 +3201,9 @@ function ProductsScreen(){
 
 /* ══════════ SETTINGS ══════════ */
 function ReturnsHistoryScreen(){
-  const{avoirs,tickets,notify}=useApp();
+  const{avoirs,tickets,notify,settings,setSettings,saveSettingsToAPI,addAudit}=useApp();
   const[filter,setFilter]=useState("all");const[search,setSearch]=useState("");
+  const[tab,setTab]=useState(avoirs.length>0?"history":"settings");
   const sorted=[...avoirs].sort((a,b)=>new Date(b.date)-new Date(a.date));
   const filtered=sorted.filter(a=>{
     if(filter==="avoir"&&a.refundMethod!=="avoir")return false;
@@ -3167,9 +3220,62 @@ function ReturnsHistoryScreen(){
   const methodStats={};avoirs.forEach(a=>{const m=a.refundMethod||"avoir";methodStats[m]=(methodStats[m]||0)+1;});
 
   return(<div style={{height:"100%",overflowY:"auto",padding:20,background:C.bg}}>
-    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16}}>
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
       <div><h2 style={{fontSize:22,fontWeight:800,margin:0}}>Retours & Avoirs</h2>
-        <p style={{fontSize:12,color:C.textMuted,margin:0}}>Historique et statistiques des retours</p></div></div>
+        <p style={{fontSize:12,color:C.textMuted,margin:0}}>Historique, statistiques et paramètres des retours</p></div></div>
+    <div style={{display:"flex",gap:6,marginBottom:14}}>
+      {[{id:"history",l:"📋 Historique"},{id:"settings",l:"⚙️ Paramètres retours"}].map(t=>(
+        <button key={t.id} onClick={()=>setTab(t.id)} style={{padding:"6px 14px",borderRadius:8,border:`1.5px solid ${tab===t.id?C.primary:C.border}`,
+          background:tab===t.id?C.primary:"transparent",color:tab===t.id?"#fff":C.text,fontSize:12,fontWeight:600,cursor:"pointer"}}>{t.l}</button>))}
+    </div>
+
+    {tab==="settings"&&<div style={{maxWidth:600}}>
+      <div style={{background:`linear-gradient(135deg,${C.primaryLight},#DCF0E2)`,borderRadius:16,padding:20,border:`1.5px solid ${C.primary}22`,marginBottom:16}}>
+        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}>
+          <RotateCcw size={20} color={C.primary}/>
+          <div><h3 style={{fontSize:16,fontWeight:800,margin:0}}>Politique de retour</h3>
+            <p style={{fontSize:11,color:C.textMuted,margin:0}}>Configurez les règles de retour et d'échange</p></div></div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:12}}>
+          <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>DÉLAI DE RETOUR (jours)</label>
+            <Input type="number" value={settings.returnPolicy?.days||30} onChange={e=>setSettings(s=>({...s,returnPolicy:{...s.returnPolicy,days:parseInt(e.target.value)||30}}))}/></div>
+          <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>MONTANT MAX SANS APPROBATION (€)</label>
+            <Input type="number" value={settings.returnPolicy?.maxNoApproval||100} onChange={e=>setSettings(s=>({...s,returnPolicy:{...s.returnPolicy,maxNoApproval:parseFloat(e.target.value)||100}}))}/></div></div>
+        <div style={{marginBottom:12}}><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>CONDITIONS DE RETOUR</label>
+          <textarea value={settings.returnPolicy?.conditions||""} onChange={e=>setSettings(s=>({...s,returnPolicy:{...s.returnPolicy,conditions:e.target.value}}))}
+            style={{width:"100%",height:60,padding:10,borderRadius:10,border:`2px solid ${C.border}`,fontSize:12,fontFamily:"inherit",resize:"vertical"}}
+            placeholder="Article non porté, étiquette présente…"/></div>
+      </div>
+      <div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`,marginBottom:14}}>
+        <h4 style={{fontSize:13,fontWeight:700,marginBottom:10}}>Modes de remboursement autorisés</h4>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+          {[{k:"allowAvoir",l:"Avoir / Crédit magasin"},{k:"allowCashRefund",l:"Remboursement espèces"},
+            {k:"allowCardRefund",l:"Remboursement carte"},{k:"allowExchange",l:"Échange article"}].map(opt=>{
+            const val=settings.returnPolicy?.[opt.k]!==false;
+            return(<button key={opt.k} onClick={()=>setSettings(s=>({...s,returnPolicy:{...s.returnPolicy,[opt.k]:!val}}))}
+              style={{padding:10,borderRadius:10,border:`2px solid ${val?C.primary:C.border}`,background:val?`${C.primary}08`:"#fff",cursor:"pointer",textAlign:"left"}}>
+              <div style={{display:"flex",alignItems:"center",gap:6}}>
+                <div style={{width:16,height:16,borderRadius:4,border:`2px solid ${val?C.primary:C.border}`,background:val?C.primary:"transparent",display:"flex",alignItems:"center",justifyContent:"center"}}>
+                  {val&&<Check size={10} color="#fff"/>}</div>
+                <span style={{fontSize:12,fontWeight:600}}>{opt.l}</span></div>
+            </button>);})}
+        </div>
+      </div>
+      <div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`,marginBottom:14}}>
+        <h4 style={{fontSize:13,fontWeight:700,marginBottom:8}}>Options</h4>
+        {[{k:"autoRestock",l:"Remise en stock automatique"},{k:"requireReceipt",l:"Ticket obligatoire"},
+          {k:"printAvoir",l:"Imprimer le ticket d'avoir"},{k:"requireReason",l:"Motif obligatoire"}].map(opt=>{
+          const val=settings.returnPolicy?.[opt.k]!==false;
+          return(<div key={opt.k} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"8px 0",borderBottom:`1px solid ${C.border}`}}>
+            <span style={{fontSize:12,fontWeight:600}}>{opt.l}</span>
+            <button onClick={()=>setSettings(s=>({...s,returnPolicy:{...s.returnPolicy,[opt.k]:!val}}))}
+              style={{width:40,height:22,borderRadius:11,border:"none",cursor:"pointer",background:val?C.primary:C.border,position:"relative",transition:"all 0.2s"}}>
+              <div style={{width:16,height:16,borderRadius:8,background:"#fff",position:"absolute",top:3,left:val?21:3,transition:"all 0.2s",boxShadow:"0 1px 3px rgba(0,0,0,0.15)"}}/></button>
+          </div>);})}
+      </div>
+      <Btn onClick={()=>{saveSettingsToAPI(settings);addAudit("CONFIG","Politique de retour mise à jour");notify("Paramètres sauvegardés","success");}} style={{width:"100%",height:44,background:`linear-gradient(135deg,${C.primary},${C.gradientB})`}}><Save size={14}/> Enregistrer</Btn>
+    </div>}
+
+    {tab==="history"&&<>
 
     <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12,marginBottom:16}}>
       <div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`}}>
@@ -3240,13 +3346,13 @@ function ReturnsHistoryScreen(){
         </div>
       </div>))}
     </div>
+    </>}
   </div>);
 }
 
 function SettingsScreen(){
   const{settings,setSettings,saveSettingsToAPI,addAudit,theme,setTheme,clockEntries,priceHistory,printerConnected,printerType,connectPrinter,disconnectPrinter,thermalPrint,notify}=useApp();
   const[tab,setTab]=useState("general");
-  const[selVariantProd,setSelVariantProd]=useState("");
   const[printerBaud,setPrinterBaud]=useState("9600");
   const[printerWidth,setPrinterWidth]=useState("48");
   const[connecting,setConnecting]=useState(false);
@@ -3422,55 +3528,66 @@ function SettingsScreen(){
     </div>}
 
     {tab==="sizes"&&(()=>{
-      const map=getVariantOrderMap();
-      const productSkus=Object.keys(map);
-      const selProd=selVariantProd||productSkus[0]||"";
-      const currentOrder=map[selProd]||[];
-      const moveVar=(idx,dir)=>{
-        const newOrder=[...currentOrder];const swapIdx=idx+dir;
-        if(swapIdx<0||swapIdx>=newOrder.length)return;
-        [newOrder[idx],newOrder[swapIdx]]=[newOrder[swapIdx],newOrder[idx]];
-        const newMap={...map,[selProd]:newOrder};
-        saveVariantOrderMap(newMap);notify("Ordre mis à jour et synchronisé","success");};
-      const resetAll=()=>{saveVariantOrderMap({});notify("Mapping réinitialisé — sera reconstruit au prochain import CSV","info");};
-      return(<div style={{maxWidth:600}}>
+      const ranking=getSizeRanking();
+      const entries=Object.entries(ranking).sort((a,b)=>a[1]-b[1]);
+      const csvMap=getVariantOrderMap();
+      const csvProductCount=Object.keys(csvMap).length;
+
+      const updateRank=(size,newRank)=>{const r={...ranking,[size]:parseFloat(newRank)||0};saveSizeRanking(r);notify("Ranking sauvegardé","success");};
+      const removeSize=(size)=>{const r={...ranking};delete r[size];saveSizeRanking(r);notify("Taille supprimée","success");};
+      const addSize=()=>{const s=prompt("Nouvelle taille (ex: 3XL, 44, etc.):");if(!s)return;
+        const key=s.toUpperCase().trim();if(ranking[key]!=null){notify("Cette taille existe déjà","error");return;}
+        const maxR=entries.length?Math.max(...entries.map(e=>e[1]))+1:1;
+        const r={...ranking,[key]:maxR};saveSizeRanking(r);notify("Taille ajoutée","success");};
+      const resetToDefault=()=>{saveSizeRanking({...DEFAULT_SIZE_RANKING});notify("Ranking réinitialisé aux valeurs par défaut","info");};
+
+      return(<div style={{maxWidth:650}}>
+        {/* Section 1: Global size ranking */}
         <div style={{background:`linear-gradient(135deg,${C.primaryLight},#DCF0E2)`,borderRadius:16,padding:20,border:`1.5px solid ${C.primary}22`,marginBottom:16}}>
           <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:6}}>
             <Grid size={20} color={C.primary}/>
-            <div><h3 style={{fontSize:16,fontWeight:800,margin:0}}>Ordre des variantes</h3>
-              <p style={{fontSize:11,color:C.textMuted,margin:0}}>L'ordre est défini par l'import CSV de chaque produit. Modifiable manuellement. Synchronisé avec le backend.</p></div></div></div>
+            <div><h3 style={{fontSize:16,fontWeight:800,margin:0}}>Ranking des tailles</h3>
+              <p style={{fontSize:11,color:C.textMuted,margin:0}}>Ordre par défaut des tailles (S=3, M=4, L=5...). Utilisé quand un produit n'a pas d'ordre CSV spécifique.</p></div></div></div>
 
-        {productSkus.length===0?<div style={{textAlign:"center",padding:30,background:C.surface,borderRadius:14,border:`1.5px solid ${C.border}`}}>
-          <Grid size={32} style={{marginBottom:8,opacity:0.3}}/>
-          <div style={{fontSize:14,fontWeight:600,marginBottom:4}}>Aucun mapping de variantes</div>
-          <div style={{fontSize:12,color:C.textMuted}}>Importez un fichier CSV pour que l'ordre des variantes soit automatiquement enregistré.</div>
-        </div>
-        :<div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`,marginBottom:14}}>
+        <div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`,marginBottom:14}}>
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
-            <div style={{display:"flex",alignItems:"center",gap:8}}>
-              <label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>PRODUIT</label>
-              <select value={selProd} onChange={e=>setSelVariantProd(e.target.value)}
-                style={{padding:"6px 10px",borderRadius:8,border:`2px solid ${C.border}`,fontSize:12,fontFamily:"inherit",maxWidth:250}}>
-                {productSkus.map(sku=>(<option key={sku} value={sku}>{sku}</option>))}
-              </select></div>
-            <Btn variant="outline" onClick={resetAll} style={{fontSize:10,padding:"4px 10px",borderColor:C.danger+"44",color:C.danger}}><RotateCcw size={11}/> Tout réinitialiser</Btn></div>
-          <div style={{fontSize:10,color:C.textMuted,marginBottom:8}}>Variantes dans l'ordre d'affichage ({currentOrder.length})</div>
-          <div style={{display:"flex",flexDirection:"column",gap:4}}>
-            {currentOrder.map((vkey,idx)=>(
-              <div key={vkey} style={{display:"flex",alignItems:"center",gap:8,padding:"8px 12px",borderRadius:10,background:C.surfaceAlt,border:`1px solid ${C.border}`}}>
-                <span style={{width:24,textAlign:"center",fontSize:11,fontWeight:700,color:C.textMuted}}>{idx+1}</span>
-                <span style={{flex:1,fontSize:12,fontWeight:600,fontFamily:"monospace"}}>{vkey.includes("|")?vkey.replace("|"," / "):vkey}</span>
-                <button onClick={()=>moveVar(idx,-1)} disabled={idx===0} style={{width:26,height:26,borderRadius:7,border:`1px solid ${C.border}`,background:idx===0?"transparent":C.surface,cursor:idx===0?"default":"pointer",display:"flex",alignItems:"center",justifyContent:"center",opacity:idx===0?0.3:1,fontSize:12}}>↑</button>
-                <button onClick={()=>moveVar(idx,1)} disabled={idx===currentOrder.length-1} style={{width:26,height:26,borderRadius:7,border:`1px solid ${C.border}`,background:idx===currentOrder.length-1?"transparent":C.surface,cursor:idx===currentOrder.length-1?"default":"pointer",display:"flex",alignItems:"center",justifyContent:"center",opacity:idx===currentOrder.length-1?0.3:1,fontSize:12}}>↓</button>
+            <h4 style={{fontSize:13,fontWeight:700,margin:0}}>Tailles et positions ({entries.length})</h4>
+            <div style={{display:"flex",gap:6}}>
+              <Btn variant="outline" onClick={addSize} style={{fontSize:10,padding:"4px 10px"}}><Plus size={11}/> Ajouter</Btn>
+              <Btn variant="outline" onClick={resetToDefault} style={{fontSize:10,padding:"4px 10px",borderColor:C.danger+"44",color:C.danger}}><RotateCcw size={11}/> Défaut</Btn></div></div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(120px,1fr))",gap:6}}>
+            {entries.map(([size,rank])=>(
+              <div key={size} style={{display:"flex",alignItems:"center",gap:6,padding:"6px 10px",borderRadius:10,background:C.surfaceAlt,border:`1px solid ${C.border}`}}>
+                <span style={{fontSize:13,fontWeight:700,minWidth:40}}>{size}</span>
+                <span style={{fontSize:10,color:C.textMuted}}>=</span>
+                <input type="number" value={rank} onChange={e=>updateRank(size,e.target.value)}
+                  style={{width:45,padding:"3px 5px",borderRadius:6,border:`1.5px solid ${C.border}`,fontSize:12,fontWeight:600,textAlign:"center",fontFamily:"inherit"}}/>
+                <button onClick={()=>removeSize(size)} style={{width:20,height:20,borderRadius:5,border:"none",background:C.dangerLight,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><X size={10} color={C.danger}/></button>
               </div>))}
+          </div>
+        </div>
+
+        {/* Section 2: CSV product orders */}
+        {csvProductCount>0&&<div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`,marginBottom:14}}>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
+            <div><h4 style={{fontSize:13,fontWeight:700,margin:0}}>Ordre CSV par produit</h4>
+              <p style={{fontSize:10,color:C.textMuted,margin:0}}>{csvProductCount} produit(s) avec un ordre CSV spécifique (prioritaire sur le ranking)</p></div>
+            <Btn variant="outline" onClick={()=>{saveVariantOrderMap({});notify("Ordres CSV réinitialisés","info");}} style={{fontSize:10,padding:"4px 10px",borderColor:C.danger+"44",color:C.danger}}><RotateCcw size={11}/> Effacer CSV</Btn></div>
+          <div style={{maxHeight:150,overflowY:"auto"}}>
+            {Object.entries(csvMap).slice(0,20).map(([sku,order])=>(
+              <div key={sku} style={{display:"flex",alignItems:"center",gap:8,padding:"4px 0",borderBottom:`1px solid ${C.border}`,fontSize:11}}>
+                <span style={{fontWeight:700,minWidth:100}}>{sku}</span>
+                <span style={{color:C.textMuted,flex:1}}>{order.map(k=>k.includes("|")?k.split("|")[1]:k).join(" → ")}</span>
+              </div>))}
+            {csvProductCount>20&&<div style={{fontSize:10,color:C.textMuted,padding:6}}>… et {csvProductCount-20} autres</div>}
           </div>
         </div>}
 
-        <div style={{background:C.infoLight,borderRadius:12,padding:14,border:`1px solid ${C.info}33`,display:"flex",gap:10,alignItems:"start"}}>
-          <Database size={16} color={C.info} style={{flexShrink:0,marginTop:2}}/>
-          <div style={{fontSize:11,color:C.info,lineHeight:1.5}}>
-            <strong>Synchronisation :</strong> L'ordre des variantes est sauvegardé localement ET envoyé au backend (settings).
-            À chaque connexion, le mapping est rechargé depuis le serveur. Un import CSV reconstruit l'ordre depuis le fichier.</div></div>
+        <div style={{background:C.warnLight,borderRadius:12,padding:14,border:`1px solid ${C.warn}33`,display:"flex",gap:10,alignItems:"start"}}>
+          <AlertTriangle size={16} color={C.warn} style={{flexShrink:0,marginTop:2}}/>
+          <div style={{fontSize:11,color:"#92400E",lineHeight:1.5}}>
+            <strong>Priorité :</strong> L'import CSV définit l'ordre pour chaque produit importé (prioritaire). Pour les produits sans import CSV, le ranking ci-dessus est utilisé (S avant M avant L, etc.).
+            Tout est synchronisé avec le backend.</div></div>
       </div>);})()}
 
     {tab==="theme"&&<div style={{maxWidth:500}}>
