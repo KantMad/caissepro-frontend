@@ -150,39 +150,57 @@ const Numpad=({value,onChange,onEnter,label})=>{
     </div></div>);};
 
 /* ══════════ DATA NORMALIZERS ══════════ */
-// Size order mapping — loaded from localStorage, synced to backend settings, built from CSV import order
-let _sizeOrderMap=null;
-function getSizeOrderMap(){
-  if(_sizeOrderMap)return _sizeOrderMap;
-  try{const s=localStorage.getItem("caissepro_size_order");if(s){_sizeOrderMap=JSON.parse(s);return _sizeOrderMap;}}catch(e){}
+/*
+ * Variant order system:
+ * - Each product has its own variant ordering stored per-product
+ * - Key: productSku or productId → array of variant keys (ean or "color|size") in display order
+ * - Built from CSV import row order, persisted in localStorage + backend settings
+ * - When the normalizer processes a product, it uses this to sort variants
+ */
+let _variantOrderMap=null; // { "PRODUCT_SKU": ["ean1","color|size2",...], ... }
+function getVariantOrderMap(){
+  if(_variantOrderMap)return _variantOrderMap;
+  try{const s=localStorage.getItem("caissepro_variant_order");if(s){_variantOrderMap=JSON.parse(s);return _variantOrderMap;}}catch(e){}
   return{};
 }
-function saveSizeOrderMap(map,syncToAPI=true){
-  _sizeOrderMap=map;
-  try{localStorage.setItem("caissepro_size_order",JSON.stringify(map));}catch(e){}
-  // Also sync to backend settings so it persists across devices
-  if(syncToAPI){try{API.settings.update({sizeOrderMap:map}).catch(()=>{});}catch(e){}}
+function saveVariantOrderMap(map){
+  _variantOrderMap=map;
+  try{localStorage.setItem("caissepro_variant_order",JSON.stringify(map));}catch(e){}
+  // Sync to backend
+  try{API.settings.update({variantOrderMap:map}).catch(()=>{});}catch(e){}
 }
-function loadSizeOrderFromSettings(settingsObj){
-  if(settingsObj&&settingsObj.sizeOrderMap&&typeof settingsObj.sizeOrderMap==="object"){
-    _sizeOrderMap=settingsObj.sizeOrderMap;
-    try{localStorage.setItem("caissepro_size_order",JSON.stringify(_sizeOrderMap));}catch(e){}
+function loadVariantOrderFromSettings(settingsObj){
+  if(settingsObj&&settingsObj.variantOrderMap&&typeof settingsObj.variantOrderMap==="object"){
+    _variantOrderMap=settingsObj.variantOrderMap;
+    try{localStorage.setItem("caissepro_variant_order",JSON.stringify(_variantOrderMap));}catch(e){}
   }
 }
-function updateSizeOrderFromVariants(variants,rebuild=false){
-  const map=rebuild?{}:{...getSizeOrderMap()};
-  let changed=false;let maxIdx=Object.values(map).reduce((m,v)=>Math.max(m,v),-1);
-  variants.forEach(v=>{const key=(v.size||"").toUpperCase().trim();
-    if(rebuild){if(key&&map[key]===undefined){maxIdx++;map[key]=maxIdx;changed=true;}}
-    else{if(key&&map[key]===undefined){maxIdx++;map[key]=maxIdx;changed=true;}}
-  });
-  if(changed||rebuild)saveSizeOrderMap(map);return map;
+function variantKey(v){return v.ean||`${(v.color||"").toLowerCase()}|${(v.size||"").toLowerCase()}`;}
+function setProductVariantOrder(productSku,variants){
+  const map={...getVariantOrderMap()};
+  map[productSku]=variants.map(v=>variantKey(v));
+  saveVariantOrderMap(map);
 }
-const sizeIdx=(s)=>{const map=getSizeOrderMap();const key=(s||"").toUpperCase().trim();
-  return map[key]!==undefined?map[key]:9000+((s||"").charCodeAt(0)||0);};
+function getVariantSortIndex(productSku,v){
+  const map=getVariantOrderMap();
+  const order=map[productSku];
+  if(!order)return 9999;
+  const key=variantKey(v);
+  const idx=order.indexOf(key);
+  return idx>=0?idx:9999;
+}
 const norm={
-  product(p){const variants=(p.variants||[]).map((v,i)=>({...v,stock:parseInt(v.stock||0),stockAlert:parseInt(v.stock_alert||v.stockAlert||5),
-      defective:parseInt(v.defective||0),_importIdx:v._importIdx??v.sortOrder??i})).sort((a,b)=>sizeIdx(a.size)-sizeIdx(b.size));
+  product(p){
+    const sku=p.sku||p.id||"";
+    const variants=(p.variants||[]).map((v,i)=>({...v,stock:parseInt(v.stock||0),stockAlert:parseInt(v.stock_alert||v.stockAlert||5),
+      defective:parseInt(v.defective||0)}))
+      .sort((a,b)=>{
+        const ia=getVariantSortIndex(sku,a);const ib=getVariantSortIndex(sku,b);
+        if(ia!==ib)return ia-ib;
+        // Fallback: sort_order from DB if present
+        if(a.sort_order!=null&&b.sort_order!=null)return a.sort_order-b.sort_order;
+        return 0; // keep API order
+      });
     return{...p,price:parseFloat(p.price),costPrice:parseFloat(p.cost_price||p.costPrice||0),
     taxRate:parseFloat(p.tax_rate||p.taxRate||0.20),category:p.category||"",collection:p.collection||"",variants}},
   customer(c){return{...c,firstName:c.first_name||c.firstName,lastName:c.last_name||c.lastName,
@@ -313,8 +331,8 @@ function AppProvider({children}){
     try{const res=await API.auth.login(n,pw);API.setToken(res.token);setCurrentUser(res.user);
       const[prods,custs,prms,setts,apiUsers]=await Promise.all([API.products.list(),API.customers.list(),API.settings.promos(),API.settings.get(),API.auth.users().catch(()=>null)]);
       setProducts(norm.products(prods));setCustomers(norm.customers(custs));setPromos(prms);setSettings(s=>({...s,...setts}));
-      // Load size order mapping from backend settings
-      loadSizeOrderFromSettings(setts);
+      // Load variant order mapping from backend settings
+      loadVariantOrderFromSettings(setts);
       // Synchroniser la liste utilisateurs depuis l'API
       if(apiUsers&&apiUsers.length){const merged=[...apiUsers.map(u=>({id:u.id,name:u.name,role:u.role,pin:"****",apiSynced:true}))];
         const localOnly=users.filter(lu=>!apiUsers.find(au=>au.name===lu.name));
@@ -2692,16 +2710,20 @@ function CSVImportWizard({open,onClose,existingProducts,onImportComplete}){
   // Step 3→4: Execute import
   const executeImport=async()=>{
     if(!processed)return;setImporting(true);
-    // Build size order mapping from CSV import order (preserves the order sizes appear in the file)
-    // Include ALL variants (new + updated) to capture the full size order from the CSV
-    const allVariants=processed.newProducts.flatMap(p=>p.variants)
-      .concat(processed.updates.flatMap(u=>[...u.updatedVariants,...u.newVariants]));
-    updateSizeOrderFromVariants(allVariants);
+    // Save variant display order per product — matches the CSV row order exactly
+    for(const p of processed.newProducts){
+      setProductVariantOrder(p.sku||p.name,p.variants);
+    }
+    for(const u of processed.updates){
+      // Rebuild variant order: all variants from CSV in their file order
+      const allVars=[...u.updatedVariants,...u.newVariants];
+      setProductVariantOrder(u.existing.sku||u.existing.name,allVars);
+    }
     const results={created:0,updated:0,skipped:processed.skipped.length,errors:[]};
     // Create new products
     for(const p of processed.newProducts){
       try{await API.products.create({name:p.name,sku:p.sku,price:p.price,costPrice:p.costPrice,taxRate:p.taxRate,
-        category:p.category,collection:p.collection,variants:p.variants.map(v=>({color:v.color,size:v.size,ean:v.ean,stock:v.stock,defective:0,stockAlert:v.stockAlert}))});
+        category:p.category,collection:p.collection,variants:p.variants.map((v,i)=>({color:v.color,size:v.size,ean:v.ean,stock:v.stock,defective:0,stockAlert:v.stockAlert,sort_order:i}))});
         results.created++;}catch(e){results.errors.push({name:p.name,error:e.message});}
     }
     // Update existing products — 3 steps: product fields, variant stock, new variants
@@ -2732,7 +2754,8 @@ function CSVImportWizard({open,onClose,existingProducts,onImportComplete}){
 
       // Step 3: Add new variants
       for(const v of u.newVariants){
-        try{await API.products.addVariant(u.existing.id,{color:v.color,size:v.size,ean:v.ean,stock:v.stock,defective:0,stockAlert:v.stockAlert});
+        try{const sortIdx=u.updatedVariants.length+u.newVariants.indexOf(v);
+          await API.products.addVariant(u.existing.id,{color:v.color,size:v.size,ean:v.ean,stock:v.stock,defective:0,stockAlert:v.stockAlert,sort_order:sortIdx});
           anySuccess=true;}catch(e){console.warn(`CSV update: addVariant failed for ${v.size}/${v.color}:`,e.message);}
       }
 
@@ -3223,6 +3246,7 @@ function ReturnsHistoryScreen(){
 function SettingsScreen(){
   const{settings,setSettings,saveSettingsToAPI,addAudit,theme,setTheme,clockEntries,priceHistory,printerConnected,printerType,connectPrinter,disconnectPrinter,thermalPrint,notify}=useApp();
   const[tab,setTab]=useState("general");
+  const[selVariantProd,setSelVariantProd]=useState("");
   const[printerBaud,setPrinterBaud]=useState("9600");
   const[printerWidth,setPrinterWidth]=useState("48");
   const[connecting,setConnecting]=useState(false);
@@ -3398,57 +3422,55 @@ function SettingsScreen(){
     </div>}
 
     {tab==="sizes"&&(()=>{
-      const map=getSizeOrderMap();
-      const entries=Object.entries(map).sort((a,b)=>a[1]-b[1]);
-      const moveSize=(idx,dir)=>{
-        const newEntries=[...entries];const swapIdx=idx+dir;
-        if(swapIdx<0||swapIdx>=newEntries.length)return;
-        [newEntries[idx],newEntries[swapIdx]]=[newEntries[swapIdx],newEntries[idx]];
-        const newMap={};newEntries.forEach(([k],i)=>newMap[k]=i);
-        saveSizeOrderMap(newMap);notify("Ordre mis à jour","success");setTab("sizes");/*force re-render*/};
-      const removeSize=(key)=>{const newMap={...map};delete newMap[key];
-        const reindexed={};Object.entries(newMap).sort((a,b)=>a[1]-b[1]).forEach(([k],i)=>reindexed[k]=i);
-        saveSizeOrderMap(reindexed);notify("Taille supprimée","success");setTab("sizes");};
-      const addSize=()=>{const s=prompt("Nouvelle taille (ex: 3XL, 44, etc.):");if(!s)return;
-        const key=s.toUpperCase().trim();if(map[key]!==undefined){notify("Cette taille existe déjà","error");return;}
-        const newMap={...map,[key]:entries.length};saveSizeOrderMap(newMap);notify("Taille ajoutée","success");setTab("sizes");};
-      const resetOrder=()=>{saveSizeOrderMap({});notify("Mapping réinitialisé — sera reconstruit au prochain import CSV","info");setTab("sizes");};
+      const map=getVariantOrderMap();
+      const productSkus=Object.keys(map);
+      const selProd=selVariantProd||productSkus[0]||"";
+      const currentOrder=map[selProd]||[];
+      const moveVar=(idx,dir)=>{
+        const newOrder=[...currentOrder];const swapIdx=idx+dir;
+        if(swapIdx<0||swapIdx>=newOrder.length)return;
+        [newOrder[idx],newOrder[swapIdx]]=[newOrder[swapIdx],newOrder[idx]];
+        const newMap={...map,[selProd]:newOrder};
+        saveVariantOrderMap(newMap);notify("Ordre mis à jour et synchronisé","success");};
+      const resetAll=()=>{saveVariantOrderMap({});notify("Mapping réinitialisé — sera reconstruit au prochain import CSV","info");};
       return(<div style={{maxWidth:600}}>
         <div style={{background:`linear-gradient(135deg,${C.primaryLight},#DCF0E2)`,borderRadius:16,padding:20,border:`1.5px solid ${C.primary}22`,marginBottom:16}}>
           <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:6}}>
             <Grid size={20} color={C.primary}/>
-            <div><h3 style={{fontSize:16,fontWeight:800,margin:0}}>Ordre des tailles</h3>
-              <p style={{fontSize:11,color:C.textMuted,margin:0}}>L'ordre est construit automatiquement depuis vos imports CSV. Vous pouvez le modifier manuellement.</p></div></div></div>
+            <div><h3 style={{fontSize:16,fontWeight:800,margin:0}}>Ordre des variantes</h3>
+              <p style={{fontSize:11,color:C.textMuted,margin:0}}>L'ordre est défini par l'import CSV de chaque produit. Modifiable manuellement. Synchronisé avec le backend.</p></div></div></div>
 
-        {entries.length===0?<div style={{textAlign:"center",padding:30,background:C.surface,borderRadius:14,border:`1.5px solid ${C.border}`}}>
+        {productSkus.length===0?<div style={{textAlign:"center",padding:30,background:C.surface,borderRadius:14,border:`1.5px solid ${C.border}`}}>
           <Grid size={32} style={{marginBottom:8,opacity:0.3}}/>
-          <div style={{fontSize:14,fontWeight:600,marginBottom:4}}>Aucun mapping de tailles</div>
-          <div style={{fontSize:12,color:C.textMuted,marginBottom:12}}>Importez un fichier CSV de produits pour construire automatiquement l'ordre des tailles, ou ajoutez-les manuellement.</div>
-          <Btn onClick={addSize} style={{background:`linear-gradient(135deg,${C.primary},${C.gradientB})`}}><Plus size={14}/> Ajouter une taille</Btn>
+          <div style={{fontSize:14,fontWeight:600,marginBottom:4}}>Aucun mapping de variantes</div>
+          <div style={{fontSize:12,color:C.textMuted}}>Importez un fichier CSV pour que l'ordre des variantes soit automatiquement enregistré.</div>
         </div>
         :<div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`,marginBottom:14}}>
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
-            <h4 style={{fontSize:13,fontWeight:700,margin:0}}>Tailles ({entries.length})</h4>
-            <div style={{display:"flex",gap:6}}>
-              <Btn variant="outline" onClick={addSize} style={{fontSize:10,padding:"4px 10px"}}><Plus size={11}/> Ajouter</Btn>
-              <Btn variant="outline" onClick={resetOrder} style={{fontSize:10,padding:"4px 10px",borderColor:C.danger+"44",color:C.danger}}><RotateCcw size={11}/> Réinitialiser</Btn></div></div>
+            <div style={{display:"flex",alignItems:"center",gap:8}}>
+              <label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>PRODUIT</label>
+              <select value={selProd} onChange={e=>setSelVariantProd(e.target.value)}
+                style={{padding:"6px 10px",borderRadius:8,border:`2px solid ${C.border}`,fontSize:12,fontFamily:"inherit",maxWidth:250}}>
+                {productSkus.map(sku=>(<option key={sku} value={sku}>{sku}</option>))}
+              </select></div>
+            <Btn variant="outline" onClick={resetAll} style={{fontSize:10,padding:"4px 10px",borderColor:C.danger+"44",color:C.danger}}><RotateCcw size={11}/> Tout réinitialiser</Btn></div>
+          <div style={{fontSize:10,color:C.textMuted,marginBottom:8}}>Variantes dans l'ordre d'affichage ({currentOrder.length})</div>
           <div style={{display:"flex",flexDirection:"column",gap:4}}>
-            {entries.map(([size,order],idx)=>(
-              <div key={size} style={{display:"flex",alignItems:"center",gap:8,padding:"8px 12px",borderRadius:10,background:C.surfaceAlt,border:`1px solid ${C.border}`}}>
+            {currentOrder.map((vkey,idx)=>(
+              <div key={vkey} style={{display:"flex",alignItems:"center",gap:8,padding:"8px 12px",borderRadius:10,background:C.surfaceAlt,border:`1px solid ${C.border}`}}>
                 <span style={{width:24,textAlign:"center",fontSize:11,fontWeight:700,color:C.textMuted}}>{idx+1}</span>
-                <span style={{flex:1,fontSize:13,fontWeight:700}}>{size}</span>
-                <button onClick={()=>moveSize(idx,-1)} disabled={idx===0} style={{width:28,height:28,borderRadius:8,border:`1px solid ${C.border}`,background:idx===0?"transparent":C.surface,cursor:idx===0?"default":"pointer",display:"flex",alignItems:"center",justifyContent:"center",opacity:idx===0?0.3:1}}>↑</button>
-                <button onClick={()=>moveSize(idx,1)} disabled={idx===entries.length-1} style={{width:28,height:28,borderRadius:8,border:`1px solid ${C.border}`,background:idx===entries.length-1?"transparent":C.surface,cursor:idx===entries.length-1?"default":"pointer",display:"flex",alignItems:"center",justifyContent:"center",opacity:idx===entries.length-1?0.3:1}}>↓</button>
-                <button onClick={()=>removeSize(size)} style={{width:28,height:28,borderRadius:8,border:`1px solid ${C.danger}33`,background:C.dangerLight,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}><X size={12} color={C.danger}/></button>
+                <span style={{flex:1,fontSize:12,fontWeight:600,fontFamily:"monospace"}}>{vkey.includes("|")?vkey.replace("|"," / "):vkey}</span>
+                <button onClick={()=>moveVar(idx,-1)} disabled={idx===0} style={{width:26,height:26,borderRadius:7,border:`1px solid ${C.border}`,background:idx===0?"transparent":C.surface,cursor:idx===0?"default":"pointer",display:"flex",alignItems:"center",justifyContent:"center",opacity:idx===0?0.3:1,fontSize:12}}>↑</button>
+                <button onClick={()=>moveVar(idx,1)} disabled={idx===currentOrder.length-1} style={{width:26,height:26,borderRadius:7,border:`1px solid ${C.border}`,background:idx===currentOrder.length-1?"transparent":C.surface,cursor:idx===currentOrder.length-1?"default":"pointer",display:"flex",alignItems:"center",justifyContent:"center",opacity:idx===currentOrder.length-1?0.3:1,fontSize:12}}>↓</button>
               </div>))}
           </div>
         </div>}
 
-        <div style={{background:C.warnLight,borderRadius:12,padding:14,border:`1px solid ${C.warn}33`,display:"flex",gap:10,alignItems:"start"}}>
-          <AlertTriangle size={16} color={C.warn} style={{flexShrink:0,marginTop:2}}/>
-          <div style={{fontSize:11,color:"#92400E",lineHeight:1.5}}>
-            <strong>Comment ça marche :</strong> L'ordre des tailles est mémorisé lors de l'import CSV. Si votre CSV liste les tailles dans l'ordre S, M, L, XL, 2XL, cet ordre sera conservé pour l'affichage dans la caisse.
-            Vous pouvez réorganiser les tailles avec les flèches ↑↓. Les changements s'appliquent immédiatement à tous les produits.</div></div>
+        <div style={{background:C.infoLight,borderRadius:12,padding:14,border:`1px solid ${C.info}33`,display:"flex",gap:10,alignItems:"start"}}>
+          <Database size={16} color={C.info} style={{flexShrink:0,marginTop:2}}/>
+          <div style={{fontSize:11,color:C.info,lineHeight:1.5}}>
+            <strong>Synchronisation :</strong> L'ordre des variantes est sauvegardé localement ET envoyé au backend (settings).
+            À chaque connexion, le mapping est rechargé depuis le serveur. Un import CSV reconstruit l'ordre depuis le fichier.</div></div>
       </div>);})()}
 
     {tab==="theme"&&<div style={{maxWidth:500}}>
