@@ -27,6 +27,13 @@ const CO={name:"Ma Boutique Textile",address:"12 rue de la Mode",postalCode:"750
 const DEFAULT_TVA_RATES=[{id:"normal",label:"Normal 20%",rate:0.20},{id:"inter",label:"Intermédiaire 10%",rate:0.10},{id:"reduit",label:"Réduit 5,5%",rate:0.055}];
 let TVA_RATES=[...DEFAULT_TVA_RATES];
 
+/* ══════════ PRICING MODE HELPERS ══════════ */
+// pricingMode: "TTC" = prices stored are TTC, "HT" = prices stored are HT
+// When TTC: HT = price / (1 + taxRate), TVA = price - HT
+// When HT:  TVA = price * taxRate, TTC = price + TVA
+const getPriceHT=(price,taxRate,mode)=>mode==="TTC"?price/(1+(taxRate||0.20)):price;
+const getPriceTTC=(price,taxRate,mode)=>mode==="TTC"?price:price*(1+(taxRate||0.20));
+
 /* ══════════ PERMISSIONS ══════════ */
 const PERMS={
   admin:{maxDiscount:100,canVoid:true,canExport:true,canSettings:true,canCloseZ:true,canCreateProduct:true,canViewMargin:true,canManagePromos:true},
@@ -161,8 +168,12 @@ class ErrorBoundary extends Component{
   componentDidCatch(e,info){console.error("BOUNDARY_CATCH:",e.message,e.stack);this.setState({info});}
   render(){if(this.state.hasError)return(<div style={{padding:40,background:"#FFF0F0",margin:20,borderRadius:16,border:"2px solid #D1453B"}}>
     <h2 style={{color:"#D1453B",margin:"0 0 10px"}}>Erreur détectée</h2>
-    <pre style={{fontSize:12,whiteSpace:"pre-wrap",color:"#333",background:"#fff",padding:12,borderRadius:8}}>{this.state.error?.message}{"\n"}{this.state.error?.stack}</pre>
-    <button onClick={()=>this.setState({hasError:false,error:null})} style={{marginTop:12,padding:"8px 16px",background:"#D1453B",color:"#fff",border:"none",borderRadius:8,cursor:"pointer"}}>Réessayer</button>
+    <pre style={{fontSize:12,whiteSpace:"pre-wrap",color:"#333",background:"#fff",padding:12,borderRadius:8,maxHeight:200,overflowY:"auto"}}>{this.state.error?.message}</pre>
+    <div style={{display:"flex",gap:10,marginTop:14}}>
+      <button onClick={()=>this.setState({hasError:false,error:null})} style={{padding:"10px 20px",background:"#2B6E44",color:"#fff",border:"none",borderRadius:10,cursor:"pointer",fontWeight:600,fontSize:13,fontFamily:"inherit"}}>
+        ← Retour</button>
+      <button onClick={()=>{this.setState({hasError:false,error:null});window.location.reload();}} style={{padding:"10px 20px",background:"#D1453B",color:"#fff",border:"none",borderRadius:10,cursor:"pointer",fontWeight:600,fontSize:13,fontFamily:"inherit"}}>
+        Recharger la page</button></div>
   </div>);return this.props.children;}
 }
 
@@ -214,7 +225,7 @@ function AppProvider({children}){
   const[promos,setPromos]=useState(initPromos);
   const[parked,setParked]=useState([]);const[selCust,setSelCust]=useState(null);
   const[stockMoves,setStockMoves]=useState([]);
-  const[settings,setSettings]=useState({...CO,loyaltyTiers:LOYALTY_TIERS,returnPolicy:{days:30,conditions:"Article non porté, étiquette présente"}});
+  const[settings,setSettings]=useState({...CO,loyaltyTiers:LOYALTY_TIERS,returnPolicy:{days:30,conditions:"Article non porté, étiquette présente"},pricingMode:"TTC"});
   const[saleNote,setSaleNote]=useState("");
   const[clockEntries,setClockEntries]=useState([]);
   const[priceHistory,setPriceHistory]=useState([]);
@@ -313,8 +324,10 @@ function AppProvider({children}){
   // ══ CHECKOUT — API ou fallback local ══
   const checkout=useCallback(async(payments)=>{
     if(!cart.length)return null;
+    const pm=settings.pricingMode||"TTC";
     const items=cart.map(i=>{
-      const lineHT=i.product.price*i.quantity*(1-i.discount/100);
+      const rawPrice=i.product.price*i.quantity*(1-i.discount/100);
+      const lineHT=pm==="TTC"?rawPrice/(1+(i.product.taxRate||0.20)):rawPrice;
       const lineTVA=lineHT*(i.product.taxRate||0.20);
       const lineTTC=lineHT+lineTVA;
       return{
@@ -327,12 +340,12 @@ function AppProvider({children}){
       variant:i.variant?{id:i.variant.id,color:i.variant.color,size:i.variant.size}:null,
       discount:i.discount||0
     };});
-    const sHT=cart.reduce((s,i)=>s+(i.product.price*i.quantity*(1-i.discount/100)),0);
+    const sHT=items.reduce((s,i)=>s+i.lineHT,0);
     let gd=gDiscType==="percentage"?sHT*(gDisc/100):Math.min(gDisc,sHT);
     const{promoDisc,applied}=calcPromoDiscount(cart);
     gd+=promoDisc;gd=Math.min(gd,sHT);
     const tHT=sHT-gd;
-    const tTVA=cart.reduce((s,i)=>{const lHT=i.product.price*i.quantity*(1-i.discount/100);return s+lHT*i.product.taxRate;},0)*(tHT/sHT||0);
+    const tTVA=items.reduce((s,i)=>s+i.lineTVA,0)*(tHT/sHT||0);
     const tTTC=Math.max(0,tHT+tTVA-avoirPayment);
 
     // Essai API d'abord
@@ -378,7 +391,7 @@ function AppProvider({children}){
       addStockMove("VENTE",{name:"Panier",sku:"—"},{color:"—",size:"—"},-cart.reduce((s,i)=>s+i.quantity,0),ticketNumber);
       notify("Vente enregistrée (hors-ligne)","warn");return ticket;
     }
-  },[cart,gDisc,gDiscType,currentUser,selCust,calcPromoDiscount,promoCode,saleNote,cashReg,tSeq,gt,avoirPayment,addStockMove,notify]);
+  },[cart,gDisc,gDiscType,currentUser,selCust,calcPromoDiscount,promoCode,saleNote,cashReg,tSeq,gt,avoirPayment,addStockMove,notify,settings.pricingMode]);
 
   // Stock receipt - via API
   const receiveStock=useCallback(async(productId,variantId,qty,supplier)=>{
@@ -502,8 +515,28 @@ function AppProvider({children}){
   // Closures — via API
   const createClosure=useCallback(async(type,aCash,aCard)=>{
     try{const cl=await API.fiscal.closure({type,actualCash:aCash,actualCard:aCard});
-      setClosures(p=>[cl,...p]);addAudit("CLOTURE",`Z ${type}`);return cl;}catch(e){alert("Erreur: "+e.message);return null;}
-  },[addAudit]);
+      setClosures(p=>[cl,...p]);addAudit("CLOTURE",`Z ${type}`);return cl;}catch(e){
+      // Fallback local
+      console.warn("Closure API failed, local fallback:",e.message);
+      const today=new Date().toISOString().split("T")[0];
+      const pt=tickets.filter(t=>(t.date||t.createdAt||t.created_at||"").startsWith(today));
+      const cash=pt.reduce((s,t)=>s+(t.payments?.filter(p=>p.method==="cash").reduce((a,p)=>a+p.amount,0)||0),0);
+      const card=pt.reduce((s,t)=>s+(t.payments?.filter(p=>p.method==="card").reduce((a,p)=>a+p.amount,0)||0),0);
+      const totalTTC=pt.reduce((s,t)=>s+(t.totalTTC||parseFloat(t.total_ttc)||0),0);
+      const totalHT=pt.reduce((s,t)=>s+(t.totalHT||parseFloat(t.total_ht)||0),0);
+      const totalTVA=pt.reduce((s,t)=>s+(t.totalTVA||parseFloat(t.total_tva)||0),0);
+      const totalMargin=pt.reduce((s,t)=>s+(t.margin||0),0);
+      const newGt=gt+totalTTC;
+      const cl={id:`cl-${Date.now()}`,type,period:today,date:new Date().toISOString(),
+        ticketCount:pt.length,totalHT,totalTVA,totalTTC,totalMargin,
+        expectedCash:(cashReg?.openingAmount||0)+cash,actualCash:aCash,actualCard:aCard,
+        grandTotal:newGt,userName:currentUser?.name,
+        fingerprint:Date.now().toString(36).toUpperCase().slice(-8),
+        bySeller:pt.reduce((m,t)=>{const n=t.userName||"?";m[n]=(m[n]||0)+(t.totalTTC||0);return m;},{})};
+      setClosures(p=>[cl,...p]);setGt(newGt);addAudit("CLOTURE",`Z ${type} (local)`);
+      notify("Clôture enregistrée (hors-ligne)","warn");return cl;
+    }
+  },[addAudit,tickets,gt,cashReg,currentUser,notify]);
 
   // Exports — via API
   const exportFEC=useCallback(async()=>{try{await API.fiscal.fec();}catch(e){alert("Erreur: "+e.message);}},[]);
@@ -532,8 +565,18 @@ function AppProvider({children}){
   const findByEAN=useCallback((ean)=>{for(const p of products)for(const v of p.variants)if(v.ean===ean)return{product:p,variant:v};return null;},[products]);
 
   // ══ THERMAL PRINTER ══
+  const printReceiptOnly=useCallback(()=>{
+    const el=document.querySelector("[data-print-receipt]");
+    if(!el){window.print();return;}
+    const w=window.open("","_blank","width=320,height=600");
+    w.document.write(`<html><head><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Courier New',monospace;font-size:11px;padding:8px;width:72mm;max-width:72mm}
+      .receipt-content{width:100%}@media print{@page{size:72mm auto;margin:2mm}}</style></head>
+      <body><div class="receipt-content">${el.innerHTML}</div></body></html>`);
+    w.document.close();w.focus();setTimeout(()=>{w.print();w.close();},300);
+  },[]);
+
   const thermalPrint=useCallback(async(type,data)=>{
-    if(!printer.connected){window.print();return false;}
+    if(!printer.connected){printReceiptOnly();return false;}
     try{
       if(type==="receipt")await printer.printReceipt(data,settings,CO);
       else if(type==="avoir")await printer.printAvoir(data,settings,CO);
@@ -541,8 +584,8 @@ function AppProvider({children}){
       else if(type==="test")await printer.testPrint();
       else if(type==="drawer")await printer.openDrawer();
       notify("🖨️ Impression envoyée");return true;
-    }catch(e){notify("❌ "+e.message,"danger");window.print();return false;}
-  },[settings,notify]);
+    }catch(e){notify("❌ "+e.message,"danger");printReceiptOnly();return false;}
+  },[settings,notify,printReceiptOnly]);
 
   const connectPrinter=useCallback(async(method,options={})=>{
     try{
@@ -855,16 +898,19 @@ function SalesScreen(){
     return matchSearch&&matchCat&&matchFav;}),[products,search,cat,favorites]);
 
   const totals=useMemo(()=>{
-    const sHT=cart.reduce((s,i)=>s+(i.product.price*i.quantity*(1-i.discount/100)),0);
+    const pm=settings.pricingMode||"TTC";
+    const sHT=cart.reduce((s,i)=>{const raw=i.product.price*i.quantity*(1-i.discount/100);
+      return s+(pm==="TTC"?raw/(1+(i.product.taxRate||0.20)):raw);},0);
     let gd=gDiscType==="percentage"?sHT*(gDisc/100):Math.min(gDisc,sHT);
     const{promoDisc,applied}=calcPromoDiscount(cart);
     gd+=promoDisc;gd=Math.min(gd,sHT);
     const tHT=sHT-gd;
     // Per-item TVA
-    const tTVA=cart.reduce((s,i)=>{const lHT=i.product.price*i.quantity*(1-i.discount/100);return s+lHT*i.product.taxRate;},0)*(tHT/sHT||0);
+    const tTVA=cart.reduce((s,i)=>{const raw=i.product.price*i.quantity*(1-i.discount/100);
+      const lHT=pm==="TTC"?raw/(1+(i.product.taxRate||0.20)):raw;return s+lHT*(i.product.taxRate||0.20);},0)*(tHT/sHT||0);
     const tTTC=tHT+tTVA-avoirPayment;
     return{sHT,gd,promoDisc,applied,tHT,tTVA,tTTC:Math.max(0,tTTC)};
-  },[cart,gDisc,gDiscType,calcPromoDiscount,avoirPayment]);
+  },[cart,gDisc,gDiscType,calcPromoDiscount,avoirPayment,settings.pricingMode]);
 
   const[payCard,setPayCard]=useState("");const[payCash,setPayCash]=useState("");const[payGC,setPayGC]=useState("");const[payChq,setPayChq]=useState("");
   const openPay=()=>{setPayCard("");setPayCash("");setPayGC("");setPayChq("");setCashGiven("");setPayModal(true);};
@@ -1204,7 +1250,7 @@ function SalesScreen(){
           <div style={{fontSize:11,fontWeight:600,color:"#3B8C5A",textTransform:"uppercase",letterSpacing:"1px",marginBottom:4}}>Vente confirmée</div>
           <div style={{fontSize:28,fontWeight:900,color:"#2F9E55",letterSpacing:"-1px"}}>{(lastTk.totalTTC||0).toFixed(2)}€</div>
           <div style={{fontSize:12,color:C.textMuted,marginTop:2}}>Paiement {({cash:"Espèces",card:"CB",giftcard:"Cadeau",MIXTE:"Mixte",cheque:"Chèque"})[lastTk.paymentMethod]||lastTk.paymentMethod}</div></div>
-        <div style={{fontFamily:"'Courier New',monospace",fontSize:10,background:"#FAFAF8",borderRadius:12,padding:18,border:`1px solid ${C.border}`,boxShadow:`inset 0 1px 3px ${C.shadow}`}}>
+        <div data-print-receipt style={{fontFamily:"'Courier New',monospace",fontSize:10,background:"#FAFAF8",borderRadius:12,padding:18,border:`1px solid ${C.border}`,boxShadow:`inset 0 1px 3px ${C.shadow}`}}>
         <div style={{textAlign:"center",marginBottom:8}}><div style={{fontSize:12,fontWeight:700}}>{settings.name||CO.name}</div>
           <div>{settings.address}, {settings.postalCode} {settings.city}</div><div>SIRET: {settings.siret} — TVA: {settings.tvaIntra}</div></div>
         <div style={{borderTop:"1px dashed #999",margin:"4px 0"}}/>
@@ -1697,7 +1743,7 @@ function HistoryScreen(){
 
     {/* Ticket detail/reprint modal */}
     <Modal open={!!reprintTk} onClose={()=>setReprintTk(null)} title={`Ticket ${reprintTk?.ticketNumber}`} wide>
-      {reprintTk&&<div style={{fontFamily:"'Courier New',monospace",fontSize:10,background:"#FAFAF8",borderRadius:10,padding:16,border:`1px solid ${C.border}`}}>
+      {reprintTk&&<div data-print-receipt style={{fontFamily:"'Courier New',monospace",fontSize:10,background:"#FAFAF8",borderRadius:10,padding:16,border:`1px solid ${C.border}`}}>
         <div style={{textAlign:"center",marginBottom:6}}><div style={{fontSize:12,fontWeight:700}}>{settings.name||CO.name}</div>
           <div>{settings.address}, {settings.postalCode} {settings.city}</div>
           <div>SIRET: {settings.siret||CO.siret} — TVA: {settings.tvaIntra||CO.tvaIntra}</div></div>
@@ -1778,7 +1824,7 @@ function HistoryScreen(){
 
     {/* Avoir detail modal */}
     <Modal open={!!avoirDetail} onClose={()=>setAvoirDetail(null)} title={`Avoir ${avoirDetail?.avoirNumber}`} wide>
-      {avoirDetail&&<div style={{fontFamily:"'Courier New',monospace",fontSize:10,background:"#FFF5F5",borderRadius:10,padding:16,border:`1px solid ${C.danger}33`}}>
+      {avoirDetail&&<div data-print-receipt style={{fontFamily:"'Courier New',monospace",fontSize:10,background:"#FFF5F5",borderRadius:10,padding:16,border:`1px solid ${C.danger}33`}}>
         <div style={{textAlign:"center",marginBottom:6,color:C.danger,fontWeight:700,fontSize:12}}>AVOIR / NOTE DE CRÉDIT</div>
         <div style={{textAlign:"center",marginBottom:6}}><div style={{fontSize:12,fontWeight:700}}>{settings.name||CO.name}</div>
           <div>SIRET: {settings.siret||CO.siret}</div></div>
@@ -1808,7 +1854,7 @@ function HistoryScreen(){
 
 /* ══════════ CLOSURE ══════════ */
 function ClosureScreen(){
-  const{tickets,cashReg,closures,createClosure,gt,closeReg,perm:p,avoirs,settings,printerConnected,thermalPrint}=useApp();
+  const{tickets,cashReg,closures,createClosure,gt,closeReg,perm:p,avoirs,settings,printerConnected,thermalPrint,notify}=useApp();
   const[aCash,setACash]=useState("");const[aCard,setACard]=useState("");
   const[reportModal,setReportModal]=useState(null);
   const[denomMode,setDenomMode]=useState(false);
@@ -1849,41 +1895,54 @@ function ClosureScreen(){
         <span style={{fontSize:18,fontWeight:800,color:C.primary}}>{(totalTTC-totalReturns).toFixed(2)}€</span></div></div>
 
     <div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`,marginBottom:14}}>
-      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
-        <span style={{fontSize:12,fontWeight:700}}>Comptage espèces</span>
-        <Btn variant={denomMode?"primary":"outline"} onClick={()=>{setDenomMode(!denomMode);if(!denomMode){const o={};[...bills,...coins].forEach(d=>o[d]=0);setDenomCounts(o);}}}
-          style={{fontSize:10,padding:"3px 10px"}}>{denomMode?"Mode coupures":"Comptage par coupure"}</Btn></div>
-      {denomMode&&<div style={{marginBottom:12}}>
-        <div style={{fontSize:10,fontWeight:600,color:C.textMuted,marginBottom:6}}>BILLETS</div>
-        <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:4,marginBottom:8}}>
-          {bills.map(d=>(<div key={d} style={{display:"flex",alignItems:"center",gap:4,padding:4,borderRadius:8,background:C.surfaceAlt}}>
-            <span style={{fontSize:10,fontWeight:700,width:36,textAlign:"right"}}>{d}€</span>
-            <input type="number" min="0" value={denomCounts[d]||""} onChange={e=>setDenom(d,e.target.value)}
-              style={{width:40,padding:"3px 4px",borderRadius:6,border:`1px solid ${C.border}`,fontSize:11,textAlign:"center",fontFamily:"inherit"}}/>
-            <span style={{fontSize:9,color:C.textMuted}}>{(d*(denomCounts[d]||0)).toFixed(0)}€</span></div>))}</div>
-        <div style={{fontSize:10,fontWeight:600,color:C.textMuted,marginBottom:6}}>PIÈCES</div>
-        <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:4,marginBottom:8}}>
-          {coins.map(d=>(<div key={d} style={{display:"flex",alignItems:"center",gap:4,padding:4,borderRadius:8,background:C.surfaceAlt}}>
-            <span style={{fontSize:10,fontWeight:700,width:36,textAlign:"right"}}>{d>=1?d+"€":(d*100).toFixed(0)+"c"}</span>
-            <input type="number" min="0" value={denomCounts[d]||""} onChange={e=>setDenom(d,e.target.value)}
-              style={{width:40,padding:"3px 4px",borderRadius:6,border:`1px solid ${C.border}`,fontSize:11,textAlign:"center",fontFamily:"inherit"}}/>
-            <span style={{fontSize:9,color:C.textMuted}}>{(d*(denomCounts[d]||0)).toFixed(2)}€</span></div>))}</div>
-        <div style={{padding:8,borderRadius:8,background:C.primaryLight,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-          <span style={{fontSize:12,fontWeight:700,color:C.primary}}>Total coupures</span>
-          <span style={{fontSize:16,fontWeight:800,color:C.primary}}>{denomTotal.toFixed(2)}€</span></div>
-        {<div style={{fontSize:10,fontWeight:600,marginTop:4,color:Math.abs(denomTotal-expected)<0.01?"#3B8C5A":C.danger}}>
-          Écart vs attendu ({expected.toFixed(2)}€): {(denomTotal-expected)>=0?"+":""}{(denomTotal-expected).toFixed(2)}€</div>}
-      </div>}
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
-        <div><label style={{fontSize:9,fontWeight:600,color:C.textMuted}}>ESPÈCES COMPTÉES (attendu: {expected.toFixed(2)}€)</label>
-          <Input type="number" step="0.01" value={aCash} onChange={e=>{if(!denomMode)setACash(e.target.value);}} placeholder={expected.toFixed(2)} style={denomMode?{background:C.surfaceAlt}:{}}/>
+      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14}}>
+        <span style={{fontSize:14,fontWeight:700}}>Comptage espèces</span>
+        <div style={{display:"flex",gap:6,marginLeft:"auto"}}>
+          <button onClick={()=>setDenomMode(false)} style={{padding:"6px 14px",borderRadius:8,border:`1.5px solid ${!denomMode?C.accent:C.border}`,background:!denomMode?C.accentLight:"transparent",
+            cursor:"pointer",fontSize:11,fontWeight:600,color:!denomMode?C.accent:C.textMuted}}>Montant rapide</button>
+          <button onClick={()=>{setDenomMode(true);const o={};[...bills,...coins].forEach(d=>o[d]=0);setDenomCounts(o);}} style={{padding:"6px 14px",borderRadius:8,border:`1.5px solid ${denomMode?C.accent:C.border}`,background:denomMode?C.accentLight:"transparent",
+            cursor:"pointer",fontSize:11,fontWeight:600,color:denomMode?C.accent:C.textMuted}}>Compter les coupures</button></div></div>
+
+      {denomMode?<>
+        <div style={{marginBottom:10}}>
+          <div style={{fontSize:11,fontWeight:700,color:C.textMuted,marginBottom:6}}>BILLETS</div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:6}}>
+            {bills.map(d=>(<div key={d} style={{display:"flex",alignItems:"center",gap:4,padding:"6px 8px",borderRadius:10,border:`1.5px solid ${denomCounts[d]>0?C.accent:C.border}`,background:denomCounts[d]>0?C.accentLight+"60":"transparent"}}>
+              <span style={{fontSize:10,fontWeight:700,color:C.accent,minWidth:36}}>{d}€</span>
+              <span style={{fontSize:9,color:C.textMuted}}>×</span>
+              <input type="number" min="0" value={denomCounts[d]||""} onChange={e=>setDenom(d,e.target.value)}
+                style={{width:40,padding:"3px 4px",borderRadius:6,border:`1px solid ${C.border}`,fontSize:12,fontWeight:700,textAlign:"center",fontFamily:"inherit"}}/>
+              <span style={{fontSize:9,color:C.textMuted,marginLeft:"auto"}}>{(d*(denomCounts[d]||0)).toFixed(0)}€</span>
+            </div>))}</div></div>
+        <div style={{marginBottom:10}}>
+          <div style={{fontSize:11,fontWeight:700,color:C.textMuted,marginBottom:6}}>PIÈCES</div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:6}}>
+            {coins.map(d=>(<div key={d} style={{display:"flex",alignItems:"center",gap:4,padding:"6px 8px",borderRadius:10,border:`1.5px solid ${denomCounts[d]>0?C.info:C.border}`,background:denomCounts[d]>0?`${C.info}10`:"transparent"}}>
+              <span style={{fontSize:10,fontWeight:700,color:C.info,minWidth:36}}>{d>=1?d+"€":(d*100).toFixed(0)+"c"}</span>
+              <span style={{fontSize:9,color:C.textMuted}}>×</span>
+              <input type="number" min="0" value={denomCounts[d]||""} onChange={e=>setDenom(d,e.target.value)}
+                style={{width:40,padding:"3px 4px",borderRadius:6,border:`1px solid ${C.border}`,fontSize:12,fontWeight:700,textAlign:"center",fontFamily:"inherit"}}/>
+              <span style={{fontSize:9,color:C.textMuted,marginLeft:"auto"}}>{(d*(denomCounts[d]||0)).toFixed(2)}€</span>
+            </div>))}</div></div>
+        <div style={{background:`linear-gradient(135deg,${C.accentLight},#F5E6D8)`,borderRadius:14,padding:14,marginBottom:10,display:"flex",justifyContent:"space-between",alignItems:"center",border:`1px solid ${C.accent}22`}}>
+          <span style={{fontSize:14,fontWeight:700,color:C.accent}}>Total coupures</span>
+          <span style={{fontSize:22,fontWeight:900,color:C.accent}}>{denomTotal.toFixed(2)}€</span></div>
+        <div style={{fontSize:11,fontWeight:600,marginBottom:10,padding:"6px 10px",borderRadius:8,
+          background:Math.abs(denomTotal-expected)<0.01?C.primaryLight:C.dangerLight,
+          color:Math.abs(denomTotal-expected)<0.01?"#3B8C5A":C.danger}}>
+          Écart vs attendu ({expected.toFixed(2)}€): {(denomTotal-expected)>=0?"+":""}{(denomTotal-expected).toFixed(2)}€ {Math.abs(denomTotal-expected)<0.01?"✓ OK":"⚠ Attention"}</div>
+      </>:<>
+        <div style={{marginBottom:10}}><label style={{fontSize:9,fontWeight:600,color:C.textMuted}}>ESPÈCES COMPTÉES (attendu: {expected.toFixed(2)}€)</label>
+          <Input type="number" step="0.01" value={aCash} onChange={e=>setACash(e.target.value)} placeholder={expected.toFixed(2)}/>
           {cashDiff!==null&&<div style={{fontSize:10,fontWeight:600,marginTop:3,color:Math.abs(cashDiff)<0.01?"#3B8C5A":C.danger}}>
             Écart: {cashDiff>=0?"+":""}{cashDiff.toFixed(2)}€ {Math.abs(cashDiff)<0.01?"(OK)":"(attention)"}</div>}</div>
-        <div><label style={{fontSize:9,fontWeight:600,color:C.textMuted}}>CARTE COMPTÉE (attendu: {card.toFixed(2)}€)</label>
-          <Input type="number" step="0.01" value={aCard} onChange={e=>setACard(e.target.value)} placeholder={card.toFixed(2)}/>
-          {cardDiff!==null&&<div style={{fontSize:10,fontWeight:600,marginTop:3,color:Math.abs(cardDiff)<0.01?"#3B8C5A":C.danger}}>
-            Écart: {cardDiff>=0?"+":""}{cardDiff.toFixed(2)}€ {Math.abs(cardDiff)<0.01?"(OK)":"(attention)"}</div>}</div></div>
-      <Btn variant="danger" onClick={async()=>{const cl=await createClosure("daily",aCash?parseFloat(aCash):null,aCard?parseFloat(aCard):null);closeReg();if(cl)setReportModal(cl);}}
+      </>}
+      <div style={{marginBottom:12}}>
+        <label style={{fontSize:9,fontWeight:600,color:C.textMuted}}>CARTE COMPTÉE (attendu: {card.toFixed(2)}€)</label>
+        <Input type="number" step="0.01" value={aCard} onChange={e=>setACard(e.target.value)} placeholder={card.toFixed(2)}/>
+        {cardDiff!==null&&<div style={{fontSize:10,fontWeight:600,marginTop:3,color:Math.abs(cardDiff)<0.01?"#3B8C5A":C.danger}}>
+          Écart: {cardDiff>=0?"+":""}{cardDiff.toFixed(2)}€ {Math.abs(cardDiff)<0.01?"(OK)":"(attention)"}</div>}</div>
+      <Btn variant="danger" onClick={async()=>{const cl=await createClosure("daily",aCash?parseFloat(aCash):null,aCard?parseFloat(aCard):null);if(cl){closeReg();setReportModal(cl);}else{notify("Erreur lors de la clôture","danger");}}}
         style={{width:"100%",height:44,marginBottom:8}}><Lock size={16}/> Clôture journalière (Z)</Btn>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
         <Btn variant="outline" onClick={async()=>{const cl=await createClosure("monthly",null,null);if(cl)setReportModal(cl);}} style={{height:36,fontSize:11}}><Calendar size={14}/> Clôture mensuelle</Btn>
@@ -1900,7 +1959,7 @@ function ClosureScreen(){
 
     {/* Closure detail/print modal */}
     <Modal open={!!reportModal} onClose={()=>setReportModal(null)} title={`Rapport Z — ${reportModal?.period}`} wide>
-      {reportModal&&<div style={{fontFamily:"'Courier New',monospace",fontSize:10,background:"#FAFAF8",borderRadius:10,padding:20,border:`1px solid ${C.border}`}}>
+      {reportModal&&<div data-print-receipt style={{fontFamily:"'Courier New',monospace",fontSize:10,background:"#FAFAF8",borderRadius:10,padding:20,border:`1px solid ${C.border}`}}>
         <div style={{textAlign:"center",marginBottom:8}}>
           <div style={{fontSize:14,fontWeight:700}}>RAPPORT DE CLÔTURE</div>
           <div style={{fontSize:12,fontWeight:700}}>{settings.name||CO.name}</div>
@@ -2487,7 +2546,8 @@ function CSVImportWizard({open,onClose,existingProducts,onImportComplete}){
 /* ══════════ PRODUCTS MANAGEMENT ══════════ */
 function ProductsScreen(){
   const{products,setProducts,refreshProducts,addProduct,addAudit,notify,perm:p,exportCatalog,duplicateProduct,
-    updateProduct,deleteProduct,addVariantToProduct,deleteVariant,updateProductPrice}=useApp();
+    updateProduct,deleteProduct,addVariantToProduct,deleteVariant,updateProductPrice,settings}=useApp();
+  const pm=settings.pricingMode||"TTC";
   const[search,setSearch]=useState("");const[importWizardOpen,setImportWizardOpen]=useState(false);
   const[createModal,setCreateModal]=useState(false);
   const[editModal,setEditModal]=useState(null);
@@ -2513,7 +2573,7 @@ function ProductsScreen(){
     <div style={{background:C.surface,borderRadius:14,border:`1.5px solid ${C.border}`,overflow:"hidden"}}>
       <table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
         <thead><tr style={{background:C.surfaceAlt}}>
-          {["Produit","SKU","Collection","Prix","Coût","Marge","TVA","Stock","Var.","Actions"].map(h=>(
+          {["Produit","SKU","Collection",`Prix ${pm}`,"Coût","Marge","TVA","Stock","Var.","Actions"].map(h=>(
             <th key={h} style={{padding:"8px 10px",textAlign:"left",fontWeight:700,color:C.textMuted,fontSize:9,borderBottom:`2px solid ${C.border}`}}>{h}</th>))}</tr></thead>
         <tbody>{filtered.map(q=>{const ts=q.variants.reduce((s,v)=>s+v.stock,0);const mg=q.costPrice?((q.price-q.costPrice)/q.price*100):0;
           return(<tr key={q.id} style={{borderBottom:`1px solid ${C.border}`,cursor:"pointer"}} onClick={()=>openEdit(q)}>
@@ -2539,7 +2599,7 @@ function ProductsScreen(){
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}>
           <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>NOM</label><Input value={ep.name||""} onChange={e=>setEp(p=>({...p,name:e.target.value}))}/></div>
           <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>SKU</label><Input value={ep.sku||""} onChange={e=>setEp(p=>({...p,sku:e.target.value}))}/></div>
-          <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>PRIX VENTE (€)</label><Input type="number" step="0.01" value={ep.price||""} onChange={e=>setEp(p=>({...p,price:e.target.value}))}/></div>
+          <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>PRIX VENTE {pm} (€)</label><Input type="number" step="0.01" value={ep.price||""} onChange={e=>setEp(p=>({...p,price:e.target.value}))}/></div>
           <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>PRIX ACHAT (€)</label><Input type="number" step="0.01" value={ep.costPrice||""} onChange={e=>setEp(p=>({...p,costPrice:e.target.value}))}/></div>
           <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>TVA</label>
             <select value={ep.taxRate||"0.20"} onChange={e=>setEp(p=>({...p,taxRate:e.target.value}))} style={{width:"100%",padding:10,borderRadius:10,border:`2px solid ${C.border}`,fontSize:12,fontFamily:"inherit"}}>
@@ -2598,7 +2658,7 @@ function ProductsScreen(){
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}>
         <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>NOM</label><Input value={np.name} onChange={e=>setNp(p=>({...p,name:e.target.value}))}/></div>
         <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>SKU</label><Input value={np.sku} onChange={e=>setNp(p=>({...p,sku:e.target.value}))}/></div>
-        <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>PRIX VENTE (€)</label><Input type="number" step="0.01" value={np.price} onChange={e=>setNp(p=>({...p,price:e.target.value}))}/></div>
+        <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>PRIX VENTE {pm} (€)</label><Input type="number" step="0.01" value={np.price} onChange={e=>setNp(p=>({...p,price:e.target.value}))}/></div>
         <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>PRIX ACHAT (€)</label><Input type="number" step="0.01" value={np.costPrice} onChange={e=>setNp(p=>({...p,costPrice:e.target.value}))}/></div>
         <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>TVA</label>
           <select value={np.taxRate} onChange={e=>setNp(p=>({...p,taxRate:e.target.value}))} style={{width:"100%",padding:10,borderRadius:10,border:`2px solid ${C.border}`,fontSize:12,fontFamily:"inherit"}}>
@@ -2643,7 +2703,7 @@ function SettingsScreen(){
   return(<div style={{height:"100%",overflowY:"auto",padding:20,background:C.bg}}>
     <h2 style={{fontSize:22,fontWeight:800,marginBottom:14}}>Paramètres</h2>
     <div style={{display:"flex",gap:6,marginBottom:14,flexWrap:"wrap"}}>
-      {[{id:"general",l:"Général"},{id:"printer",l:"🖨️ Imprimante"},{id:"return",l:"Retours"},{id:"theme",l:"Thème"},{id:"clock",l:"Pointages"},{id:"prices",l:"Historique prix"}].map(t=>(
+      {[{id:"general",l:"Général"},{id:"pricing",l:"💰 Prix HT/TTC"},{id:"printer",l:"🖨️ Imprimante"},{id:"return",l:"Retours"},{id:"theme",l:"Thème"},{id:"clock",l:"Pointages"},{id:"prices",l:"Historique prix"}].map(t=>(
         <button key={t.id} onClick={()=>setTab(t.id)} style={{padding:"5px 12px",borderRadius:8,border:`1.5px solid ${tab===t.id?C.primary:C.border}`,
           background:tab===t.id?C.primary:"transparent",color:tab===t.id?"#fff":C.text,fontSize:11,fontWeight:600,cursor:"pointer"}}>{t.l}</button>))}</div>
 
@@ -2652,6 +2712,36 @@ function SettingsScreen(){
         <div key={f.k} style={{marginBottom:10}}><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>{f.l}</label>
           <Input value={settings[f.k]||""} onChange={e=>setSettings(s=>({...s,[f.k]:e.target.value}))}/></div>))}
       <Btn onClick={()=>addAudit("CONFIG","Paramètres mis à jour")} style={{width:"100%",height:40,marginTop:8,background:`linear-gradient(135deg,${C.primary},${C.gradientB})`}}><Save size={14}/> Enregistrer</Btn></div>}
+
+    {tab==="pricing"&&<div style={{maxWidth:550}}>
+      <div style={{background:`linear-gradient(135deg,${C.primaryLight},#DCF0E2)`,borderRadius:16,padding:20,border:`1.5px solid ${C.primary}22`,marginBottom:16}}>
+        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}>
+          <DollarSign size={20} color={C.primary}/>
+          <div><h3 style={{fontSize:16,fontWeight:800,margin:0}}>Mode de tarification</h3>
+            <p style={{fontSize:11,color:C.textMuted,margin:0}}>Définissez comment vos prix de vente sont saisis</p></div></div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+          {[{id:"TTC",l:"Prix TTC",d:"Les prix saisis incluent la TVA. Le HT est calculé en soustrayant la TVA.",ex:"Prix saisi: 29.90€ TTC → HT: 24.92€ (TVA 20%)"},
+            {id:"HT",l:"Prix HT",d:"Les prix saisis sont hors taxes. La TVA est ajoutée au total.",ex:"Prix saisi: 29.90€ HT → TTC: 35.88€ (TVA 20%)"}].map(m=>(
+            <button key={m.id} onClick={()=>setSettings(s=>({...s,pricingMode:m.id}))}
+              style={{padding:16,borderRadius:14,border:`2.5px solid ${(settings.pricingMode||"TTC")===m.id?C.primary:C.border}`,
+                background:(settings.pricingMode||"TTC")===m.id?`${C.primary}08`:"#fff",cursor:"pointer",textAlign:"left",transition:"all 0.15s"}}>
+              <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:6}}>
+                <div style={{width:18,height:18,borderRadius:9,border:`2px solid ${(settings.pricingMode||"TTC")===m.id?C.primary:C.border}`,
+                  display:"flex",alignItems:"center",justifyContent:"center"}}>
+                  {(settings.pricingMode||"TTC")===m.id&&<div style={{width:10,height:10,borderRadius:5,background:C.primary}}/>}</div>
+                <span style={{fontSize:14,fontWeight:700,color:(settings.pricingMode||"TTC")===m.id?C.primary:C.text}}>{m.l}</span></div>
+              <p style={{fontSize:11,color:C.textMuted,margin:"0 0 6px 0",lineHeight:1.4}}>{m.d}</p>
+              <div style={{fontSize:10,color:C.info,background:C.infoLight,borderRadius:8,padding:"4px 8px",fontWeight:600}}>{m.ex}</div>
+            </button>))}
+        </div>
+      </div>
+      <div style={{background:C.warnLight,borderRadius:12,padding:14,border:`1px solid ${C.warn}33`,display:"flex",gap:10,alignItems:"start"}}>
+        <AlertTriangle size={16} color={C.warn} style={{flexShrink:0,marginTop:2}}/>
+        <div style={{fontSize:11,color:"#92400E",lineHeight:1.5}}>
+          <strong>Important :</strong> Ce réglage s'applique à tous vos produits. Si vous changez de TTC à HT (ou inversement),
+          vérifiez que vos prix sont bien cohérents. Les prix existants ne sont pas recalculés automatiquement —
+          seul le calcul de la TVA sur les tickets change.</div></div>
+    </div>}
 
     {tab==="printer"&&<div style={{maxWidth:600}}>
       {/* Printer status */}
@@ -3103,6 +3193,9 @@ export default function App(){
       input:focus,select:focus,textarea:focus{outline:none;border-color:${C.primary}!important;box-shadow:0 0 0 3px ${C.primary}12!important}
       ::selection{background:${C.primary}20;color:${C.primaryDark}}
       select{cursor:pointer}
+      @media print{body *{visibility:hidden!important}[data-print-receipt],[data-print-receipt] *{visibility:visible!important}
+        [data-print-receipt]{position:absolute!important;left:0!important;top:0!important;width:72mm!important;padding:4mm!important;background:#fff!important;border:none!important;box-shadow:none!important;border-radius:0!important}
+        @page{size:72mm auto;margin:2mm}}
       @media (max-width:1024px){.hide-md{display:none!important}}`}</style>
   </AppProvider>);
 }
