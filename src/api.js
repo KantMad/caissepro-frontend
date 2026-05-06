@@ -2,7 +2,7 @@
 // CaissePro — Service API
 // ═══════════════════════════════════════
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://51.77.149.138';
+const API_URL = import.meta.env.VITE_API_URL || 'https://api.techincash.app';
 
 let token = null;
 
