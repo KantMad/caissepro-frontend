@@ -150,11 +150,24 @@ const Numpad=({value,onChange,onEnter,label})=>{
     </div></div>);};
 
 /* ══════════ DATA NORMALIZERS ══════════ */
-const SIZE_ORDER=["XXS","XS","S","M","L","XL","2XL","XXL","3XL","XXXL","4XL","5XL","6XL"];
-const sizeIdx=(s)=>{const i=SIZE_ORDER.indexOf((s||"").toUpperCase());return i>=0?i:100+parseInt(s)||999;};
+// Size order mapping — loaded from localStorage, built from CSV import order
+let _sizeOrderMap=null;
+function getSizeOrderMap(){
+  if(_sizeOrderMap)return _sizeOrderMap;
+  try{const s=localStorage.getItem("caissepro_size_order");if(s){_sizeOrderMap=JSON.parse(s);return _sizeOrderMap;}}catch(e){}
+  return{};
+}
+function saveSizeOrderMap(map){_sizeOrderMap=map;try{localStorage.setItem("caissepro_size_order",JSON.stringify(map));}catch(e){}}
+function updateSizeOrderFromVariants(variants){
+  const map=getSizeOrderMap();let changed=false;let maxIdx=Object.values(map).reduce((m,v)=>Math.max(m,v),-1);
+  variants.forEach(v=>{const key=(v.size||"").toUpperCase().trim();if(key&&map[key]===undefined){maxIdx++;map[key]=maxIdx;changed=true;}});
+  if(changed)saveSizeOrderMap(map);return map;
+}
+const sizeIdx=(s)=>{const map=getSizeOrderMap();const key=(s||"").toUpperCase().trim();
+  return map[key]!==undefined?map[key]:9000+((s||"").charCodeAt(0)||0);};
 const norm={
-  product(p){const variants=(p.variants||[]).map(v=>({...v,stock:parseInt(v.stock||0),stockAlert:parseInt(v.stock_alert||v.stockAlert||5),
-      defective:parseInt(v.defective||0)})).sort((a,b)=>sizeIdx(a.size)-sizeIdx(b.size));
+  product(p){const variants=(p.variants||[]).map((v,i)=>({...v,stock:parseInt(v.stock||0),stockAlert:parseInt(v.stock_alert||v.stockAlert||5),
+      defective:parseInt(v.defective||0),_importIdx:v._importIdx??v.sortOrder??i})).sort((a,b)=>sizeIdx(a.size)-sizeIdx(b.size));
     return{...p,price:parseFloat(p.price),costPrice:parseFloat(p.cost_price||p.costPrice||0),
     taxRate:parseFloat(p.tax_rate||p.taxRate||0.20),category:p.category||"",collection:p.collection||"",variants}},
   customer(c){return{...c,firstName:c.first_name||c.firstName,lastName:c.last_name||c.lastName,
@@ -2625,7 +2638,7 @@ function CSVImportWizard({open,onClose,existingProducts,onImportComplete}){
         variants:group.rows.map((r,i)=>{const gv=(f)=>r[mapping[f]]||"";return{
           id:`iv-${Date.now()}-${i}-${Math.random().toString(36).slice(2,6)}`,
           color:gv("color")||"Défaut",size:gv("size")||"TU",ean:gv("ean")||"",
-          stock:parseInt(gv("stock"))||0,defective:0,stockAlert:parseInt(gv("stockAlert"))||5};}),
+          stock:parseInt(gv("stock"))||0,defective:0,stockAlert:parseInt(gv("stockAlert"))||5,sortOrder:i};}),
         sourceRows:group.indices.map(i=>i+2),
       };
       // Check duplicates
@@ -2652,6 +2665,9 @@ function CSVImportWizard({open,onClose,existingProducts,onImportComplete}){
   // Step 3→4: Execute import
   const executeImport=async()=>{
     if(!processed)return;setImporting(true);
+    // Build size order mapping from CSV import order (preserves the order sizes appear in the file)
+    const allVariants=processed.newProducts.flatMap(p=>p.variants).concat(processed.updates.flatMap(u=>u.newVariants));
+    updateSizeOrderFromVariants(allVariants);
     const results={created:0,updated:0,skipped:processed.skipped.length,errors:[]};
     // Create new products
     for(const p of processed.newProducts){
@@ -3145,7 +3161,7 @@ function SettingsScreen(){
   return(<div style={{height:"100%",overflowY:"auto",padding:20,background:C.bg}}>
     <h2 style={{fontSize:22,fontWeight:800,marginBottom:14}}>Paramètres</h2>
     <div style={{display:"flex",gap:6,marginBottom:14,flexWrap:"wrap"}}>
-      {[{id:"general",l:"Général"},{id:"pricing",l:"💰 Prix HT/TTC"},{id:"printer",l:"🖨️ Imprimante"},{id:"return",l:"Retours"},{id:"theme",l:"Thème"},{id:"clock",l:"Pointages"},{id:"prices",l:"Historique prix"}].map(t=>(
+      {[{id:"general",l:"Général"},{id:"pricing",l:"💰 Prix HT/TTC"},{id:"printer",l:"🖨️ Imprimante"},{id:"return",l:"Retours"},{id:"sizes",l:"📏 Ordre tailles"},{id:"theme",l:"Thème"},{id:"clock",l:"Pointages"},{id:"prices",l:"Historique prix"}].map(t=>(
         <button key={t.id} onClick={()=>setTab(t.id)} style={{padding:"5px 12px",borderRadius:8,border:`1.5px solid ${tab===t.id?C.primary:C.border}`,
           background:tab===t.id?C.primary:"transparent",color:tab===t.id?"#fff":C.text,fontSize:11,fontWeight:600,cursor:"pointer"}}>{t.l}</button>))}</div>
 
@@ -3312,6 +3328,60 @@ function SettingsScreen(){
 
       <Btn onClick={()=>{saveSettingsToAPI(settings);addAudit("CONFIG","Politique de retour mise à jour");notify("Paramètres de retour sauvegardés","success");}} style={{width:"100%",height:44,background:`linear-gradient(135deg,${C.primary},${C.gradientB})`}}><Save size={14}/> Enregistrer les paramètres de retour</Btn>
     </div>}
+
+    {tab==="sizes"&&(()=>{
+      const map=getSizeOrderMap();
+      const entries=Object.entries(map).sort((a,b)=>a[1]-b[1]);
+      const moveSize=(idx,dir)=>{
+        const newEntries=[...entries];const swapIdx=idx+dir;
+        if(swapIdx<0||swapIdx>=newEntries.length)return;
+        [newEntries[idx],newEntries[swapIdx]]=[newEntries[swapIdx],newEntries[idx]];
+        const newMap={};newEntries.forEach(([k],i)=>newMap[k]=i);
+        saveSizeOrderMap(newMap);notify("Ordre mis à jour","success");setTab("sizes");/*force re-render*/};
+      const removeSize=(key)=>{const newMap={...map};delete newMap[key];
+        const reindexed={};Object.entries(newMap).sort((a,b)=>a[1]-b[1]).forEach(([k],i)=>reindexed[k]=i);
+        saveSizeOrderMap(reindexed);notify("Taille supprimée","success");setTab("sizes");};
+      const addSize=()=>{const s=prompt("Nouvelle taille (ex: 3XL, 44, etc.):");if(!s)return;
+        const key=s.toUpperCase().trim();if(map[key]!==undefined){notify("Cette taille existe déjà","error");return;}
+        const newMap={...map,[key]:entries.length};saveSizeOrderMap(newMap);notify("Taille ajoutée","success");setTab("sizes");};
+      const resetOrder=()=>{saveSizeOrderMap({});notify("Mapping réinitialisé — sera reconstruit au prochain import CSV","info");setTab("sizes");};
+      return(<div style={{maxWidth:600}}>
+        <div style={{background:`linear-gradient(135deg,${C.primaryLight},#DCF0E2)`,borderRadius:16,padding:20,border:`1.5px solid ${C.primary}22`,marginBottom:16}}>
+          <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:6}}>
+            <Grid size={20} color={C.primary}/>
+            <div><h3 style={{fontSize:16,fontWeight:800,margin:0}}>Ordre des tailles</h3>
+              <p style={{fontSize:11,color:C.textMuted,margin:0}}>L'ordre est construit automatiquement depuis vos imports CSV. Vous pouvez le modifier manuellement.</p></div></div></div>
+
+        {entries.length===0?<div style={{textAlign:"center",padding:30,background:C.surface,borderRadius:14,border:`1.5px solid ${C.border}`}}>
+          <Grid size={32} style={{marginBottom:8,opacity:0.3}}/>
+          <div style={{fontSize:14,fontWeight:600,marginBottom:4}}>Aucun mapping de tailles</div>
+          <div style={{fontSize:12,color:C.textMuted,marginBottom:12}}>Importez un fichier CSV de produits pour construire automatiquement l'ordre des tailles, ou ajoutez-les manuellement.</div>
+          <Btn onClick={addSize} style={{background:`linear-gradient(135deg,${C.primary},${C.gradientB})`}}><Plus size={14}/> Ajouter une taille</Btn>
+        </div>
+        :<div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`,marginBottom:14}}>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
+            <h4 style={{fontSize:13,fontWeight:700,margin:0}}>Tailles ({entries.length})</h4>
+            <div style={{display:"flex",gap:6}}>
+              <Btn variant="outline" onClick={addSize} style={{fontSize:10,padding:"4px 10px"}}><Plus size={11}/> Ajouter</Btn>
+              <Btn variant="outline" onClick={resetOrder} style={{fontSize:10,padding:"4px 10px",borderColor:C.danger+"44",color:C.danger}}><RotateCcw size={11}/> Réinitialiser</Btn></div></div>
+          <div style={{display:"flex",flexDirection:"column",gap:4}}>
+            {entries.map(([size,order],idx)=>(
+              <div key={size} style={{display:"flex",alignItems:"center",gap:8,padding:"8px 12px",borderRadius:10,background:C.surfaceAlt,border:`1px solid ${C.border}`}}>
+                <span style={{width:24,textAlign:"center",fontSize:11,fontWeight:700,color:C.textMuted}}>{idx+1}</span>
+                <span style={{flex:1,fontSize:13,fontWeight:700}}>{size}</span>
+                <button onClick={()=>moveSize(idx,-1)} disabled={idx===0} style={{width:28,height:28,borderRadius:8,border:`1px solid ${C.border}`,background:idx===0?"transparent":C.surface,cursor:idx===0?"default":"pointer",display:"flex",alignItems:"center",justifyContent:"center",opacity:idx===0?0.3:1}}>↑</button>
+                <button onClick={()=>moveSize(idx,1)} disabled={idx===entries.length-1} style={{width:28,height:28,borderRadius:8,border:`1px solid ${C.border}`,background:idx===entries.length-1?"transparent":C.surface,cursor:idx===entries.length-1?"default":"pointer",display:"flex",alignItems:"center",justifyContent:"center",opacity:idx===entries.length-1?0.3:1}}>↓</button>
+                <button onClick={()=>removeSize(size)} style={{width:28,height:28,borderRadius:8,border:`1px solid ${C.danger}33`,background:C.dangerLight,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}><X size={12} color={C.danger}/></button>
+              </div>))}
+          </div>
+        </div>}
+
+        <div style={{background:C.warnLight,borderRadius:12,padding:14,border:`1px solid ${C.warn}33`,display:"flex",gap:10,alignItems:"start"}}>
+          <AlertTriangle size={16} color={C.warn} style={{flexShrink:0,marginTop:2}}/>
+          <div style={{fontSize:11,color:"#92400E",lineHeight:1.5}}>
+            <strong>Comment ça marche :</strong> L'ordre des tailles est mémorisé lors de l'import CSV. Si votre CSV liste les tailles dans l'ordre S, M, L, XL, 2XL, cet ordre sera conservé pour l'affichage dans la caisse.
+            Vous pouvez réorganiser les tailles avec les flèches ↑↓. Les changements s'appliquent immédiatement à tous les produits.</div></div>
+      </div>);})()}
 
     {tab==="theme"&&<div style={{maxWidth:500}}>
       <div style={{marginBottom:10}}><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>COULEUR PRINCIPALE</label>
