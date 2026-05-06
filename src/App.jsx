@@ -6,7 +6,7 @@ import {
   Shield, Download, FileText, Settings, CheckCircle2, AlertTriangle, Save,
   Archive, Activity, Database, WifiOff, Pause, Play, Upload, Printer, Bell,
   Heart, Grid, Box, Star, Calendar, Zap, ScanLine, Split,
-  Mail, XOctagon, Edit, BarChart2
+  Mail, XOctagon, Edit, BarChart2, Check
 } from "lucide-react";
 import {
   PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer,
@@ -37,7 +37,7 @@ const getPriceTTC=(price,taxRate,mode)=>mode==="TTC"?price:price*(1+(taxRate||0.
 /* ══════════ PERMISSIONS ══════════ */
 const PERMS={
   admin:{maxDiscount:100,canVoid:true,canExport:true,canSettings:true,canCloseZ:true,canCreateProduct:true,canViewMargin:true,canManagePromos:true},
-  cashier:{maxDiscount:20,canVoid:false,canExport:false,canSettings:false,canCloseZ:false,canCreateProduct:false,canViewMargin:false,canManagePromos:false},
+  cashier:{maxDiscount:20,canVoid:false,canExport:false,canSettings:false,canCloseZ:true,canCreateProduct:false,canViewMargin:false,canManagePromos:false},
 };
 
 /* ══════════ DATA ══════════ */
@@ -150,11 +150,13 @@ const Numpad=({value,onChange,onEnter,label})=>{
     </div></div>);};
 
 /* ══════════ DATA NORMALIZERS ══════════ */
+const SIZE_ORDER=["XXS","XS","S","M","L","XL","2XL","XXL","3XL","XXXL","4XL","5XL","6XL"];
+const sizeIdx=(s)=>{const i=SIZE_ORDER.indexOf((s||"").toUpperCase());return i>=0?i:100+parseInt(s)||999;};
 const norm={
-  product(p){return{...p,price:parseFloat(p.price),costPrice:parseFloat(p.cost_price||p.costPrice||0),
-    taxRate:parseFloat(p.tax_rate||p.taxRate||0.20),category:p.category||"",collection:p.collection||"",
-    variants:(p.variants||[]).map(v=>({...v,stock:parseInt(v.stock||0),stockAlert:parseInt(v.stock_alert||v.stockAlert||5),
-      defective:parseInt(v.defective||0)}))}},
+  product(p){const variants=(p.variants||[]).map(v=>({...v,stock:parseInt(v.stock||0),stockAlert:parseInt(v.stock_alert||v.stockAlert||5),
+      defective:parseInt(v.defective||0)})).sort((a,b)=>sizeIdx(a.size)-sizeIdx(b.size));
+    return{...p,price:parseFloat(p.price),costPrice:parseFloat(p.cost_price||p.costPrice||0),
+    taxRate:parseFloat(p.tax_rate||p.taxRate||0.20),category:p.category||"",collection:p.collection||"",variants}},
   customer(c){return{...c,firstName:c.first_name||c.firstName,lastName:c.last_name||c.lastName,
     totalSpent:parseFloat(c.total_spent||c.totalSpent||0),points:parseInt(c.points||0)}},
   products(list){return(list||[]).map(norm.product)},
@@ -1407,7 +1409,7 @@ function StatsScreen(){
       <SC icon={BarChart2} label="Marge %" value={stats.tHT>0?`${(stats.margin/stats.tHT*100).toFixed(1)}%`:"—"} color="#3B8C5A"/></div>
 
     <div style={{display:"flex",gap:6,marginBottom:14,flexWrap:"wrap"}}>
-      {[{id:"ca",l:"Évolution CA"},{id:"hour",l:"CA par heure"},{id:"dow",l:"CA par jour"},{id:"best",l:"Best-sellers"},{id:"seller",l:"Par vendeur"},{id:"variant",l:"Tailles/Couleurs"},{id:"collection",l:"Collections"},{id:"pay",l:"Paiements"}].map(t=>(
+      {[{id:"ca",l:"Évolution CA"},{id:"compare",l:"Comparaison"},{id:"hour",l:"CA par heure"},{id:"dow",l:"CA par jour"},{id:"best",l:"Best-sellers"},{id:"variantDetail",l:"Détail variantes"},{id:"seller",l:"Par vendeur"},{id:"variant",l:"Tailles/Couleurs"},{id:"collection",l:"Collections"},{id:"customers",l:"Clients"},{id:"returns",l:"Retours"},{id:"pay",l:"Paiements"},{id:"discounts",l:"Remises"}].map(t=>(
         <button key={t.id} onClick={()=>setTab(t.id)} style={{padding:"5px 12px",borderRadius:8,border:`1.5px solid ${tab===t.id?C.primary:C.border}`,
           background:tab===t.id?C.primary:"transparent",color:tab===t.id?"#fff":C.text,fontSize:11,fontWeight:600,cursor:"pointer"}}>{t.l}</button>))}</div>
 
@@ -1487,6 +1489,123 @@ function StatsScreen(){
     {tab==="pay"&&<div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`}}>
       <ResponsiveContainer width="100%" height={220}><PieChart><Pie data={pieData} cx="50%" cy="50%" innerRadius={50} outerRadius={80} paddingAngle={3} dataKey="value">
         {pieData.map((d,i)=><Cell key={i} fill={pieColors[i%pieColors.length]}/>)}</Pie><Tooltip formatter={v=>`${v.toFixed(2)}€`}/><Legend/></PieChart></ResponsiveContainer></div>}
+
+    {/* Comparaison de périodes */}
+    {tab==="compare"&&(()=>{const pctCA=pctChange(stats.tTTC,prevStats.tTTC);const pctCount=pctChange(stats.count,prevStats.count);
+      const prevAvg=prevStats.count?prevStats.tTTC/prevStats.count:0;const pctAvg=pctChange(stats.avg,prevAvg);
+      return(<div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`}}>
+        <h3 style={{fontSize:14,fontWeight:700,marginBottom:10}}>Comparaison période actuelle vs précédente</h3>
+        {!dateFrom?<div style={{padding:20,textAlign:"center",color:C.textMuted,fontSize:12}}>Sélectionnez une période ci-dessus pour activer la comparaison</div>
+        :<div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12,marginBottom:16}}>
+            {[{l:"CA TTC",cur:stats.tTTC,prev:prevStats.tTTC,fmt:v=>`${v.toFixed(0)}€`},{l:"Nb tickets",cur:stats.count,prev:prevStats.count,fmt:v=>v},
+              {l:"Panier moyen",cur:stats.avg,prev:prevAvg,fmt:v=>`${v.toFixed(1)}€`}].map(x=>{const p=pctChange(x.cur,x.prev);return(
+              <div key={x.l} style={{padding:14,borderRadius:12,background:C.surfaceAlt,textAlign:"center"}}>
+                <div style={{fontSize:10,color:C.textMuted,fontWeight:600,marginBottom:4}}>{x.l}</div>
+                <div style={{fontSize:20,fontWeight:800,color:C.primary,marginBottom:2}}>{x.fmt(x.cur)}</div>
+                <div style={{fontSize:11,color:C.textMuted}}>vs {x.fmt(x.prev)}</div>
+                {p!==null&&<div style={{fontSize:13,fontWeight:700,color:p>=0?"#3B8C5A":C.danger,marginTop:4}}>{p>=0?"▲":"▼"} {Math.abs(p).toFixed(1)}%</div>}
+              </div>);})}</div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+            <div><h4 style={{fontSize:12,fontWeight:700,marginBottom:8}}>Top produits — Période actuelle</h4>
+              {fBestSellers.slice(0,5).map((p,i)=>(<div key={p.sku} style={{display:"flex",justifyContent:"space-between",padding:4,fontSize:11,borderBottom:`1px solid ${C.border}`}}>
+                <span>{i+1}. {p.name}</span><span style={{fontWeight:700}}>{p.qty} vendus</span></div>))}</div>
+            <div><h4 style={{fontSize:12,fontWeight:700,marginBottom:8}}>Répartition paiements</h4>
+              {pieData.map((d,i)=>(<div key={d.name} style={{display:"flex",justifyContent:"space-between",padding:4,fontSize:11,borderBottom:`1px solid ${C.border}`}}>
+                <span style={{display:"flex",alignItems:"center",gap:6}}><div style={{width:10,height:10,borderRadius:5,background:pieColors[i%pieColors.length]}}/>{d.name}</span>
+                <span style={{fontWeight:700}}>{d.value.toFixed(2)}€</span></div>))}</div></div>
+        </div>}</div>);})()}
+
+    {/* Détail variantes vendues */}
+    {tab==="variantDetail"&&(()=>{const byProd={};fTickets.forEach(t=>(t.items||[]).forEach(i=>{
+      const pn=i.product?.name||i.product_name;const c=i.variant?.color||i.variant_color||"?";const s=i.variant?.size||i.variant_size||"?";
+      if(!byProd[pn])byProd[pn]={name:pn,variants:{}};const vk=`${c}/${s}`;
+      if(!byProd[pn].variants[vk])byProd[pn].variants[vk]={color:c,size:s,qty:0,revenue:0};
+      byProd[pn].variants[vk].qty+=i.quantity;byProd[pn].variants[vk].revenue+=(i.lineTTC||i.line_ttc||0);}));
+      const prodList=Object.values(byProd).sort((a,b)=>{const aq=Object.values(a.variants).reduce((s,v)=>s+v.qty,0);
+        const bq=Object.values(b.variants).reduce((s,v)=>s+v.qty,0);return bq-aq;});
+      return(<div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`}}>
+        <h3 style={{fontSize:14,fontWeight:700,marginBottom:10}}>Détail des variantes vendues</h3>
+        {prodList.slice(0,10).map(p=>{const vars=Object.values(p.variants).sort((a,b)=>b.qty-a.qty);
+          const totalQty=vars.reduce((s,v)=>s+v.qty,0);
+          return(<div key={p.name} style={{marginBottom:14,padding:12,borderRadius:10,background:C.surfaceAlt}}>
+            <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}>
+              <span style={{fontSize:13,fontWeight:700}}>{p.name}</span>
+              <Badge color={C.primary}>{totalQty} vendus</Badge></div>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(120px,1fr))",gap:4}}>
+              {vars.map(v=>{const pct=totalQty?(v.qty/totalQty*100):0;return(
+                <div key={`${v.color}/${v.size}`} style={{padding:6,borderRadius:8,background:C.surface,border:`1px solid ${C.border}`,fontSize:10}}>
+                  <div style={{fontWeight:600}}>{v.color} — {v.size}</div>
+                  <div style={{display:"flex",justifyContent:"space-between",marginTop:3}}>
+                    <span style={{fontWeight:700,color:C.primary}}>{v.qty} ({pct.toFixed(0)}%)</span>
+                    <span style={{color:C.textMuted}}>{v.revenue.toFixed(0)}€</span></div>
+                  <div style={{height:3,background:C.surfaceAlt,borderRadius:2,marginTop:3}}>
+                    <div style={{width:`${pct}%`,height:"100%",background:C.primary,borderRadius:2}}/></div>
+                </div>);})}
+            </div></div>);})}
+      </div>);})()}
+
+    {/* Clients analytics */}
+    {tab==="customers"&&(()=>{const identified=fTickets.filter(t=>t.customerId||t.customer_id);const anonymous=fTickets.filter(t=>!t.customerId&&!t.customer_id);
+      const identCA=identified.reduce((s,t)=>s+(t.totalTTC||parseFloat(t.total_ttc)||0),0);
+      const anonCA=anonymous.reduce((s,t)=>s+(t.totalTTC||parseFloat(t.total_ttc)||0),0);
+      const custMap={};identified.forEach(t=>{const cid=t.customerId||t.customer_id;if(!custMap[cid])custMap[cid]={name:t.customerName||"Client",count:0,total:0};
+        custMap[cid].count++;custMap[cid].total+=(t.totalTTC||parseFloat(t.total_ttc)||0);});
+      const topCusts=Object.values(custMap).sort((a,b)=>b.total-a.total);
+      const newCustsThisPeriod=fTickets.filter(t=>{const cn=t.customerName||t.customer_name;if(!cn)return false;
+        const firstTk=tickets.find(tk=>(tk.customerName||tk.customer_name)===cn);return firstTk&&firstTk.ticketNumber===t.ticketNumber;});
+      return(<div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+        <div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`}}>
+          <h3 style={{fontSize:14,fontWeight:700,marginBottom:10}}>Répartition clients</h3>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}>
+            <div style={{padding:12,borderRadius:10,background:C.primaryLight,textAlign:"center"}}>
+              <div style={{fontSize:20,fontWeight:800,color:C.primary}}>{identified.length}</div>
+              <div style={{fontSize:10,color:C.primaryDark,fontWeight:600}}>Ventes identifiées</div>
+              <div style={{fontSize:12,fontWeight:700,color:C.primary}}>{identCA.toFixed(0)}€</div></div>
+            <div style={{padding:12,borderRadius:10,background:C.surfaceAlt,textAlign:"center"}}>
+              <div style={{fontSize:20,fontWeight:800,color:C.textMuted}}>{anonymous.length}</div>
+              <div style={{fontSize:10,color:C.textMuted,fontWeight:600}}>Ventes anonymes</div>
+              <div style={{fontSize:12,fontWeight:700,color:C.textMuted}}>{anonCA.toFixed(0)}€</div></div></div>
+          <div style={{fontSize:11,color:C.textMuted}}>Taux d'identification: <strong style={{color:C.primary}}>{fTickets.length?(identified.length/fTickets.length*100).toFixed(1):0}%</strong></div>
+          {identified.length>0&&<div style={{fontSize:11,color:C.textMuted,marginTop:4}}>Panier moyen identifié: <strong>{(identCA/identified.length).toFixed(1)}€</strong> vs anonyme: <strong>{anonymous.length?(anonCA/anonymous.length).toFixed(1):0}€</strong></div>}
+        </div>
+        <div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`}}>
+          <h3 style={{fontSize:14,fontWeight:700,marginBottom:10}}>Top clients</h3>
+          {topCusts.slice(0,8).map((c,i)=>(<div key={i} style={{display:"flex",justifyContent:"space-between",padding:6,borderBottom:`1px solid ${C.border}`,fontSize:11}}>
+            <span style={{fontWeight:i<3?700:400}}>{i+1}. {c.name}</span>
+            <span><Badge color={C.primary}>{c.count} achats</Badge> <strong style={{color:C.primary}}>{c.total.toFixed(0)}€</strong></span></div>))}</div>
+      </div>);})()}
+
+    {/* Retours stats */}
+    {tab==="returns"&&(()=>{const{avoirs:returnData}=(()=>{try{const s=localStorage.getItem("caissepro_avoirs");return{avoirs:s?JSON.parse(s):[]};}catch(e){return{avoirs:[]};}})();
+      const totalReturns=returnData.length;const totalReturnValue=returnData.reduce((s,a)=>s+(a.totalTTC||0),0);
+      const returnRate=fTickets.length?(totalReturns/fTickets.length*100):0;
+      const byReason={};returnData.forEach(a=>{const r=a.reason||"Autre";byReason[r]=(byReason[r]||0)+1;});
+      const reasonData=Object.entries(byReason).sort((a,b)=>b[1]-a[1]).map(([k,v])=>({name:k,value:v}));
+      return(<div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+        <div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`}}>
+          <h3 style={{fontSize:14,fontWeight:700,marginBottom:10}}>Statistiques retours</h3>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8}}>
+            <SC icon={RotateCcw} label="Retours" value={totalReturns} color={C.fiscal}/>
+            <SC icon={DollarSign} label="Montant" value={`${totalReturnValue.toFixed(0)}€`} color={C.danger}/>
+            <SC icon={TrendingUp} label="Taux retour" value={`${returnRate.toFixed(1)}%`} color={returnRate>5?C.danger:C.primary}/></div></div>
+        <div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`}}>
+          <h3 style={{fontSize:14,fontWeight:700,marginBottom:10}}>Motifs de retour</h3>
+          {reasonData.length===0&&<div style={{color:C.textLight,fontSize:11}}>Aucun retour</div>}
+          {reasonData.map((r,i)=>(<div key={r.name} style={{display:"flex",justifyContent:"space-between",padding:6,borderBottom:`1px solid ${C.border}`,fontSize:11}}>
+            <span>{r.name}</span><Badge color={C.fiscal}>{r.value}</Badge></div>))}</div>
+      </div>);})()}
+
+    {/* Discounts analysis */}
+    {tab==="discounts"&&(()=>{const discounted=fTickets.filter(t=>t.globalDiscount>0||(t.items||[]).some(i=>i.discount>0));
+      const totalDisc=fTickets.reduce((s,t)=>{const gd=t.globalDiscount||0;const id=(t.items||[]).reduce((si,i)=>si+(i.product?.price||0)*i.quantity*(i.discount||0)/100,0);return s+gd+id;},0);
+      return(<div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`}}>
+        <h3 style={{fontSize:14,fontWeight:700,marginBottom:10}}>Analyse des remises</h3>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:14}}>
+          <SC icon={Percent} label="Ventes avec remise" value={discounted.length} color={C.accent}/>
+          <SC icon={DollarSign} label="Total remisé" value={`${totalDisc.toFixed(0)}€`} color={C.warn}/>
+          <SC icon={TrendingUp} label="% ventes remisées" value={`${fTickets.length?(discounted.length/fTickets.length*100).toFixed(1):0}%`} color={C.info}/></div>
+      </div>);})()}
   </div>);
 }
 
@@ -1876,6 +1995,207 @@ function HistoryScreen(){
   </div>);
 }
 
+/* ══════════ RETURN SCREEN ══════════ */
+function ReturnScreen(){
+  const{tickets,products,processReturn,findByEAN,avoirs,settings,notify,printerConnected,thermalPrint}=useApp();
+  const[mode,setMode]=useState("ticket");// ticket | scan | free
+  const[searchTk,setSearchTk]=useState("");const[selectedTk,setSelectedTk]=useState(null);
+  const[returnItems,setReturnItems]=useState([]);const[reason,setReason]=useState("Échange taille");
+  const[refundMethod,setRefundMethod]=useState("avoir");const[restock,setRestock]=useState(true);
+  const[searchProd,setSearchProd]=useState("");const[freeItem,setFreeItem]=useState(null);const[freeQty,setFreeQty]=useState(1);
+  const[lastAvoir,setLastAvoir]=useState(null);
+  const REASONS=["Échange taille","Échange couleur","Défectueux","N'aime plus","Cadeau à retourner","Erreur de commande","Autre"];
+  const REFUND_METHODS=[{id:"avoir",l:"Avoir / Crédit magasin",i:Gift,d:"Génère un avoir utilisable en caisse"},
+    {id:"cash",l:"Remboursement espèces",i:Banknote,d:"Remboursement immédiat en liquide"},
+    {id:"card",l:"Remboursement carte",i:CreditCard,d:"Remboursement sur la carte du client"},
+    {id:"exchange",l:"Échange immédiat",i:RotateCcw,d:"Retour + nouvelle vente, payer la différence"}];
+
+  const foundTickets=useMemo(()=>{if(!searchTk||searchTk.length<2)return[];const q=searchTk.toLowerCase();
+    return tickets.filter(t=>(t.ticketNumber||"").toLowerCase().includes(q)||(t.customerName||"").toLowerCase().includes(q))
+      .slice(0,10);},[tickets,searchTk]);
+
+  const foundProducts=useMemo(()=>{if(!searchProd||searchProd.length<2)return[];const q=searchProd.toLowerCase();
+    return products.filter(p=>p.name.toLowerCase().includes(q)||p.sku.toLowerCase().includes(q)||p.variants.some(v=>(v.ean||"").includes(q)))
+      .slice(0,8);},[products,searchProd]);
+
+  const toggleItem=(item,variant,maxQty)=>{const key=`${item.product?.id||item.productId}-${variant?.id||item.variantId}`;
+    setReturnItems(prev=>{const existing=prev.find(r=>r.key===key);
+      if(existing)return prev.filter(r=>r.key!==key);
+      return[...prev,{key,productId:item.product?.id||item.productId,variantId:variant?.id||item.variantId,
+        productName:item.product?.name||item.product_name,variantColor:variant?.color||item.variant_color,variantSize:variant?.size||item.variant_size,
+        qty:1,maxQty:maxQty||item.quantity,unitPrice:item.lineTTC?item.lineTTC/item.quantity:(item.unit_price||0)}];});};
+  const updateReturnQty=(key,qty)=>setReturnItems(prev=>prev.map(r=>r.key===key?{...r,qty:Math.min(Math.max(1,qty),r.maxQty)}:r));
+  const returnTotal=returnItems.reduce((s,r)=>s+r.unitPrice*r.qty,0);
+
+  const doReturn=async()=>{if(!returnItems.length){notify("Sélectionnez au moins un article","error");return;}
+    const items=returnItems.map(r=>({productId:r.productId,variantId:r.variantId,qty:r.qty}));
+    const avoir=await processReturn(selectedTk||{ticketNumber:"RETOUR-LIBRE",date:new Date().toISOString(),items:returnItems.map(r=>({
+      product:{id:r.productId,name:r.productName},variant:{id:r.variantId,color:r.variantColor,size:r.variantSize},
+      quantity:r.maxQty,lineHT:r.unitPrice*r.maxQty/1.20,lineTVA:r.unitPrice*r.maxQty*0.20/1.20,lineTTC:r.unitPrice*r.maxQty}))},items,reason,refundMethod);
+    if(avoir){setLastAvoir(avoir);setReturnItems([]);setSelectedTk(null);setSearchTk("");setSearchProd("");setFreeItem(null);}};
+
+  const returnWindow=settings.returnPolicy?.days||30;
+  const isExpired=(tk)=>{if(!tk)return false;const d=new Date(tk.date||tk.createdAt||tk.created_at);
+    return(Date.now()-d.getTime())/(1000*60*60*24)>returnWindow;};
+
+  return(<div style={{height:"100%",overflowY:"auto",padding:20,background:C.bg}}>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+      <h2 style={{fontSize:22,fontWeight:800,margin:0}}>Retours & Avoirs</h2>
+      <div style={{display:"flex",gap:6}}>
+        <Badge color={C.fiscal}>{avoirs.length} avoir{avoirs.length>1?"s":""}</Badge>
+        <Badge color={C.textMuted}>Délai: {returnWindow}j</Badge></div></div>
+
+    {/* Mode tabs */}
+    <div style={{display:"flex",gap:6,marginBottom:14}}>
+      {[{id:"ticket",l:"Par ticket de caisse",i:Receipt},{id:"scan",l:"Par scan / recherche produit",i:ScanLine},{id:"free",l:"Retour libre (sans ticket)",i:Edit}].map(m=>(
+        <button key={m.id} onClick={()=>{setMode(m.id);setSelectedTk(null);setReturnItems([]);setFreeItem(null);}}
+          style={{flex:1,padding:"12px 14px",borderRadius:12,border:`2px solid ${mode===m.id?C.primary:C.border}`,
+            background:mode===m.id?C.primaryLight:"transparent",cursor:"pointer",transition:"all 0.15s",textAlign:"left"}}>
+          <div style={{display:"flex",alignItems:"center",gap:8}}>
+            <m.i size={16} color={mode===m.id?C.primary:C.textMuted}/>
+            <span style={{fontSize:12,fontWeight:mode===m.id?700:500,color:mode===m.id?C.primary:C.text}}>{m.l}</span></div>
+        </button>))}</div>
+
+    <div style={{display:"grid",gridTemplateColumns:returnItems.length?"1fr 380px":"1fr",gap:14}}>
+      {/* Left — Select items */}
+      <div>
+        {mode==="ticket"&&<div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`}}>
+          <label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:4}}>RECHERCHER UN TICKET</label>
+          <Input value={searchTk} onChange={e=>setSearchTk(e.target.value)} placeholder="N° ticket, nom client…" style={{marginBottom:8,height:40}}/>
+          {!selectedTk&&foundTickets.map(t=>{const expired=isExpired(t);return(
+            <div key={t.ticketNumber} onClick={()=>{if(!expired){setSelectedTk(t);setReturnItems([]);}}}
+              style={{display:"flex",alignItems:"center",gap:10,padding:10,borderRadius:10,border:`1.5px solid ${expired?C.danger+"44":C.border}`,
+                marginBottom:4,cursor:expired?"not-allowed":"pointer",opacity:expired?0.6:1,background:expired?C.dangerLight+"20":"transparent"}}>
+              <Receipt size={14} color={expired?C.danger:C.primary}/>
+              <div style={{flex:1}}><div style={{fontSize:12,fontWeight:600}}>{t.ticketNumber}</div>
+                <div style={{fontSize:10,color:C.textMuted}}>{new Date(t.date||t.createdAt||t.created_at).toLocaleDateString("fr-FR")} — {(t.items||[]).length} art. — {(t.totalTTC||parseFloat(t.total_ttc)||0).toFixed(2)}€{t.customerName?` — ${t.customerName}`:""}</div></div>
+              {expired&&<Badge color={C.danger}>Hors délai</Badge>}
+              <span style={{fontSize:14,fontWeight:800,color:C.primary}}>{(t.totalTTC||parseFloat(t.total_ttc)||0).toFixed(2)}€</span>
+            </div>);})}
+          {selectedTk&&<div>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 12px",background:C.primaryLight,borderRadius:10,marginBottom:10,border:`1px solid ${C.primary}22`}}>
+              <div><div style={{fontSize:13,fontWeight:700,color:C.primaryDark}}>Ticket {selectedTk.ticketNumber}</div>
+                <div style={{fontSize:10,color:C.primary}}>{new Date(selectedTk.date||selectedTk.createdAt||selectedTk.created_at).toLocaleDateString("fr-FR")} — {selectedTk.userName}{selectedTk.customerName?` — ${selectedTk.customerName}`:""}</div></div>
+              <Btn variant="outline" onClick={()=>{setSelectedTk(null);setReturnItems([]);}} style={{fontSize:10,padding:"4px 10px"}}>Changer</Btn></div>
+            <div style={{fontSize:10,fontWeight:600,color:C.textMuted,marginBottom:6}}>SÉLECTIONNEZ LES ARTICLES À RETOURNER</div>
+            {(selectedTk.items||[]).map((item,idx)=>{const key=`${item.product?.id||item.product_id}-${item.variant?.id||item.variant_id}`;
+              const selected=returnItems.find(r=>r.key===key);
+              return(<div key={idx} onClick={()=>toggleItem(item,item.variant||{id:item.variant_id,color:item.variant_color,size:item.variant_size},item.quantity)}
+                style={{display:"flex",alignItems:"center",gap:10,padding:10,borderRadius:10,border:`2px solid ${selected?C.primary:C.border}`,
+                  marginBottom:4,cursor:"pointer",background:selected?C.primaryLight+"50":"transparent",transition:"all 0.15s"}}>
+                {selected?<CheckCircle2 size={18} color={C.primary}/>:<div style={{width:18,height:18,borderRadius:9,border:`2px solid ${C.border}`}}/>}
+                <div style={{flex:1}}><div style={{fontSize:12,fontWeight:600}}>{item.product?.name||item.product_name}</div>
+                  <div style={{fontSize:10,color:C.textMuted}}>{item.variant?.color||item.variant_color}/{item.variant?.size||item.variant_size} — Qté: {item.quantity}</div></div>
+                <span style={{fontSize:13,fontWeight:700,color:C.primary}}>{(item.lineTTC||item.line_ttc||(item.unit_price*item.quantity)).toFixed(2)}€</span>
+              </div>);})}
+          </div>}
+        </div>}
+
+        {mode==="scan"&&<div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`}}>
+          <label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:4}}>SCANNER OU RECHERCHER UN PRODUIT</label>
+          <Input value={searchProd} onChange={e=>setSearchProd(e.target.value)} placeholder="Nom, SKU ou scanner code-barres…" style={{marginBottom:8,height:40}}/>
+          {foundProducts.map(p=>(<div key={p.id}>
+            {p.variants.map(v=>{const key=`${p.id}-${v.id}`;const selected=returnItems.find(r=>r.key===key);
+              return(<div key={v.id} onClick={()=>toggleItem({product:p,variant:v,quantity:99,lineTTC:p.price,unit_price:p.price},v,99)}
+                style={{display:"flex",alignItems:"center",gap:10,padding:8,borderRadius:8,border:`1.5px solid ${selected?C.primary:C.border}`,
+                  marginBottom:3,cursor:"pointer",background:selected?C.primaryLight+"50":"transparent"}}>
+                {selected?<CheckCircle2 size={16} color={C.primary}/>:<div style={{width:16,height:16,borderRadius:8,border:`2px solid ${C.border}`}}/>}
+                <div style={{flex:1}}><div style={{fontSize:11,fontWeight:600}}>{p.name}</div>
+                  <div style={{fontSize:9,color:C.textMuted}}>{v.color}/{v.size} — SKU: {p.sku}{v.ean?` — EAN: ${v.ean}`:""}</div></div>
+                <span style={{fontSize:12,fontWeight:700,color:C.primary}}>{p.price.toFixed(2)}€</span>
+              </div>);})}</div>))}</div>}
+
+        {mode==="free"&&<div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`}}>
+          <label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:4}}>RETOUR LIBRE — RECHERCHER DANS LE CATALOGUE</label>
+          <Input value={searchProd} onChange={e=>setSearchProd(e.target.value)} placeholder="Nom, SKU ou scanner…" style={{marginBottom:8,height:40}}/>
+          <div style={{padding:8,background:C.warnLight,borderRadius:8,marginBottom:10,fontSize:11,color:"#92400E",border:`1px solid ${C.warn}33`}}>
+            <AlertTriangle size={12} style={{verticalAlign:"middle",marginRight:4}}/> Retour sans ticket — approbation manager recommandée</div>
+          {foundProducts.map(p=>(<div key={p.id}>
+            {p.variants.map(v=>{const key=`${p.id}-${v.id}`;const selected=returnItems.find(r=>r.key===key);
+              return(<div key={v.id} onClick={()=>toggleItem({product:p,variant:v,quantity:99,lineTTC:p.price,unit_price:p.price},v,99)}
+                style={{display:"flex",alignItems:"center",gap:10,padding:8,borderRadius:8,border:`1.5px solid ${selected?C.primary:C.border}`,
+                  marginBottom:3,cursor:"pointer",background:selected?C.primaryLight+"50":"transparent"}}>
+                {selected?<CheckCircle2 size={16} color={C.primary}/>:<div style={{width:16,height:16,borderRadius:8,border:`2px solid ${C.border}`}}/>}
+                <div style={{flex:1}}><div style={{fontSize:11,fontWeight:600}}>{p.name}</div>
+                  <div style={{fontSize:9,color:C.textMuted}}>{v.color}/{v.size}</div></div>
+                <span style={{fontSize:12,fontWeight:700,color:C.primary}}>{p.price.toFixed(2)}€</span>
+              </div>);})}</div>))}</div>}
+
+        {/* Historique avoirs */}
+        {!returnItems.length&&!selectedTk&&<div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`,marginTop:14}}>
+          <div style={{fontSize:14,fontWeight:700,marginBottom:10}}>Avoirs émis ({avoirs.length})</div>
+          {avoirs.length===0&&<div style={{color:C.textLight,fontSize:11}}>Aucun avoir</div>}
+          {avoirs.slice(0,15).map(a=>(<div key={a.avoirNumber} style={{display:"flex",alignItems:"center",gap:10,padding:8,borderBottom:`1px solid ${C.border}`}}>
+            <RotateCcw size={13} color={C.fiscal}/>
+            <div style={{flex:1}}><div style={{fontSize:11,fontWeight:600}}>{a.avoirNumber}</div>
+              <div style={{fontSize:9,color:C.textMuted}}>{new Date(a.date).toLocaleDateString("fr-FR")} — Réf: {a.originalTicket} — {a.reason} — {a.refundMethod}</div></div>
+            <span style={{fontSize:12,fontWeight:700,color:C.danger}}>-{a.totalTTC.toFixed(2)}€</span>
+          </div>))}</div>}
+      </div>
+
+      {/* Right — Return summary */}
+      {returnItems.length>0&&<div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`,alignSelf:"start",position:"sticky",top:20}}>
+        <div style={{fontSize:14,fontWeight:700,marginBottom:10,display:"flex",alignItems:"center",gap:6}}>
+          <RotateCcw size={16} color={C.fiscal}/> Résumé du retour</div>
+
+        {returnItems.map(r=>(<div key={r.key} style={{display:"flex",alignItems:"center",gap:8,padding:8,borderBottom:`1px solid ${C.border}`,marginBottom:4}}>
+          <div style={{flex:1}}><div style={{fontSize:11,fontWeight:600}}>{r.productName}</div>
+            <div style={{fontSize:9,color:C.textMuted}}>{r.variantColor}/{r.variantSize}</div></div>
+          <div style={{display:"flex",alignItems:"center",gap:2,background:C.surfaceAlt,borderRadius:8,padding:2}}>
+            <button onClick={()=>updateReturnQty(r.key,r.qty-1)} style={{width:22,height:22,borderRadius:6,border:"none",background:C.surface,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}><Minus size={10}/></button>
+            <span style={{width:24,textAlign:"center",fontSize:11,fontWeight:700}}>{r.qty}</span>
+            <button onClick={()=>updateReturnQty(r.key,r.qty+1)} style={{width:22,height:22,borderRadius:6,border:"none",background:C.surface,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}><Plus size={10}/></button></div>
+          <span style={{fontSize:12,fontWeight:700,color:C.danger,minWidth:60,textAlign:"right"}}>{(r.unitPrice*r.qty).toFixed(2)}€</span>
+          <button onClick={()=>setReturnItems(p=>p.filter(x=>x.key!==r.key))} style={{background:C.dangerLight,border:"none",cursor:"pointer",borderRadius:6,width:22,height:22,display:"flex",alignItems:"center",justifyContent:"center"}}>
+            <Trash2 size={10} color={C.danger}/></button>
+        </div>))}
+
+        <div style={{background:C.surfaceAlt,borderRadius:10,padding:12,margin:"10px 0"}}>
+          <div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}>
+            <span style={{fontSize:16,fontWeight:800}}>Total retour</span>
+            <span style={{fontSize:20,fontWeight:900,color:C.danger}}>-{returnTotal.toFixed(2)}€</span></div></div>
+
+        <div style={{marginBottom:10}}>
+          <label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:4}}>MOTIF DU RETOUR</label>
+          <select value={reason} onChange={e=>setReason(e.target.value)} style={{width:"100%",padding:8,borderRadius:8,border:`1.5px solid ${C.border}`,fontSize:11,fontFamily:"inherit"}}>
+            {REASONS.map(r=>(<option key={r} value={r}>{r}</option>))}</select></div>
+
+        <div style={{marginBottom:10}}>
+          <label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:4}}>MODE DE REMBOURSEMENT</label>
+          <div style={{display:"flex",flexDirection:"column",gap:4}}>
+            {REFUND_METHODS.map(m=>(<button key={m.id} onClick={()=>setRefundMethod(m.id)}
+              style={{display:"flex",alignItems:"center",gap:8,padding:"8px 10px",borderRadius:8,border:`2px solid ${refundMethod===m.id?C.fiscal:C.border}`,
+                background:refundMethod===m.id?`${C.fiscal}08`:"transparent",cursor:"pointer",textAlign:"left"}}>
+              <m.i size={14} color={refundMethod===m.id?C.fiscal:C.textMuted}/>
+              <div><div style={{fontSize:11,fontWeight:refundMethod===m.id?700:500,color:refundMethod===m.id?C.fiscal:C.text}}>{m.l}</div>
+                <div style={{fontSize:9,color:C.textMuted}}>{m.d}</div></div>
+            </button>))}</div></div>
+
+        <label style={{display:"flex",alignItems:"center",gap:6,fontSize:11,fontWeight:600,color:C.textMuted,marginBottom:12,cursor:"pointer"}}>
+          <input type="checkbox" checked={restock} onChange={e=>setRestock(e.target.checked)}
+            style={{width:16,height:16,accentColor:C.primary}}/> Remettre en stock</label>
+
+        <Btn onClick={doReturn} style={{width:"100%",height:44,background:`linear-gradient(135deg,${C.fiscal},#8B6FC0)`,fontSize:13}}>
+          <RotateCcw size={16}/> Valider le retour — {returnTotal.toFixed(2)}€</Btn>
+      </div>}
+    </div>
+
+    {/* Avoir confirmation */}
+    <Modal open={!!lastAvoir} onClose={()=>setLastAvoir(null)} title="Avoir émis">
+      {lastAvoir&&<div style={{textAlign:"center"}}>
+        <div style={{width:64,height:64,borderRadius:32,background:`linear-gradient(135deg,${C.fiscal},#8B6FC0)`,display:"inline-flex",alignItems:"center",justifyContent:"center",marginBottom:10,
+          boxShadow:`0 8px 24px ${C.fiscal}35`}}><CheckCircle2 size={32} color="#fff"/></div>
+        <div style={{fontSize:20,fontWeight:900,color:C.fiscal,marginBottom:4}}>{lastAvoir.avoirNumber}</div>
+        <div style={{fontSize:14,color:C.text,marginBottom:4}}>Montant: <strong>{lastAvoir.totalTTC.toFixed(2)}€</strong></div>
+        <div style={{fontSize:12,color:C.textMuted,marginBottom:4}}>Motif: {lastAvoir.reason} — Mode: {lastAvoir.refundMethod}</div>
+        <div style={{fontSize:11,color:C.textMuted,marginBottom:14}}>Réf. ticket: {lastAvoir.originalTicket}</div>
+        <div style={{display:"flex",gap:8}}>
+          <Btn variant="outline" onClick={()=>thermalPrint("avoir",lastAvoir)} style={{flex:1}}><Printer size={14}/> Imprimer</Btn>
+          <Btn variant="success" onClick={()=>setLastAvoir(null)} style={{flex:1}}><CheckCircle2 size={14}/> Terminé</Btn></div>
+      </div>}</Modal>
+  </div>);
+}
+
 /* ══════════ CLOSURE ══════════ */
 function ClosureScreen(){
   const{tickets,cashReg,closures,createClosure,gt,closeReg,perm:p,avoirs,settings,printerConnected,thermalPrint,notify}=useApp();
@@ -2061,17 +2381,20 @@ function CustomersScreen(){
         <Btn variant="outline" onClick={()=>{setCsvModal(true);setCsvStep(0);setCsvData([]);}} style={{fontSize:11}}><Upload size={12}/> Import CSV</Btn>
         <Btn onClick={()=>setNewCustModal(true)} style={{fontSize:11,background:`linear-gradient(135deg,${C.primary},${C.gradientB})`}}><Plus size={12}/> Nouveau client</Btn></div></div>
     <div style={{display:"flex",gap:10}}>
-      <div style={{width:300}}>
+      <div style={{flex:sel?`0 0 280px`:"1",transition:"flex 0.3s ease",maxHeight:"calc(100vh - 140px)",overflowY:"auto"}}>
         <Input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Rechercher nom, email, téléphone…" style={{marginBottom:10,height:36}}/>
+        <div style={{display:sel?"flex":"grid",flexDirection:"column",gridTemplateColumns:sel?"1fr":"repeat(auto-fill,minmax(260px,1fr))",gap:sel?4:8}}>
         {filtered.map(c=>{const tier=getLoyaltyTier(c.points);return(
-          <div key={c.id} onClick={()=>{setSel(c);setEditMode(false);}} style={{display:"flex",alignItems:"center",gap:8,padding:8,borderRadius:8,
-            background:sel?.id===c.id?C.primaryLight:C.surface,border:`1.5px solid ${sel?.id===c.id?C.primary:C.border}`,marginBottom:4,cursor:"pointer"}}>
-            <div style={{width:30,height:30,borderRadius:15,background:`linear-gradient(135deg,${C.primary},${C.gradientB})`,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:700,fontSize:10}}>{c.firstName[0]}{c.lastName[0]}</div>
-            <div style={{flex:1}}><div style={{fontSize:11,fontWeight:600}}>{c.firstName} {c.lastName}</div>
-              <div style={{fontSize:9,color:C.textMuted}}>{tier.name} — {c.points}pts — {c.totalSpent.toFixed(0)}€</div></div>
-          </div>);})}
+          <div key={c.id} onClick={()=>{setSel(c);setEditMode(false);}} style={{display:"flex",alignItems:"center",gap:8,padding:sel?8:12,borderRadius:sel?8:12,
+            background:sel?.id===c.id?C.primaryLight:C.surface,border:`1.5px solid ${sel?.id===c.id?C.primary:C.border}`,cursor:"pointer",transition:"all 0.15s"}}
+            onMouseEnter={e=>{if(sel?.id!==c.id)e.currentTarget.style.borderColor=C.primary+"66";}} onMouseLeave={e=>{if(sel?.id!==c.id)e.currentTarget.style.borderColor=C.border;}}>
+            <div style={{width:sel?30:36,height:sel?30:36,borderRadius:sel?15:18,background:`linear-gradient(135deg,${C.primary},${C.gradientB})`,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:700,fontSize:sel?10:12}}>{c.firstName?.[0]}{c.lastName?.[0]}</div>
+            <div style={{flex:1,minWidth:0}}><div style={{fontSize:sel?11:13,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.firstName} {c.lastName}</div>
+              <div style={{fontSize:sel?9:10,color:C.textMuted}}>{tier.name} — {c.points}pts — {c.totalSpent.toFixed(0)}€</div>
+              {!sel&&c.phone&&<div style={{fontSize:9,color:C.textLight,marginTop:1}}>{c.phone}{c.email?` — ${c.email}`:""}</div>}</div>
+          </div>);})}</div>
       </div>
-      {sel&&<div style={{flex:1}}>
+      {sel&&<div style={{flex:1,minWidth:0}}>
         <div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`,marginBottom:10}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"start",marginBottom:10}}>
             {!editMode?<div><div style={{fontSize:18,fontWeight:700}}>{sel.firstName} {sel.lastName}</div>
@@ -2718,6 +3041,101 @@ function ProductsScreen(){
 }
 
 /* ══════════ SETTINGS ══════════ */
+function ReturnsHistoryScreen(){
+  const{avoirs,tickets,notify}=useApp();
+  const[filter,setFilter]=useState("all");const[search,setSearch]=useState("");
+  const sorted=[...avoirs].sort((a,b)=>new Date(b.date)-new Date(a.date));
+  const filtered=sorted.filter(a=>{
+    if(filter==="avoir"&&a.refundMethod!=="avoir")return false;
+    if(filter==="cash"&&a.refundMethod!=="cash")return false;
+    if(filter==="card"&&a.refundMethod!=="card")return false;
+    if(filter==="exchange"&&a.refundMethod!=="exchange")return false;
+    if(search){const s=search.toLowerCase();return(a.code||"").toLowerCase().includes(s)||(a.reason||"").toLowerCase().includes(s)||(a.items||[]).some(it=>(it.name||"").toLowerCase().includes(s));}
+    return true;
+  });
+  const totalReturns=avoirs.length;
+  const totalValue=avoirs.reduce((s,a)=>s+(a.amount||0),0);
+  const totalItems=avoirs.reduce((s,a)=>s+(a.items||[]).reduce((ss,it)=>ss+(it.qty||1),0),0);
+  const reasonStats={};avoirs.forEach(a=>{const r=a.reason||"Non spécifié";reasonStats[r]=(reasonStats[r]||0)+1;});
+  const methodStats={};avoirs.forEach(a=>{const m=a.refundMethod||"avoir";methodStats[m]=(methodStats[m]||0)+1;});
+
+  return(<div style={{height:"100%",overflowY:"auto",padding:20,background:C.bg}}>
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16}}>
+      <div><h2 style={{fontSize:22,fontWeight:800,margin:0}}>Retours & Avoirs</h2>
+        <p style={{fontSize:12,color:C.textMuted,margin:0}}>Historique et statistiques des retours</p></div></div>
+
+    <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12,marginBottom:16}}>
+      <div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`}}>
+        <div style={{fontSize:10,color:C.textMuted,fontWeight:600,marginBottom:4}}>TOTAL RETOURS</div>
+        <div style={{fontSize:24,fontWeight:800}}>{totalReturns}</div></div>
+      <div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`}}>
+        <div style={{fontSize:10,color:C.textMuted,fontWeight:600,marginBottom:4}}>VALEUR TOTALE</div>
+        <div style={{fontSize:24,fontWeight:800,color:C.danger}}>{totalValue.toFixed(2)}€</div></div>
+      <div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`}}>
+        <div style={{fontSize:10,color:C.textMuted,fontWeight:600,marginBottom:4}}>ARTICLES RETOURNÉS</div>
+        <div style={{fontSize:24,fontWeight:800}}>{totalItems}</div></div>
+      <div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`}}>
+        <div style={{fontSize:10,color:C.textMuted,fontWeight:600,marginBottom:4}}>TAUX DE RETOUR</div>
+        <div style={{fontSize:24,fontWeight:800}}>{tickets.length?((totalReturns/tickets.length)*100).toFixed(1):0}%</div></div>
+    </div>
+
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,marginBottom:16}}>
+      <div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`}}>
+        <h4 style={{fontSize:13,fontWeight:700,marginBottom:10}}>Par motif</h4>
+        {Object.entries(reasonStats).sort((a,b)=>b[1]-a[1]).map(([reason,count])=>(
+          <div key={reason} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"6px 0",borderBottom:`1px solid ${C.border}`}}>
+            <span style={{fontSize:12}}>{reason}</span>
+            <div style={{display:"flex",alignItems:"center",gap:8}}>
+              <div style={{width:60,height:6,borderRadius:3,background:C.surfaceAlt,overflow:"hidden"}}>
+                <div style={{height:"100%",borderRadius:3,background:C.primary,width:`${(count/totalReturns)*100}%`}}/></div>
+              <span style={{fontSize:11,fontWeight:700,minWidth:30,textAlign:"right"}}>{count}</span></div></div>))}
+        {Object.keys(reasonStats).length===0&&<div style={{color:C.textLight,fontSize:12,textAlign:"center",padding:16}}>Aucun retour</div>}
+      </div>
+      <div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`}}>
+        <h4 style={{fontSize:13,fontWeight:700,marginBottom:10}}>Par mode de remboursement</h4>
+        {Object.entries(methodStats).sort((a,b)=>b[1]-a[1]).map(([method,count])=>{
+          const labels={avoir:"Avoir / Crédit",cash:"Espèces",card:"Carte bancaire",exchange:"Échange"};
+          const colors={avoir:C.primary,cash:C.accent,card:C.info,exchange:"#8B5CF6"};
+          return(<div key={method} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"6px 0",borderBottom:`1px solid ${C.border}`}}>
+            <div style={{display:"flex",alignItems:"center",gap:6}}>
+              <div style={{width:10,height:10,borderRadius:3,background:colors[method]||C.textMuted}}/>
+              <span style={{fontSize:12}}>{labels[method]||method}</span></div>
+            <span style={{fontSize:11,fontWeight:700}}>{count}</span></div>);})}
+        {Object.keys(methodStats).length===0&&<div style={{color:C.textLight,fontSize:12,textAlign:"center",padding:16}}>Aucun retour</div>}
+      </div>
+    </div>
+
+    <div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`}}>
+      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
+        <div style={{flex:1,position:"relative"}}><Search size={14} style={{position:"absolute",left:10,top:10,color:C.textMuted}}/><Input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Rechercher un retour…" style={{paddingLeft:30}}/></div>
+        <div style={{display:"flex",gap:4}}>
+          {[{id:"all",l:"Tous"},{id:"avoir",l:"Avoirs"},{id:"cash",l:"Espèces"},{id:"card",l:"Carte"},{id:"exchange",l:"Échanges"}].map(f=>(
+            <button key={f.id} onClick={()=>setFilter(f.id)} style={{padding:"6px 12px",borderRadius:8,border:`1.5px solid ${filter===f.id?C.primary:C.border}`,
+              background:filter===f.id?C.primary:"transparent",color:filter===f.id?"#fff":C.text,fontSize:11,fontWeight:600,cursor:"pointer"}}>{f.l}</button>))}
+        </div>
+      </div>
+      {filtered.length===0&&<div style={{textAlign:"center",padding:30,color:C.textLight}}>
+        <RotateCcw size={32} style={{marginBottom:8,opacity:0.3}}/><div>Aucun retour trouvé</div></div>}
+      {filtered.map(a=>(<div key={a.id||a.code} style={{padding:12,borderBottom:`1px solid ${C.border}`,display:"flex",alignItems:"center",gap:12}}>
+        <div style={{width:40,height:40,borderRadius:10,background:C.dangerLight,display:"flex",alignItems:"center",justifyContent:"center"}}><RotateCcw size={16} color={C.danger}/></div>
+        <div style={{flex:1}}>
+          <div style={{display:"flex",alignItems:"center",gap:6}}>
+            <span style={{fontSize:13,fontWeight:700}}>{a.code||"RET-"+String(a.id).slice(-6)}</span>
+            <Badge color={a.refundMethod==="avoir"?C.primary:a.refundMethod==="cash"?C.accent:a.refundMethod==="card"?C.info:"#8B5CF6"}>
+              {a.refundMethod==="avoir"?"Avoir":a.refundMethod==="cash"?"Espèces":a.refundMethod==="card"?"Carte":"Échange"}</Badge>
+            {a.originalTicket&&<span style={{fontSize:10,color:C.textMuted}}>Ticket: {a.originalTicket}</span>}</div>
+          <div style={{fontSize:11,color:C.textMuted,marginTop:2}}>
+            {(a.items||[]).map(it=>`${it.name}${it.variant?" ("+it.variant+")":""}${it.qty>1?" x"+it.qty:""}`).join(", ")}
+            {a.reason&&<span> — {a.reason}</span>}</div></div>
+        <div style={{textAlign:"right"}}>
+          <div style={{fontSize:14,fontWeight:800,color:C.danger}}>{(a.amount||0).toFixed(2)}€</div>
+          <div style={{fontSize:10,color:C.textMuted}}>{new Date(a.date).toLocaleDateString("fr-FR",{day:"2-digit",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"})}</div>
+        </div>
+      </div>))}
+    </div>
+  </div>);
+}
+
 function SettingsScreen(){
   const{settings,setSettings,saveSettingsToAPI,addAudit,theme,setTheme,clockEntries,priceHistory,printerConnected,printerType,connectPrinter,disconnectPrinter,thermalPrint,notify}=useApp();
   const[tab,setTab]=useState("general");
@@ -2822,14 +3240,78 @@ function SettingsScreen(){
           <strong>Tiroir-caisse:</strong> Ouverture automatique via signal RJ11 (connecté à l'imprimante)</div></div>
     </div>}
 
-    {tab==="return"&&<div style={{maxWidth:500}}>
-      <div style={{marginBottom:10}}><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>DÉLAI DE RETOUR (jours)</label>
-        <Input type="number" value={settings.returnPolicy?.days||30} onChange={e=>setSettings(s=>({...s,returnPolicy:{...s.returnPolicy,days:parseInt(e.target.value)||30}}))}/></div>
-      <div style={{marginBottom:10}}><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>CONDITIONS</label>
-        <textarea value={settings.returnPolicy?.conditions||""} onChange={e=>setSettings(s=>({...s,returnPolicy:{...s.returnPolicy,conditions:e.target.value}}))}
-          style={{width:"100%",height:80,padding:10,borderRadius:10,border:`2px solid ${C.border}`,fontSize:12,fontFamily:"inherit",resize:"vertical"}}
-          placeholder="Article non porté, étiquette présente…"/></div>
-      <Btn onClick={()=>addAudit("CONFIG","Politique de retour mise à jour")} style={{width:"100%",height:40,background:`linear-gradient(135deg,${C.primary},${C.gradientB})`}}><Save size={14}/> Enregistrer</Btn></div>}
+    {tab==="return"&&<div style={{maxWidth:600}}>
+      <div style={{background:`linear-gradient(135deg,${C.primaryLight},#DCF0E2)`,borderRadius:16,padding:20,border:`1.5px solid ${C.primary}22`,marginBottom:16}}>
+        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}>
+          <RotateCcw size={20} color={C.primary}/>
+          <div><h3 style={{fontSize:16,fontWeight:800,margin:0}}>Politique de retour</h3>
+            <p style={{fontSize:11,color:C.textMuted,margin:0}}>Configurez les règles de retour et d'échange</p></div></div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:12}}>
+          <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>DÉLAI DE RETOUR (jours)</label>
+            <Input type="number" value={settings.returnPolicy?.days||30} onChange={e=>setSettings(s=>({...s,returnPolicy:{...s.returnPolicy,days:parseInt(e.target.value)||30}}))}/></div>
+          <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>MONTANT MAX SANS APPROBATION (€)</label>
+            <Input type="number" value={settings.returnPolicy?.maxNoApproval||100} onChange={e=>setSettings(s=>({...s,returnPolicy:{...s.returnPolicy,maxNoApproval:parseFloat(e.target.value)||100}}))}/></div>
+        </div>
+        <div style={{marginBottom:12}}><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>CONDITIONS DE RETOUR</label>
+          <textarea value={settings.returnPolicy?.conditions||""} onChange={e=>setSettings(s=>({...s,returnPolicy:{...s.returnPolicy,conditions:e.target.value}}))}
+            style={{width:"100%",height:70,padding:10,borderRadius:10,border:`2px solid ${C.border}`,fontSize:12,fontFamily:"inherit",resize:"vertical"}}
+            placeholder="Article non porté, étiquette présente…"/></div>
+        <div style={{marginBottom:12}}><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>MESSAGE SUR LE TICKET D'AVOIR</label>
+          <Input value={settings.returnPolicy?.avoirMsg||""} onChange={e=>setSettings(s=>({...s,returnPolicy:{...s.returnPolicy,avoirMsg:e.target.value}}))} placeholder="Merci de votre confiance. Avoir valable 12 mois."/></div>
+      </div>
+
+      <div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`,marginBottom:14}}>
+        <h4 style={{fontSize:13,fontWeight:700,marginBottom:12}}>Modes de remboursement autorisés</h4>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+          {[{k:"allowAvoir",l:"Avoir / Crédit magasin",d:"Émettre un bon d'avoir utilisable en magasin"},
+            {k:"allowCashRefund",l:"Remboursement espèces",d:"Rembourser en espèces au client"},
+            {k:"allowCardRefund",l:"Remboursement carte",d:"Rembourser sur la carte bancaire du client"},
+            {k:"allowExchange",l:"Échange article",d:"Échanger contre un autre article"}].map(opt=>{
+            const val=settings.returnPolicy?.[opt.k]!==false;
+            return(<button key={opt.k} onClick={()=>setSettings(s=>({...s,returnPolicy:{...s.returnPolicy,[opt.k]:!val}}))}
+              style={{padding:12,borderRadius:12,border:`2px solid ${val?C.primary:C.border}`,background:val?`${C.primary}08`:"#fff",cursor:"pointer",textAlign:"left",transition:"all 0.15s"}}>
+              <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:4}}>
+                <div style={{width:16,height:16,borderRadius:4,border:`2px solid ${val?C.primary:C.border}`,background:val?C.primary:"transparent",display:"flex",alignItems:"center",justifyContent:"center"}}>
+                  {val&&<Check size={10} color="#fff"/>}</div>
+                <span style={{fontSize:12,fontWeight:600,color:val?C.primary:C.text}}>{opt.l}</span></div>
+              <p style={{fontSize:10,color:C.textMuted,margin:0,paddingLeft:22}}>{opt.d}</p>
+            </button>);})}
+        </div>
+      </div>
+
+      <div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`,marginBottom:14}}>
+        <h4 style={{fontSize:13,fontWeight:700,marginBottom:12}}>Options de retour</h4>
+        <div style={{display:"flex",flexDirection:"column",gap:8}}>
+          {[{k:"autoRestock",l:"Remise en stock automatique",d:"Remettre automatiquement les articles retournés en stock"},
+            {k:"requireReceipt",l:"Ticket obligatoire",d:"Exiger le ticket de caisse pour effectuer un retour (désactiver pour autoriser les retours libres)"},
+            {k:"printAvoir",l:"Imprimer le ticket d'avoir",d:"Imprimer automatiquement un justificatif d'avoir"},
+            {k:"requireReason",l:"Motif obligatoire",d:"Exiger un motif pour chaque retour"}].map(opt=>{
+            const val=settings.returnPolicy?.[opt.k]!==false;
+            return(<div key={opt.k} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"8px 12px",borderRadius:10,background:C.surfaceAlt,border:`1px solid ${C.border}`}}>
+              <div><div style={{fontSize:12,fontWeight:600}}>{opt.l}</div>
+                <div style={{fontSize:10,color:C.textMuted}}>{opt.d}</div></div>
+              <button onClick={()=>setSettings(s=>({...s,returnPolicy:{...s.returnPolicy,[opt.k]:!val}}))}
+                style={{width:40,height:22,borderRadius:11,border:"none",cursor:"pointer",background:val?C.primary:C.border,position:"relative",transition:"all 0.2s"}}>
+                <div style={{width:16,height:16,borderRadius:8,background:"#fff",position:"absolute",top:3,left:val?21:3,transition:"all 0.2s",boxShadow:"0 1px 3px rgba(0,0,0,0.15)"}}/></button>
+            </div>);})}
+        </div>
+      </div>
+
+      <div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`,marginBottom:14}}>
+        <h4 style={{fontSize:13,fontWeight:700,marginBottom:8}}>Motifs de retour personnalisés</h4>
+        <p style={{fontSize:10,color:C.textMuted,marginBottom:10}}>Ces motifs seront proposés dans la caisse lors d'un retour.</p>
+        <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+          {(settings.returnPolicy?.reasons||["Échange taille","Échange couleur","Défectueux","Ne convient pas","Erreur achat","Autre"]).map((r,i)=>(
+            <div key={i} style={{display:"flex",alignItems:"center",gap:4,padding:"4px 10px",borderRadius:8,background:C.surfaceAlt,border:`1px solid ${C.border}`,fontSize:11}}>
+              {r}<button onClick={()=>{const reasons=[...(settings.returnPolicy?.reasons||["Échange taille","Échange couleur","Défectueux","Ne convient pas","Erreur achat","Autre"])];reasons.splice(i,1);setSettings(s=>({...s,returnPolicy:{...s.returnPolicy,reasons}}));}}
+                style={{background:"none",border:"none",cursor:"pointer",padding:0,display:"flex"}}><X size={12} color={C.textMuted}/></button></div>))}
+          <button onClick={()=>{const r=prompt("Nouveau motif de retour:");if(r){const reasons=[...(settings.returnPolicy?.reasons||["Échange taille","Échange couleur","Défectueux","Ne convient pas","Erreur achat","Autre"]),r];setSettings(s=>({...s,returnPolicy:{...s.returnPolicy,reasons}}));}}}
+            style={{padding:"4px 10px",borderRadius:8,border:`1.5px dashed ${C.primary}`,background:"transparent",color:C.primary,fontSize:11,fontWeight:600,cursor:"pointer"}}>+ Ajouter</button>
+        </div>
+      </div>
+
+      <Btn onClick={()=>{saveSettingsToAPI(settings);addAudit("CONFIG","Politique de retour mise à jour");notify("Paramètres de retour sauvegardés","success");}} style={{width:"100%",height:44,background:`linear-gradient(135deg,${C.primary},${C.gradientB})`}}><Save size={14}/> Enregistrer les paramètres de retour</Btn>
+    </div>}
 
     {tab==="theme"&&<div style={{maxWidth:500}}>
       <div style={{marginBottom:10}}><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>COULEUR PRINCIPALE</label>
@@ -2978,7 +3460,7 @@ function PromosScreen(){
 
 function CashierNav({active,onNav}){
   const{currentUser,logout,isOnline,stockAlerts,clockIn,clockOut}=useApp();
-  const items=[{id:"sales",l:"Vente",i:ShoppingCart},{id:"stats",l:"Stats",i:BarChart3},{id:"stock",l:"Stock",i:Grid},
+  const items=[{id:"sales",l:"Vente",i:ShoppingCart},{id:"returns",l:"Retours",i:RotateCcw},{id:"stats",l:"Stats",i:BarChart3},{id:"stock",l:"Stock",i:Grid},
     {id:"products",l:"Produits",i:Package},{id:"history",l:"Tickets",i:Receipt},{id:"customers",l:"Clients",i:Users},{id:"giftcards",l:"Cadeaux",i:Gift},
     {id:"promos",l:"Promos",i:Zap},{id:"closure",l:"Clôture",i:Lock},
     {id:"audit",l:"Audit",i:Activity},{id:"fiscal",l:"NF525",i:Shield},{id:"settings",l:"Réglages",i:Settings}];
@@ -3015,7 +3497,7 @@ function CashierNav({active,onNav}){
 function CashierInterface(){
   const[sr,setSr]=useState(true);const[sc,setSc]=useState("sales");
   if(sr)return<CashRegControl onSkip={()=>setSr(false)} onDone={()=>setSr(false)}/>;
-  const S={sales:SalesScreen,stats:StatsScreen,stock:StockScreen,history:HistoryScreen,customers:CustomersScreen,
+  const S={sales:SalesScreen,returns:ReturnScreen,stats:StatsScreen,stock:StockScreen,history:HistoryScreen,customers:CustomersScreen,
     giftcards:GiftCardScreen,promos:PromosScreen,products:ProductsScreen,closure:ClosureScreen,audit:AuditScreen,fiscal:FiscalScreen,settings:SettingsScreen};
   const Sc=S[sc]||SalesScreen;
   return(<div style={{display:"flex",height:"100vh",fontFamily:"'DM Sans',system-ui,sans-serif"}}><CashierNav active={sc} onNav={setSc}/><div style={{flex:1,overflow:"hidden"}}><ErrorBoundary><Sc/></ErrorBoundary></div></div>);
@@ -3079,7 +3561,7 @@ function UsersScreen(){
 function DashboardNav({active,onNav}){
   const{logout,currentUser}=useApp();
   const items=[{id:"overview",l:"Dashboard",i:LayoutDashboard},{id:"products",l:"Produits",i:Package},{id:"stock",l:"Stock",i:Grid},
-    {id:"stats",l:"Statistiques",i:BarChart3},{id:"customers",l:"Clients",i:Users},{id:"users",l:"Utilisateurs",i:UserIcon},
+    {id:"stats",l:"Statistiques",i:BarChart3},{id:"returns",l:"Retours & Avoirs",i:RotateCcw},{id:"customers",l:"Clients",i:Users},{id:"users",l:"Utilisateurs",i:UserIcon},
     {id:"tva",l:"Taux de TVA",i:Percent},{id:"giftcards",l:"Cartes cadeaux",i:Gift},{id:"promos",l:"Promotions",i:Zap},{id:"settings",l:"Paramètres",i:Settings},{id:"fiscal",l:"Fiscal NF525",i:Shield},{id:"audit",l:"Journal d'audit",i:Activity}];
   return(<div style={{width:230,background:"linear-gradient(180deg,#1A2830,#1E3035)",height:"100vh",display:"flex",flexDirection:"column"}}>
     <div style={{padding:"20px 18px",borderBottom:"1px solid rgba(255,255,255,0.06)"}}>
@@ -3207,7 +3689,7 @@ function TVAScreen(){
 
 function DashboardInterface(){
   const[sc,setSc]=useState("overview");
-  const S={overview:DashOverview,products:ProductsScreen,stock:StockScreen,stats:StatsScreen,customers:CustomersScreen,
+  const S={overview:DashOverview,products:ProductsScreen,stock:StockScreen,stats:StatsScreen,returns:ReturnsHistoryScreen,customers:CustomersScreen,
     users:UsersScreen,tva:TVAScreen,giftcards:GiftCardScreen,promos:PromosScreen,settings:SettingsScreen,fiscal:FiscalScreen,audit:AuditScreen};
   const Sc=S[sc]||DashOverview;
   return(<div style={{display:"flex",height:"100vh",fontFamily:"'DM Sans',system-ui,sans-serif"}}><DashboardNav active={sc} onNav={setSc}/><div style={{flex:1,overflow:"hidden"}}><Sc/></div></div>);
