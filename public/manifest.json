@@ -1,0 +1,9 @@
+{
+  "name": "CaissePro",
+  "short_name": "CaissePro",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#F8F7F4",
+  "theme_color": "#2D5A3D",
+  "icons": []
+}
