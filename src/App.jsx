@@ -2653,12 +2653,22 @@ function CSVImportWizard({open,onClose,existingProducts,onImportComplete}){
         existingMatch=existingProducts.find(ep=>ep.name.toLowerCase()===product.name.toLowerCase());isDuplicate=!!existingMatch;
       }
       if(isDuplicate){
-        if(duplicateAction==="update")updates.push({existing:existingMatch,incoming:product,
-          newVariants:product.variants.filter(v=>!existingMatch.variants.some(ev=>ev.ean&&ev.ean===v.ean))});
-        else skipped.push({existing:existingMatch,incoming:product});
+        if(duplicateAction==="update"){
+          // Separate new variants from existing ones that need updating
+          const newVariants=[];const updatedVariants=[];
+          product.variants.forEach(v=>{
+            const match=existingMatch.variants.find(ev=>(ev.ean&&ev.ean===v.ean)||(ev.size===v.size&&ev.color===v.color));
+            if(match)updatedVariants.push({...v,existingId:match.id,existingEan:match.ean});
+            else newVariants.push(v);
+          });
+          updates.push({existing:existingMatch,incoming:product,newVariants,updatedVariants,
+            fieldsChanged:{name:product.name,price:product.price,costPrice:product.costPrice,
+              taxRate:product.taxRate,category:product.category,collection:product.collection}});
+        }else skipped.push({existing:existingMatch,incoming:product});
       }else{newProducts.push(product);}
     });
-    setProcessed({newProducts,updates,skipped,errors,totalVariants:newProducts.reduce((s,p)=>s+p.variants.length,0)+updates.reduce((s,u)=>s+u.newVariants.length,0)});
+    setProcessed({newProducts,updates,skipped,errors,
+      totalVariants:newProducts.reduce((s,p)=>s+p.variants.length,0)+updates.reduce((s,u)=>s+u.newVariants.length+u.updatedVariants.length,0)});
     setStep(3);
   };
 
@@ -2675,14 +2685,37 @@ function CSVImportWizard({open,onClose,existingProducts,onImportComplete}){
         category:p.category,collection:p.collection,variants:p.variants.map(v=>({color:v.color,size:v.size,ean:v.ean,stock:v.stock,defective:0,stockAlert:v.stockAlert}))});
         results.created++;}catch(e){results.errors.push({name:p.name,error:e.message});}
     }
-    // Update existing products (add new variants)
+    // Update existing products — update product fields, existing variant stock, and add new variants
     for(const u of processed.updates){
-      try{for(const v of u.newVariants){await API.products.addVariant(u.existing.id,{color:v.color,size:v.size,ean:v.ean,stock:v.stock,defective:0,stockAlert:v.stockAlert});}
-        results.updated++;}catch(e){results.errors.push({name:u.existing.name,error:e.message});}
+      try{
+        // 1) Update product core fields (price, name, category, etc.)
+        const fc=u.fieldsChanged;
+        await API.products.update(u.existing.id,{
+          name:fc.name||u.existing.name,price:fc.price||u.existing.price,
+          costPrice:fc.costPrice||u.existing.costPrice,taxRate:fc.taxRate??u.existing.taxRate,
+          category:fc.category||u.existing.category,collection:fc.collection||u.existing.collection,
+          // Merge variants: update existing + add new
+          variants:[
+            ...u.existing.variants.map(ev=>{
+              const csvMatch=u.updatedVariants.find(uv=>uv.existingId===ev.id);
+              if(csvMatch)return{...ev,stock:csvMatch.stock,ean:csvMatch.ean||ev.ean,color:csvMatch.color||ev.color,size:csvMatch.size||ev.size,stockAlert:csvMatch.stockAlert||ev.stockAlert};
+              return ev;
+            }),
+            ...u.newVariants.map(v=>({color:v.color,size:v.size,ean:v.ean,stock:v.stock,defective:0,stockAlert:v.stockAlert}))
+          ]
+        });
+        results.updated++;
+      }catch(e){
+        // Fallback: try just adding new variants if full update fails
+        try{for(const v of u.newVariants){await API.products.addVariant(u.existing.id,{color:v.color,size:v.size,ean:v.ean,stock:v.stock,defective:0,stockAlert:v.stockAlert});}
+          results.updated++;}catch(e2){results.errors.push({name:u.existing.name,error:e.message});}
+      }
     }
-    // Fallback: if API fails for all, do local import
-    if(results.created===0&&results.updated===0&&processed.newProducts.length>0){
-      onImportComplete(null,processed.newProducts);setImportResult(results);setImporting(false);setStep(4);return;
+    // Fallback: if API fails for all, do local import (both new + updates)
+    if(results.created===0&&results.updated===0&&(processed.newProducts.length>0||processed.updates.length>0)){
+      const localUpdates=processed.updates.map(u=>({...u.existing,...u.fieldsChanged,
+        variants:[...u.existing.variants.map(ev=>{const m=u.updatedVariants.find(uv=>uv.existingId===ev.id);return m?{...ev,stock:m.stock,ean:m.ean||ev.ean}:ev;}),...u.newVariants]}));
+      onImportComplete(null,processed.newProducts,localUpdates);setImportResult(results);setImporting(false);setStep(4);return;
     }
     // Refresh from API
     try{const prods=await API.products.list();onImportComplete(prods,null);}catch(e){onImportComplete(null,processed.newProducts);}
@@ -2800,7 +2833,7 @@ function CSVImportWizard({open,onClose,existingProducts,onImportComplete}){
         <div style={{fontSize:10,fontWeight:600,color:C.textMuted,marginBottom:6}}>EN CAS DE DOUBLON</div>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
           {[{id:"skip",l:"Ignorer la ligne",d:"Les doublons ne seront pas importés",i:XCircle,c:C.warn},
-            {id:"update",l:"Mettre à jour",d:"Ajouter les nouvelles variantes au produit existant",i:Upload,c:C.primary}].map(o=>(
+            {id:"update",l:"Mettre à jour",d:"Mettre à jour prix, stock, variantes du produit existant",i:Upload,c:C.primary}].map(o=>(
             <button key={o.id} onClick={()=>setDuplicateAction(o.id)} style={{padding:12,borderRadius:12,
               border:`2px solid ${duplicateAction===o.id?o.c:C.border}`,background:duplicateAction===o.id?`${o.c}08`:"transparent",
               cursor:"pointer",textAlign:"left",transition:"all 0.15s"}}>
@@ -2841,7 +2874,7 @@ function CSVImportWizard({open,onClose,existingProducts,onImportComplete}){
         <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:4}}><Upload size={13} color={C.info}/>
           <span style={{fontSize:11,fontWeight:700,color:C.info}}>Mises à jour ({processed.updates.length})</span></div>
         {processed.updates.map((u,i)=>(<div key={i} style={{fontSize:10,color:C.info,padding:"2px 0"}}>
-          "{u.existing.name}" ({u.existing.sku}) + {u.newVariants.length} nouvelle(s) variante(s)</div>))}
+          "{u.existing.name}" ({u.existing.sku}) — {u.updatedVariants.length} variante(s) mise(s) à jour{u.newVariants.length>0?`, +${u.newVariants.length} nouvelle(s)`:""}</div>))}
       </div>}
 
       {processed.skipped.length>0&&<div style={{background:C.warnLight,borderRadius:10,padding:10,marginBottom:12,border:`1.5px solid ${C.warn}33`}}>
@@ -3048,9 +3081,17 @@ function ProductsScreen(){
 
     {/* CSV Import Wizard */}
     <CSVImportWizard open={importWizardOpen} onClose={()=>setImportWizardOpen(false)} existingProducts={products}
-      onImportComplete={(apiProds,localProds)=>{
+      onImportComplete={(apiProds,localProds,localUpdates)=>{
         if(apiProds){setProducts(norm.products(apiProds));}
-        else if(localProds){setProducts(p=>[...p,...localProds]);}
+        else{
+          setProducts(p=>{let updated=[...p];
+            // Apply local updates to existing products
+            if(localUpdates){localUpdates.forEach(lu=>{const idx=updated.findIndex(x=>x.id===lu.id);if(idx>=0)updated[idx]=norm.product(lu);});}
+            // Add new products
+            if(localProds)updated=[...updated,...localProds.map(norm.product)];
+            return updated;
+          });
+        }
         setImportWizardOpen(false);addAudit("IMPORT","Import CSV terminé");notify("Import CSV terminé","success");
       }}/>
   </div>);
