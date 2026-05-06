@@ -326,11 +326,10 @@ function AppProvider({children}){
   useEffect(()=>{try{localStorage.setItem("caissepro_stockmoves",JSON.stringify(stockMoves.slice(0,500)));}catch(e){}},[stockMoves]);
   const[settings,setSettings]=useState(()=>{try{const s=localStorage.getItem("caissepro_settings");return s?{...CO,loyaltyTiers:LOYALTY_TIERS,returnPolicy:{days:30,conditions:"Article non porté, étiquette présente"},pricingMode:"TTC",...JSON.parse(s)}:{...CO,loyaltyTiers:LOYALTY_TIERS,returnPolicy:{days:30,conditions:"Article non porté, étiquette présente"},pricingMode:"TTC"};}catch(e){return{...CO,loyaltyTiers:LOYALTY_TIERS,returnPolicy:{days:30,conditions:"Article non porté, étiquette présente"},pricingMode:"TTC"};}});
   useEffect(()=>{try{localStorage.setItem("caissepro_settings",JSON.stringify(settings));}catch(e){}},[settings]);
-  const saveSettingsToAPI=useCallback(async(newSettings)=>{
+  const saveSettingsToAPI_base=useCallback(async(newSettings)=>{
     setSettings(s=>({...s,...newSettings}));
-    addJET("PARAM_CHANGE",`Modification paramètres: ${Object.keys(newSettings).join(", ")}`);
     try{await API.settings.update(newSettings);}catch(e){console.warn("Settings sauvés localement uniquement:",e.message);}
-  },[addJET]);
+  },[]);
   const[saleNote,setSaleNote]=useState("");
   const[clockEntries,setClockEntries]=useState(()=>{try{const s=localStorage.getItem("caissepro_clock");return s?JSON.parse(s):[];}catch(e){return[];}});
   useEffect(()=>{try{localStorage.setItem("caissepro_clock",JSON.stringify(clockEntries.slice(0,500)));}catch(e){}},[clockEntries]);
@@ -367,9 +366,13 @@ function AppProvider({children}){
   const addJET=useCallback((t,d)=>setJet(p=>[{id:Date.now(),date:new Date().toISOString(),type:t,detail:d,user:currentUser?.name||"Sys"},...p]),[currentUser]);
   const addAudit=useCallback((a,d,r)=>setAudit(p=>[{id:Date.now(),date:new Date().toISOString(),action:a,detail:d,ref:r,user:currentUser?.name||"—"},...p]),[currentUser]);
   const perm=useCallback(()=>currentUser?PERMS[currentUser.role]||PERMS.cashier:PERMS.cashier,[currentUser]);
-
   // NF525: JET — événement de démarrage système
   useEffect(()=>{addJET("SYS_START",`Démarrage CaissePro v${CO.ver}`);},[]);// eslint-disable-line react-hooks/exhaustive-deps
+  // saveSettingsToAPI with JET logging (addJET must be declared first)
+  const saveSettingsToAPI=useCallback(async(newSettings)=>{
+    addJET("PARAM_CHANGE",`Modification paramètres: ${Object.keys(newSettings).join(", ")}`);
+    return saveSettingsToAPI_base(newSettings);
+  },[addJET,saveSettingsToAPI_base]);
 
   const[offlineMode,setOfflineMode]=useState(false);
   const login=async(n,pw)=>{
