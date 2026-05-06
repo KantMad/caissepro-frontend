@@ -218,15 +218,31 @@ function AppProvider({children}){
   const[promoCode,setPromoCode]=useState("");
   const[cashReg,setCashReg]=useState(null);
   const[isOnline,setIsOnline]=useState(true);
-  const[tickets,setTickets]=useState([]);const[tSeq,setTSeq]=useState(0);
-  const[lastHash,setLastHash]=useState("0".repeat(64));const[gt,setGt]=useState(0);
-  const[audit,setAudit]=useState([]);const[jet,setJet]=useState([]);
-  const[closures,setClosures]=useState([]);const[avoirs,setAvoirs]=useState([]);
+  const[tickets,setTickets]=useState(()=>{try{const s=localStorage.getItem("caissepro_tickets");return s?JSON.parse(s):[];}catch(e){return[];}});
+  useEffect(()=>{try{localStorage.setItem("caissepro_tickets",JSON.stringify(tickets.slice(0,500)));}catch(e){}},[tickets]);
+  const[tSeq,setTSeq]=useState(()=>{try{return parseInt(localStorage.getItem("caissepro_tseq"))||0;}catch(e){return 0;}});
+  useEffect(()=>{try{localStorage.setItem("caissepro_tseq",String(tSeq));}catch(e){}},[tSeq]);
+  const[lastHash,setLastHash]=useState(()=>{try{return localStorage.getItem("caissepro_lasthash")||"0".repeat(64);}catch(e){return "0".repeat(64);}});
+  useEffect(()=>{try{localStorage.setItem("caissepro_lasthash",lastHash);}catch(e){}},[lastHash]);
+  const[gt,setGt]=useState(()=>{try{return parseFloat(localStorage.getItem("caissepro_gt"))||0;}catch(e){return 0;}});
+  useEffect(()=>{try{localStorage.setItem("caissepro_gt",String(gt));}catch(e){}},[gt]);
+  const[audit,setAudit]=useState(()=>{try{const s=localStorage.getItem("caissepro_audit");return s?JSON.parse(s):[];}catch(e){return[];}});
+  useEffect(()=>{try{localStorage.setItem("caissepro_audit",JSON.stringify(audit.slice(0,1000)));}catch(e){}},[audit]);
+  const[jet,setJet]=useState(()=>{try{const s=localStorage.getItem("caissepro_jet");return s?JSON.parse(s):[];}catch(e){return[];}});
+  useEffect(()=>{try{localStorage.setItem("caissepro_jet",JSON.stringify(jet.slice(0,1000)));}catch(e){}},[jet]);
+  const[closures,setClosures]=useState(()=>{try{const s=localStorage.getItem("caissepro_closures");return s?JSON.parse(s):[];}catch(e){return[];}});
+  useEffect(()=>{try{localStorage.setItem("caissepro_closures",JSON.stringify(closures));}catch(e){}},[closures]);
+  const[avoirs,setAvoirs]=useState(()=>{try{const s=localStorage.getItem("caissepro_avoirs");return s?JSON.parse(s):[];}catch(e){return[];}});
+  useEffect(()=>{try{localStorage.setItem("caissepro_avoirs",JSON.stringify(avoirs));}catch(e){}},[avoirs]);
   const[promos,setPromos]=useState(initPromos);
   const[parked,setParked]=useState([]);const[selCust,setSelCust]=useState(null);
   const[stockMoves,setStockMoves]=useState([]);
   const[settings,setSettings]=useState(()=>{try{const s=localStorage.getItem("caissepro_settings");return s?{...CO,loyaltyTiers:LOYALTY_TIERS,returnPolicy:{days:30,conditions:"Article non porté, étiquette présente"},pricingMode:"TTC",...JSON.parse(s)}:{...CO,loyaltyTiers:LOYALTY_TIERS,returnPolicy:{days:30,conditions:"Article non porté, étiquette présente"},pricingMode:"TTC"};}catch(e){return{...CO,loyaltyTiers:LOYALTY_TIERS,returnPolicy:{days:30,conditions:"Article non porté, étiquette présente"},pricingMode:"TTC"};}});
   useEffect(()=>{try{localStorage.setItem("caissepro_settings",JSON.stringify(settings));}catch(e){}},[settings]);
+  const saveSettingsToAPI=useCallback(async(newSettings)=>{
+    setSettings(s=>({...s,...newSettings}));
+    try{await API.settings.update(newSettings);}catch(e){console.warn("Settings sauvés localement uniquement:",e.message);}
+  },[]);
   const[saleNote,setSaleNote]=useState("");
   const[clockEntries,setClockEntries]=useState([]);
   const[priceHistory,setPriceHistory]=useState([]);
@@ -626,7 +642,8 @@ function AppProvider({children}){
   const closeReg=()=>setCashReg(null);
 
   // ══ GIFT CARDS ══
-  const[giftCards,setGiftCards]=useState([]);
+  const[giftCards,setGiftCards]=useState(()=>{try{const s=localStorage.getItem("caissepro_giftcards");return s?JSON.parse(s):[];}catch(e){return[];}});
+  useEffect(()=>{try{localStorage.setItem("caissepro_giftcards",JSON.stringify(giftCards));}catch(e){}},[giftCards]);
   const createGiftCard=useCallback((amount,customerName)=>{
     const code=`GC-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2,6).toUpperCase()}`;
     const gc={id:Date.now(),code,initialAmount:amount,balance:amount,createdDate:new Date().toISOString(),
@@ -748,7 +765,7 @@ function AppProvider({children}){
     checkout,createClosure,exportArchive,exportFEC,exportCSVReport,exportCustomerRGPD,addAudit,addJET,
     promos,setPromos,activePromos,parked,parkCart,restoreCart,selCust,setSelCust,
     stockAlerts,stockMoves,addStockMove,receiveStock,
-    refreshProducts,findByEAN,perm,settings,setSettings,getLoyaltyTier,avoirPayment,setAvoirPayment,
+    refreshProducts,findByEAN,perm,settings,setSettings,saveSettingsToAPI,getLoyaltyTier,avoirPayment,setAvoirPayment,
     bestSellers,salesBySeller,salesByVariant,caEvolution,salesByCollection,
     saleNote,setSaleNote,clockIn,clockOut,clockEntries,verifyChain,exportCatalog,
     updateProductPrice,priceHistory,reorderSuggestions,toggleFavorite,favorites,tvaSummary,stockAging,
@@ -2702,7 +2719,7 @@ function ProductsScreen(){
 
 /* ══════════ SETTINGS ══════════ */
 function SettingsScreen(){
-  const{settings,setSettings,addAudit,theme,setTheme,clockEntries,priceHistory,printerConnected,printerType,connectPrinter,disconnectPrinter,thermalPrint,notify}=useApp();
+  const{settings,setSettings,saveSettingsToAPI,addAudit,theme,setTheme,clockEntries,priceHistory,printerConnected,printerType,connectPrinter,disconnectPrinter,thermalPrint,notify}=useApp();
   const[tab,setTab]=useState("general");
   const[printerBaud,setPrinterBaud]=useState("9600");
   const[printerWidth,setPrinterWidth]=useState("48");
@@ -2718,7 +2735,7 @@ function SettingsScreen(){
       {[{l:"Nom boutique",k:"name"},{l:"Adresse",k:"address"},{l:"Code postal",k:"postalCode"},{l:"Ville",k:"city"},{l:"SIRET",k:"siret"},{l:"N° TVA Intra",k:"tvaIntra"},{l:"Téléphone",k:"phone"},{l:"Message ticket",k:"footerMsg"}].map(f=>(
         <div key={f.k} style={{marginBottom:10}}><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>{f.l}</label>
           <Input value={settings[f.k]||""} onChange={e=>setSettings(s=>({...s,[f.k]:e.target.value}))}/></div>))}
-      <Btn onClick={()=>addAudit("CONFIG","Paramètres mis à jour")} style={{width:"100%",height:40,marginTop:8,background:`linear-gradient(135deg,${C.primary},${C.gradientB})`}}><Save size={14}/> Enregistrer</Btn></div>}
+      <Btn onClick={()=>{saveSettingsToAPI(settings);addAudit("CONFIG","Paramètres mis à jour");notify("Paramètres sauvegardés","success");}} style={{width:"100%",height:40,marginTop:8,background:`linear-gradient(135deg,${C.primary},${C.gradientB})`}}><Save size={14}/> Enregistrer</Btn></div>}
 
     {tab==="pricing"&&<div style={{maxWidth:550}}>
       <div style={{background:`linear-gradient(135deg,${C.primaryLight},#DCF0E2)`,borderRadius:16,padding:20,border:`1.5px solid ${C.primary}22`,marginBottom:16}}>
@@ -3011,14 +3028,23 @@ function UsersScreen(){
   const[form,setForm]=useState({name:"",role:"cashier",pin:""});
   const[confirmDel,setConfirmDel]=useState(null);
   const openEdit=(u)=>{setForm({name:u.name,role:u.role,pin:u.pin});setEditUser(u);};
-  const saveUser=()=>{if(!form.name||!form.pin){notify("Nom et PIN requis","error");return;}
-    if(editUser){setUsers(p=>p.map(u=>u.id===editUser.id?{...u,...form}:u));setEditUser(null);notify("Utilisateur modifié","success");}
-    else{const newUser={id:"u"+Date.now(),name:form.name,role:form.role,pin:form.pin};
-      // Créer aussi côté API
-      API.auth.createUser({name:form.name,password:form.pin,role:form.role}).then(apiUser=>{
-        if(apiUser&&apiUser.id){setUsers(p=>p.map(u=>u.id===newUser.id?{...u,id:apiUser.id,apiSynced:true}:u));}
-      }).catch(e=>console.warn("Utilisateur créé localement uniquement:",e.message));
-      setUsers(p=>[...p,newUser]);setNewModal(false);notify("Utilisateur créé","success");}
+  const saveUser=async()=>{if(!form.name||!form.pin){notify("Nom et PIN requis","error");return;}
+    if(editUser){
+      setUsers(p=>p.map(u=>u.id===editUser.id?{...u,...form}:u));
+      // Sync modification avec l'API
+      API.auth.updateUser(editUser.id,{name:form.name,password:form.pin,role:form.role}).catch(e=>console.warn("Modif locale uniquement:",e.message));
+      setEditUser(null);notify("Utilisateur modifié","success");
+    }else{
+      // Créer côté API d'abord, puis local
+      try{
+        const apiUser=await API.auth.createUser({name:form.name,password:form.pin,role:form.role});
+        setUsers(p=>[...p,{id:apiUser.id||("u"+Date.now()),name:form.name,role:form.role,pin:form.pin,apiSynced:true}]);
+      }catch(e){
+        setUsers(p=>[...p,{id:"u"+Date.now(),name:form.name,role:form.role,pin:form.pin}]);
+        console.warn("Utilisateur créé localement uniquement:",e.message);
+      }
+      setNewModal(false);notify("Utilisateur créé","success");
+    }
     setForm({name:"",role:"cashier",pin:""});};
   return(<div style={{height:"100%",overflowY:"auto",padding:20,background:C.bg}}>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
@@ -3042,7 +3068,10 @@ function UsersScreen(){
             <option value="admin">Administrateur</option><option value="cashier">Caissier(e)</option></select></div>
         <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>CODE PIN</label><Input type="password" value={form.pin} onChange={e=>setForm(p=>({...p,pin:e.target.value}))} placeholder="1234"/></div></div>
       <Btn onClick={saveUser} style={{width:"100%",height:40,background:`linear-gradient(135deg,${C.primary},${C.gradientB})`}}><Save size={14}/> {editUser?"Enregistrer":"Créer"}</Btn></Modal>
-    <ConfirmDialog open={!!confirmDel} onClose={()=>setConfirmDel(null)} onConfirm={()=>{setUsers(p=>p.filter(u=>u.id!==confirmDel.id));notify("Utilisateur supprimé","warn");}}
+    <ConfirmDialog open={!!confirmDel} onClose={()=>setConfirmDel(null)} onConfirm={()=>{
+      setUsers(p=>p.filter(u=>u.id!==confirmDel.id));
+      API.auth.deleteUser(confirmDel.id).catch(e=>console.warn("Suppression locale uniquement:",e.message));
+      notify("Utilisateur supprimé","warn");}}
       title="Supprimer cet utilisateur ?" message={`Supprimer ${confirmDel?.name} ?`}/>
   </div>);
 }

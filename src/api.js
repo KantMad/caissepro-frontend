@@ -43,6 +43,8 @@ export const auth = {
   me: () => api('/api/auth/me'),
   users: () => api('/api/auth/users'),
   createUser: (data) => api('/api/auth/users', { method: 'POST', body: JSON.stringify(data) }),
+  updateUser: (id, data) => api(`/api/auth/users/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteUser: (id) => api(`/api/auth/users/${id}`, { method: 'DELETE' }),
   clock: (type) => api('/api/auth/clock', { method: 'POST', body: JSON.stringify({ type }) }),
 };
 
