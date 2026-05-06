@@ -14,6 +14,7 @@ import {
 } from "recharts";
 import Papa from "papaparse";
 import * as API from "./api.js";
+import printer, { PAPER_48, PAPER_32 } from "./printer.js";
 
 /* ══════════ FISCAL — Désormais côté serveur (VPS) ══════════ */
 
@@ -218,10 +219,22 @@ function AppProvider({children}){
   const[priceHistory,setPriceHistory]=useState([]);
   const[favorites,setFavorites]=useState([]);
   const[notifications,setNotifications]=useState([]);
+  const[printerConnected,setPrinterConnected]=useState(false);
+  const[printerType,setPrinterType]=useState(null);
+  const[users,setUsers]=useState([{id:"u1",name:"Admin",role:"admin",pin:"1234"},{id:"u2",name:"Sophie",role:"cashier",pin:"1234"},{id:"u3",name:"Marc",role:"cashier",pin:"1234"}]);
 
   const notify=useCallback((msg,type="info")=>{const id=Date.now();
     setNotifications(p=>[...p,{id,msg,type}]);
     setTimeout(()=>setNotifications(p=>p.filter(n=>n.id!==id)),3500);},[]);
+
+  // Printer event listener
+  useEffect(()=>{
+    const unsub=printer.on((event,data)=>{
+      if(event==='connected'){setPrinterConnected(true);setPrinterType(data.type);}
+      if(event==='disconnected'){setPrinterConnected(false);setPrinterType(null);}
+    });
+    return unsub;
+  },[]);
 
   useEffect(()=>{const on=()=>setIsOnline(true);const off=()=>setIsOnline(false);
     window.addEventListener("online",on);window.addEventListener("offline",off);
@@ -515,6 +528,31 @@ function AppProvider({children}){
   // Find by EAN
   const findByEAN=useCallback((ean)=>{for(const p of products)for(const v of p.variants)if(v.ean===ean)return{product:p,variant:v};return null;},[products]);
 
+  // ══ THERMAL PRINTER ══
+  const thermalPrint=useCallback(async(type,data)=>{
+    if(!printer.connected){window.print();return false;}
+    try{
+      if(type==="receipt")await printer.printReceipt(data,settings,CO);
+      else if(type==="avoir")await printer.printAvoir(data,settings,CO);
+      else if(type==="closure")await printer.printClosure(data,settings,CO);
+      else if(type==="test")await printer.testPrint();
+      else if(type==="drawer")await printer.openDrawer();
+      notify("🖨️ Impression envoyée");return true;
+    }catch(e){notify("❌ "+e.message,"danger");window.print();return false;}
+  },[settings,notify]);
+
+  const connectPrinter=useCallback(async(method,options={})=>{
+    try{
+      if(method==="serial")await printer.connectSerial(options);
+      else if(method==="usb")await printer.connectUSB();
+      notify("🖨️ Imprimante connectée ("+method+")");return true;
+    }catch(e){notify("❌ "+e.message,"danger");return false;}
+  },[notify]);
+
+  const disconnectPrinter=useCallback(async()=>{
+    await printer.disconnect();notify("Imprimante déconnectée","warn");
+  },[notify]);
+
   // Refresh products from API
   const refreshProducts=useCallback(async()=>{try{const prods=await API.products.list();setProducts(norm.products(prods));}catch(e){console.error("refreshProducts:",e);}},[]);
 
@@ -659,6 +697,8 @@ function AppProvider({children}){
     processReturn,giftCards,createGiftCard,useGiftCard,checkGiftCard,
     updateProduct,deleteProduct,addVariantToProduct,deleteVariant,
     updateCustomer,deleteCustomer,adjustStock,
+    printerConnected,printerType,thermalPrint,connectPrinter,disconnectPrinter,
+    users,setUsers,
   }}>{children}</AppCtx.Provider>;
 }
 
@@ -724,7 +764,8 @@ function SalesScreen(){
   const{products,cart,addToCart,addCustomItem,removeFromCart,voidSale,updateQty,updateItemDisc,clearCart,checkout,
     gDisc,gDiscType,setCartGD,promoCode,setPromoCode,calcPromoDiscount,isOnline,findByEAN,offlineMode,
     parked,parkCart,restoreCart,customers,addCustomer,selCust,setSelCust,perm,notify,
-    stockAlerts,activePromos,avoirPayment,setAvoirPayment,getLoyaltyTier,tickets,saleNote,setSaleNote,favorites,toggleFavorite,getLastPriceForCustomer,settings}=useApp();
+    stockAlerts,activePromos,avoirPayment,setAvoirPayment,getLoyaltyTier,tickets,saleNote,setSaleNote,favorites,toggleFavorite,getLastPriceForCustomer,settings,
+    printerConnected,thermalPrint}=useApp();
   const[search,setSearch]=useState("");const[cat,setCat]=useState("Tous");const[vm,setVm]=useState(null);
   const[dm,setDm]=useState(null);const[dv,setDv]=useState("");const[gm,setGm]=useState(false);const[gv,setGv]=useState("");const[gtp,setGtp]=useState("percentage");
   const[lastTk,setLastTk]=useState(null);const[tkModal,setTkModal]=useState(false);const[busy,setBusy]=useState(false);
@@ -750,13 +791,14 @@ function SalesScreen(){
   };window.addEventListener("keydown",handler);return()=>window.removeEventListener("keydown",handler);
   },[cart,busy,parkCart]);
 
-  // Barcode scan listener
+  // Barcode scan listener (compatible with USB/Bluetooth barcode scanners)
   useEffect(()=>{const h=(e)=>{if(e.target.tagName==="INPUT"||e.target.tagName==="TEXTAREA")return;
     if(e.key==="Enter"&&barcodeBuffer.current.length>=8){const ean=barcodeBuffer.current;barcodeBuffer.current="";
-      const f=findByEAN(ean);if(f)addToCart(f.product,f.variant);}
+      const f=findByEAN(ean);if(f){addToCart(f.product,f.variant);notify("✅ "+f.product.name+" ajouté ("+ean+")");}
+      else{notify("⚠️ Aucun produit pour EAN: "+ean,"warn");}}
     else if(e.key.length===1){barcodeBuffer.current+=e.key;clearTimeout(barcodeTimer.current);
-      barcodeTimer.current=setTimeout(()=>{barcodeBuffer.current="";},100);}};
-    window.addEventListener("keydown",h);return()=>window.removeEventListener("keydown",h);},[findByEAN,addToCart]);
+      barcodeTimer.current=setTimeout(()=>{barcodeBuffer.current="";},150);}};
+    window.addEventListener("keydown",h);return()=>window.removeEventListener("keydown",h);},[findByEAN,addToCart,notify]);
 
   const filtered=useMemo(()=>products.filter(p=>{const q=search.toLowerCase();
     const matchSearch=!q||p.name.toLowerCase().includes(q)||p.sku.toLowerCase().includes(q)||p.variants.some(v=>v.ean.includes(q)||v.color.toLowerCase().includes(q));
@@ -822,6 +864,9 @@ function SalesScreen(){
           <Badge color={C.primary}>{todayTickets.length} vente{todayTickets.length>1?"s":""}</Badge>
           <span style={{fontSize:16,fontWeight:800,color:C.primary,letterSpacing:"-0.5px"}}>{todayCA.toFixed(2)}€</span>
           {stockAlerts.length>0&&<Badge color={C.danger}>{stockAlerts.length} alerte{stockAlerts.length>1?"s":""}</Badge>}
+          <span style={{fontSize:9,color:printerConnected?"#3B8C5A":C.textLight,display:"flex",alignItems:"center",gap:3,padding:"3px 8px",borderRadius:6,
+            background:printerConnected?"#3B8C5A10":C.surface,border:`1px solid ${printerConnected?"#3B8C5A33":"transparent"}`}}>
+            <Printer size={10}/> {printerConnected?"ESC/POS":"—"}</span>
           <span style={{fontSize:9,color:C.textMuted,cursor:"pointer",display:"flex",alignItems:"center",gap:3,padding:"3px 8px",borderRadius:6,background:C.surface}} onClick={()=>setShowShortcuts(true)}>
             <kbd style={{fontSize:9,fontWeight:700}}>?</kbd> Raccourcis</span></div>
       </div>
@@ -872,7 +917,8 @@ function SalesScreen(){
             <button onClick={e=>{e.stopPropagation();toggleFavorite(p.id);}} style={{position:"absolute",bottom:6,right:6,background:"rgba(255,255,255,0.9)",border:"none",cursor:"pointer",padding:4,borderRadius:8,boxShadow:`0 1px 4px ${C.shadow}`,transition:"all 0.15s"}}>
               <Star size={13} color={favorites.includes(p.id)?C.accent:C.textLight} fill={favorites.includes(p.id)?C.accent:"none"}/></button></div>
           <div style={{padding:"10px 11px 11px"}}>
-            <div style={{fontSize:12,fontWeight:700,marginBottom:3,lineHeight:1.3,letterSpacing:"-0.2px"}}>{p.name}</div>
+            <div style={{fontSize:12,fontWeight:700,marginBottom:2,lineHeight:1.3,letterSpacing:"-0.2px"}}>{p.name}</div>
+            {p.sku&&<div style={{fontSize:9,fontFamily:"'Courier New',monospace",color:C.textMuted,marginBottom:3,letterSpacing:"0.3px"}}>{p.sku}</div>}
             <div style={{display:"flex",alignItems:"center",gap:4,marginBottom:6}}>
               <span style={{fontSize:9,color:cc,fontWeight:600,background:`${cc}10`,padding:"1px 5px",borderRadius:4}}>{p.category}</span>
               <span style={{fontSize:9,color:C.textLight}}>{p.variants.length} var.</span></div>
@@ -930,10 +976,14 @@ function SalesScreen(){
                 <span style={{fontSize:16}}>{i.isCustom?"📝":catIcon(i.product.category)}</span></div>
               <div style={{flex:1,minWidth:0}}>
                 <div style={{fontSize:12,fontWeight:700,lineHeight:1.2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{i.product.name}{i.isCustom?" (divers)":""}</div>
-                {!i.isCustom&&<div style={{display:"flex",gap:3,marginTop:3}}>
+                {!i.isCustom&&<><div style={{display:"flex",gap:3,marginTop:3}}>
                   <span style={{fontSize:9,color:cc,fontWeight:600,background:`${cc}10`,padding:"1px 5px",borderRadius:4}}>{i.variant?.color}</span>
                   <span style={{fontSize:9,color:C.info,fontWeight:600,background:`${C.info}10`,padding:"1px 5px",borderRadius:4}}>{i.variant?.size}</span>
-                  {lastP&&<span style={{fontSize:8,color:C.textMuted,background:C.surfaceAlt,padding:"1px 4px",borderRadius:4}}>Préc. {lastP.toFixed(2)}€</span>}</div>}</div>
+                  {lastP&&<span style={{fontSize:8,color:C.textMuted,background:C.surfaceAlt,padding:"1px 4px",borderRadius:4}}>Préc. {lastP.toFixed(2)}€</span>}</div>
+                <div style={{display:"flex",gap:4,marginTop:2}}>
+                  {i.product.sku&&<span style={{fontSize:8,fontFamily:"monospace",color:C.textMuted}}>Réf: {i.product.sku}</span>}
+                  {i.variant?.ean&&<span style={{fontSize:8,fontFamily:"monospace",color:C.textLight}}>EAN: {i.variant.ean}</span>}
+                </div></>}</div>
               <button onClick={()=>removeFromCart(i.product.id,i.variant?.id)} style={{background:C.dangerLight,border:"none",cursor:"pointer",borderRadius:8,width:26,height:26,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"all 0.15s"}}
                 onMouseEnter={e=>e.currentTarget.style.background=C.danger} onMouseLeave={e=>e.currentTarget.style.background=C.dangerLight}>
                 <Trash2 size={11} color={C.danger} style={{transition:"color 0.15s"}}/></button></div>
@@ -988,7 +1038,8 @@ function SalesScreen(){
         <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:14,padding:"10px 12px",background:C.surfaceAlt,borderRadius:12}}>
           <span style={{fontSize:28}}>{catIcon(vm.category)}</span>
           <div><div style={{fontSize:13,fontWeight:700}}>{vm.name}</div>
-            <div style={{fontSize:11,color:C.textMuted}}>{vm.category} — {vm.collection||"Sans collection"} — TVA {(vm.taxRate*100).toFixed(0)}%</div></div>
+            <div style={{fontSize:11,color:C.textMuted}}>{vm.category} — {vm.collection||"Sans collection"} — TVA {(vm.taxRate*100).toFixed(0)}%</div>
+            {vm.sku&&<div style={{fontSize:10,fontFamily:"monospace",color:C.textMuted,marginTop:1}}>Réf: {vm.sku}</div>}</div>
           <div style={{marginLeft:"auto",fontSize:18,fontWeight:800,color:CAT_COLORS[vm.category]||C.primary}}>{vm.price.toFixed(2)}€</div></div>
         <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(130px,1fr))",gap:8}}>
           {vm.variants.map(v=>{const cc=CAT_COLORS[vm.category]||C.primary;return(
@@ -1004,7 +1055,7 @@ function SalesScreen(){
                 <span style={{fontSize:11,fontWeight:600,color:v.stock>0?(v.stock<=(v.stockAlert||5)?C.warn:cc):C.danger,
                   background:v.stock>0?(v.stock<=(v.stockAlert||5)?C.warnLight:`${cc}10`):C.dangerLight,padding:"2px 7px",borderRadius:6}}>
                   {v.stock>0?`${v.stock} dispo`:"Rupture"}</span>
-                {v.ean&&<span style={{fontSize:8,color:C.textLight,fontFamily:"monospace"}}>{v.ean.slice(-4)}</span>}</div>
+                {v.ean&&<span style={{fontSize:8,color:C.textLight,fontFamily:"monospace"}}>{v.ean}</span>}</div>
             </button>);})}
         </div>
       </>}</Modal>
@@ -1112,7 +1163,10 @@ function SalesScreen(){
         <div style={{display:"flex",justifyContent:"space-between"}}><span>N° {lastTk.ticketNumber}</span><span>{new Date(lastTk.date||lastTk.createdAt||"").toLocaleString("fr-FR")}</span></div>
         <div>Caissier: {lastTk.userName}{lastTk.customerName?` — Client: ${lastTk.customerName}`:""}</div>
         <div style={{borderTop:"1px dashed #999",margin:"4px 0"}}/>
-        {(lastTk.items||[]).map((i,k)=>(<div key={k} style={{display:"flex",justifyContent:"space-between"}}><span>{i.product?.name||i.product_name}{i.isCustom||i.is_custom?"":`(${i.variant?.color||i.variant_color}/${i.variant?.size||i.variant_size})`} x{i.quantity}{i.discount>0?` -${i.discount}%`:""}</span><span>{(i.lineTTC||i.line_ttc||(i.unit_price*i.quantity)).toFixed(2)}€</span></div>))}
+        {(lastTk.items||[]).map((i,k)=>{const sku=i.product?.sku||i.product_sku||"";const ean=i.variant?.ean||i.variant_ean||"";return(<div key={k}>
+          <div style={{display:"flex",justifyContent:"space-between"}}><span>{i.product?.name||i.product_name}{i.isCustom||i.is_custom?"":`(${i.variant?.color||i.variant_color}/${i.variant?.size||i.variant_size})`} x{i.quantity}{i.discount>0?` -${i.discount}%`:""}</span><span>{(i.lineTTC||i.line_ttc||(i.unit_price*i.quantity)).toFixed(2)}€</span></div>
+          {(sku||ean)&&<div style={{fontSize:8,color:"#999"}}>{sku?`Réf: ${sku}`:""}{sku&&ean?" — ":""}{ean?`EAN: ${ean}`:""}</div>}
+        </div>);})}
         <div style={{borderTop:"1px dashed #999",margin:"4px 0"}}/>
         {lastTk.promosApplied?.length>0&&lastTk.promosApplied.map((a,i)=><div key={i} style={{color:"#3B8C5A",fontSize:9}}>✓ {a}</div>)}
         <div style={{display:"flex",justifyContent:"space-between"}}><span>Total HT</span><span>{(lastTk.totalHT||0).toFixed(2)}€</span></div>
@@ -1130,7 +1184,7 @@ function SalesScreen(){
       </div>
       <div style={{display:"flex",gap:8,marginTop:14}}>
         <Btn variant="outline" onClick={()=>emailTicket(lastTk)} style={{flex:1,borderRadius:12}}><Mail size={14}/> Email</Btn>
-        <Btn variant="outline" onClick={()=>window.print()} style={{flex:1,borderRadius:12}}><Printer size={14}/> Imprimer</Btn>
+        <Btn variant="outline" onClick={()=>thermalPrint("receipt",lastTk)} style={{flex:1,borderRadius:12}}><Printer size={14}/> {printerConnected?"Ticket":"Imprimer"}</Btn>
         <Btn variant="success" onClick={()=>setTkModal(false)} style={{flex:1,borderRadius:12}}><CheckCircle2 size={14}/> Terminé</Btn>
       </div></>)}
     </Modal>
@@ -1158,40 +1212,110 @@ function SalesScreen(){
 
 /* ══════════ STATS SCREEN ══════════ */
 function StatsScreen(){
-  const{tickets,bestSellers,salesBySeller,salesByVariant,caEvolution,salesByCollection,exportCSVReport,perm,commissions,salesGoals,setSellerGoal}=useApp();
+  const{tickets,products,bestSellers:allBestSellers,salesBySeller,salesByVariant,caEvolution,salesByCollection,exportCSVReport,perm,commissions,salesGoals,setSellerGoal}=useApp();
   const[tab,setTab]=useState("ca");
-  const stats=useMemo(()=>{const t=tickets.reduce((s,t)=>s+(t.totalTTC||parseFloat(t.total_ttc)||0),0);const h=tickets.reduce((s,t)=>s+(t.totalHT||parseFloat(t.total_ht)||0),0);
-    const m=tickets.reduce((s,t)=>s+(t.margin||0),0);return{tTTC:t,tHT:h,margin:m,avg:tickets.length?t/tickets.length:0,count:tickets.length};},[tickets]);
-  const pieData=[...new Set(tickets.map(t=>t.paymentMethod||t.payment_method))].map(m=>({name:({cash:"Espèces",card:"CB",giftcard:"Cadeau",MIXTE:"Mixte",avoir:"Avoir"})[m]||m,
-    value:Math.round(tickets.filter(t=>(t.paymentMethod||t.payment_method)===m).reduce((s,t)=>s+(t.totalTTC||parseFloat(t.total_ttc)||0),0)*100)/100}));
+  const[dateFrom,setDateFrom]=useState("");const[dateTo,setDateTo]=useState("");const[catFilter,setCatFilter]=useState("");
+  const setPreset=(p)=>{const now=new Date();const fmt=d=>d.toISOString().split("T")[0];
+    if(p==="today"){setDateFrom(fmt(now));setDateTo(fmt(now));}
+    else if(p==="week"){const d=new Date(now);d.setDate(d.getDate()-d.getDay()+1);setDateFrom(fmt(d));setDateTo(fmt(now));}
+    else if(p==="month"){setDateFrom(fmt(new Date(now.getFullYear(),now.getMonth(),1)));setDateTo(fmt(now));}
+    else if(p==="lastmonth"){setDateFrom(fmt(new Date(now.getFullYear(),now.getMonth()-1,1)));setDateTo(fmt(new Date(now.getFullYear(),now.getMonth(),0)));}
+    else if(p==="year"){setDateFrom(fmt(new Date(now.getFullYear(),0,1)));setDateTo(fmt(now));}
+    else{setDateFrom("");setDateTo("");}};
+  const fTickets=useMemo(()=>{return tickets.filter(t=>{const d=(t.date||t.createdAt||t.created_at||"").split("T")[0];
+    if(dateFrom&&d<dateFrom)return false;if(dateTo&&d>dateTo)return false;
+    if(catFilter){const hasItem=(t.items||[]).some(i=>(i.product?.category||"")===catFilter);if(!hasItem)return false;}return true;});},[tickets,dateFrom,dateTo,catFilter]);
+  const prevTickets=useMemo(()=>{if(!dateFrom||!dateTo)return[];const from=new Date(dateFrom);const to=new Date(dateTo);
+    const span=to-from;const pFrom=new Date(from-span-86400000);const pTo=new Date(from-86400000);
+    const fmt=d=>d.toISOString().split("T")[0];
+    return tickets.filter(t=>{const d=(t.date||t.createdAt||t.created_at||"").split("T")[0];return d>=fmt(pFrom)&&d<=fmt(pTo);});},[tickets,dateFrom,dateTo]);
+  const stats=useMemo(()=>{const t=fTickets.reduce((s,t)=>s+(t.totalTTC||parseFloat(t.total_ttc)||0),0);const h=fTickets.reduce((s,t)=>s+(t.totalHT||parseFloat(t.total_ht)||0),0);
+    const m=fTickets.reduce((s,t)=>s+(t.margin||0),0);return{tTTC:t,tHT:h,margin:m,avg:fTickets.length?t/fTickets.length:0,count:fTickets.length};},[fTickets]);
+  const prevStats=useMemo(()=>{const t=prevTickets.reduce((s,t)=>s+(t.totalTTC||parseFloat(t.total_ttc)||0),0);return{tTTC:t,count:prevTickets.length};},[prevTickets]);
+  const pctChange=(cur,prev)=>{if(!prev)return null;const pct=((cur-prev)/prev*100);return pct;};
+  const PctBadge=({cur,prev})=>{const p=pctChange(cur,prev);if(p===null||!dateFrom)return null;
+    return<Badge color={p>=0?"#3B8C5A":C.danger}>{p>=0?"+":""}{p.toFixed(1)}%</Badge>;};
+  const fBestSellers=useMemo(()=>{const m={};fTickets.forEach(t=>(t.items||[]).forEach(i=>{
+    const k=i.product?.sku||i.product_name;if(!m[k])m[k]={name:i.product?.name||i.product_name,sku:k,qty:0,revenue:0,margin:0};
+    m[k].qty+=i.quantity;m[k].revenue+=(i.lineTTC||i.line_ttc||0);m[k].margin+=((i.lineHT||i.line_ht||0)-(i.product?.costPrice||i.cost_price||0)*i.quantity);}));
+    return Object.values(m).sort((a,b)=>b.qty-a.qty);},[fTickets]);
+  const fCommissions=useMemo(()=>{const m={};fTickets.forEach(t=>{
+    const n=t.userName||t.user_name||"?";if(!m[n])m[n]={name:n,count:0,revenue:0,margin:0};
+    m[n].count++;m[n].revenue+=(t.totalTTC||parseFloat(t.total_ttc)||0);m[n].margin+=(t.margin||0);});
+    return Object.values(m).sort((a,b)=>b.revenue-a.revenue).map(s=>({...s,commission:s.margin*0.05,goal:salesGoals[s.name]||0,goalProgress:salesGoals[s.name]?(s.revenue/salesGoals[s.name]*100):0}));},[fTickets,salesGoals]);
+  const fByVariant=useMemo(()=>{const bySize={},byColor={};fTickets.forEach(t=>(t.items||[]).forEach(i=>{
+    const s=i.variant?.size||i.variant_size||"?";const c=i.variant?.color||i.variant_color||"?";
+    bySize[s]=(bySize[s]||0)+i.quantity;byColor[c]=(byColor[c]||0)+i.quantity;}));
+    return{bySize:Object.entries(bySize).sort((a,b)=>b[1]-a[1]).map(([k,v])=>({name:k,qty:v})),
+      byColor:Object.entries(byColor).sort((a,b)=>b[1]-a[1]).map(([k,v])=>({name:k,qty:v}))};
+  },[fTickets]);
+  const fByCollection=useMemo(()=>{const m={};fTickets.forEach(t=>(t.items||[]).forEach(i=>{
+    const col=i.product?.collection||"Sans collection";if(!m[col])m[col]={name:col,qty:0,revenue:0,margin:0};
+    m[col].qty+=i.quantity;m[col].revenue+=(i.lineTTC||i.line_ttc||0);m[col].margin+=((i.lineHT||i.line_ht||0)-(i.product?.costPrice||i.cost_price||0)*i.quantity);}));
+    return Object.values(m).sort((a,b)=>b.revenue-a.revenue);},[fTickets]);
+  const fCAEvol=useMemo(()=>{const m={};fTickets.forEach(t=>{
+    const d=new Date(t.date||t.createdAt||t.created_at).toLocaleDateString("fr-FR",{day:"2-digit",month:"short"});
+    m[d]=(m[d]||0)+(t.totalTTC||parseFloat(t.total_ttc)||0);});
+    return Object.entries(m).reverse().map(([d,v])=>({date:d,ca:Math.round(v*100)/100}));},[fTickets]);
+  const pieData=[...new Set(fTickets.map(t=>t.paymentMethod||t.payment_method))].map(m=>({name:({cash:"Espèces",card:"CB",giftcard:"Cadeau",MIXTE:"Mixte",avoir:"Avoir"})[m]||m,
+    value:Math.round(fTickets.filter(t=>(t.paymentMethod||t.payment_method)===m).reduce((s,t)=>s+(t.totalTTC||parseFloat(t.total_ttc)||0),0)*100)/100}));
   const pieColors=[C.info,C.primary,C.accent,C.fiscal,C.warn];
+  const byHour=useMemo(()=>{const h=Array(24).fill(0);fTickets.forEach(t=>{const hr=new Date(t.date||t.createdAt||t.created_at).getHours();
+    h[hr]+=(t.totalTTC||parseFloat(t.total_ttc)||0);});return h.map((v,i)=>({hour:`${i}h`,ca:Math.round(v*100)/100})).filter(x=>x.ca>0);},[fTickets]);
+  const byDow=useMemo(()=>{const days=["Dim","Lun","Mar","Mer","Jeu","Ven","Sam"];const d=Array(7).fill(0);
+    fTickets.forEach(t=>{const dow=new Date(t.date||t.createdAt||t.created_at).getDay();d[dow]+=(t.totalTTC||parseFloat(t.total_ttc)||0);});
+    return d.map((v,i)=>({day:days[i],ca:Math.round(v*100)/100}));},[fTickets]);
+  const allCats=[...new Set(products.flatMap(p=>[p.category]).filter(Boolean))];
   return(<div style={{height:"100%",overflowY:"auto",padding:20,background:C.bg}}>
-    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
       <h2 style={{fontSize:22,fontWeight:800,margin:0}}>Statistiques</h2>
-      <Btn variant="outline" onClick={()=>exportCSVReport(bestSellers,"best-sellers.csv")} style={{fontSize:11}}><Download size={12}/> Export CSV</Btn></div>
+      <Btn variant="outline" onClick={()=>exportCSVReport(fBestSellers,"best-sellers.csv")} style={{fontSize:11}}><Download size={12}/> Export CSV</Btn></div>
+    {/* Filters */}
+    <div style={{display:"flex",gap:6,alignItems:"center",marginBottom:10,flexWrap:"wrap"}}>
+      <span style={{fontSize:10,fontWeight:600,color:C.textMuted}}>Période:</span>
+      {[{id:"all",l:"Tout"},{id:"today",l:"Aujourd'hui"},{id:"week",l:"Semaine"},{id:"month",l:"Ce mois"},{id:"lastmonth",l:"Mois dernier"},{id:"year",l:"Année"}].map(p=>(
+        <button key={p.id} onClick={()=>setPreset(p.id)} style={{padding:"3px 8px",borderRadius:6,border:`1px solid ${C.border}`,background:"transparent",
+          fontSize:10,fontWeight:600,cursor:"pointer",color:C.text}}>{p.l}</button>))}
+      <Input type="date" value={dateFrom} onChange={e=>setDateFrom(e.target.value)} style={{width:120,height:28,fontSize:10,padding:"2px 6px"}}/>
+      <span style={{fontSize:10,color:C.textMuted}}>au</span>
+      <Input type="date" value={dateTo} onChange={e=>setDateTo(e.target.value)} style={{width:120,height:28,fontSize:10,padding:"2px 6px"}}/>
+      <select value={catFilter} onChange={e=>setCatFilter(e.target.value)} style={{padding:"4px 8px",borderRadius:6,border:`1px solid ${C.border}`,fontSize:10,fontFamily:"inherit"}}>
+        <option value="">Toutes catégories</option>{allCats.map(c=>(<option key={c} value={c}>{c}</option>))}</select></div>
     <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:10,marginBottom:16}}>
-      <SC icon={DollarSign} label="CA TTC" value={`${stats.tTTC.toFixed(0)}€`} color={C.primary}/>
-      <SC icon={Receipt} label="Tickets" value={stats.count} color={C.info}/>
+      <div><SC icon={DollarSign} label="CA TTC" value={`${stats.tTTC.toFixed(0)}€`} color={C.primary} sub={<PctBadge cur={stats.tTTC} prev={prevStats.tTTC}/>}/></div>
+      <div><SC icon={Receipt} label="Tickets" value={stats.count} color={C.info} sub={<PctBadge cur={stats.count} prev={prevStats.count}/>}/></div>
       <SC icon={TrendingUp} label="Panier moy." value={`${stats.avg.toFixed(1)}€`} color={C.accent}/>
       {perm().canViewMargin&&<SC icon={BarChart2} label="Marge" value={`${stats.margin.toFixed(0)}€`} color="#3B8C5A"/>}
       <SC icon={BarChart2} label="Marge %" value={stats.tHT>0?`${(stats.margin/stats.tHT*100).toFixed(1)}%`:"—"} color="#3B8C5A"/></div>
 
-    <div style={{display:"flex",gap:6,marginBottom:14}}>
-      {[{id:"ca",l:"Évolution CA"},{id:"best",l:"Best-sellers"},{id:"seller",l:"Par vendeur"},{id:"variant",l:"Tailles/Couleurs"},{id:"collection",l:"Collections"},{id:"pay",l:"Paiements"}].map(t=>(
+    <div style={{display:"flex",gap:6,marginBottom:14,flexWrap:"wrap"}}>
+      {[{id:"ca",l:"Évolution CA"},{id:"hour",l:"CA par heure"},{id:"dow",l:"CA par jour"},{id:"best",l:"Best-sellers"},{id:"seller",l:"Par vendeur"},{id:"variant",l:"Tailles/Couleurs"},{id:"collection",l:"Collections"},{id:"pay",l:"Paiements"}].map(t=>(
         <button key={t.id} onClick={()=>setTab(t.id)} style={{padding:"5px 12px",borderRadius:8,border:`1.5px solid ${tab===t.id?C.primary:C.border}`,
           background:tab===t.id?C.primary:"transparent",color:tab===t.id?"#fff":C.text,fontSize:11,fontWeight:600,cursor:"pointer"}}>{t.l}</button>))}</div>
 
     {tab==="ca"&&<div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`}}>
-      <ResponsiveContainer width="100%" height={280}><LineChart data={caEvolution}>
+      <ResponsiveContainer width="100%" height={280}><LineChart data={fCAEvol}>
         <CartesianGrid strokeDasharray="3 3" stroke={C.border}/><XAxis dataKey="date" tick={{fontSize:10}}/><YAxis tick={{fontSize:10}}/>
         <Tooltip formatter={v=>`${v.toFixed(2)}€`}/><Line type="monotone" dataKey="ca" stroke={C.primary} strokeWidth={2} dot={{r:3}}/></LineChart></ResponsiveContainer></div>}
+
+    {tab==="hour"&&<div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`}}>
+      <h3 style={{fontSize:14,fontWeight:700,marginBottom:10}}>CA par heure</h3>
+      <ResponsiveContainer width="100%" height={280}><BarChart data={byHour}>
+        <CartesianGrid strokeDasharray="3 3" stroke={C.border}/><XAxis dataKey="hour" tick={{fontSize:10}}/><YAxis tick={{fontSize:10}}/>
+        <Tooltip formatter={v=>`${v.toFixed(2)}€`}/><Bar dataKey="ca" fill={C.primary} radius={[4,4,0,0]}/></BarChart></ResponsiveContainer></div>}
+
+    {tab==="dow"&&<div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`}}>
+      <h3 style={{fontSize:14,fontWeight:700,marginBottom:10}}>CA par jour de la semaine</h3>
+      <ResponsiveContainer width="100%" height={280}><BarChart data={byDow}>
+        <CartesianGrid strokeDasharray="3 3" stroke={C.border}/><XAxis dataKey="day" tick={{fontSize:10}}/><YAxis tick={{fontSize:10}}/>
+        <Tooltip formatter={v=>`${v.toFixed(2)}€`}/><Bar dataKey="ca" fill={C.accent} radius={[4,4,0,0]}/></BarChart></ResponsiveContainer></div>}
 
     {tab==="best"&&<div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`}}>
       <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
         <thead><tr style={{borderBottom:`2px solid ${C.border}`}}>
           {["#","Produit","SKU","Qté vendue","CA TTC",perm().canViewMargin?"Marge":""].filter(Boolean).map(h=>(
             <th key={h} style={{padding:8,textAlign:"left",fontSize:10,fontWeight:700,color:C.textMuted}}>{h}</th>))}</tr></thead>
-        <tbody>{bestSellers.slice(0,15).map((p,i)=>(<tr key={p.sku} style={{borderBottom:`1px solid ${C.border}`}}>
+        <tbody>{fBestSellers.slice(0,15).map((p,i)=>(<tr key={p.sku} style={{borderBottom:`1px solid ${C.border}`}}>
           <td style={{padding:8,fontWeight:700,color:i<3?C.primary:C.text}}>{i+1}</td>
           <td style={{padding:8,fontWeight:600}}>{p.name}</td>
           <td style={{padding:8,color:C.textMuted,fontFamily:"monospace"}}>{p.sku}</td>
@@ -1205,7 +1329,7 @@ function StatsScreen(){
         <thead><tr style={{borderBottom:`2px solid ${C.border}`}}>
           {["Vendeur","Nb ventes","CA TTC",perm().canViewMargin?"Marge":"",perm().canViewMargin?"Commission (5%)":"","Objectif","Progression"].filter(Boolean).map(h=>(
             <th key={h} style={{padding:8,textAlign:"left",fontSize:10,fontWeight:700,color:C.textMuted}}>{h}</th>))}</tr></thead>
-        <tbody>{commissions.map(s=>(<tr key={s.name} style={{borderBottom:`1px solid ${C.border}`}}>
+        <tbody>{fCommissions.map(s=>(<tr key={s.name} style={{borderBottom:`1px solid ${C.border}`}}>
           <td style={{padding:8,fontWeight:600}}>{s.name}</td>
           <td style={{padding:8}}>{s.count}</td>
           <td style={{padding:8,fontWeight:700,color:C.primary}}>{s.revenue.toFixed(2)}€</td>
@@ -1222,12 +1346,12 @@ function StatsScreen(){
     {tab==="variant"&&<div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
       <div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`}}>
         <h3 style={{fontSize:14,fontWeight:700,marginBottom:10}}>Par taille</h3>
-        <ResponsiveContainer width="100%" height={200}><BarChart data={salesByVariant.bySize}>
+        <ResponsiveContainer width="100%" height={200}><BarChart data={fByVariant.bySize}>
           <XAxis dataKey="name" tick={{fontSize:10}}/><YAxis tick={{fontSize:10}}/><Tooltip/>
           <Bar dataKey="qty" fill={C.primary} radius={[4,4,0,0]}/></BarChart></ResponsiveContainer></div>
       <div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`}}>
         <h3 style={{fontSize:14,fontWeight:700,marginBottom:10}}>Par couleur</h3>
-        <ResponsiveContainer width="100%" height={200}><BarChart data={salesByVariant.byColor}>
+        <ResponsiveContainer width="100%" height={200}><BarChart data={fByVariant.byColor}>
           <XAxis dataKey="name" tick={{fontSize:10}}/><YAxis tick={{fontSize:10}}/><Tooltip/>
           <Bar dataKey="qty" fill={C.accent} radius={[4,4,0,0]}/></BarChart></ResponsiveContainer></div></div>}
 
@@ -1236,7 +1360,7 @@ function StatsScreen(){
       <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
         <thead><tr style={{borderBottom:`2px solid ${C.border}`}}>
           {["Collection","Qté vendue","CA TTC","Marge"].map(h=>(<th key={h} style={{padding:8,textAlign:"left",fontSize:10,fontWeight:700,color:C.textMuted}}>{h}</th>))}</tr></thead>
-        <tbody>{salesByCollection.map(s=>(<tr key={s.name} style={{borderBottom:`1px solid ${C.border}`}}>
+        <tbody>{fByCollection.map(s=>(<tr key={s.name} style={{borderBottom:`1px solid ${C.border}`}}>
           <td style={{padding:8,fontWeight:600}}><Badge color={C.info}>{s.name}</Badge></td>
           <td style={{padding:8}}>{s.qty}</td>
           <td style={{padding:8,fontWeight:700,color:C.primary}}>{s.revenue.toFixed(2)}€</td>
@@ -1250,10 +1374,13 @@ function StatsScreen(){
 
 /* ══════════ STOCK MATRIX ══════════ */
 function StockScreen(){
-  const{products,stockAlerts,stockMoves,receiveStock,stockAging,reorderSuggestions,adjustStock}=useApp();
+  const{products,stockAlerts,stockMoves,receiveStock,stockAging,reorderSuggestions,adjustStock,notify,findByEAN}=useApp();
   const[sel,setSel]=useState(products[0]?.id||"");const[tab,setTab]=useState("matrix");
   const[rcModal,setRcModal]=useState(false);const[rcProd,setRcProd]=useState("");const[rcVar,setRcVar]=useState("");const[rcQty,setRcQty]=useState("");const[rcSup,setRcSup]=useState("");
   const[adjProd,setAdjProd]=useState("");const[adjVar,setAdjVar]=useState("");const[adjQty,setAdjQty]=useState("");const[adjReason,setAdjReason]=useState("INVENTAIRE");
+  const[invSearch,setInvSearch]=useState("");const[invCounts,setInvCounts]=useState({});
+  const[stSearchMatrix,setStSearchMatrix]=useState("");const[stSearchReceipt,setStSearchReceipt]=useState("");const[stSearchAdj,setStSearchAdj]=useState("");
+  const[csvStockModal,setCsvStockModal]=useState(false);const[csvStStep,setCsvStStep]=useState(0);const[csvStData,setCsvStData]=useState([]);const[csvStHeaders,setCsvStHeaders]=useState([]);const[csvStMapping,setCsvStMapping]=useState({});const[csvStPreview,setCsvStPreview]=useState([]);
   const p=products.find(x=>x.id===sel);
   const sizes=[...new Set(p?.variants.map(v=>v.size)||[])];const colors=[...new Set(p?.variants.map(v=>v.color)||[])];
   return(<div style={{height:"100%",overflowY:"auto",padding:20,background:C.bg}}>
@@ -1263,12 +1390,13 @@ function StockScreen(){
       <div style={{flex:1}}/>
       <Btn variant="outline" onClick={()=>setRcModal(true)}><Upload size={14}/> Réception</Btn></div>
     <div style={{display:"flex",gap:6,marginBottom:12}}>
-      {[{id:"matrix",l:"Matrice"},{id:"alerts",l:"Alertes"},{id:"moves",l:"Mouvements"},{id:"adjust",l:"Ajustement"},{id:"aging",l:"Vieillissement"},{id:"reorder",l:"Réassort"}].map(t=>(
+      {[{id:"matrix",l:"Matrice"},{id:"alerts",l:"Alertes"},{id:"moves",l:"Mouvements"},{id:"inventory",l:"Inventaire"},{id:"adjust",l:"Ajustement"},{id:"aging",l:"Vieillissement"},{id:"reorder",l:"Réassort"}].map(t=>(
         <button key={t.id} onClick={()=>setTab(t.id)} style={{padding:"5px 12px",borderRadius:8,border:`1.5px solid ${tab===t.id?C.primary:C.border}`,
           background:tab===t.id?C.primary:"transparent",color:tab===t.id?"#fff":C.text,fontSize:11,fontWeight:600,cursor:"pointer"}}>{t.l}</button>))}</div>
 
-    {tab==="matrix"&&<><select value={sel} onChange={e=>setSel(e.target.value)} style={{padding:8,borderRadius:8,border:`1.5px solid ${C.border}`,fontSize:12,marginBottom:12,fontFamily:"inherit"}}>
-      {products.map(p=>(<option key={p.id} value={p.id}>{p.name} ({p.sku})</option>))}</select>
+    {tab==="matrix"&&<><Input value={stSearchMatrix} onChange={e=>setStSearchMatrix(e.target.value)} placeholder="Rechercher produit (nom, SKU)..." style={{marginBottom:6,height:32,fontSize:11,padding:"4px 10px"}}/>
+      <select value={sel} onChange={e=>setSel(e.target.value)} style={{padding:8,borderRadius:8,border:`1.5px solid ${C.border}`,fontSize:12,marginBottom:12,fontFamily:"inherit"}}>
+      {products.filter(p=>!stSearchMatrix||p.name.toLowerCase().includes(stSearchMatrix.toLowerCase())||p.sku.toLowerCase().includes(stSearchMatrix.toLowerCase())).map(p=>(<option key={p.id} value={p.id}>{p.name} ({p.sku})</option>))}</select>
     {p&&<div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`,overflowX:"auto"}}>
       <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
         <thead><tr><th style={{padding:8,textAlign:"left",borderBottom:`2px solid ${C.border}`,fontSize:10}}>Couleur\Taille</th>
@@ -1287,7 +1415,7 @@ function StockScreen(){
         background:a.level==="rupture"?C.dangerLight:C.warnLight,border:`1.5px solid ${a.level==="rupture"?C.danger+"44":C.warn+"44"}`}}>
         <AlertTriangle size={16} color={a.level==="rupture"?C.danger:C.warn}/>
         <div style={{flex:1}}><div style={{fontSize:12,fontWeight:600}}>{a.product.name} — {a.variant.color}/{a.variant.size}</div>
-          <div style={{fontSize:10,color:C.textMuted}}>Stock: {a.variant.stock} | Seuil: {a.variant.stockAlert}</div></div>
+          <div style={{fontSize:10,color:C.textMuted}}>Stock: {a.variant.stock} | Seuil: {a.variant.stockAlert}{a.product.sku?` | Réf: ${a.product.sku}`:""}{a.variant.ean?` | EAN: ${a.variant.ean}`:""}</div></div>
         <Badge color={a.level==="rupture"?C.danger:C.warn}>{a.level==="rupture"?"RUPTURE":"BAS"}</Badge></div>))}</div>}
 
     {tab==="moves"&&<div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`}}>
@@ -1326,7 +1454,7 @@ function StockScreen(){
       {reorderSuggestions.map((s,i)=>(<div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:10,borderBottom:`1px solid ${C.border}`}}>
         <AlertTriangle size={14} color={s.currentStock===0?C.danger:C.warn}/>
         <div style={{flex:1}}><div style={{fontSize:12,fontWeight:600}}>{s.product.name} — {s.variant.color}/{s.variant.size}</div>
-          <div style={{fontSize:10,color:C.textMuted}}>Stock actuel: {s.currentStock} | Seuil: {s.variant.stockAlert}</div></div>
+          <div style={{fontSize:10,color:C.textMuted}}>Stock actuel: {s.currentStock} | Seuil: {s.variant.stockAlert}{s.product.sku?` | Réf: ${s.product.sku}`:""}</div></div>
         <Badge color={C.info}>Commander: {s.suggestedQty}</Badge>
       </div>))}</div>}
 
@@ -1335,8 +1463,9 @@ function StockScreen(){
       <p style={{fontSize:11,color:C.textMuted,marginBottom:12}}>Inventaire, casse, perte, correction d'erreur…</p>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}>
         <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>PRODUIT</label>
+          <Input value={stSearchAdj} onChange={e=>setStSearchAdj(e.target.value)} placeholder="Rechercher..." style={{marginBottom:4,height:28,fontSize:10,padding:"2px 8px"}}/>
           <select value={adjProd} onChange={e=>{setAdjProd(e.target.value);setAdjVar("");setAdjQty("");}} style={{width:"100%",padding:10,borderRadius:10,border:`2px solid ${C.border}`,fontSize:12,fontFamily:"inherit"}}>
-            <option value="">Sélectionner…</option>{products.map(p=>(<option key={p.id} value={p.id}>{p.name} ({p.sku})</option>))}</select></div>
+            <option value="">Sélectionner…</option>{products.filter(p=>!stSearchAdj||p.name.toLowerCase().includes(stSearchAdj.toLowerCase())||p.sku.toLowerCase().includes(stSearchAdj.toLowerCase())).map(p=>(<option key={p.id} value={p.id}>{p.name} ({p.sku})</option>))}</select></div>
         {adjProd&&<div><label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>VARIANTE</label>
           <select value={adjVar} onChange={e=>{setAdjVar(e.target.value);const pr=products.find(x=>x.id===adjProd);const v=pr?.variants.find(x=>x.id===e.target.value);if(v)setAdjQty(String(v.stock));}} style={{width:"100%",padding:10,borderRadius:10,border:`2px solid ${C.border}`,fontSize:12,fontFamily:"inherit"}}>
             <option value="">Sélectionner…</option>{products.find(x=>x.id===adjProd)?.variants.map(v=>(<option key={v.id} value={v.id}>{v.color}/{v.size} (stock: {v.stock})</option>))}</select></div>}
@@ -1357,23 +1486,100 @@ function StockScreen(){
         <Save size={14}/> Enregistrer l'ajustement</Btn>
     </div>}
 
+    {/* Inventory tab */}
+    {tab==="inventory"&&<div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`}}>
+      <h3 style={{fontSize:14,fontWeight:700,marginBottom:10}}>Inventaire complet</h3>
+      <Input value={invSearch} onChange={e=>setInvSearch(e.target.value)} placeholder="Rechercher produit (nom, SKU)..." style={{marginBottom:10,height:32,fontSize:11,padding:"4px 10px"}}/>
+      <div style={{maxHeight:400,overflowY:"auto",marginBottom:12}}>
+        <table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
+          <thead><tr style={{borderBottom:`2px solid ${C.border}`,position:"sticky",top:0,background:C.surface}}>
+            {["Produit","Variante","EAN","Stock actuel","Stock compté","Écart"].map(h=>(<th key={h} style={{padding:6,textAlign:"left",fontSize:9,fontWeight:700,color:C.textMuted}}>{h}</th>))}</tr></thead>
+          <tbody>{products.filter(p=>!invSearch||p.name.toLowerCase().includes(invSearch.toLowerCase())||p.sku.toLowerCase().includes(invSearch.toLowerCase())).flatMap(p=>
+            p.variants.map(v=>{const key=`${p.id}_${v.id}`;const counted=invCounts[key];const diff=counted!==undefined&&counted!==""?parseInt(counted)-v.stock:null;
+              return(<tr key={key} style={{borderBottom:`1px solid ${C.border}`,background:diff!==null&&diff!==0?(diff>0?C.primaryLight:C.dangerLight):"transparent"}}>
+                <td style={{padding:6,fontWeight:600}}>{p.name} <span style={{color:C.textMuted,fontSize:9}}>({p.sku})</span></td>
+                <td style={{padding:6}}>{v.color}/{v.size}</td>
+                <td style={{padding:6,fontFamily:"monospace",fontSize:9}}>{v.ean||"—"}</td>
+                <td style={{padding:6,fontWeight:700}}>{v.stock}</td>
+                <td style={{padding:6}}><input type="number" min="0" value={invCounts[key]??""}
+                  onChange={e=>setInvCounts(prev=>({...prev,[key]:e.target.value}))}
+                  style={{width:60,padding:"3px 6px",borderRadius:6,border:`1.5px solid ${C.border}`,fontSize:11,textAlign:"center",fontFamily:"inherit"}}/></td>
+                <td style={{padding:6,fontWeight:700,color:diff===null||diff===0?C.textMuted:diff>0?"#3B8C5A":C.danger}}>
+                  {diff!==null?(diff>0?`+${diff}`:diff):"—"}</td></tr>);})
+          )}</tbody></table></div>
+      <Btn onClick={()=>{let count=0;Object.entries(invCounts).forEach(([key,val])=>{if(val===""||val===undefined)return;
+        const[pid,vid]=key.split("_");const pr=products.find(x=>x.id===pid);const vr=pr?.variants.find(x=>x.id===vid);
+        if(pr&&vr&&parseInt(val)!==vr.stock){adjustStock(pid,vid,parseInt(val),"INVENTAIRE");count++;}});
+        setInvCounts({});notify(`${count} ajustement(s) validé(s)`,"success");}}
+        disabled={!Object.values(invCounts).some(v=>v!==""&&v!==undefined)}
+        style={{width:"100%",height:40,background:`linear-gradient(135deg,${C.primary},${C.gradientB})`}}><Save size={14}/> Valider l'inventaire</Btn>
+    </div>}
+
     {/* Stock receipt modal */}
     <Modal open={rcModal} onClose={()=>setRcModal(false)} title="Réception de marchandise">
       <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:12}}>
+        <div style={{display:"flex",gap:6,justifyContent:"flex-end"}}><Btn variant="outline" onClick={()=>{setCsvStockModal(true);setCsvStStep(0);setCsvStData([]);}} style={{fontSize:10,padding:"4px 10px"}}><Upload size={11}/> Import CSV stock</Btn></div>
+        <Input value={stSearchReceipt} onChange={e=>setStSearchReceipt(e.target.value)} placeholder="Rechercher produit..." style={{height:28,fontSize:10,padding:"2px 8px"}}/>
         <select value={rcProd} onChange={e=>{setRcProd(e.target.value);setRcVar("");}} style={{padding:10,borderRadius:10,border:`2px solid ${C.border}`,fontSize:12,fontFamily:"inherit"}}>
-          <option value="">Sélectionner un produit</option>{products.map(p=>(<option key={p.id} value={p.id}>{p.name} ({p.sku})</option>))}</select>
+          <option value="">Sélectionner un produit</option>{products.filter(p=>!stSearchReceipt||p.name.toLowerCase().includes(stSearchReceipt.toLowerCase())||p.sku.toLowerCase().includes(stSearchReceipt.toLowerCase())).map(p=>(<option key={p.id} value={p.id}>{p.name} ({p.sku})</option>))}</select>
         {rcProd&&<select value={rcVar} onChange={e=>setRcVar(e.target.value)} style={{padding:10,borderRadius:10,border:`2px solid ${C.border}`,fontSize:12,fontFamily:"inherit"}}>
           <option value="">Variante</option>{products.find(x=>x.id===rcProd)?.variants.map(v=>(<option key={v.id} value={v.id}>{v.color}/{v.size} (stock: {v.stock})</option>))}</select>}
         <Input type="number" value={rcQty} onChange={e=>setRcQty(e.target.value)} placeholder="Quantité reçue"/>
         <Input value={rcSup} onChange={e=>setRcSup(e.target.value)} placeholder="Fournisseur"/></div>
       <Btn onClick={()=>{if(rcProd&&rcVar&&rcQty){receiveStock(rcProd,rcVar,parseInt(rcQty),rcSup||"Non spécifié");setRcModal(false);setRcQty("");setRcSup("");}}}
         style={{width:"100%",height:40,background:`linear-gradient(135deg,${C.primary},${C.gradientB})`}}><Upload size={14}/> Enregistrer la réception</Btn></Modal>
+
+    {/* CSV Stock Import Modal */}
+    <Modal open={csvStockModal} onClose={()=>setCsvStockModal(false)} title="Import CSV - Réception stock" wide>
+      {csvStStep===0&&<div style={{textAlign:"center",padding:20}}>
+        <Upload size={32} color={C.primary} style={{marginBottom:10}}/>
+        <p style={{fontSize:12,color:C.textMuted,marginBottom:12}}>CSV avec colonnes: sku (ou ean), quantité, fournisseur</p>
+        <input type="file" accept=".csv,.txt" onChange={e=>{const file=e.target.files[0];if(!file)return;
+          Papa.parse(file,{header:true,skipEmptyLines:true,complete:(r)=>{if(!r.data.length)return;
+            setCsvStHeaders(r.meta.fields||[]);setCsvStData(r.data);
+            const map={};(r.meta.fields||[]).forEach(h=>{const hl=h.toLowerCase().trim();
+              if(["sku","ref","reference","référence","code"].includes(hl))map[h]="sku";
+              if(["ean","ean13","barcode","code_barre"].includes(hl))map[h]="ean";
+              if(["quantity","quantite","quantité","qty","qte"].includes(hl))map[h]="quantity";
+              if(["supplier","fournisseur","source"].includes(hl))map[h]="supplier";});
+            setCsvStMapping(map);setCsvStStep(1);}});}} style={{fontSize:12}}/></div>}
+      {csvStStep===1&&<div>
+        <div style={{fontSize:12,fontWeight:700,marginBottom:8}}>Associer les colonnes</div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginBottom:12}}>
+          {csvStHeaders.map(h=>(<div key={h} style={{display:"flex",alignItems:"center",gap:6,padding:6,borderRadius:8,background:C.surfaceAlt}}>
+            <span style={{fontSize:11,fontWeight:600,flex:1}}>{h}</span>
+            <select value={csvStMapping[h]||""} onChange={e=>{const v=e.target.value;setCsvStMapping(p=>{const n={...p};if(!v)delete n[h];else n[h]=v;return n;});}}
+              style={{padding:4,borderRadius:6,border:`1px solid ${C.border}`,fontSize:10,fontFamily:"inherit"}}>
+              <option value="">— ignorer —</option><option value="sku">SKU</option><option value="ean">EAN</option>
+              <option value="quantity">Quantité</option><option value="supplier">Fournisseur</option></select></div>))}</div>
+        <Btn onClick={()=>{const rows=csvStData.map(row=>{const getF=(f)=>{const h=Object.entries(csvStMapping).find(([k,v])=>v===f);return h?row[h[0]]?.trim()||"":"";};
+          const sku=getF("sku");const ean=getF("ean");const qty=parseInt(getF("quantity"))||0;const sup=getF("supplier");
+          let match=null;for(const p of products){for(const v of p.variants){if((ean&&v.ean===ean)||(sku&&p.sku===sku)){match={product:p,variant:v};break;}}if(match)break;}
+          return{sku,ean,qty,supplier:sup,match,status:match?"found":"not_found"};});setCsvStPreview(rows);setCsvStStep(2);}}
+          style={{width:"100%",height:36}}><Search size={12}/> Prévisualiser</Btn></div>}
+      {csvStStep===2&&<div>
+        <div style={{fontSize:12,fontWeight:700,marginBottom:8}}>Aperçu ({csvStPreview.filter(r=>r.status==="found").length}/{csvStPreview.length} trouvés)</div>
+        <div style={{maxHeight:300,overflowY:"auto",marginBottom:12}}>
+          <table style={{width:"100%",borderCollapse:"collapse",fontSize:10}}>
+            <thead><tr style={{borderBottom:`2px solid ${C.border}`}}>
+              {["SKU/EAN","Produit","Variante","Qté","Fournisseur","Statut"].map(h=>(<th key={h} style={{padding:4,textAlign:"left",fontSize:9,fontWeight:700,color:C.textMuted}}>{h}</th>))}</tr></thead>
+            <tbody>{csvStPreview.map((r,i)=>(<tr key={i} style={{borderBottom:`1px solid ${C.border}`,background:r.status==="found"?"transparent":C.dangerLight}}>
+              <td style={{padding:4,fontFamily:"monospace"}}>{r.sku||r.ean}</td>
+              <td style={{padding:4,fontWeight:600}}>{r.match?.product.name||"—"}</td>
+              <td style={{padding:4}}>{r.match?`${r.match.variant.color}/${r.match.variant.size}`:"—"}</td>
+              <td style={{padding:4,fontWeight:700}}>{r.qty}</td><td style={{padding:4}}>{r.supplier}</td>
+              <td style={{padding:4}}>{r.status==="found"?<Badge color="#3B8C5A">Trouvé</Badge>:<Badge color={C.danger}>Non trouvé</Badge>}</td></tr>))}</tbody></table></div>
+        <Btn onClick={()=>{csvStPreview.filter(r=>r.status==="found"&&r.qty>0).forEach(r=>{
+          receiveStock(r.match.product.id,r.match.variant.id,r.qty,r.supplier||"Import CSV");});
+          setCsvStockModal(false);setCsvStStep(0);}}
+          style={{width:"100%",height:40,background:`linear-gradient(135deg,${C.primary},${C.gradientB})`}}><Upload size={14}/> Réceptionner {csvStPreview.filter(r=>r.status==="found"&&r.qty>0).length} ligne(s)</Btn></div>}
+    </Modal>
   </div>);
 }
 
 /* ══════════ HISTORY ══════════ */
 function HistoryScreen(){
-  const{tickets,avoirs,settings,processReturn,perm:p}=useApp();
+  const{tickets,avoirs,settings,processReturn,perm:p,printerConnected,thermalPrint}=useApp();
   const[tab,setTab]=useState("tickets");const[reprintTk,setReprintTk]=useState(null);
   const[search,setSearch]=useState("");const[dateFilter,setDateFilter]=useState("");
   const[returnModal,setReturnModal]=useState(null);
@@ -1393,7 +1599,7 @@ function HistoryScreen(){
   const openReturn=(ticket)=>{
     setReturnModal(ticket);
     setReturnItems((ticket.items||[]).map(i=>({productId:i.product?.id||i.product_id,variantId:i.variant?.id||i.variant_id,
-      name:i.product?.name||i.product_name,color:i.variant?.color||i.variant_color,size:i.variant?.size||i.variant_size,
+      name:i.product?.name||i.product_name,sku:i.product?.sku||i.product_sku||"",ean:i.variant?.ean||i.variant_ean||"",color:i.variant?.color||i.variant_color,size:i.variant?.size||i.variant_size,
       maxQty:i.quantity,qty:0,unitTTC:(i.lineTTC||i.line_ttc||(i.unit_price*i.quantity))/i.quantity})));
     setReturnReason("");setReturnMethod("cash");
   };
@@ -1451,9 +1657,11 @@ function HistoryScreen(){
         <div style={{display:"flex",justifyContent:"space-between"}}><span>N° {reprintTk.ticketNumber}</span><span>{new Date(reprintTk.date||reprintTk.createdAt||"").toLocaleString("fr-FR")}</span></div>
         <div>Caissier: {reprintTk.userName}{reprintTk.customerName?` — Client: ${reprintTk.customerName}`:""}</div>
         <div style={{borderTop:"1px dashed #999",margin:"4px 0"}}/>
-        {(reprintTk.items||[]).map((i,k)=>(<div key={k} style={{display:"flex",justifyContent:"space-between"}}>
-          <span>{i.product?.name||i.product_name}{!(i.isCustom||i.is_custom)?` (${i.variant?.color||i.variant_color}/${i.variant?.size||i.variant_size})`:""} x{i.quantity}{i.discount>0?` -${i.discount}%`:""}</span>
-          <span>{(i.lineTTC||i.line_ttc||(i.unit_price*i.quantity)).toFixed(2)}€</span></div>))}
+        {(reprintTk.items||[]).map((i,k)=>{const sku=i.product?.sku||i.product_sku||"";const ean=i.variant?.ean||i.variant_ean||"";return(<div key={k}>
+          <div style={{display:"flex",justifyContent:"space-between"}}><span>{i.product?.name||i.product_name}{!(i.isCustom||i.is_custom)?` (${i.variant?.color||i.variant_color}/${i.variant?.size||i.variant_size})`:""} x{i.quantity}{i.discount>0?` -${i.discount}%`:""}</span>
+          <span>{(i.lineTTC||i.line_ttc||(i.unit_price*i.quantity)).toFixed(2)}€</span></div>
+          {(sku||ean)&&<div style={{fontSize:8,color:"#999"}}>{sku?`Réf: ${sku}`:""}{sku&&ean?" — ":""}{ean?`EAN: ${ean}`:""}</div>}
+        </div>);})}
         <div style={{borderTop:"1px dashed #999",margin:"4px 0"}}/>
         {reprintTk.globalDiscount>0&&<div style={{display:"flex",justifyContent:"space-between",color:"#3B8C5A"}}><span>Remise</span><span>-{(reprintTk.globalDiscount||0).toFixed(2)}€</span></div>}
         <div style={{display:"flex",justifyContent:"space-between"}}><span>Total HT</span><span>{(reprintTk.totalHT||0).toFixed(2)}€</span></div>
@@ -1467,7 +1675,7 @@ function HistoryScreen(){
         <div style={{textAlign:"center",fontSize:8,color:C.textMuted}}>{CO.sw} v{CO.ver}<br/>{settings.footerMsg||CO.footerMsg}</div>
       </div>}
       {reprintTk&&<div style={{display:"flex",gap:8,marginTop:10}}>
-        <Btn variant="outline" onClick={()=>window.print()} style={{flex:1}}><Printer size={14}/> Réimprimer</Btn>
+        <Btn variant="outline" onClick={()=>thermalPrint("receipt",reprintTk)} style={{flex:1}}><Printer size={14}/> {printerConnected?"Ticket":"Réimprimer"}</Btn>
         <Btn variant="outline" onClick={()=>{const s=encodeURIComponent(`Ticket ${reprintTk.ticketNumber} — ${settings.name||CO.name}`);
           const b=encodeURIComponent(`Bonjour,\n\nTicket N°${reprintTk.ticketNumber}\nDate: ${new Date(reprintTk.date||reprintTk.createdAt||"").toLocaleString("fr-FR")}\nTotal: ${(reprintTk.totalTTC||0).toFixed(2)}€\n\n${settings.name||CO.name}\nSIRET: ${settings.siret||CO.siret}`);
           window.open(`mailto:${reprintTk.customerName?"":""}?subject=${s}&body=${b}`);}} style={{flex:1}}><Mail size={14}/> Email</Btn>
@@ -1482,7 +1690,7 @@ function HistoryScreen(){
         <div style={{display:"flex",flexDirection:"column",gap:6,marginBottom:14}}>
           {returnItems.map((ri,idx)=>(<div key={idx} style={{display:"flex",alignItems:"center",gap:8,padding:8,borderRadius:8,border:`1px solid ${ri.qty>0?C.danger+"66":C.border}`,background:ri.qty>0?C.dangerLight:"transparent"}}>
             <div style={{flex:1}}><div style={{fontSize:12,fontWeight:600}}>{ri.name}</div>
-              <div style={{fontSize:10,color:C.textMuted}}>{ri.color}/{ri.size} — {ri.unitTTC.toFixed(2)}€/u — max: {ri.maxQty}</div></div>
+              <div style={{fontSize:10,color:C.textMuted}}>{ri.color}/{ri.size} — {ri.unitTTC.toFixed(2)}€/u — max: {ri.maxQty}{ri.sku?` — Réf: ${ri.sku}`:""}</div></div>
             <div style={{display:"flex",alignItems:"center",gap:4}}>
               <button onClick={()=>setReturnItems(p=>p.map((x,i)=>i===idx?{...x,qty:Math.max(0,x.qty-1)}:x))}
                 style={{width:26,height:26,borderRadius:13,border:`1px solid ${C.border}`,background:C.surface,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}><Minus size={11}/></button>
@@ -1533,9 +1741,11 @@ function HistoryScreen(){
         {avoirDetail.customerName&&<div>Client: {avoirDetail.customerName}</div>}
         <div>Motif: {avoirDetail.reason}</div>
         <div style={{borderTop:"1px dashed #C44B4B",margin:"4px 0"}}/>
-        {avoirDetail.items.map((i,k)=>(<div key={k} style={{display:"flex",justifyContent:"space-between"}}>
-          <span>{i.product.name}{i.variant?` (${i.variant.color}/${i.variant.size})`:""} x{i.quantity}</span>
-          <span>-{i.lineTTC.toFixed(2)}€</span></div>))}
+        {avoirDetail.items.map((i,k)=>{const sku=i.product?.sku||"";const ean=i.variant?.ean||"";return(<div key={k}>
+          <div style={{display:"flex",justifyContent:"space-between"}}><span>{i.product.name}{i.variant?` (${i.variant.color}/${i.variant.size})`:""} x{i.quantity}</span>
+          <span>-{i.lineTTC.toFixed(2)}€</span></div>
+          {(sku||ean)&&<div style={{fontSize:8,color:"#C44B4B99"}}>{sku?`Réf: ${sku}`:""}{sku&&ean?" — ":""}{ean?`EAN: ${ean}`:""}</div>}
+        </div>);})}
         <div style={{borderTop:"1px dashed #C44B4B",margin:"4px 0"}}/>
         <div style={{display:"flex",justifyContent:"space-between",fontWeight:700,color:C.danger}}><span>TOTAL AVOIR</span><span>-{(avoirDetail.totalTTC||0).toFixed(2)}€</span></div>
         <div>Remboursement: {({cash:"Espèces",card:"Carte bancaire",avoir:"Avoir client"})[avoirDetail.refundMethod]||avoirDetail.refundMethod}</div>
@@ -1543,16 +1753,22 @@ function HistoryScreen(){
           <div style={{fontSize:8,color:C.danger,fontWeight:700}}>EMPREINTE NF525</div>
           <div style={{fontSize:11,fontWeight:700,color:C.danger,letterSpacing:2}}>{avoirDetail.fingerprint}</div></div>
       </div>}
-      {avoirDetail&&<Btn variant="outline" onClick={()=>window.print()} style={{width:"100%",marginTop:10}}><Printer size={14}/> Imprimer</Btn>}
+      {avoirDetail&&<Btn variant="outline" onClick={()=>thermalPrint("avoir",avoirDetail)} style={{width:"100%",marginTop:10}}><Printer size={14}/> {printerConnected?"Ticket":"Imprimer"}</Btn>}
     </Modal>
   </div>);
 }
 
 /* ══════════ CLOSURE ══════════ */
 function ClosureScreen(){
-  const{tickets,cashReg,closures,createClosure,gt,closeReg,perm:p,avoirs,settings}=useApp();
+  const{tickets,cashReg,closures,createClosure,gt,closeReg,perm:p,avoirs,settings,printerConnected,thermalPrint}=useApp();
   const[aCash,setACash]=useState("");const[aCard,setACard]=useState("");
   const[reportModal,setReportModal]=useState(null);
+  const[denomMode,setDenomMode]=useState(false);
+  const bills=[500,200,100,50,20,10,5];const coins=[2,1,0.5,0.2,0.1,0.05,0.02,0.01];
+  const[denomCounts,setDenomCounts]=useState(()=>{const o={};[...bills,...coins].forEach(d=>o[d]=0);return o;});
+  const denomTotal=useMemo(()=>Object.entries(denomCounts).reduce((s,[d,c])=>s+parseFloat(d)*c,0),[denomCounts]);
+  const setDenom=(d,v)=>{setDenomCounts(p=>({...p,[d]:Math.max(0,parseInt(v)||0)}));};
+  useEffect(()=>{if(denomMode)setACash(denomTotal.toFixed(2));},[denomMode,denomTotal]);
   if(!p().canCloseZ)return<div style={{padding:40,textAlign:"center",color:C.textMuted}}>Accès réservé aux administrateurs</div>;
   const today=new Date().toISOString().split("T")[0];const pt=tickets.filter(t=>(t.date||t.createdAt||t.created_at||"").startsWith(today));
   const todayAvoirs=avoirs.filter(a=>(a.date||a.createdAt||"").startsWith(today));
@@ -1585,9 +1801,34 @@ function ClosureScreen(){
         <span style={{fontSize:18,fontWeight:800,color:C.primary}}>{(totalTTC-totalReturns).toFixed(2)}€</span></div></div>
 
     <div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`,marginBottom:14}}>
+      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
+        <span style={{fontSize:12,fontWeight:700}}>Comptage espèces</span>
+        <Btn variant={denomMode?"primary":"outline"} onClick={()=>{setDenomMode(!denomMode);if(!denomMode){const o={};[...bills,...coins].forEach(d=>o[d]=0);setDenomCounts(o);}}}
+          style={{fontSize:10,padding:"3px 10px"}}>{denomMode?"Mode coupures":"Comptage par coupure"}</Btn></div>
+      {denomMode&&<div style={{marginBottom:12}}>
+        <div style={{fontSize:10,fontWeight:600,color:C.textMuted,marginBottom:6}}>BILLETS</div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:4,marginBottom:8}}>
+          {bills.map(d=>(<div key={d} style={{display:"flex",alignItems:"center",gap:4,padding:4,borderRadius:8,background:C.surfaceAlt}}>
+            <span style={{fontSize:10,fontWeight:700,width:36,textAlign:"right"}}>{d}€</span>
+            <input type="number" min="0" value={denomCounts[d]||""} onChange={e=>setDenom(d,e.target.value)}
+              style={{width:40,padding:"3px 4px",borderRadius:6,border:`1px solid ${C.border}`,fontSize:11,textAlign:"center",fontFamily:"inherit"}}/>
+            <span style={{fontSize:9,color:C.textMuted}}>{(d*(denomCounts[d]||0)).toFixed(0)}€</span></div>))}</div>
+        <div style={{fontSize:10,fontWeight:600,color:C.textMuted,marginBottom:6}}>PIÈCES</div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:4,marginBottom:8}}>
+          {coins.map(d=>(<div key={d} style={{display:"flex",alignItems:"center",gap:4,padding:4,borderRadius:8,background:C.surfaceAlt}}>
+            <span style={{fontSize:10,fontWeight:700,width:36,textAlign:"right"}}>{d>=1?d+"€":(d*100).toFixed(0)+"c"}</span>
+            <input type="number" min="0" value={denomCounts[d]||""} onChange={e=>setDenom(d,e.target.value)}
+              style={{width:40,padding:"3px 4px",borderRadius:6,border:`1px solid ${C.border}`,fontSize:11,textAlign:"center",fontFamily:"inherit"}}/>
+            <span style={{fontSize:9,color:C.textMuted}}>{(d*(denomCounts[d]||0)).toFixed(2)}€</span></div>))}</div>
+        <div style={{padding:8,borderRadius:8,background:C.primaryLight,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <span style={{fontSize:12,fontWeight:700,color:C.primary}}>Total coupures</span>
+          <span style={{fontSize:16,fontWeight:800,color:C.primary}}>{denomTotal.toFixed(2)}€</span></div>
+        {<div style={{fontSize:10,fontWeight:600,marginTop:4,color:Math.abs(denomTotal-expected)<0.01?"#3B8C5A":C.danger}}>
+          Écart vs attendu ({expected.toFixed(2)}€): {(denomTotal-expected)>=0?"+":""}{(denomTotal-expected).toFixed(2)}€</div>}
+      </div>}
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
         <div><label style={{fontSize:9,fontWeight:600,color:C.textMuted}}>ESPÈCES COMPTÉES (attendu: {expected.toFixed(2)}€)</label>
-          <Input type="number" step="0.01" value={aCash} onChange={e=>setACash(e.target.value)} placeholder={expected.toFixed(2)}/>
+          <Input type="number" step="0.01" value={aCash} onChange={e=>{if(!denomMode)setACash(e.target.value);}} placeholder={expected.toFixed(2)} style={denomMode?{background:C.surfaceAlt}:{}}/>
           {cashDiff!==null&&<div style={{fontSize:10,fontWeight:600,marginTop:3,color:Math.abs(cashDiff)<0.01?"#3B8C5A":C.danger}}>
             Écart: {cashDiff>=0?"+":""}{cashDiff.toFixed(2)}€ {Math.abs(cashDiff)<0.01?"(OK)":"(attention)"}</div>}</div>
         <div><label style={{fontSize:9,fontWeight:600,color:C.textMuted}}>CARTE COMPTÉE (attendu: {card.toFixed(2)}€)</label>
@@ -1646,20 +1887,35 @@ function ClosureScreen(){
           <div style={{fontSize:11,fontWeight:700,color:C.fiscal,letterSpacing:2}}>{reportModal.fingerprint}</div></div>
         <div style={{textAlign:"center",fontSize:8,color:C.textMuted}}>{CO.sw} v{CO.ver} — Document non modifiable</div>
       </div>}
-      {reportModal&&<Btn variant="outline" onClick={()=>window.print()} style={{width:"100%",marginTop:10}}><Printer size={14}/> Imprimer le rapport</Btn>}
+      {reportModal&&<Btn variant="outline" onClick={()=>thermalPrint("closure",reportModal)} style={{width:"100%",marginTop:10}}><Printer size={14}/> {printerConnected?"Ticket":"Imprimer le rapport"}</Btn>}
     </Modal>
   </div>);
 }
 
 /* ══════════ CUSTOMERS ══════════ */
 function CustomersScreen(){
-  const{customers,setCustomers,tickets,exportCustomerRGPD,getLoyaltyTier,updateCustomer,deleteCustomer,addCustomer}=useApp();
+  const{customers,setCustomers,tickets,exportCustomerRGPD,getLoyaltyTier,updateCustomer,deleteCustomer,addCustomer,notify}=useApp();
   const[sel,setSel]=useState(null);const[search,setSearch]=useState("");
   const[editMode,setEditMode]=useState(false);
   const[editData,setEditData]=useState({});
   const[newCustModal,setNewCustModal]=useState(false);
   const[nc,setNc]=useState({firstName:"",lastName:"",email:"",phone:"",city:"",notes:""});
   const[confirmDel,setConfirmDel]=useState(false);
+  const[csvModal,setCsvModal]=useState(false);const[csvStep,setCsvStep]=useState(0);const[csvData,setCsvData]=useState([]);const[csvHeaders,setCsvHeaders]=useState([]);
+  const[csvMapping,setCsvMapping]=useState({});const[csvPreview,setCsvPreview]=useState([]);
+  const custFields=["firstName","lastName","email","phone","city","notes"];
+  const custSynonyms={firstName:["prenom","prénom","first_name","firstname","prenom_client"],lastName:["nom","last_name","lastname","nom_client","nom_famille"],
+    email:["email","mail","e-mail","courriel"],phone:["phone","telephone","téléphone","tel","portable","mobile"],city:["city","ville","localite","localité"],notes:["notes","note","commentaire","remarque"]};
+  const autoMapCustHeaders=(headers)=>{const map={};headers.forEach(h=>{const hl=h.toLowerCase().trim();
+    custFields.forEach(f=>{if(hl===f.toLowerCase()||custSynonyms[f]?.some(s=>hl===s))map[h]=f;});});return map;};
+  const handleCustCSV=(e)=>{const file=e.target.files[0];if(!file)return;
+    Papa.parse(file,{header:true,skipEmptyLines:true,complete:(r)=>{if(!r.data.length)return;
+      setCsvHeaders(r.meta.fields||[]);setCsvData(r.data);const map=autoMapCustHeaders(r.meta.fields||[]);setCsvMapping(map);setCsvStep(1);}});};
+  const buildCustPreview=()=>{const rows=csvData.map(row=>{const c={};custFields.forEach(f=>{const h=Object.entries(csvMapping).find(([k,v])=>v===f);
+    c[f]=h?row[h[0]]?.trim()||"":"";});c._dup=c.email&&customers.some(ex=>ex.email?.toLowerCase()===c.email.toLowerCase());return c;});setCsvPreview(rows);setCsvStep(2);};
+  const importCustCSV=()=>{let added=0;csvPreview.forEach(c=>{if(!c.firstName&&!c.lastName)return;if(c._dup)return;
+    setCustomers(p=>[...p,{id:"c"+Date.now()+Math.random().toString(36).slice(2,5),firstName:c.firstName,lastName:c.lastName,email:c.email,phone:c.phone,city:c.city,notes:c.notes,points:0,totalSpent:0}]);added++;});
+    notify(`${added} client(s) importé(s)`,"success");setCsvModal(false);setCsvStep(0);setCsvData([]);};
   const filtered=customers.filter(c=>!search||`${c.firstName} ${c.lastName} ${c.email} ${c.phone}`.toLowerCase().includes(search.toLowerCase()));
   const custTickets=sel?tickets.filter(t=>t.customerId===sel.id):[];
   const custAvg=custTickets.length?custTickets.reduce((s,t)=>s+(t.totalTTC||parseFloat(t.total_ttc)||0),0)/custTickets.length:0;
@@ -1670,7 +1926,9 @@ function CustomersScreen(){
   return(<div style={{height:"100%",overflowY:"auto",padding:20,background:C.bg}}>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
       <h2 style={{fontSize:22,fontWeight:800,margin:0}}>Clients & Fidélité ({customers.length})</h2>
-      <Btn onClick={()=>setNewCustModal(true)} style={{fontSize:11,background:`linear-gradient(135deg,${C.primary},${C.gradientB})`}}><Plus size={12}/> Nouveau client</Btn></div>
+      <div style={{display:"flex",gap:6}}>
+        <Btn variant="outline" onClick={()=>{setCsvModal(true);setCsvStep(0);setCsvData([]);}} style={{fontSize:11}}><Upload size={12}/> Import CSV</Btn>
+        <Btn onClick={()=>setNewCustModal(true)} style={{fontSize:11,background:`linear-gradient(135deg,${C.primary},${C.gradientB})`}}><Plus size={12}/> Nouveau client</Btn></div></div>
     <div style={{display:"flex",gap:10}}>
       <div style={{width:300}}>
         <Input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Rechercher nom, email, téléphone…" style={{marginBottom:10,height:36}}/>
@@ -1739,6 +1997,34 @@ function CustomersScreen(){
       <Btn onClick={async()=>{if(nc.firstName&&nc.lastName){const c=await addCustomer(nc);if(c){setSel(c);setNewCustModal(false);
         setNc({firstName:"",lastName:"",email:"",phone:"",city:"",notes:""});}}}}
         style={{width:"100%",height:40,background:`linear-gradient(135deg,${C.primary},${C.gradientB})`}}>Créer le client</Btn></Modal>
+
+    {/* CSV Import Modal */}
+    <Modal open={csvModal} onClose={()=>setCsvModal(false)} title="Import CSV clients" wide>
+      {csvStep===0&&<div style={{textAlign:"center",padding:20}}>
+        <Upload size={32} color={C.primary} style={{marginBottom:10}}/>
+        <p style={{fontSize:12,color:C.textMuted,marginBottom:12}}>Sélectionnez un fichier CSV avec les colonnes: prénom, nom, email, téléphone, ville, notes</p>
+        <input type="file" accept=".csv,.txt" onChange={handleCustCSV} style={{fontSize:12}}/></div>}
+      {csvStep===1&&<div>
+        <div style={{fontSize:12,fontWeight:700,marginBottom:8}}>Associer les colonnes ({csvHeaders.length} colonnes détectées)</div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginBottom:12}}>
+          {csvHeaders.map(h=>(<div key={h} style={{display:"flex",alignItems:"center",gap:6,padding:6,borderRadius:8,background:C.surfaceAlt}}>
+            <span style={{fontSize:11,fontWeight:600,flex:1}}>{h}</span>
+            <select value={csvMapping[h]||""} onChange={e=>{const v=e.target.value;setCsvMapping(p=>{const n={...p};if(!v)delete n[h];else n[h]=v;return n;});}}
+              style={{padding:4,borderRadius:6,border:`1px solid ${C.border}`,fontSize:10,fontFamily:"inherit"}}>
+              <option value="">— ignorer —</option>{custFields.map(f=>(<option key={f} value={f}>{f}</option>))}</select></div>))}</div>
+        <Btn onClick={buildCustPreview} style={{width:"100%",height:36}}><Search size={12}/> Prévisualiser</Btn></div>}
+      {csvStep===2&&<div>
+        <div style={{fontSize:12,fontWeight:700,marginBottom:8}}>Aperçu ({csvPreview.length} lignes, {csvPreview.filter(c=>c._dup).length} doublons détectés)</div>
+        <div style={{maxHeight:300,overflowY:"auto",marginBottom:12}}>
+          <table style={{width:"100%",borderCollapse:"collapse",fontSize:10}}>
+            <thead><tr style={{borderBottom:`2px solid ${C.border}`}}>
+              {["Prénom","Nom","Email","Tél","Ville","Statut"].map(h=>(<th key={h} style={{padding:4,textAlign:"left",fontSize:9,fontWeight:700,color:C.textMuted}}>{h}</th>))}</tr></thead>
+            <tbody>{csvPreview.slice(0,50).map((c,i)=>(<tr key={i} style={{borderBottom:`1px solid ${C.border}`,background:c._dup?C.warnLight:"transparent"}}>
+              <td style={{padding:4}}>{c.firstName}</td><td style={{padding:4}}>{c.lastName}</td><td style={{padding:4}}>{c.email}</td>
+              <td style={{padding:4}}>{c.phone}</td><td style={{padding:4}}>{c.city}</td>
+              <td style={{padding:4}}>{c._dup?<Badge color={C.warn}>Doublon</Badge>:<Badge color="#3B8C5A">Nouveau</Badge>}</td></tr>))}</tbody></table></div>
+        <Btn onClick={importCustCSV} style={{width:"100%",height:40,background:`linear-gradient(135deg,${C.primary},${C.gradientB})`}}><Upload size={14}/> Importer {csvPreview.filter(c=>!c._dup&&(c.firstName||c.lastName)).length} client(s)</Btn></div>}
+    </Modal>
 
     {/* Delete confirmation */}
     <ConfirmDialog open={confirmDel} onClose={()=>setConfirmDel(false)} onConfirm={()=>{deleteCustomer(sel.id);setSel(null);}}
@@ -2301,12 +2587,15 @@ function ProductsScreen(){
 
 /* ══════════ SETTINGS ══════════ */
 function SettingsScreen(){
-  const{settings,setSettings,addAudit,theme,setTheme,clockEntries,priceHistory}=useApp();
+  const{settings,setSettings,addAudit,theme,setTheme,clockEntries,priceHistory,printerConnected,printerType,connectPrinter,disconnectPrinter,thermalPrint,notify}=useApp();
   const[tab,setTab]=useState("general");
+  const[printerBaud,setPrinterBaud]=useState("9600");
+  const[printerWidth,setPrinterWidth]=useState("48");
+  const[connecting,setConnecting]=useState(false);
   return(<div style={{height:"100%",overflowY:"auto",padding:20,background:C.bg}}>
     <h2 style={{fontSize:22,fontWeight:800,marginBottom:14}}>Paramètres</h2>
-    <div style={{display:"flex",gap:6,marginBottom:14}}>
-      {[{id:"general",l:"Général"},{id:"return",l:"Retours"},{id:"theme",l:"Thème"},{id:"clock",l:"Pointages"},{id:"prices",l:"Historique prix"}].map(t=>(
+    <div style={{display:"flex",gap:6,marginBottom:14,flexWrap:"wrap"}}>
+      {[{id:"general",l:"Général"},{id:"printer",l:"🖨️ Imprimante"},{id:"return",l:"Retours"},{id:"theme",l:"Thème"},{id:"clock",l:"Pointages"},{id:"prices",l:"Historique prix"}].map(t=>(
         <button key={t.id} onClick={()=>setTab(t.id)} style={{padding:"5px 12px",borderRadius:8,border:`1.5px solid ${tab===t.id?C.primary:C.border}`,
           background:tab===t.id?C.primary:"transparent",color:tab===t.id?"#fff":C.text,fontSize:11,fontWeight:600,cursor:"pointer"}}>{t.l}</button>))}</div>
 
@@ -2315,6 +2604,61 @@ function SettingsScreen(){
         <div key={f.k} style={{marginBottom:10}}><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>{f.l}</label>
           <Input value={settings[f.k]||""} onChange={e=>setSettings(s=>({...s,[f.k]:e.target.value}))}/></div>))}
       <Btn onClick={()=>addAudit("CONFIG","Paramètres mis à jour")} style={{width:"100%",height:40,marginTop:8,background:`linear-gradient(135deg,${C.primary},${C.gradientB})`}}><Save size={14}/> Enregistrer</Btn></div>}
+
+    {tab==="printer"&&<div style={{maxWidth:600}}>
+      {/* Printer status */}
+      <div style={{background:printerConnected?C.primaryLight:C.surfaceAlt,borderRadius:14,padding:16,border:`1.5px solid ${printerConnected?C.primary+"44":C.border}`,marginBottom:14}}>
+        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}>
+          <div style={{width:12,height:12,borderRadius:6,background:printerConnected?"#3B8C5A":"#CCC",boxShadow:printerConnected?"0 0 8px #3B8C5A55":"none"}}/>
+          <span style={{fontSize:14,fontWeight:700}}>{printerConnected?"Imprimante connectée":"Aucune imprimante"}</span>
+          {printerConnected&&<Badge color={C.primary}>{printerType==="serial"?"Web Serial":"WebUSB"}</Badge>}</div>
+        {printerConnected&&<div style={{fontSize:11,color:C.textMuted}}>L'impression ESC/POS est active. Les tickets seront envoyés directement à l'imprimante thermique.</div>}</div>
+
+      {/* Connect / Disconnect */}
+      {!printerConnected?<>
+        <h3 style={{fontSize:14,fontWeight:700,marginBottom:10}}>Connexion imprimante thermique</h3>
+        <p style={{fontSize:11,color:C.textMuted,marginBottom:12}}>
+          Connectez une imprimante ticket thermique ESC/POS (Epson TM-T20, Star TSP, Bixolon, etc.) via USB ou port série.
+          Nécessite un navigateur compatible (Chrome, Edge, Opera).</p>
+
+        {/* Serial settings */}
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}>
+          <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>VITESSE SÉRIE (BAUD)</label>
+            <select value={printerBaud} onChange={e=>setPrinterBaud(e.target.value)} style={{width:"100%",padding:10,borderRadius:10,border:`2px solid ${C.border}`,fontSize:12,fontFamily:"inherit"}}>
+              {["9600","19200","38400","57600","115200"].map(b=>(<option key={b} value={b}>{b}</option>))}</select></div>
+          <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>LARGEUR PAPIER</label>
+            <select value={printerWidth} onChange={e=>setPrinterWidth(e.target.value)} style={{width:"100%",padding:10,borderRadius:10,border:`2px solid ${C.border}`,fontSize:12,fontFamily:"inherit"}}>
+              <option value="48">80mm (48 car.)</option>
+              <option value="32">58mm (32 car.)</option></select></div></div>
+
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+          {!!navigator.serial&&<Btn onClick={async()=>{setConnecting(true);await connectPrinter("serial",{baudRate:parseInt(printerBaud),paperWidth:parseInt(printerWidth)});setConnecting(false);}}
+            disabled={connecting} style={{height:44,background:`linear-gradient(135deg,${C.primary},${C.gradientB})`}}>
+            <Printer size={14}/> {connecting?"Connexion…":"Connecter (Port série)"}</Btn>}
+          {!!navigator.usb&&<Btn onClick={async()=>{setConnecting(true);await connectPrinter("usb");setConnecting(false);}}
+            disabled={connecting} style={{height:44,background:`linear-gradient(135deg,${C.info},#6BA3D6)`}}>
+            <Printer size={14}/> {connecting?"Connexion…":"Connecter (USB)"}</Btn>}
+        </div>
+
+        {!navigator.serial&&!navigator.usb&&<div style={{background:C.warnLight,borderRadius:10,padding:12,marginTop:10,fontSize:11,color:"#92400E",border:`1px solid ${C.warn}33`}}>
+          ⚠️ Votre navigateur ne supporte ni Web Serial ni WebUSB. Utilisez <strong>Google Chrome</strong>, <strong>Microsoft Edge</strong> ou <strong>Opera</strong> pour connecter une imprimante thermique.</div>}
+      </>:<>
+        {/* Connected actions */}
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:14}}>
+          <Btn variant="outline" onClick={()=>thermalPrint("test")} style={{height:44}}><Printer size={14}/> Test impression</Btn>
+          <Btn variant="outline" onClick={()=>thermalPrint("drawer")} style={{height:44}}><Box size={14}/> Ouvrir tiroir</Btn>
+          <Btn variant="danger" onClick={async()=>{await disconnectPrinter();}} style={{height:44}}><XCircle size={14}/> Déconnecter</Btn></div>
+      </>}
+
+      {/* Info box */}
+      <div style={{background:C.surfaceAlt,borderRadius:12,padding:14,marginTop:14,border:`1px solid ${C.border}`}}>
+        <div style={{fontSize:12,fontWeight:700,marginBottom:6}}>ℹ️ Imprimantes compatibles</div>
+        <div style={{fontSize:10,color:C.textMuted,lineHeight:1.6}}>
+          <strong>Port série (RS232/USB-Série):</strong> Epson TM-T20II/III, TM-T88V/VI, Star TSP100/TSP650, Bixolon SRP-350<br/>
+          <strong>USB direct:</strong> Epson TM-T20, TM-m30, Star mC-Print3, Bixolon SRP-332II<br/>
+          <strong>Protocole:</strong> ESC/POS standard — compatible avec la grande majorité des imprimantes thermiques<br/>
+          <strong>Tiroir-caisse:</strong> Ouverture automatique via signal RJ11 (connecté à l'imprimante)</div></div>
+    </div>}
 
     {tab==="return"&&<div style={{maxWidth:500}}>
       <div style={{marginBottom:10}}><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>DÉLAI DE RETOUR (jours)</label>
@@ -2515,11 +2859,49 @@ function CashierInterface(){
   return(<div style={{display:"flex",height:"100vh",fontFamily:"'DM Sans',system-ui,sans-serif"}}><CashierNav active={sc} onNav={setSc}/><div style={{flex:1,overflow:"hidden"}}><ErrorBoundary><Sc/></ErrorBoundary></div></div>);
 }
 
+/* ══════════ USERS SCREEN ══════════ */
+function UsersScreen(){
+  const{users,setUsers,notify}=useApp();
+  const[editUser,setEditUser]=useState(null);const[newModal,setNewModal]=useState(false);
+  const[form,setForm]=useState({name:"",role:"cashier",pin:""});
+  const[confirmDel,setConfirmDel]=useState(null);
+  const openEdit=(u)=>{setForm({name:u.name,role:u.role,pin:u.pin});setEditUser(u);};
+  const saveUser=()=>{if(!form.name||!form.pin){notify("Nom et PIN requis","error");return;}
+    if(editUser){setUsers(p=>p.map(u=>u.id===editUser.id?{...u,...form}:u));setEditUser(null);notify("Utilisateur modifié","success");}
+    else{setUsers(p=>[...p,{id:"u"+Date.now(),name:form.name,role:form.role,pin:form.pin}]);setNewModal(false);notify("Utilisateur créé","success");}
+    setForm({name:"",role:"cashier",pin:""});};
+  return(<div style={{height:"100%",overflowY:"auto",padding:20,background:C.bg}}>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+      <h2 style={{fontSize:22,fontWeight:800,margin:0}}>Utilisateurs ({users.length})</h2>
+      <Btn onClick={()=>{setForm({name:"",role:"cashier",pin:""});setNewModal(true);}} style={{fontSize:11,background:`linear-gradient(135deg,${C.primary},${C.gradientB})`}}><Plus size={12}/> Nouvel utilisateur</Btn></div>
+    <div style={{display:"flex",flexDirection:"column",gap:6}}>
+      {users.map(u=>(<div key={u.id} style={{display:"flex",alignItems:"center",gap:10,padding:12,borderRadius:12,background:C.surface,border:`1.5px solid ${C.border}`}}>
+        <div style={{width:36,height:36,borderRadius:18,background:`linear-gradient(135deg,${u.role==="admin"?C.accent:C.primary},${u.role==="admin"?"#D4A574":C.gradientB})`,
+          display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:700,fontSize:13}}>{u.name[0]}</div>
+        <div style={{flex:1}}><div style={{fontSize:13,fontWeight:600}}>{u.name}</div>
+          <div style={{fontSize:10,color:C.textMuted}}>{u.role==="admin"?"Administrateur":"Caissier(e)"} — PIN: ****</div></div>
+        <Badge color={u.role==="admin"?C.accent:C.primary}>{u.role}</Badge>
+        <Btn variant="outline" onClick={()=>openEdit(u)} style={{fontSize:10,padding:"4px 10px"}}><Settings size={11}/> Modifier</Btn>
+        <Btn variant="ghost" onClick={()=>setConfirmDel(u)} style={{color:C.danger,padding:"4px 8px"}}><Trash2 size={11}/></Btn>
+      </div>))}</div>
+    <Modal open={newModal||!!editUser} onClose={()=>{setNewModal(false);setEditUser(null);}} title={editUser?"Modifier l'utilisateur":"Nouvel utilisateur"}>
+      <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:12}}>
+        <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>NOM</label><Input value={form.name} onChange={e=>setForm(p=>({...p,name:e.target.value}))}/></div>
+        <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>RÔLE</label>
+          <select value={form.role} onChange={e=>setForm(p=>({...p,role:e.target.value}))} style={{width:"100%",padding:10,borderRadius:10,border:`2px solid ${C.border}`,fontSize:12,fontFamily:"inherit"}}>
+            <option value="admin">Administrateur</option><option value="cashier">Caissier(e)</option></select></div>
+        <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>CODE PIN</label><Input type="password" value={form.pin} onChange={e=>setForm(p=>({...p,pin:e.target.value}))} placeholder="1234"/></div></div>
+      <Btn onClick={saveUser} style={{width:"100%",height:40,background:`linear-gradient(135deg,${C.primary},${C.gradientB})`}}><Save size={14}/> {editUser?"Enregistrer":"Créer"}</Btn></Modal>
+    <ConfirmDialog open={!!confirmDel} onClose={()=>setConfirmDel(null)} onConfirm={()=>{setUsers(p=>p.filter(u=>u.id!==confirmDel.id));notify("Utilisateur supprimé","warn");}}
+      title="Supprimer cet utilisateur ?" message={`Supprimer ${confirmDel?.name} ?`}/>
+  </div>);
+}
+
 function DashboardNav({active,onNav}){
   const{logout,currentUser}=useApp();
   const items=[{id:"overview",l:"Dashboard",i:LayoutDashboard},{id:"products",l:"Produits",i:Package},{id:"stock",l:"Stock",i:Grid},
-    {id:"stats",l:"Statistiques",i:BarChart3},{id:"customers",l:"Clients",i:Users},{id:"giftcards",l:"Cartes cadeaux",i:Gift},
-    {id:"promos",l:"Promotions",i:Zap},{id:"settings",l:"Paramètres",i:Settings},{id:"fiscal",l:"Fiscal NF525",i:Shield},{id:"audit",l:"Journal d'audit",i:Activity}];
+    {id:"stats",l:"Statistiques",i:BarChart3},{id:"customers",l:"Clients",i:Users},{id:"users",l:"Utilisateurs",i:UserIcon},
+    {id:"giftcards",l:"Cartes cadeaux",i:Gift},{id:"promos",l:"Promotions",i:Zap},{id:"settings",l:"Paramètres",i:Settings},{id:"fiscal",l:"Fiscal NF525",i:Shield},{id:"audit",l:"Journal d'audit",i:Activity}];
   return(<div style={{width:230,background:"linear-gradient(180deg,#1A2830,#1E3035)",height:"100vh",display:"flex",flexDirection:"column"}}>
     <div style={{padding:"20px 18px",borderBottom:"1px solid rgba(255,255,255,0.06)"}}>
       <div style={{display:"flex",alignItems:"center",gap:10}}>
@@ -2590,7 +2972,7 @@ function DashOverview(){
 function DashboardInterface(){
   const[sc,setSc]=useState("overview");
   const S={overview:DashOverview,products:ProductsScreen,stock:StockScreen,stats:StatsScreen,customers:CustomersScreen,
-    giftcards:GiftCardScreen,promos:PromosScreen,settings:SettingsScreen,fiscal:FiscalScreen,audit:AuditScreen};
+    users:UsersScreen,giftcards:GiftCardScreen,promos:PromosScreen,settings:SettingsScreen,fiscal:FiscalScreen,audit:AuditScreen};
   const Sc=S[sc]||DashOverview;
   return(<div style={{display:"flex",height:"100vh",fontFamily:"'DM Sans',system-ui,sans-serif"}}><DashboardNav active={sc} onNav={setSc}/><div style={{flex:1,overflow:"hidden"}}><Sc/></div></div>);
 }
