@@ -24,7 +24,8 @@ const CO={name:"Ma Boutique Textile",address:"12 rue de la Mode",postalCode:"750
   logo:"",footerMsg:"Merci de votre visite !",legalForm:"SARL",capital:"10 000 €"};
 
 /* ══════════ TVA RATES ══════════ */
-const TVA_RATES=[{id:"normal",label:"Normal 20%",rate:0.20},{id:"inter",label:"Intermédiaire 10%",rate:0.10},{id:"reduit",label:"Réduit 5,5%",rate:0.055}];
+const DEFAULT_TVA_RATES=[{id:"normal",label:"Normal 20%",rate:0.20},{id:"inter",label:"Intermédiaire 10%",rate:0.10},{id:"reduit",label:"Réduit 5,5%",rate:0.055}];
+let TVA_RATES=[...DEFAULT_TVA_RATES];
 
 /* ══════════ PERMISSIONS ══════════ */
 const PERMS={
@@ -222,6 +223,8 @@ function AppProvider({children}){
   const[printerConnected,setPrinterConnected]=useState(false);
   const[printerType,setPrinterType]=useState(null);
   const[users,setUsers]=useState([{id:"u1",name:"Admin",role:"admin",pin:"1234"},{id:"u2",name:"Sophie",role:"cashier",pin:"1234"},{id:"u3",name:"Marc",role:"cashier",pin:"1234"}]);
+  const[tvaRates,setTvaRates]=useState([...DEFAULT_TVA_RATES]);
+  useEffect(()=>{TVA_RATES=tvaRates;},[tvaRates]);
 
   const notify=useCallback((msg,type="info")=>{const id=Date.now();
     setNotifications(p=>[...p,{id,msg,type}]);
@@ -254,7 +257,7 @@ function AppProvider({children}){
     }catch(e){
       console.warn("API indisponible, tentative login hors-ligne:",e.message);
       // Fallback local — vérifier les identifiants locaux
-      const localUser=initUsers.find(u=>u.name===n&&u.password===pw);
+      const localUser=initUsers.find(u=>u.name===n&&u.password===pw)||users.find(u=>u.name===n&&u.pin===pw);
       if(localUser){setCurrentUser({id:localUser.id,name:localUser.name,role:localUser.role});
         setProducts(initProducts);setCustomers(initCustomers);setPromos(initPromos);
         setOfflineMode(true);addJET("LOGIN_OFFLINE",n);
@@ -559,8 +562,15 @@ function AppProvider({children}){
   // Add product — via API
   const addProduct=useCallback(async(p)=>{try{await API.products.create(p);
     const prods=await API.products.list();setProducts(norm.products(prods));}catch(e){alert("Erreur: "+e.message);}},[]);
-  // Add customer — via API
-  const addCustomer=useCallback(async(c)=>{try{const nc=await API.customers.create(c);setCustomers(p=>[...p,nc]);return nc;}catch(e){alert("Erreur: "+e.message);return null;}},[]);
+  // Add customer — via API with offline fallback
+  const addCustomer=useCallback(async(c)=>{
+    try{const nc=await API.customers.create(c);setCustomers(p=>[...p,nc]);return nc;}
+    catch(e){
+      // Fallback local si API indisponible
+      const nc={id:`c-${Date.now()}`,firstName:c.firstName||"",lastName:c.lastName||"",email:c.email||"",phone:c.phone||"",
+        city:c.city||"",notes:c.notes||"",points:0,totalSpent:0,createdAt:new Date().toISOString()};
+      setCustomers(p=>[...p,nc]);notify("Client créé localement (hors-ligne)","warn");return nc;
+    }},[notify]);
 
   const openReg=(a)=>{setCashReg({openingAmount:a,openDate:new Date().toISOString()});addAudit("CAISSE","Ouverture "+a+"€");};
   const closeReg=()=>setCashReg(null);
@@ -698,15 +708,16 @@ function AppProvider({children}){
     updateProduct,deleteProduct,addVariantToProduct,deleteVariant,
     updateCustomer,deleteCustomer,adjustStock,
     printerConnected,printerType,thermalPrint,connectPrinter,disconnectPrinter,
-    users,setUsers,
+    users,setUsers,tvaRates,setTvaRates,
   }}>{children}</AppCtx.Provider>;
 }
 
 /* ══════════ LOGIN ══════════ */
 function LoginScreen(){
-  const{login,setMode:setIM}=useApp();const[su,setSu]=useState("");const[pw,setPw]=useState("");const[err,setErr]=useState("");const[m,setM]=useState("cashier");const[loading,setLoading]=useState(false);
-  const go=async()=>{if(!su){setErr("Sélectionnez un profil");return;}const u=initUsers.find(u=>u.id===su);if(!u){setErr("Profil introuvable");return;}
-    setLoading(true);setErr("");try{const ok=await login(u.name,pw);if(ok)setIM(m);else setErr("Code incorrect ou serveur indisponible");}catch(e){setErr("Erreur de connexion: "+e.message);}finally{setLoading(false);}};
+  const{login,setMode:setIM,users}=useApp();const[su,setSu]=useState("");const[pw,setPw]=useState("");const[err,setErr]=useState("");const[m,setM]=useState("cashier");const[loading,setLoading]=useState(false);
+  const allUsers=users&&users.length?users:initUsers;
+  const go=async()=>{if(!su){setErr("Sélectionnez un profil");return;}const u=allUsers.find(u=>u.id===su);if(!u){setErr("Profil introuvable");return;}
+    setLoading(true);setErr("");try{const ok=await login(u.name,pw||u.pin);if(ok)setIM(m);else setErr("Code incorrect ou serveur indisponible");}catch(e){setErr("Erreur de connexion: "+e.message);}finally{setLoading(false);}};
   return(<div style={{minHeight:"100vh",background:`linear-gradient(160deg,#E4F2E9 0%,${C.bg} 40%,${C.accentLight} 100%)`,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
     <div style={{width:440,background:"rgba(255,255,255,0.95)",backdropFilter:"blur(30px)",WebkitBackdropFilter:"blur(30px)",borderRadius:32,padding:44,
       boxShadow:"0 32px 100px rgba(0,0,0,0.10), 0 0 0 1px rgba(255,255,255,0.6) inset",animation:"fadeIn 0.4s ease"}}>
@@ -722,7 +733,7 @@ function LoginScreen(){
             <div style={{fontSize:12,fontWeight:700,color:m===x.id?C.primary:C.text}}>{x.l}</div>
             <div style={{fontSize:9,color:C.textMuted,marginTop:2}}>{x.d}</div></button>))}</div>
       <div style={{display:"flex",flexDirection:"column",gap:6,marginBottom:16}}>
-        {initUsers.map(u=>(<button key={u.id} onClick={()=>setSu(u.id)} style={{display:"flex",alignItems:"center",gap:10,padding:10,borderRadius:12,
+        {allUsers.map(u=>(<button key={u.id} onClick={()=>setSu(u.id)} style={{display:"flex",alignItems:"center",gap:10,padding:10,borderRadius:12,
           border:`2px solid ${su===u.id?C.primary:C.border}`,background:su===u.id?C.primaryLight:"transparent",cursor:"pointer",transition:"all 0.15s"}}>
           <div style={{width:38,height:38,borderRadius:19,background:su===u.id?`linear-gradient(135deg,${C.primary},${C.gradientB})`:C.surfaceAlt,display:"flex",alignItems:"center",justifyContent:"center",transition:"all 0.15s"}}>
             <UserIcon size={18} color={su===u.id?"#fff":C.textMuted}/></div>
@@ -740,22 +751,59 @@ function LoginScreen(){
 }
 
 function CashRegControl({onSkip,onDone}){
-  const{currentUser,openReg}=useApp();const[a,setA]=useState("");
+  const{currentUser,openReg}=useApp();const[a,setA]=useState("");const[denomMode,setDenomMode]=useState(false);
+  const bills=[{v:500,l:"500€"},{v:200,l:"200€"},{v:100,l:"100€"},{v:50,l:"50€"},{v:20,l:"20€"},{v:10,l:"10€"},{v:5,l:"5€"}];
+  const coins=[{v:2,l:"2€"},{v:1,l:"1€"},{v:0.50,l:"0.50€"},{v:0.20,l:"0.20€"},{v:0.10,l:"0.10€"},{v:0.05,l:"0.05€"},{v:0.02,l:"0.02€"},{v:0.01,l:"0.01€"}];
+  const[denom,setDenom]=useState(()=>{const d={};bills.concat(coins).forEach(x=>d[x.v]=0);return d;});
+  const denomTotal=Object.entries(denom).reduce((s,[v,n])=>s+parseFloat(v)*n,0);
   const quickAmounts=[50,100,150,200,300];
   return(<div style={{minHeight:"100vh",background:`linear-gradient(145deg,#E8F0EB,${C.bg})`,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
-    <div style={{width:440,background:"rgba(255,255,255,0.92)",backdropFilter:"blur(24px)",borderRadius:28,padding:36,boxShadow:"0 24px 80px rgba(0,0,0,0.08)"}}>
-      <div style={{textAlign:"center",marginBottom:28}}>
+    <div style={{width:denomMode?600:440,background:"rgba(255,255,255,0.92)",backdropFilter:"blur(24px)",borderRadius:28,padding:36,boxShadow:"0 24px 80px rgba(0,0,0,0.08)",transition:"width 0.3s",maxHeight:"90vh",overflowY:"auto"}}>
+      <div style={{textAlign:"center",marginBottom:20}}>
         <div style={{width:60,height:60,borderRadius:16,background:`linear-gradient(135deg,${C.accent},#D4A574)`,display:"inline-flex",alignItems:"center",justifyContent:"center",marginBottom:12,boxShadow:`0 8px 24px ${C.accent}33`}}><Wallet size={30} color="#fff"/></div>
         <h1 style={{fontSize:22,fontWeight:800,margin:"0 0 4px"}}>Ouverture de caisse</h1>
         <p style={{color:C.textMuted,fontSize:12}}>Bienvenue {currentUser?.name} — {new Date().toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long"})}</p></div>
-      <label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:4,textTransform:"uppercase",letterSpacing:"0.5px"}}>Fond de caisse (€)</label>
-      <Input type="number" step="0.01" value={a} onChange={e=>setA(e.target.value)} placeholder="100.00" style={{marginBottom:8,height:48,fontSize:16,fontWeight:700,textAlign:"center"}}/>
-      <div style={{display:"flex",gap:6,marginBottom:16,justifyContent:"center"}}>
-        {quickAmounts.map(v=>(<button key={v} onClick={()=>setA(String(v))} style={{padding:"6px 12px",borderRadius:8,border:`1.5px solid ${a===String(v)?C.accent:C.border}`,background:a===String(v)?C.accentLight:"transparent",
-          cursor:"pointer",fontSize:11,fontWeight:600,color:a===String(v)?C.accent:C.textMuted,transition:"all 0.12s"}}>{v}€</button>))}</div>
+
+      <div style={{display:"flex",gap:6,justifyContent:"center",marginBottom:14}}>
+        <button onClick={()=>setDenomMode(false)} style={{padding:"6px 14px",borderRadius:8,border:`1.5px solid ${!denomMode?C.accent:C.border}`,background:!denomMode?C.accentLight:"transparent",
+          cursor:"pointer",fontSize:11,fontWeight:600,color:!denomMode?C.accent:C.textMuted}}>Montant rapide</button>
+        <button onClick={()=>setDenomMode(true)} style={{padding:"6px 14px",borderRadius:8,border:`1.5px solid ${denomMode?C.accent:C.border}`,background:denomMode?C.accentLight:"transparent",
+          cursor:"pointer",fontSize:11,fontWeight:600,color:denomMode?C.accent:C.textMuted}}>Compter les coupures</button></div>
+
+      {!denomMode?<>
+        <label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:4,textTransform:"uppercase",letterSpacing:"0.5px"}}>Fond de caisse (€)</label>
+        <Input type="number" step="0.01" value={a} onChange={e=>setA(e.target.value)} placeholder="100.00" style={{marginBottom:8,height:48,fontSize:16,fontWeight:700,textAlign:"center"}}/>
+        <div style={{display:"flex",gap:6,marginBottom:16,justifyContent:"center"}}>
+          {quickAmounts.map(v=>(<button key={v} onClick={()=>setA(String(v))} style={{padding:"6px 12px",borderRadius:8,border:`1.5px solid ${a===String(v)?C.accent:C.border}`,background:a===String(v)?C.accentLight:"transparent",
+            cursor:"pointer",fontSize:11,fontWeight:600,color:a===String(v)?C.accent:C.textMuted,transition:"all 0.12s"}}>{v}€</button>))}</div>
+      </>:<>
+        <div style={{marginBottom:10}}>
+          <div style={{fontSize:11,fontWeight:700,color:C.textMuted,marginBottom:6}}>BILLETS</div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:6}}>
+            {bills.map(b=>(<div key={b.v} style={{display:"flex",alignItems:"center",gap:4,padding:"6px 8px",borderRadius:10,border:`1.5px solid ${denom[b.v]>0?C.accent:C.border}`,background:denom[b.v]>0?C.accentLight+"60":"transparent"}}>
+              <span style={{fontSize:10,fontWeight:700,color:C.accent,minWidth:36}}>{b.l}</span>
+              <span style={{fontSize:9,color:C.textMuted}}>×</span>
+              <input type="number" min="0" value={denom[b.v]||""} onChange={e=>{const n=parseInt(e.target.value)||0;setDenom(d=>({...d,[b.v]:n}));}}
+                style={{width:40,padding:"3px 4px",borderRadius:6,border:`1px solid ${C.border}`,fontSize:12,fontWeight:700,textAlign:"center",fontFamily:"inherit"}}/>
+            </div>))}</div></div>
+        <div style={{marginBottom:10}}>
+          <div style={{fontSize:11,fontWeight:700,color:C.textMuted,marginBottom:6}}>PIÈCES</div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:6}}>
+            {coins.map(c=>(<div key={c.v} style={{display:"flex",alignItems:"center",gap:4,padding:"6px 8px",borderRadius:10,border:`1.5px solid ${denom[c.v]>0?C.info:C.border}`,background:denom[c.v]>0?`${C.info}10`:"transparent"}}>
+              <span style={{fontSize:10,fontWeight:700,color:C.info,minWidth:36}}>{c.l}</span>
+              <span style={{fontSize:9,color:C.textMuted}}>×</span>
+              <input type="number" min="0" value={denom[c.v]||""} onChange={e=>{const n=parseInt(e.target.value)||0;setDenom(d=>({...d,[c.v]:n}));}}
+                style={{width:40,padding:"3px 4px",borderRadius:6,border:`1px solid ${C.border}`,fontSize:12,fontWeight:700,textAlign:"center",fontFamily:"inherit"}}/>
+            </div>))}</div></div>
+        <div style={{background:`linear-gradient(135deg,${C.accentLight},#F5E6D8)`,borderRadius:14,padding:14,marginBottom:14,display:"flex",justifyContent:"space-between",alignItems:"center",border:`1px solid ${C.accent}22`}}>
+          <span style={{fontSize:14,fontWeight:700,color:C.accent}}>Total fond de caisse</span>
+          <span style={{fontSize:22,fontWeight:900,color:C.accent}}>{denomTotal.toFixed(2)}€</span></div>
+      </>}
+
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
         <Btn variant="outline" onClick={onSkip} style={{height:48,borderRadius:12}}><XCircle size={14}/> Passer</Btn>
-        <Btn onClick={()=>{if(a){openReg(parseFloat(a));onDone();}}} disabled={!a} style={{height:48,borderRadius:12,background:`linear-gradient(135deg,${C.accent},#D4A574)`,boxShadow:a?`0 4px 16px ${C.accent}33`:"none"}}><Wallet size={14}/> Ouvrir la caisse</Btn>
+        <Btn onClick={()=>{const amt=denomMode?denomTotal:parseFloat(a);if(amt){openReg(amt);onDone();}}} disabled={denomMode?denomTotal===0:!a}
+          style={{height:48,borderRadius:12,background:`linear-gradient(135deg,${C.accent},#D4A574)`,boxShadow:(denomMode?denomTotal>0:a)?`0 4px 16px ${C.accent}33`:"none"}}><Wallet size={14}/> Ouvrir la caisse</Btn>
       </div></div></div>);
 }
 
@@ -2901,7 +2949,7 @@ function DashboardNav({active,onNav}){
   const{logout,currentUser}=useApp();
   const items=[{id:"overview",l:"Dashboard",i:LayoutDashboard},{id:"products",l:"Produits",i:Package},{id:"stock",l:"Stock",i:Grid},
     {id:"stats",l:"Statistiques",i:BarChart3},{id:"customers",l:"Clients",i:Users},{id:"users",l:"Utilisateurs",i:UserIcon},
-    {id:"giftcards",l:"Cartes cadeaux",i:Gift},{id:"promos",l:"Promotions",i:Zap},{id:"settings",l:"Paramètres",i:Settings},{id:"fiscal",l:"Fiscal NF525",i:Shield},{id:"audit",l:"Journal d'audit",i:Activity}];
+    {id:"tva",l:"Taux de TVA",i:Percent},{id:"giftcards",l:"Cartes cadeaux",i:Gift},{id:"promos",l:"Promotions",i:Zap},{id:"settings",l:"Paramètres",i:Settings},{id:"fiscal",l:"Fiscal NF525",i:Shield},{id:"audit",l:"Journal d'audit",i:Activity}];
   return(<div style={{width:230,background:"linear-gradient(180deg,#1A2830,#1E3035)",height:"100vh",display:"flex",flexDirection:"column"}}>
     <div style={{padding:"20px 18px",borderBottom:"1px solid rgba(255,255,255,0.06)"}}>
       <div style={{display:"flex",alignItems:"center",gap:10}}>
@@ -2969,10 +3017,67 @@ function DashOverview(){
   </div>);
 }
 
+/* ══════════ TVA MANAGEMENT ══════════ */
+function TVAScreen(){
+  const{tvaRates,setTvaRates,addAudit,notify}=useApp();
+  const[newLabel,setNewLabel]=useState("");const[newRate,setNewRate]=useState("");
+  const[editId,setEditId]=useState(null);const[editLabel,setEditLabel]=useState("");const[editRate,setEditRate]=useState("");
+  const addRate=()=>{if(!newLabel||!newRate)return;const r=parseFloat(newRate);if(isNaN(r))return;
+    const id=`tva-${Date.now()}`;setTvaRates(p=>[...p,{id,label:newLabel,rate:r>1?r/100:r}]);
+    setNewLabel("");setNewRate("");addAudit("TVA",`Ajout taux: ${newLabel}`);notify("Taux TVA ajouté");};
+  const saveEdit=()=>{if(!editLabel||!editRate)return;const r=parseFloat(editRate);if(isNaN(r))return;
+    setTvaRates(p=>p.map(t=>t.id===editId?{...t,label:editLabel,rate:r>1?r/100:r}:t));
+    setEditId(null);addAudit("TVA",`Modification taux: ${editLabel}`);notify("Taux TVA modifié");};
+  const removeRate=(id)=>{if(tvaRates.length<=1){notify("Au moins un taux requis","warn");return;}
+    setTvaRates(p=>p.filter(t=>t.id!==id));addAudit("TVA","Suppression taux TVA");notify("Taux supprimé","warn");};
+  return(<div style={{height:"100%",overflowY:"auto",padding:20,background:C.bg}}>
+    <h2 style={{fontSize:22,fontWeight:800,marginBottom:16}}>Gestion des taux de TVA</h2>
+    <div style={{maxWidth:600}}>
+      <div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`,marginBottom:14}}>
+        <div style={{fontSize:14,fontWeight:700,marginBottom:12}}>Taux de TVA actifs ({tvaRates.length})</div>
+        <div style={{display:"flex",flexDirection:"column",gap:6}}>
+          {tvaRates.map(t=>(
+            <div key={t.id} style={{display:"flex",alignItems:"center",gap:8,padding:10,borderRadius:10,border:`1.5px solid ${C.border}`,background:editId===t.id?C.primaryLight:"transparent"}}>
+              {editId===t.id?<>
+                <Input value={editLabel} onChange={e=>setEditLabel(e.target.value)} style={{flex:1,height:34,fontSize:12}} placeholder="Libellé"/>
+                <Input type="number" step="0.01" value={editRate} onChange={e=>setEditRate(e.target.value)} style={{width:80,height:34,fontSize:12,textAlign:"center"}} placeholder="%"/>
+                <Btn variant="success" onClick={saveEdit} style={{height:34,fontSize:10,padding:"0 10px"}}><Save size={11}/></Btn>
+                <Btn variant="outline" onClick={()=>setEditId(null)} style={{height:34,fontSize:10,padding:"0 10px"}}>✕</Btn>
+              </>:<>
+                <div style={{flex:1}}>
+                  <span style={{fontSize:13,fontWeight:600}}>{t.label}</span>
+                  <span style={{fontSize:11,color:C.textMuted,marginLeft:8}}>({(t.rate*100).toFixed(2)}%)</span></div>
+                <Badge color={C.primary}>{(t.rate*100).toFixed(t.rate*100%1===0?0:1)}%</Badge>
+                <button onClick={()=>{setEditId(t.id);setEditLabel(t.label);setEditRate(String(t.rate*100));}} style={{background:"none",border:"none",cursor:"pointer",color:C.primary,fontSize:10,fontWeight:600}}>Modifier</button>
+                <button onClick={()=>removeRate(t.id)} style={{background:"none",border:"none",cursor:"pointer",color:C.danger,fontSize:10,fontWeight:600}}><Trash2 size={12}/></button>
+              </>}
+            </div>))}</div></div>
+
+      <div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`,marginBottom:14}}>
+        <div style={{fontSize:14,fontWeight:700,marginBottom:10}}>Ajouter un taux</div>
+        <div style={{display:"flex",gap:8,alignItems:"end"}}>
+          <div style={{flex:1}}><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>LIBELLÉ</label>
+            <Input value={newLabel} onChange={e=>setNewLabel(e.target.value)} placeholder="Ex: Super réduit 2,1%"/></div>
+          <div style={{width:100}}><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>TAUX (%)</label>
+            <Input type="number" step="0.01" value={newRate} onChange={e=>setNewRate(e.target.value)} placeholder="2.1"/></div>
+          <Btn onClick={addRate} disabled={!newLabel||!newRate} style={{height:42,background:`linear-gradient(135deg,${C.primary},${C.gradientB})`}}><Plus size={14}/> Ajouter</Btn>
+        </div></div>
+
+      <div style={{background:C.surfaceAlt,borderRadius:12,padding:14,border:`1px solid ${C.border}`}}>
+        <div style={{fontSize:12,fontWeight:700,marginBottom:6}}>ℹ️ Taux de TVA légaux en France</div>
+        <div style={{fontSize:10,color:C.textMuted,lineHeight:1.6}}>
+          <strong>20%</strong> — Taux normal (vêtements, accessoires, etc.)<br/>
+          <strong>10%</strong> — Taux intermédiaire (restauration sur place, transports)<br/>
+          <strong>5,5%</strong> — Taux réduit (alimentation, livres, énergie)<br/>
+          <strong>2,1%</strong> — Taux super réduit (presse, médicaments remboursés)<br/>
+          Les produits existants ne sont pas modifiés. Changez la TVA de chaque produit individuellement.</div></div>
+    </div></div>);
+}
+
 function DashboardInterface(){
   const[sc,setSc]=useState("overview");
   const S={overview:DashOverview,products:ProductsScreen,stock:StockScreen,stats:StatsScreen,customers:CustomersScreen,
-    users:UsersScreen,giftcards:GiftCardScreen,promos:PromosScreen,settings:SettingsScreen,fiscal:FiscalScreen,audit:AuditScreen};
+    users:UsersScreen,tva:TVAScreen,giftcards:GiftCardScreen,promos:PromosScreen,settings:SettingsScreen,fiscal:FiscalScreen,audit:AuditScreen};
   const Sc=S[sc]||DashOverview;
   return(<div style={{display:"flex",height:"100vh",fontFamily:"'DM Sans',system-ui,sans-serif"}}><DashboardNav active={sc} onNav={setSc}/><div style={{flex:1,overflow:"hidden"}}><Sc/></div></div>);
 }
