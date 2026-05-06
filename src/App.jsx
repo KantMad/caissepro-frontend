@@ -150,18 +150,33 @@ const Numpad=({value,onChange,onEnter,label})=>{
     </div></div>);};
 
 /* ══════════ DATA NORMALIZERS ══════════ */
-// Size order mapping — loaded from localStorage, built from CSV import order
+// Size order mapping — loaded from localStorage, synced to backend settings, built from CSV import order
 let _sizeOrderMap=null;
 function getSizeOrderMap(){
   if(_sizeOrderMap)return _sizeOrderMap;
   try{const s=localStorage.getItem("caissepro_size_order");if(s){_sizeOrderMap=JSON.parse(s);return _sizeOrderMap;}}catch(e){}
   return{};
 }
-function saveSizeOrderMap(map){_sizeOrderMap=map;try{localStorage.setItem("caissepro_size_order",JSON.stringify(map));}catch(e){}}
-function updateSizeOrderFromVariants(variants){
-  const map=getSizeOrderMap();let changed=false;let maxIdx=Object.values(map).reduce((m,v)=>Math.max(m,v),-1);
-  variants.forEach(v=>{const key=(v.size||"").toUpperCase().trim();if(key&&map[key]===undefined){maxIdx++;map[key]=maxIdx;changed=true;}});
-  if(changed)saveSizeOrderMap(map);return map;
+function saveSizeOrderMap(map,syncToAPI=true){
+  _sizeOrderMap=map;
+  try{localStorage.setItem("caissepro_size_order",JSON.stringify(map));}catch(e){}
+  // Also sync to backend settings so it persists across devices
+  if(syncToAPI){try{API.settings.update({sizeOrderMap:map}).catch(()=>{});}catch(e){}}
+}
+function loadSizeOrderFromSettings(settingsObj){
+  if(settingsObj&&settingsObj.sizeOrderMap&&typeof settingsObj.sizeOrderMap==="object"){
+    _sizeOrderMap=settingsObj.sizeOrderMap;
+    try{localStorage.setItem("caissepro_size_order",JSON.stringify(_sizeOrderMap));}catch(e){}
+  }
+}
+function updateSizeOrderFromVariants(variants,rebuild=false){
+  const map=rebuild?{}:{...getSizeOrderMap()};
+  let changed=false;let maxIdx=Object.values(map).reduce((m,v)=>Math.max(m,v),-1);
+  variants.forEach(v=>{const key=(v.size||"").toUpperCase().trim();
+    if(rebuild){if(key&&map[key]===undefined){maxIdx++;map[key]=maxIdx;changed=true;}}
+    else{if(key&&map[key]===undefined){maxIdx++;map[key]=maxIdx;changed=true;}}
+  });
+  if(changed||rebuild)saveSizeOrderMap(map);return map;
 }
 const sizeIdx=(s)=>{const map=getSizeOrderMap();const key=(s||"").toUpperCase().trim();
   return map[key]!==undefined?map[key]:9000+((s||"").charCodeAt(0)||0);};
@@ -298,6 +313,8 @@ function AppProvider({children}){
     try{const res=await API.auth.login(n,pw);API.setToken(res.token);setCurrentUser(res.user);
       const[prods,custs,prms,setts,apiUsers]=await Promise.all([API.products.list(),API.customers.list(),API.settings.promos(),API.settings.get(),API.auth.users().catch(()=>null)]);
       setProducts(norm.products(prods));setCustomers(norm.customers(custs));setPromos(prms);setSettings(s=>({...s,...setts}));
+      // Load size order mapping from backend settings
+      loadSizeOrderFromSettings(setts);
       // Synchroniser la liste utilisateurs depuis l'API
       if(apiUsers&&apiUsers.length){const merged=[...apiUsers.map(u=>({id:u.id,name:u.name,role:u.role,pin:"****",apiSynced:true}))];
         const localOnly=users.filter(lu=>!apiUsers.find(au=>au.name===lu.name));
@@ -2593,7 +2610,7 @@ function CSVImportWizard({open,onClose,existingProducts,onImportComplete}){
   const[mapping,setMapping]=useState({});
   const[parentRefField,setParentRefField]=useState("sku");
   const[uniqueKeyField,setUniqueKeyField]=useState("ean");
-  const[duplicateAction,setDuplicateAction]=useState("skip");
+  const[duplicateAction,setDuplicateAction]=useState("update");
   const[processed,setProcessed]=useState(null);
   const[importResult,setImportResult]=useState(null);
   const[importing,setImporting]=useState(false);
@@ -2601,7 +2618,7 @@ function CSVImportWizard({open,onClose,existingProducts,onImportComplete}){
   const fileRef=useRef();
 
   const reset=()=>{setStep(0);setRawData([]);setCsvHeaders([]);setMapping({});setParentRefField("sku");
-    setUniqueKeyField("ean");setDuplicateAction("skip");setProcessed(null);setImportResult(null);setImporting(false);setFileName("");};
+    setUniqueKeyField("ean");setDuplicateAction("update");setProcessed(null);setImportResult(null);setImporting(false);setFileName("");};
   const handleClose=()=>{reset();onClose();};
 
   // Step 0: File upload
@@ -2676,7 +2693,9 @@ function CSVImportWizard({open,onClose,existingProducts,onImportComplete}){
   const executeImport=async()=>{
     if(!processed)return;setImporting(true);
     // Build size order mapping from CSV import order (preserves the order sizes appear in the file)
-    const allVariants=processed.newProducts.flatMap(p=>p.variants).concat(processed.updates.flatMap(u=>u.newVariants));
+    // Include ALL variants (new + updated) to capture the full size order from the CSV
+    const allVariants=processed.newProducts.flatMap(p=>p.variants)
+      .concat(processed.updates.flatMap(u=>[...u.updatedVariants,...u.newVariants]));
     updateSizeOrderFromVariants(allVariants);
     const results={created:0,updated:0,skipped:processed.skipped.length,errors:[]};
     // Create new products
@@ -2685,31 +2704,39 @@ function CSVImportWizard({open,onClose,existingProducts,onImportComplete}){
         category:p.category,collection:p.collection,variants:p.variants.map(v=>({color:v.color,size:v.size,ean:v.ean,stock:v.stock,defective:0,stockAlert:v.stockAlert}))});
         results.created++;}catch(e){results.errors.push({name:p.name,error:e.message});}
     }
-    // Update existing products — update product fields, existing variant stock, and add new variants
+    // Update existing products — 3 steps: product fields, variant stock, new variants
     for(const u of processed.updates){
+      let anySuccess=false;
       try{
-        // 1) Update product core fields (price, name, category, etc.)
+        // Step 1: Update product core fields (price, name, category, etc.)
         const fc=u.fieldsChanged;
         await API.products.update(u.existing.id,{
           name:fc.name||u.existing.name,price:fc.price||u.existing.price,
           costPrice:fc.costPrice||u.existing.costPrice,taxRate:fc.taxRate??u.existing.taxRate,
-          category:fc.category||u.existing.category,collection:fc.collection||u.existing.collection,
-          // Merge variants: update existing + add new
-          variants:[
-            ...u.existing.variants.map(ev=>{
-              const csvMatch=u.updatedVariants.find(uv=>uv.existingId===ev.id);
-              if(csvMatch)return{...ev,stock:csvMatch.stock,ean:csvMatch.ean||ev.ean,color:csvMatch.color||ev.color,size:csvMatch.size||ev.size,stockAlert:csvMatch.stockAlert||ev.stockAlert};
-              return ev;
-            }),
-            ...u.newVariants.map(v=>({color:v.color,size:v.size,ean:v.ean,stock:v.stock,defective:0,stockAlert:v.stockAlert}))
-          ]
+          category:fc.category||u.existing.category,collection:fc.collection||u.existing.collection
         });
-        results.updated++;
-      }catch(e){
-        // Fallback: try just adding new variants if full update fails
-        try{for(const v of u.newVariants){await API.products.addVariant(u.existing.id,{color:v.color,size:v.size,ean:v.ean,stock:v.stock,defective:0,stockAlert:v.stockAlert});}
-          results.updated++;}catch(e2){results.errors.push({name:u.existing.name,error:e.message});}
+        anySuccess=true;
+      }catch(e){console.warn(`CSV update: product fields failed for ${u.existing.name}:`,e.message);}
+
+      // Step 2: Update stock for existing variants via stock.adjust
+      for(const uv of u.updatedVariants){
+        try{
+          const existingVariant=u.existing.variants.find(ev=>ev.id===uv.existingId);
+          if(existingVariant&&uv.stock!==existingVariant.stock){
+            const diff=uv.stock-(existingVariant.stock||0);
+            if(diff!==0)await API.stock.adjust({productId:u.existing.id,variantId:uv.existingId,quantity:diff,reason:"Import CSV - mise à jour stock"});
+            anySuccess=true;
+          }
+        }catch(e){console.warn(`CSV update: stock adjust failed for variant ${uv.size}/${uv.color}:`,e.message);}
       }
+
+      // Step 3: Add new variants
+      for(const v of u.newVariants){
+        try{await API.products.addVariant(u.existing.id,{color:v.color,size:v.size,ean:v.ean,stock:v.stock,defective:0,stockAlert:v.stockAlert});
+          anySuccess=true;}catch(e){console.warn(`CSV update: addVariant failed for ${v.size}/${v.color}:`,e.message);}
+      }
+
+      if(anySuccess)results.updated++;else results.errors.push({name:u.existing.name,error:"Échec de la mise à jour via l'API"});
     }
     // Fallback: if API fails for all, do local import (both new + updates)
     if(results.created===0&&results.updated===0&&(processed.newProducts.length>0||processed.updates.length>0)){
