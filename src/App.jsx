@@ -225,7 +225,8 @@ function AppProvider({children}){
   const[promos,setPromos]=useState(initPromos);
   const[parked,setParked]=useState([]);const[selCust,setSelCust]=useState(null);
   const[stockMoves,setStockMoves]=useState([]);
-  const[settings,setSettings]=useState({...CO,loyaltyTiers:LOYALTY_TIERS,returnPolicy:{days:30,conditions:"Article non porté, étiquette présente"},pricingMode:"TTC"});
+  const[settings,setSettings]=useState(()=>{try{const s=localStorage.getItem("caissepro_settings");return s?{...CO,loyaltyTiers:LOYALTY_TIERS,returnPolicy:{days:30,conditions:"Article non porté, étiquette présente"},pricingMode:"TTC",...JSON.parse(s)}:{...CO,loyaltyTiers:LOYALTY_TIERS,returnPolicy:{days:30,conditions:"Article non porté, étiquette présente"},pricingMode:"TTC"};}catch(e){return{...CO,loyaltyTiers:LOYALTY_TIERS,returnPolicy:{days:30,conditions:"Article non porté, étiquette présente"},pricingMode:"TTC"};}});
+  useEffect(()=>{try{localStorage.setItem("caissepro_settings",JSON.stringify(settings));}catch(e){}},[settings]);
   const[saleNote,setSaleNote]=useState("");
   const[clockEntries,setClockEntries]=useState([]);
   const[priceHistory,setPriceHistory]=useState([]);
@@ -233,7 +234,9 @@ function AppProvider({children}){
   const[notifications,setNotifications]=useState([]);
   const[printerConnected,setPrinterConnected]=useState(false);
   const[printerType,setPrinterType]=useState(null);
-  const[users,setUsers]=useState([{id:"u1",name:"Admin",role:"admin",pin:"1234"},{id:"u2",name:"Sophie",role:"cashier",pin:"1234"},{id:"u3",name:"Marc",role:"cashier",pin:"1234"}]);
+  const defaultUsers=[{id:"u1",name:"Admin",role:"admin",pin:"1234"},{id:"u2",name:"Sophie",role:"cashier",pin:"1234"},{id:"u3",name:"Marc",role:"cashier",pin:"1234"}];
+  const[users,setUsersRaw]=useState(()=>{try{const s=localStorage.getItem("caissepro_users");return s?JSON.parse(s):defaultUsers;}catch(e){return defaultUsers;}});
+  const setUsers=useCallback((v)=>{setUsersRaw(prev=>{const next=typeof v==="function"?v(prev):v;try{localStorage.setItem("caissepro_users",JSON.stringify(next));}catch(e){}return next;});},[]);
   const[tvaRates,setTvaRates]=useState([...DEFAULT_TVA_RATES]);
   useEffect(()=>{TVA_RATES=tvaRates;},[tvaRates]);
 
@@ -373,10 +376,10 @@ function AppProvider({children}){
       const ticketNumber=`TK-${new Date().getFullYear()}-${String(seq).padStart(6,"0")}`;
       const paymentMethod=payments.length===1?payments[0].method:"MIXTE";
       const margin=cart.reduce((s,i)=>s+((i.product.price-i.product.costPrice)*i.quantity*(1-i.discount/100)),0)*(tHT/sHT||0);
-      // Décrémenter stock local
+      // Décrémenter stock local (autorise négatif)
       setProducts(prev=>prev.map(p=>{const ci=cart.find(c=>c.product.id===p.id);if(!ci)return p;
         return{...p,variants:p.variants.map(v=>{const cv=cart.find(c=>c.product.id===p.id&&c.variant?.id===v.id);
-          return cv?{...v,stock:Math.max(0,v.stock-cv.quantity)}:v;})};}));
+          return cv?{...v,stock:v.stock-cv.quantity}:v;})};}));
       // Fidélité
       if(selCust){setCustomers(prev=>prev.map(c=>c.id===selCust.id?{...c,points:(c.points||0)+Math.floor(tTTC),totalSpent:(c.totalSpent||0)+tTTC}:c));}
       const fingerprint=ticketNumber.slice(-8).toUpperCase();
@@ -398,7 +401,7 @@ function AppProvider({children}){
     try{await API.stock.receive({productId,variantId,quantity:qty,supplier});
       const prods=await API.products.list();
       setProducts(norm.products(prods));
-      addAudit("RECEPTION",`+${qty} — ${supplier}`);}catch(e){alert("Erreur: "+e.message);}
+      addAudit("RECEPTION",`+${qty} — ${supplier}`);}catch(e){notify("Erreur: "+e.message,"error");}
   },[addAudit]);
 
   // ══ P2: Clock in/out — via API ══
@@ -457,7 +460,7 @@ function AppProvider({children}){
   // ══ P3: Duplicate product — via API ══
   const duplicateProduct=useCallback(async(productId)=>{
     try{await API.products.duplicate(productId);
-      const prods=await API.products.list();setProducts(norm.products(prods));}catch(e){alert("Erreur: "+e.message);}
+      const prods=await API.products.list();setProducts(norm.products(prods));}catch(e){notify("Erreur: "+e.message,"error");}
   },[]);
 
   // ══ P3: Sales goals by seller ══
@@ -539,16 +542,16 @@ function AppProvider({children}){
   },[addAudit,tickets,gt,cashReg,currentUser,notify]);
 
   // Exports — via API
-  const exportFEC=useCallback(async()=>{try{await API.fiscal.fec();}catch(e){alert("Erreur: "+e.message);}},[]);
+  const exportFEC=useCallback(async()=>{try{await API.fiscal.fec();}catch(e){notify("Erreur: "+e.message,"error");}},[notify]);
 
-  const exportArchive=useCallback(async()=>{try{await API.fiscal.archive();}catch(e){alert("Erreur: "+e.message);}},[]);
+  const exportArchive=useCallback(async()=>{try{await API.fiscal.archive();}catch(e){notify("Erreur: "+e.message,"error");}},[notify]);
 
   // Customer RGPD export — via API
   const exportCustomerRGPD=useCallback(async(custId)=>{
     try{const data=await API.customers.rgpd(custId);
       const b=new Blob([JSON.stringify(data,null,2)],{type:"application/json"});const u=URL.createObjectURL(b);
-      const a=document.createElement("a");a.href=u;a.download=`rgpd-export.json`;a.click();}catch(e){alert("Erreur: "+e.message);}
-  },[]);
+      const a=document.createElement("a");a.href=u;a.download=`rgpd-export.json`;a.click();}catch(e){notify("Erreur: "+e.message,"error");}
+  },[notify]);
 
   // Loyalty tier for customer
   const getLoyaltyTier=useCallback((points)=>{
@@ -604,15 +607,15 @@ function AppProvider({children}){
 
   // Add product — via API
   const addProduct=useCallback(async(p)=>{try{await API.products.create(p);
-    const prods=await API.products.list();setProducts(norm.products(prods));}catch(e){alert("Erreur: "+e.message);}},[]);
+    const prods=await API.products.list();setProducts(norm.products(prods));}catch(e){notify("Erreur: "+e.message,"error");}},[notify]);
   // Add customer — via API with offline fallback
   const addCustomer=useCallback(async(c)=>{
-    try{const nc=await API.customers.create(c);setCustomers(p=>[...p,nc]);return nc;}
+    try{const nc=await API.customers.create(c);setCustomers(p=>[...p,nc]);notify("Client créé","success");return nc;}
     catch(e){
-      // Fallback local si API indisponible
+      // Fallback local si API indisponible — pas d'erreur, juste création locale
       const nc={id:`c-${Date.now()}`,firstName:c.firstName||"",lastName:c.lastName||"",email:c.email||"",phone:c.phone||"",
         city:c.city||"",notes:c.notes||"",points:0,totalSpent:0,createdAt:new Date().toISOString()};
-      setCustomers(p=>[...p,nc]);notify("Client créé localement (hors-ligne)","warn");return nc;
+      setCustomers(p=>[...p,nc]);notify("Client créé","success");return nc;
     }},[notify]);
 
   const openReg=(a)=>{setCashReg({openingAmount:a,openDate:new Date().toISOString()});addAudit("CAISSE","Ouverture "+a+"€");};
@@ -676,7 +679,7 @@ function AppProvider({children}){
     try{await API.products.update(productId,updates);
       const prods=await API.products.list();setProducts(norm.products(prods));
       addAudit("PRODUCT",`Modification: ${updates.name||""}`);
-    }catch(e){alert("Erreur: "+e.message);}
+    }catch(e){notify("Erreur: "+e.message,"error");}
   },[addAudit]);
 
   const deleteProduct=useCallback(async(productId)=>{
@@ -687,14 +690,14 @@ function AppProvider({children}){
       setProducts(prev=>prev.filter(x=>x.id!==productId));
       addAudit("PRODUCT",`Suppression: ${p.name} (${p.sku})`);
       notify(`Produit ${p.name} supprimé`,"warn");return true;
-    }catch(e){alert("Erreur: "+e.message);return false;}
+    }catch(e){notify("Erreur: "+e.message,"error");return false;}
   },[products,addAudit,notify]);
 
   const addVariantToProduct=useCallback(async(productId,variant)=>{
     try{await API.products.addVariant(productId,variant);
       const prods=await API.products.list();setProducts(norm.products(prods));
       addAudit("PRODUCT",`Variante ajoutée: ${variant.color}/${variant.size}`);
-    }catch(e){alert("Erreur: "+e.message);}
+    }catch(e){notify("Erreur: "+e.message,"error");}
   },[addAudit]);
 
   const deleteVariant=useCallback(async(productId,variantId)=>{
@@ -703,7 +706,7 @@ function AppProvider({children}){
     try{await API.products.removeVariant(productId,variantId);
       setProducts(prev=>prev.map(x=>x.id===productId?{...x,variants:x.variants.filter(vr=>vr.id!==variantId)}:x));
       addAudit("PRODUCT",`Variante supprimée: ${v?.color}/${v?.size}`);return true;
-    }catch(e){alert("Erreur: "+e.message);return false;}
+    }catch(e){notify("Erreur: "+e.message,"error");return false;}
   },[products,addAudit,notify]);
 
   // ══ CUSTOMER EDIT — via API ══
@@ -711,7 +714,7 @@ function AppProvider({children}){
     try{await API.customers.update(customerId,updates);
       setCustomers(prev=>prev.map(c=>c.id===customerId?{...c,...updates}:c));
       addAudit("CLIENT",`Client modifié: ${updates.firstName||""} ${updates.lastName||""}`);
-    }catch(e){alert("Erreur: "+e.message);}
+    }catch(e){notify("Erreur: "+e.message,"error");}
   },[addAudit]);
 
   const deleteCustomer=useCallback(async(customerId)=>{
@@ -720,7 +723,7 @@ function AppProvider({children}){
       setCustomers(prev=>prev.filter(x=>x.id!==customerId));
       addAudit("CLIENT",`Client supprimé: ${c.firstName} ${c.lastName}`);
       notify(`Client ${c.firstName} ${c.lastName} supprimé`,"warn");
-    }catch(e){alert("Erreur: "+e.message);}
+    }catch(e){notify("Erreur: "+e.message,"error");}
   },[customers,addAudit,notify]);
 
   // ══ STOCK ADJUSTMENT ══
@@ -731,7 +734,7 @@ function AppProvider({children}){
       const prods=await API.products.list();setProducts(norm.products(prods));
       addAudit("STOCK",`${p.name} ${v.color}/${v.size}: ${v.stock} → ${newStock} (${reason||"Ajustement"})`);
       notify(`Stock ajusté: ${p.name} ${v.color}/${v.size}`,"info");
-    }catch(e){alert("Erreur: "+e.message);}
+    }catch(e){notify("Erreur: "+e.message,"error");}
   },[products,addAudit,notify]);
 
   return<AppCtx.Provider value={{currentUser,login,logout,mode,setMode,offlineMode,products,setProducts,addProduct,customers,setCustomers,addCustomer,
@@ -1004,8 +1007,8 @@ function SalesScreen(){
           onMouseLeave={e=>{e.currentTarget.style.transform="translateY(0)";e.currentTarget.style.boxShadow=`0 1px 3px ${C.shadow}`;e.currentTarget.style.borderColor=C.border;}}>
           <div style={{aspectRatio:"1.1",background:`linear-gradient(155deg,${cc}08,${cc}04)`,display:"flex",alignItems:"center",justifyContent:"center",position:"relative",borderBottom:`1px solid ${C.border}`}}>
             <span style={{fontSize:32,opacity:0.7,filter:"grayscale(0.2)"}}>{catIcon(p.category)}</span>
-            {ts===0&&<div style={{position:"absolute",inset:0,background:"rgba(255,255,255,0.85)",display:"flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(2px)"}}>
-              <Badge color={C.danger}>Rupture</Badge></div>}
+            {ts<=0&&<div style={{position:"absolute",top:6,left:6,zIndex:2}}>
+              <Badge color={C.danger}>{ts<0?`Stock ${ts}`:"Rupture"}</Badge></div>}
             {ha&&ts>0&&<div style={{position:"absolute",top:6,left:6}}><div style={{width:8,height:8,borderRadius:4,background:C.warn,boxShadow:`0 0 0 2px ${C.surface}`}}/></div>}
             {p.collection&&<span style={{position:"absolute",top:6,right:6,fontSize:8,background:"rgba(255,255,255,0.9)",color:cc,padding:"2px 6px",borderRadius:8,fontWeight:700,backdropFilter:"blur(4px)",boxShadow:`0 1px 4px ${C.shadow}`}}>{p.collection}</span>}
             <button onClick={e=>{e.stopPropagation();toggleFavorite(p.id);}} style={{position:"absolute",bottom:6,right:6,background:"rgba(255,255,255,0.9)",border:"none",cursor:"pointer",padding:4,borderRadius:8,boxShadow:`0 1px 4px ${C.shadow}`,transition:"all 0.15s"}}>
@@ -1137,10 +1140,10 @@ function SalesScreen(){
           <div style={{marginLeft:"auto",fontSize:18,fontWeight:800,color:CAT_COLORS[vm.category]||C.primary}}>{vm.price.toFixed(2)}€</div></div>
         <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(130px,1fr))",gap:8}}>
           {vm.variants.map(v=>{const cc=CAT_COLORS[vm.category]||C.primary;return(
-            <button key={v.id} onClick={()=>{addToCart(vm,v);setVm(null);}} disabled={v.stock===0}
-              style={{padding:12,borderRadius:14,border:`1.5px solid ${v.stock===0?C.danger+"30":C.border}`,background:v.stock===0?C.dangerLight+"30":"transparent",
-                cursor:v.stock===0?"not-allowed":"pointer",opacity:v.stock===0?.5:1,textAlign:"left",transition:"all 0.15s"}}
-              onMouseEnter={e=>{if(v.stock>0)e.currentTarget.style.borderColor=cc;}} onMouseLeave={e=>{if(v.stock>0)e.currentTarget.style.borderColor=C.border;}}>
+            <button key={v.id} onClick={()=>{addToCart(vm,v);setVm(null);}}
+              style={{padding:12,borderRadius:14,border:`1.5px solid ${v.stock<=0?C.danger+"30":C.border}`,background:v.stock<=0?C.dangerLight+"15":"transparent",
+                cursor:"pointer",textAlign:"left",transition:"all 0.15s"}}
+              onMouseEnter={e=>e.currentTarget.style.borderColor=cc} onMouseLeave={e=>e.currentTarget.style.borderColor=v.stock<=0?C.danger+"30":C.border}>
               <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:6}}>
                 <div style={{width:14,height:14,borderRadius:7,background:cc+"30",border:`2px solid ${cc}`}}/>
                 <span style={{fontSize:12,fontWeight:700}}>{v.color}</span></div>
@@ -1148,7 +1151,7 @@ function SalesScreen(){
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                 <span style={{fontSize:11,fontWeight:600,color:v.stock>0?(v.stock<=(v.stockAlert||5)?C.warn:cc):C.danger,
                   background:v.stock>0?(v.stock<=(v.stockAlert||5)?C.warnLight:`${cc}10`):C.dangerLight,padding:"2px 7px",borderRadius:6}}>
-                  {v.stock>0?`${v.stock} dispo`:"Rupture"}</span>
+                  {v.stock>0?`${v.stock} dispo`:v.stock===0?"Rupture":`${v.stock} (négatif)`}</span>
                 {v.ean&&<span style={{fontSize:8,color:C.textLight,fontFamily:"monospace"}}>{v.ean}</span>}</div>
             </button>);})}
         </div>
