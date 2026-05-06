@@ -265,8 +265,12 @@ function AppProvider({children}){
   const login=async(n,pw)=>{
     // Essai API d'abord
     try{const res=await API.auth.login(n,pw);API.setToken(res.token);setCurrentUser(res.user);
-      const[prods,custs,prms,setts]=await Promise.all([API.products.list(),API.customers.list(),API.settings.promos(),API.settings.get()]);
+      const[prods,custs,prms,setts,apiUsers]=await Promise.all([API.products.list(),API.customers.list(),API.settings.promos(),API.settings.get(),API.auth.users().catch(()=>null)]);
       setProducts(norm.products(prods));setCustomers(norm.customers(custs));setPromos(prms);setSettings(s=>({...s,...setts}));
+      // Synchroniser la liste utilisateurs depuis l'API
+      if(apiUsers&&apiUsers.length){const merged=[...apiUsers.map(u=>({id:u.id,name:u.name,role:u.role,pin:"****",apiSynced:true}))];
+        const localOnly=users.filter(lu=>!apiUsers.find(au=>au.name===lu.name));
+        setUsers([...merged,...localOnly]);}
       setOfflineMode(false);addJET("LOGIN",n);notify("Connecté au serveur","success");return true;
     }catch(e){
       console.warn("API indisponible, tentative login hors-ligne:",e.message);
@@ -3009,7 +3013,12 @@ function UsersScreen(){
   const openEdit=(u)=>{setForm({name:u.name,role:u.role,pin:u.pin});setEditUser(u);};
   const saveUser=()=>{if(!form.name||!form.pin){notify("Nom et PIN requis","error");return;}
     if(editUser){setUsers(p=>p.map(u=>u.id===editUser.id?{...u,...form}:u));setEditUser(null);notify("Utilisateur modifié","success");}
-    else{setUsers(p=>[...p,{id:"u"+Date.now(),name:form.name,role:form.role,pin:form.pin}]);setNewModal(false);notify("Utilisateur créé","success");}
+    else{const newUser={id:"u"+Date.now(),name:form.name,role:form.role,pin:form.pin};
+      // Créer aussi côté API
+      API.auth.createUser({name:form.name,password:form.pin,role:form.role}).then(apiUser=>{
+        if(apiUser&&apiUser.id){setUsers(p=>p.map(u=>u.id===newUser.id?{...u,id:apiUser.id,apiSynced:true}:u));}
+      }).catch(e=>console.warn("Utilisateur créé localement uniquement:",e.message));
+      setUsers(p=>[...p,newUser]);setNewModal(false);notify("Utilisateur créé","success");}
     setForm({name:"",role:"cashier",pin:""});};
   return(<div style={{height:"100%",overflowY:"auto",padding:20,background:C.bg}}>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
