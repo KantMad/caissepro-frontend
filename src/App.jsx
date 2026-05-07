@@ -6,7 +6,7 @@ import {
   Shield, Download, FileText, Settings, CheckCircle2, AlertTriangle, Save,
   Archive, Activity, Database, WifiOff, Pause, Play, Upload, Printer, Bell,
   Heart, Grid, Box, Star, Calendar, Zap, ScanLine, Split,
-  Mail, XOctagon, Edit, BarChart2, Check, X, HelpCircle
+  Mail, XOctagon, Edit, BarChart2, Check, X, HelpCircle, ChevronDown
 } from "lucide-react";
 import {
   PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer,
@@ -4499,69 +4499,397 @@ function FootfallScreen(){
 }
 
 function HelpCashierScreen(){
+  const[openIdx,setOpenIdx]=useState(null);
   const sections=[
-    {icon:"🛒",title:"Encaisser une vente",desc:"Ajoutez des articles au panier et finalisez la vente.",steps:["Recherchez un produit par nom, SKU ou code-barres","Cliquez sur le produit pour l'ajouter au panier","Sélectionnez la variante (taille/couleur) si demandé","Ajustez la quantité avec +/- si nécessaire","Choisissez le mode de paiement (CB, espèces, etc.)","Validez la vente"]},
-    {icon:"💸",title:"Appliquer une remise",desc:"Remises par article ou globales sur le panier.",steps:["Remise article : cliquez sur le crayon à côté de l'article","Choisissez % ou montant fixe","Remise globale : bouton 'Remise globale' sous le panier","La remise max est configurable par rôle utilisateur"]},
-    {icon:"↩️",title:"Retours et échanges",desc:"Gérez les retours produits et les avoirs.",steps:["Allez dans l'onglet Retours","Recherchez le ticket d'origine","Sélectionnez les articles à retourner","Choisissez le mode de remboursement (avoir, espèces, carte, échange)","Indiquez le motif du retour","Validez le retour"]},
-    {icon:"💳",title:"Paiements multiples",desc:"Fractionnez un paiement entre plusieurs moyens.",steps:["Cliquez sur 'Fractionné' dans la barre de paiement","Répartissez le montant entre CB/AMEX, espèces, carte cadeau, chèque","Utilisez le bouton '= Reste' pour compléter automatiquement","Le toggle CB/AMEX permet de choisir le type de carte","Validez quand le reste à payer est à 0€"]},
-    {icon:"📷",title:"Scan code-barres",desc:"Utilisez un scanner USB ou Bluetooth.",steps:["Branchez votre scanner USB ou connectez-le en Bluetooth","Scannez le code-barres d'un produit","L'article est automatiquement ajouté au panier","Compatible avec les codes EAN-13 et EAN-8"]},
-    {icon:"❤️",title:"Client fidélité",desc:"Associez un client à la vente pour la fidélité.",steps:["Cliquez sur l'icône client dans le panier","Sélectionnez un client existant ou créez-en un nouveau","Les points fidélité sont automatiquement calculés","Le tier du client (Bronze/Silver/Gold) est affiché"]},
-    {icon:"⏸️",title:"Mettre en attente",desc:"Mettez un panier de côté pour le reprendre plus tard.",steps:["Cliquez sur 'Attente' ou appuyez sur F5","Le panier est sauvegardé avec la date et le client","Reprenez-le depuis le menu 'Paniers en attente'","Plusieurs paniers peuvent être en attente simultanément"]},
-    {icon:"🖨️",title:"Imprimer un ticket",desc:"Imprimez le ticket après une vente.",steps:["Après validation, le ticket s'affiche automatiquement","Cliquez sur 'Imprimer' pour l'impression thermique","Ou 'Envoyer par email' pour un envoi numérique","L'imprimante doit être configurée dans les Réglages"]},
-    {icon:"✈️",title:"Détaxe",desc:"Ventes en détaxe pour les résidents hors UE.",steps:["Activez le bouton 'Détaxe' avant le paiement","Achat minimum : 100,01€ requis","La TVA est mise à 0% sur tous les articles","Le ticket mentionne la détaxe"]},
-    {icon:"🔐",title:"Ouvrir/Fermer la caisse",desc:"Gérez l'ouverture et la clôture de caisse.",steps:["À l'ouverture : saisissez le fond de caisse (rapide ou par coupures)","En fin de journée : allez dans Clôture","Comptez les espèces et validez la clôture Z","Le rapport est archivé automatiquement (NF525)"]},
-    {icon:"⌨️",title:"Raccourcis clavier",desc:"Accélérez votre travail avec les raccourcis.",steps:["F2 : Paiement rapide par carte","F3 : Paiement rapide en espèces","F4 : Ouvrir le paiement fractionné","F5 : Mettre le panier en attente","F8 : Annuler le panier","Shift+? : Afficher les raccourcis"]}
+    {icon:"🛒",title:"Encaisser une vente",desc:"Ajouter des articles et finaliser un paiement.",steps:[
+      "Vous êtes sur l'écran « Vente » (1er bouton de la barre latérale gauche, icône caddie).",
+      "Pour ajouter un article : tapez le nom, la référence ou le code-barres dans la barre de recherche en haut de la grille produits (à droite).",
+      "Cliquez sur la carte du produit dans la grille. Si le produit a des variantes (taille/couleur), une popup s'ouvre : cliquez sur la variante souhaitée.",
+      "L'article apparaît dans le panier (colonne de gauche). Pour modifier la quantité, cliquez sur les boutons « + » et « − » à côté de l'article dans le panier.",
+      "Pour supprimer un article du panier, cliquez sur l'icône corbeille (🗑️) à droite de la ligne de l'article.",
+      "En bas du panier, vous voyez le total TTC. Pour payer, cliquez sur un des boutons de paiement :",
+      "  • « CB » → Paiement carte bancaire. Un toggle apparaît pour choisir entre CB classique ou AMEX (American Express). Cliquez sur « CB » ou « AMEX » pour basculer.",
+      "  • « Espèces » → Saisissez le montant remis par le client, le rendu de monnaie se calcule automatiquement.",
+      "  • « Fractionné » → Permet de répartir le paiement entre plusieurs moyens (voir section dédiée).",
+      "  • « Chèque » → Paiement par chèque.",
+      "Après validation, le ticket s'affiche. Cliquez « Imprimer » pour l'impression thermique ou « Fermer » pour revenir à l'écran de vente."
+    ]},
+    {icon:"💸",title:"Appliquer une remise",desc:"Remise sur un article ou sur tout le panier.",steps:[
+      "Remise sur UN article : dans le panier (colonne gauche), cliquez sur l'icône crayon (✏️) à côté de l'article que vous voulez remiser.",
+      "Une popup s'ouvre. Choisissez le type de remise : « % » (pourcentage) ou « € » (montant fixe).",
+      "Saisissez la valeur (ex : 10 pour 10% ou 5 pour 5€ de remise). Le nouveau prix s'affiche en aperçu.",
+      "Cliquez « Appliquer » pour valider. La remise apparaît en rouge sous l'article dans le panier.",
+      "Remise GLOBALE sur tout le panier : cliquez sur le bouton « Remise globale » situé sous la liste des articles dans le panier.",
+      "Choisissez % ou €, saisissez la valeur, puis « Appliquer ». La remise s'applique proportionnellement à chaque article.",
+      "⚠️ La remise maximale autorisée dépend de votre rôle (configuré par l'administrateur dans le Dashboard → Paramètres)."
+    ]},
+    {icon:"↩️",title:"Faire un retour / échange",desc:"Retourner un article et rembourser ou faire un avoir.",steps:[
+      "Cliquez sur « Retours » dans la barre latérale gauche (2ème bouton, icône flèche).",
+      "Recherchez le ticket d'origine : tapez le numéro de ticket, le nom du client ou la date dans la barre de recherche en haut.",
+      "Cliquez sur le ticket trouvé pour l'ouvrir. La liste des articles du ticket s'affiche.",
+      "Cochez les articles à retourner en cliquant sur la case à gauche de chaque article.",
+      "Sélectionnez le motif du retour dans le menu déroulant (taille incorrecte, défaut, etc.).",
+      "Choisissez le mode de remboursement en bas de l'écran :",
+      "  • « Avoir » → Génère un bon d'avoir que le client pourra utiliser lors d'un prochain achat.",
+      "  • « Espèces » → Remboursement en liquide.",
+      "  • « Carte » → Remboursement sur la carte bancaire du client.",
+      "  • « Échange » → Le montant retourné est crédité pour un nouvel achat immédiat.",
+      "Cliquez sur « Valider le retour » pour confirmer. Un ticket de retour est généré automatiquement."
+    ]},
+    {icon:"💳",title:"Paiement fractionné (multi-moyens)",desc:"Payer une partie en CB, une partie en espèces, etc.",steps:[
+      "Depuis l'écran « Vente », avec des articles dans le panier, cliquez sur le bouton « Fractionné » dans la barre de paiement (en bas du panier).",
+      "L'écran de paiement fractionné s'ouvre. Vous voyez le montant total en haut et le « Reste à payer » qui diminue au fur et à mesure.",
+      "Pour chaque moyen de paiement (CB/AMEX, Espèces, Chèque, Carte cadeau) : saisissez le montant dans le champ correspondant.",
+      "Le bouton « = Reste » à côté de chaque champ remplit automatiquement le montant restant. Pratique pour le dernier moyen de paiement.",
+      "Pour CB : un toggle « CB / AMEX » vous permet de préciser le type de carte. Cliquez dessus pour basculer.",
+      "Vérifiez que le « Reste à payer » est bien à 0,00€.",
+      "Cliquez sur « Valider le paiement » pour finaliser. Le ticket affichera le détail de chaque moyen de paiement utilisé."
+    ]},
+    {icon:"📷",title:"Utiliser un scanner code-barres",desc:"Ajouter des articles en scannant leur code-barres.",steps:[
+      "Branchez votre scanner USB sur l'ordinateur ou la tablette, ou connectez-le en Bluetooth via les paramètres de votre appareil.",
+      "Depuis l'écran « Vente », placez le curseur dans la barre de recherche (cliquez dessus ou elle est déjà active par défaut).",
+      "Scannez le code-barres de l'article. Le scanner « tape » automatiquement le code EAN dans la barre de recherche.",
+      "Si un produit correspond au code EAN, il est ajouté automatiquement au panier. Si le produit a des variantes, la popup de sélection apparaît.",
+      "Si aucun produit ne correspond, un message « Produit non trouvé » s'affiche. Vérifiez que le code EAN est bien renseigné dans la fiche produit (Dashboard → Produits → modifier le produit → champ EAN de chaque variante).",
+      "Compatible EAN-13, EAN-8 et codes internes."
+    ]},
+    {icon:"❤️",title:"Associer un client (fidélité)",desc:"Lier un client à la vente pour cumuler ses points.",steps:[
+      "Depuis l'écran « Vente », cliquez sur l'icône client (👤) en haut du panier (colonne gauche).",
+      "Une popup s'ouvre avec la liste des clients. Tapez un nom ou un email dans la barre de recherche pour filtrer.",
+      "Cliquez sur le client souhaité pour l'associer à la vente en cours. Son nom apparaît en haut du panier.",
+      "Pour créer un nouveau client : cliquez sur « + Nouveau client » en haut de la popup, remplissez nom, email, téléphone, puis « Créer ».",
+      "Les points de fidélité sont automatiquement ajoutés au compte du client après validation de la vente.",
+      "Le tier du client (Bronze, Silver, Gold) est affiché à côté de son nom. Les seuils sont configurables dans Dashboard → Clients."
+    ]},
+    {icon:"⏸️",title:"Mettre un panier en attente",desc:"Sauvegarder le panier pour le reprendre plus tard.",steps:[
+      "Depuis l'écran « Vente », avec des articles dans le panier, cliquez sur le bouton « Attente » en bas du panier ou appuyez sur la touche F5.",
+      "Le panier est sauvegardé avec la date, l'heure et le client associé (si présent). L'écran de vente se vide pour un nouveau client.",
+      "Pour reprendre un panier en attente : cliquez sur le bouton « Paniers en attente » (icône pause) en haut du panier.",
+      "La liste des paniers en attente s'affiche avec la date et le contenu. Cliquez sur celui que vous voulez reprendre.",
+      "Le panier reprend là où il en était. Vous pouvez ajouter ou retirer des articles avant de finaliser.",
+      "Plusieurs paniers peuvent être en attente simultanément (ex : un client qui part chercher un article, etc.)."
+    ]},
+    {icon:"🖨️",title:"Imprimer un ticket / étiquette",desc:"Impression thermique du ticket de caisse ou d'étiquettes produits.",steps:[
+      "Ticket de caisse : après chaque vente validée, le ticket s'affiche automatiquement. Cliquez sur « Imprimer » pour l'envoyer à l'imprimante thermique.",
+      "Si l'imprimante n'est pas configurée : allez dans « Réglages » (avant-dernier bouton de la barre latérale gauche, icône engrenage).",
+      "Dans l'onglet « 🖨️ Imprimante », cliquez sur « Connecter l'imprimante ». Sélectionnez votre imprimante dans la liste qui apparaît.",
+      "Choisissez la largeur du papier : 32 colonnes (58mm) ou 48 colonnes (80mm). Cliquez sur « Test impression » pour vérifier.",
+      "Étiquettes code-barres : allez dans « Produits » (5ème bouton de la barre latérale), cliquez sur un produit pour l'ouvrir.",
+      "Dans la fiche produit, cliquez sur le bouton « Étiquettes » (entre « Enregistrer » et « Supprimer »). Choisissez le format d'étiquette et les variantes à imprimer.",
+      "Personnalisation du ticket : allez dans « Réglages » → onglet « 🧾 Ticket » pour ajouter un logo, modifier l'en-tête/pied de page, et choisir les informations affichées."
+    ]},
+    {icon:"✈️",title:"Vente en détaxe",desc:"Appliquer la détaxe pour un client hors UE.",steps:[
+      "Depuis l'écran « Vente », avec des articles dans le panier (montant minimum : 100,01€ TTC requis).",
+      "Cliquez sur le bouton « Détaxe » situé au-dessus de la zone de paiement, avant de finaliser la vente.",
+      "Le bouton devient actif (vert). La TVA de tous les articles passe automatiquement à 0%.",
+      "Le total du panier est recalculé sans TVA. Finalisez le paiement normalement (CB, espèces, etc.).",
+      "Le ticket de caisse mentionne « VENTE EN DÉTAXE » et affiche les montants HT = TTC.",
+      "⚠️ Vous devez vérifier l'identité du client (passeport) et le bordereau PABLO. La détaxe est réservée aux résidents hors Union Européenne."
+    ]},
+    {icon:"🔐",title:"Ouvrir et fermer la caisse",desc:"Fond de caisse à l'ouverture, clôture Z en fin de journée.",steps:[
+      "OUVERTURE : au démarrage, l'écran d'ouverture de caisse apparaît automatiquement.",
+      "Mode rapide : saisissez le montant total du fond de caisse dans le champ unique, puis cliquez « Ouvrir la caisse ».",
+      "Mode détaillé : cliquez sur « Comptage par coupures » pour saisir le nombre de chaque billet et pièce. Le total se calcule automatiquement.",
+      "Si vous ne voulez pas ouvrir de caisse maintenant, cliquez « Passer » en haut à droite.",
+      "CLÔTURE Z : cliquez sur « Clôture » dans la barre latérale gauche (icône cadenas, entre Promos et Entrées).",
+      "Comptez les espèces en caisse et saisissez le montant réel. Le système compare avec le montant théorique calculé.",
+      "L'écart (positif ou négatif) est affiché. Cliquez « Valider la clôture Z » pour archiver le rapport.",
+      "⚠️ La clôture Z est obligatoire (NF525). Le rapport est signé numériquement et archivé de manière inaltérable."
+    ]},
+    {icon:"📊",title:"Consulter les statistiques",desc:"Voir le chiffre d'affaires, le panier moyen, les performances.",steps:[
+      "Cliquez sur « Stats » dans la barre latérale gauche (3ème bouton, icône graphique).",
+      "En haut : les indicateurs clés — CA total, nombre de ventes, panier moyen, marge (si autorisé par votre rôle).",
+      "Les graphiques montrent l'évolution des ventes par jour.",
+      "Sous les graphiques : le classement des meilleurs vendeurs et des produits les plus vendus.",
+      "Vous pouvez basculer entre différentes vues selon les onglets disponibles."
+    ]},
+    {icon:"📦",title:"Consulter le stock",desc:"Voir les niveaux de stock et les alertes.",steps:[
+      "Cliquez sur « Stock » dans la barre latérale gauche (4ème bouton, icône grille).",
+      "Un badge rouge sur l'icône Stock indique le nombre d'alertes de stock (rupture ou stock bas).",
+      "L'écran affiche la liste de tous les produits avec leur stock actuel par variante (taille/couleur).",
+      "Les articles en rupture sont surlignés en rouge. Les articles en stock bas sont en orange.",
+      "Pour ajuster un stock manuellement : cliquez sur le produit, modifiez la quantité et enregistrez."
+    ]},
+    {icon:"📜",title:"Historique des tickets",desc:"Retrouver et réimprimer un ancien ticket.",steps:[
+      "Cliquez sur « Tickets » dans la barre latérale gauche (6ème bouton, icône ticket).",
+      "La liste de tous les tickets s'affiche, du plus récent au plus ancien.",
+      "Utilisez la barre de recherche en haut pour filtrer par numéro de ticket, nom de client ou date.",
+      "Cliquez sur un ticket pour voir son détail complet : articles, montants, mode de paiement, vendeur.",
+      "Depuis le détail du ticket, cliquez « Imprimer » pour réimprimer le ticket ou « Annuler » pour annuler la vente (avec motif obligatoire)."
+    ]},
+    {icon:"👥",title:"Gérer les clients",desc:"Ajouter, modifier ou consulter les fiches clients.",steps:[
+      "Cliquez sur « Clients » dans la barre latérale gauche (7ème bouton, icône personnes).",
+      "La liste de tous les clients s'affiche. Utilisez la barre de recherche pour trouver un client par nom, email ou téléphone.",
+      "Pour ajouter un client : cliquez sur « + Nouveau client » en haut à droite. Remplissez nom, email, téléphone, puis « Créer ».",
+      "Pour modifier un client : cliquez sur le bouton « Modifier » (icône crayon) à droite de la ligne du client.",
+      "Pour voir l'historique d'achats : cliquez sur « Historique » à côté du client. Vous verrez toutes ses ventes passées."
+    ]},
+    {icon:"🎁",title:"Cartes cadeaux",desc:"Vendre et utiliser des cartes cadeaux.",steps:[
+      "Cliquez sur « Cadeaux » dans la barre latérale gauche (8ème bouton, icône cadeau).",
+      "Pour créer une carte cadeau : cliquez « + Nouvelle carte », saisissez le montant, puis « Créer ». Un code unique est généré.",
+      "Pour utiliser une carte cadeau comme moyen de paiement : lors du paiement fractionné, saisissez le code de la carte dans le champ « Carte cadeau ».",
+      "Le solde de la carte est débité du montant utilisé. Le solde restant est affiché."
+    ]},
+    {icon:"🏷️",title:"Promotions",desc:"Voir et appliquer les promotions en cours.",steps:[
+      "Cliquez sur « Promos » dans la barre latérale gauche (9ème bouton, icône éclair).",
+      "Les promotions actives sont affichées en vert. Elles s'appliquent automatiquement lors de l'encaissement si les conditions sont remplies.",
+      "Les types de promos : par collection (catégorie), par quantité (2+1 gratuit, etc.), ou par code promo.",
+      "Pour créer ou modifier des promotions, passez en mode Dashboard → Promotions."
+    ]},
+    {icon:"🚶",title:"Compteur d'entrées (footfall)",desc:"Compter les visiteurs entrant dans le magasin.",steps:[
+      "Cliquez sur « Entrées » dans la barre latérale gauche (11ème bouton, icône activité).",
+      "Cliquez sur le bouton « + Entrée » à chaque visiteur qui entre dans le magasin.",
+      "Le compteur affiche le nombre de visiteurs du jour et le taux de conversion (visiteurs vs tickets).",
+      "L'historique par jour est visible dans un tableau en dessous."
+    ]},
+    {icon:"📋",title:"Journal d'audit",desc:"Traçabilité de toutes les actions effectuées.",steps:[
+      "Cliquez sur « Audit » dans la barre latérale gauche (12ème bouton, icône activité).",
+      "Le journal affiche toutes les actions : ventes, annulations, modifications de prix, connexions, etc.",
+      "Filtrez par utilisateur ou par type d'action avec les filtres en haut.",
+      "Ce journal est inaltérable (NF525) et peut être exporté pour un contrôle fiscal."
+    ]},
+    {icon:"🛡️",title:"Conformité NF525",desc:"Vérifier l'intégrité de la chaîne fiscale.",steps:[
+      "Cliquez sur « NF525 » dans la barre latérale gauche (13ème bouton, icône bouclier).",
+      "L'écran affiche l'état de la chaîne de signatures : chaque vente est signée et chaînée à la précédente.",
+      "Cliquez « Vérifier la chaîne » pour lancer un contrôle d'intégrité complet.",
+      "Vous pouvez aussi exporter le FEC (Fichier des Écritures Comptables) et télécharger l'archive fiscale."
+    ]},
+    {icon:"⚙️",title:"Réglages (mode caisse)",desc:"Configurer l'imprimante, les retours, les tailles, etc.",steps:[
+      "Cliquez sur « Réglages » dans la barre latérale gauche (14ème bouton, icône engrenage).",
+      "Les onglets disponibles sont affichés en haut : Général, 💰 Prix HT/TTC, Commission, Magasins, 🖨️ Imprimante, 🧾 Ticket, 📺 Écran 2, 🏷️ Icônes catégories, Retours, 📏 Ordre tailles, Thème, Pointages, Historique prix.",
+      "Onglet « Général » : nom de la boutique, adresse, SIRET, TVA intra, téléphone, message du ticket.",
+      "Onglet « 🖨️ Imprimante » : connexion de l'imprimante thermique, choix de la largeur papier, test d'impression, configuration des étiquettes.",
+      "Onglet « 🧾 Ticket » : ajouter un logo en haut du ticket, personnaliser l'en-tête et le pied de page, choisir les champs affichés (TVA, vendeur, etc.).",
+      "Onglet « 📺 Écran 2 » : personnaliser l'écran client (couleurs, logo, message d'accueil).",
+      "Onglet « 🏷️ Icônes catégories » : choisir un emoji pour chaque catégorie de produit, affiché sur les cartes produits dans la grille de vente.",
+      "Onglet « Retours » : configurer les motifs de retour, le délai maximal et les modes de remboursement autorisés.",
+      "Onglet « 📏 Ordre tailles » : réorganiser l'ordre d'affichage des tailles (XS, S, M, L, XL…). Glissez-déposez ou modifiez le numéro de rang.",
+      "⚠️ N'oubliez pas de cliquer « Enregistrer » après chaque modification."
+    ]},
+    {icon:"⌨️",title:"Raccourcis clavier",desc:"Aller plus vite avec le clavier.",steps:[
+      "F2 → Paiement rapide par carte bancaire (valide le panier et enregistre un paiement CB).",
+      "F3 → Paiement rapide en espèces (montant exact, sans rendu de monnaie).",
+      "F4 → Ouvrir l'écran de paiement fractionné.",
+      "F5 → Mettre le panier actuel en attente.",
+      "F8 → Annuler / vider le panier en cours.",
+      "Shift + ? → Afficher la liste des raccourcis.",
+      "Ces raccourcis fonctionnent depuis l'écran de vente uniquement."
+    ]},
+    {icon:"🔒",title:"Pointage (arrivée / départ)",desc:"Pointer son entrée et sa sortie de poste.",steps:[
+      "Dans la barre latérale gauche, en haut sous votre initiale, vous voyez deux petits boutons « IN » et « OUT ».",
+      "Cliquez « IN » lorsque vous commencez votre poste. L'heure est enregistrée.",
+      "Cliquez « OUT » lorsque vous terminez votre poste.",
+      "L'historique des pointages est visible dans Réglages → onglet « Pointages » ou dans Dashboard → Journal d'audit."
+    ]},
+    {icon:"📺",title:"Écran client (Écran 2)",desc:"Afficher le panier sur un 2ème écran orienté client.",steps:[
+      "Dans la barre latérale gauche, tout en bas, cliquez sur le bouton « Écran 2 ».",
+      "Une nouvelle fenêtre s'ouvre. Faites-la glisser sur le 2ème écran orienté vers le client.",
+      "L'écran affiche en temps réel les articles ajoutés au panier, les prix et le total.",
+      "Pour personnaliser l'apparence (couleurs, logo, message) : allez dans Réglages → onglet « 📺 Écran 2 »."
+    ]}
   ];
   return(<div style={{height:"100%",overflowY:"auto",padding:20,background:C.bg}}>
     <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:20}}>
       <div style={{width:44,height:44,borderRadius:14,background:`linear-gradient(135deg,${C.primary},${C.gradientB})`,display:"flex",alignItems:"center",justifyContent:"center"}}>
         <HelpCircle size={22} color="#fff"/></div>
       <div><h2 style={{fontSize:22,fontWeight:800,margin:0}}>Aide Caissier</h2>
-        <p style={{fontSize:12,color:C.textMuted,margin:0}}>Guide complet de toutes les fonctionnalités du mode caisse</p></div></div>
-    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(340px,1fr))",gap:12}}>
-      {sections.map(s=>(<div key={s.title} style={{background:C.surface,borderRadius:16,padding:18,border:`1.5px solid ${C.border}`,boxShadow:`0 1px 4px ${C.shadow}`}}>
-        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}>
-          <span style={{fontSize:24}}>{s.icon}</span>
-          <div><div style={{fontSize:14,fontWeight:700}}>{s.title}</div>
-            <div style={{fontSize:11,color:C.textMuted}}>{s.desc}</div></div></div>
-        <div style={{display:"flex",flexDirection:"column",gap:4}}>
-          {s.steps.map((step,i)=>(<div key={i} style={{display:"flex",alignItems:"start",gap:8,padding:"4px 0",fontSize:11,color:C.text}}>
-            <span style={{minWidth:18,height:18,borderRadius:9,background:`${C.primary}15`,color:C.primary,fontSize:10,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{i+1}</span>
-            <span>{step}</span></div>))}</div></div>))}</div></div>);
+        <p style={{fontSize:12,color:C.textMuted,margin:0}}>Guide complet — cliquez sur une section pour voir les instructions détaillées</p></div></div>
+    <div style={{display:"flex",flexDirection:"column",gap:8}}>
+      {sections.map((s,idx)=>(<div key={s.title} style={{background:C.surface,borderRadius:16,border:`1.5px solid ${openIdx===idx?C.primary:C.border}`,boxShadow:`0 1px 4px ${C.shadow}`,overflow:"hidden",transition:"all 0.2s"}}>
+        <button onClick={()=>setOpenIdx(openIdx===idx?null:idx)} style={{width:"100%",display:"flex",alignItems:"center",gap:12,padding:"14px 18px",background:"transparent",border:"none",cursor:"pointer",fontFamily:"inherit",textAlign:"left"}}>
+          <span style={{fontSize:26}}>{s.icon}</span>
+          <div style={{flex:1}}><div style={{fontSize:14,fontWeight:700,color:C.text}}>{s.title}</div>
+            <div style={{fontSize:11,color:C.textMuted}}>{s.desc}</div></div>
+          <ChevronDown size={18} color={C.textMuted} style={{transform:openIdx===idx?"rotate(180deg)":"rotate(0deg)",transition:"transform 0.2s"}}/></button>
+        {openIdx===idx&&<div style={{padding:"0 18px 16px 18px",borderTop:`1px solid ${C.border}`}}>
+          <div style={{display:"flex",flexDirection:"column",gap:6,paddingTop:12}}>
+            {s.steps.map((step,i)=>(<div key={i} style={{display:"flex",alignItems:"start",gap:10,fontSize:12,color:C.text,lineHeight:1.5}}>
+              {!step.startsWith("  •")&&!step.startsWith("⚠️")?<span style={{minWidth:22,height:22,borderRadius:11,background:`${C.primary}15`,color:C.primary,fontSize:11,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:1}}>{step.startsWith("⚠️")?"":(i+1)}</span>
+              :<span style={{minWidth:22}}/>}
+              <span style={{fontWeight:step.startsWith("⚠️")?600:400,color:step.startsWith("⚠️")?C.warn:step.startsWith("  •")?C.textMuted:C.text}}>{step}</span></div>))}</div></div>}
+      </div>))}</div></div>);
 }
 
 function HelpDashboardScreen(){
+  const[openIdx,setOpenIdx]=useState(null);
   const sections=[
-    {icon:"📦",title:"Gestion des produits",desc:"Ajoutez, modifiez et organisez votre catalogue.",steps:["Allez dans Produits pour voir la liste complète","Créez un produit avec nom, prix, catégorie, taux TVA","Ajoutez des variantes (taille, couleur, EAN, stock)","Modifiez les prix, stocks et informations à tout moment"]},
-    {icon:"📄",title:"Import CSV",desc:"Importez vos produits en masse depuis un fichier CSV.",steps:["Préparez un fichier CSV avec les colonnes requises","Cliquez sur 'Importer CSV' dans l'écran Produits","Mappez les colonnes si nécessaire","Vérifiez l'aperçu avant import","Validez l'import"]},
-    {icon:"📊",title:"Statistiques",desc:"Analysez vos performances de vente.",steps:["Consultez le CA, le panier moyen, le nombre de ventes","Visualisez les graphiques par période","Identifiez les produits les plus vendus","Analysez les performances par vendeur et par catégorie"]},
-    {icon:"↩️",title:"Retours & Avoirs",desc:"Historique complet des retours et avoirs émis.",steps:["Consultez la liste de tous les retours effectués","Filtrez par date, motif ou mode de remboursement","Analysez les statistiques de retours","Les avoirs sont traçables pour le contrôle fiscal"]},
-    {icon:"👥",title:"Gestion des clients",desc:"Base de données clients et fidélité.",steps:["Ajoutez des clients avec leurs coordonnées","Suivez les points de fidélité et le tier (Bronze/Silver/Gold)","Consultez l'historique d'achats par client","Exportez la base clients si nécessaire"]},
-    {icon:"👤",title:"Utilisateurs & rôles",desc:"Gérez les accès et permissions de votre équipe.",steps:["Créez des comptes pour chaque vendeur/manager","Attribuez un rôle : vendeur, manager ou admin","Configurez les permissions (remise max, accès stats, etc.)","Chaque action est tracée par utilisateur"]},
-    {icon:"⚙️",title:"Paramètres boutique",desc:"Configurez votre boutique et vos préférences.",steps:["Modifiez les informations de la boutique (nom, adresse, SIRET)","Configurez le mode de tarification (HT ou TTC)","Personnalisez les tickets de caisse","Configurez l'imprimante thermique"]},
-    {icon:"🛡️",title:"Fiscal NF525",desc:"Conformité fiscale française obligatoire.",steps:["Le système est conforme NF525 par défaut","Chaque vente, retour et annulation est signée","L'historique est inaltérable et auditable","Exportez les données pour le contrôle fiscal"]},
-    {icon:"📋",title:"Clôtures Z",desc:"Clôtures de caisse quotidiennes.",steps:["Effectuez une clôture Z en fin de journée","Comptez les espèces en caisse","Le système compare au montant théorique","Le rapport est archivé et signé (NF525)"]},
-    {icon:"📑",title:"Export FEC",desc:"Fichier des Écritures Comptables pour l'administration fiscale.",steps:["Allez dans l'onglet Fiscal NF525","Sélectionnez la période d'export","Générez le fichier FEC au format réglementaire","Transmettez-le à votre comptable ou à l'administration"]},
-    {icon:"🏷️",title:"Promotions",desc:"Créez et gérez des promotions.",steps:["Créez une promo par collection, quantité ou code promo","Définissez la valeur de la remise en pourcentage","Configurez les dates de début et fin","Activez/désactivez les promos à tout moment"]},
-    {icon:"📦",title:"Stock & inventaire",desc:"Suivi et gestion des stocks en temps réel.",steps:["Consultez l'état du stock de chaque variante","Recevez des alertes de stock bas automatiques","Effectuez des ajustements manuels de stock","Gérez les transferts entre magasins si multi-sites"]},
-    {icon:"🖨️",title:"Imprimante & étiquettes",desc:"Configuration de l'impression.",steps:["Connectez votre imprimante thermique (USB/série)","Configurez la largeur de papier (32 ou 48 colonnes)","Testez l'impression depuis les réglages","Les étiquettes peuvent être imprimées depuis la fiche produit"]}
+    {icon:"📊",title:"Tableau de bord (Dashboard)",desc:"Vue d'ensemble de l'activité du magasin.",steps:[
+      "Cliquez sur « Dashboard » dans la barre latérale gauche (1er élément, icône tableau de bord). C'est la page d'accueil du mode gestion.",
+      "En haut : le bandeau vert « Aujourd'hui » affiche en temps réel le nombre de ventes du jour, le CA du jour et le panier moyen.",
+      "En dessous : 4 cartes récapitulatives — CA total (Grand Total), Marge totale (si autorisé), Nombre de tickets, Alertes de stock.",
+      "Si des produits sont en rupture ou stock bas, un encadré orange « Alertes de stock » liste les variantes concernées.",
+      "En bas : le classement « Top 5 produits » affiche les articles les plus vendus avec la quantité et le CA généré."
+    ]},
+    {icon:"📦",title:"Gestion des produits",desc:"Ajouter, modifier, dupliquer et supprimer des produits.",steps:[
+      "Cliquez sur « Produits » dans la barre latérale gauche (2ème élément, icône colis).",
+      "La liste de tous vos produits s'affiche avec le nom, la catégorie, le prix et le nombre de variantes.",
+      "AJOUTER un produit : cliquez sur le bouton « + Nouveau produit » en haut à droite.",
+      "  • Remplissez les champs : Nom, SKU (référence), Catégorie, Prix de vente TTC (ou HT selon votre réglage), Prix d'achat (coût), Taux de TVA.",
+      "  • Pour ajouter une variante : dans la section « Variantes », cliquez « + Ajouter une variante ». Renseignez la taille, la couleur, le code EAN et le stock initial.",
+      "  • Cliquez « Enregistrer » pour sauvegarder le produit.",
+      "MODIFIER un produit : cliquez sur la ligne du produit dans la liste. La fiche s'ouvre. Modifiez les champs souhaités puis cliquez « Enregistrer ».",
+      "DUPLIQUER un produit : dans la fiche produit, cliquez sur le bouton « Dupliquer ». Une copie est créée avec le suffixe « (copie) ».",
+      "IMPRIMER DES ÉTIQUETTES : dans la fiche produit, cliquez sur le bouton « Étiquettes » (entre « Enregistrer » et « Supprimer »). Sélectionnez le format et les variantes à imprimer.",
+      "SUPPRIMER un produit : dans la fiche produit, cliquez sur le bouton « Supprimer » (en rouge). Confirmez la suppression.",
+      "⚠️ La suppression est définitive. Pour les produits ayant un historique de vente, préférez les désactiver plutôt que les supprimer."
+    ]},
+    {icon:"📄",title:"Import CSV de produits",desc:"Importer des produits en masse depuis un fichier Excel/CSV.",steps:[
+      "Cliquez sur « Produits » dans la barre latérale gauche, puis sur le bouton « Importer CSV » en haut de l'écran.",
+      "Cliquez sur « Choisir un fichier » et sélectionnez votre fichier .csv (séparateur virgule ou point-virgule).",
+      "L'aperçu des colonnes détectées s'affiche. Pour chaque colonne de votre fichier, sélectionnez le champ CaissePro correspondant dans le menu déroulant :",
+      "  • Colonnes disponibles : Nom, SKU, Prix de vente, Prix d'achat, Catégorie, TVA, Taille, Couleur, EAN, Stock.",
+      "Si vos colonnes portent des noms standard (name, price, sku, etc.), le mapping est automatique.",
+      "Vérifiez l'aperçu des premières lignes en bas de l'écran. Les données doivent correspondre aux bons champs.",
+      "Cliquez « Importer » pour lancer l'import. Une barre de progression s'affiche.",
+      "À la fin, un résumé indique le nombre de produits créés et les éventuelles erreurs."
+    ]},
+    {icon:"📈",title:"Statistiques de vente",desc:"Analyser le CA, les tendances et les performances.",steps:[
+      "Cliquez sur « Statistiques » dans la barre latérale gauche (4ème élément, icône graphique).",
+      "En haut : les indicateurs clés — CA total, nombre de ventes, panier moyen, marge totale.",
+      "Les onglets permettent de basculer entre différentes vues :",
+      "  • Vue par jour : graphique en barres du CA quotidien.",
+      "  • Meilleurs vendeurs : classement des vendeurs par CA généré.",
+      "  • Produits les plus vendus : classement par quantité vendue et CA.",
+      "  • Par catégorie : répartition du CA par catégorie de produit.",
+      "Tous les montants sont calculés à partir des tickets validés et signés (NF525)."
+    ]},
+    {icon:"↩️",title:"Retours & Avoirs",desc:"Consulter l'historique des retours et des avoirs émis.",steps:[
+      "Cliquez sur « Retours & Avoirs » dans la barre latérale gauche (5ème élément, icône flèche retour).",
+      "Deux onglets sont disponibles en haut : « Tickets » (liste des tickets avec retour) et « Avoirs » (liste des avoirs générés).",
+      "Pour chaque retour : vous voyez la date, le numéro de ticket d'origine, les articles retournés, le motif et le mode de remboursement.",
+      "Les avoirs affichent le code, le montant, la date de création et le statut (utilisé ou non).",
+      "⚠️ Les retours sont tracés de manière inaltérable (NF525). Un retour ne peut pas être supprimé."
+    ]},
+    {icon:"👥",title:"Gestion des clients",desc:"Base de données clients et programme de fidélité.",steps:[
+      "Cliquez sur « Clients » dans la barre latérale gauche (6ème élément, icône personnes).",
+      "La liste de tous les clients s'affiche avec nom, email, téléphone, points de fidélité et tier (Bronze/Silver/Gold).",
+      "AJOUTER un client : cliquez « + Nouveau client » en haut à droite. Renseignez le nom, l'email et le téléphone, puis « Créer ».",
+      "MODIFIER un client : cliquez sur le bouton « Modifier » (icône crayon) à droite de la ligne du client.",
+      "HISTORIQUE D'ACHATS : cliquez sur « Historique » à côté du client pour voir toutes ses ventes passées, les montants et les dates.",
+      "RGPD : cliquez sur « RGPD » pour exporter ou supprimer les données personnelles du client (conformité RGPD).",
+      "FIDÉLITÉ : les points sont attribués automatiquement à chaque achat. Les seuils des tiers sont configurables."
+    ]},
+    {icon:"👤",title:"Utilisateurs & rôles",desc:"Créer des comptes et gérer les permissions de l'équipe.",steps:[
+      "Cliquez sur « Utilisateurs » dans la barre latérale gauche (7ème élément, icône personne).",
+      "La liste de tous les utilisateurs s'affiche avec leur nom, rôle (Admin ou Caissier) et statut.",
+      "CRÉER un utilisateur : cliquez « + Nouvel utilisateur » en haut à droite.",
+      "  • Saisissez le nom, choisissez le rôle dans le menu déroulant (« Administrateur » ou « Caissier(e) »), et définissez un code PIN (mot de passe).",
+      "  • Cliquez « Créer » pour enregistrer. Le compte est immédiatement disponible sur tous les appareils.",
+      "MODIFIER un utilisateur : cliquez sur le bouton « Modifier » (icône engrenage) à droite de la ligne. Changez le nom, le rôle ou le PIN, puis « Enregistrer ».",
+      "  • Pour changer le PIN : saisissez le nouveau PIN dans le champ « CODE PIN ». Laissez vide pour ne pas le modifier.",
+      "SUPPRIMER un utilisateur : cliquez sur l'icône corbeille (🗑️) à droite. L'utilisateur est désactivé (pas supprimé, pour conserver l'historique).",
+      "⚠️ Les rôles déterminent les permissions : un « Caissier » n'a pas accès au Dashboard, un « Admin » a tous les droits."
+    ]},
+    {icon:"💶",title:"Taux de TVA",desc:"Gérer les taux de TVA appliqués aux produits.",steps:[
+      "Cliquez sur « Taux de TVA » dans la barre latérale gauche (8ème élément, icône pourcentage).",
+      "La liste des taux actifs s'affiche : libellé et pourcentage (ex : « Normal 20% », « Réduit 5,5% »).",
+      "MODIFIER un taux : cliquez « Modifier » à droite du taux. Changez le libellé ou le pourcentage, puis cliquez l'icône de sauvegarde (💾).",
+      "AJOUTER un taux : en bas de l'écran, remplissez « Libellé » (ex : « Super réduit ») et « Taux % » (ex : 2.1), puis cliquez « + Ajouter ».",
+      "SUPPRIMER un taux : cliquez l'icône corbeille à droite. Au moins un taux doit rester.",
+      "ℹ️ En bas de page : un rappel des taux légaux en France (20%, 10%, 5,5%, 2,1%) avec leur usage.",
+      "⚠️ Modifier un taux ne change pas la TVA des produits existants. Changez la TVA produit par produit dans leur fiche."
+    ]},
+    {icon:"🎁",title:"Cartes cadeaux",desc:"Créer et suivre les cartes cadeaux.",steps:[
+      "Cliquez sur « Cartes cadeaux » dans la barre latérale gauche (9ème élément, icône cadeau).",
+      "La liste de toutes les cartes s'affiche avec le code, le montant initial, le solde restant et le statut.",
+      "CRÉER une carte : cliquez « + Nouvelle carte cadeau ». Saisissez le montant et cliquez « Créer ». Un code unique est généré automatiquement.",
+      "UTILISER une carte : lors d'un paiement en mode caisse, choisissez « Fractionné », puis saisissez le code de la carte dans le champ dédié.",
+      "Le solde de la carte diminue du montant utilisé. Quand le solde atteint 0€, la carte est marquée comme épuisée."
+    ]},
+    {icon:"🏷️",title:"Promotions",desc:"Créer, activer et gérer les promotions.",steps:[
+      "Cliquez sur « Promotions » dans la barre latérale gauche (10ème élément, icône éclair).",
+      "La liste des promotions s'affiche. Les promos actives ont un badge vert, les inactives un badge gris.",
+      "CRÉER une promo : cliquez « + Nouvelle promotion » en haut à droite.",
+      "  • Choisissez le type : « Collection » (s'applique à une catégorie), « Quantité » (ex : 3 pour le prix de 2), ou « Code promo » (le client doit saisir un code).",
+      "  • Saisissez le nom, la valeur de la remise (en %), les dates de début et fin.",
+      "  • Pour « Collection » : sélectionnez la catégorie concernée.",
+      "  • Pour « Code promo » : définissez le code que le client devra donner (ex : SOLDES20).",
+      "  • Cliquez « Créer » pour enregistrer.",
+      "ACTIVER / DÉSACTIVER : cliquez sur le bouton toggle à droite de chaque promo pour l'activer ou la désactiver instantanément.",
+      "Les promos actives s'appliquent automatiquement en caisse si les conditions sont remplies."
+    ]},
+    {icon:"🚶",title:"Compteur d'entrées (footfall)",desc:"Suivre la fréquentation et le taux de conversion.",steps:[
+      "Cliquez sur « Entrées » dans la barre latérale gauche (11ème élément, icône activité).",
+      "En haut : le compteur d'entrées du jour avec le bouton « + Entrée » pour ajouter un visiteur.",
+      "En dessous : le taux de conversion du jour (nombre de tickets ÷ nombre d'entrées × 100).",
+      "Le tableau en bas liste l'historique jour par jour : date, nombre d'entrées, nombre de tickets et taux de conversion.",
+      "Le comptage peut aussi être fait depuis le mode caisse (même écran « Entrées »)."
+    ]},
+    {icon:"⚙️",title:"Paramètres complets",desc:"Configurer tous les aspects de la boutique.",steps:[
+      "Cliquez sur « Paramètres » dans la barre latérale gauche (12ème élément, icône engrenage).",
+      "Les onglets sont affichés en haut de l'écran. Cliquez sur un onglet pour accéder à sa section :",
+      "ONGLET « Général » : informations de la boutique — Nom, Adresse, Code postal, Ville, SIRET, N° TVA intracommunautaire, Téléphone, Message ticket de caisse. Remplissez chaque champ puis cliquez « Enregistrer ».",
+      "ONGLET « 💰 Prix HT/TTC » : choisissez si vous saisissez vos prix en HT ou en TTC. Le système calcule automatiquement l'autre valeur.",
+      "ONGLET « Commission » : configurez les commissions vendeurs (pourcentage sur les ventes).",
+      "ONGLET « Magasins » : si vous avez plusieurs points de vente, ajoutez-les ici avec leur nom et adresse.",
+      "ONGLET « 🖨️ Imprimante » : connectez votre imprimante thermique (bouton « Connecter l'imprimante »), choisissez la largeur papier (32 ou 48 colonnes), testez l'impression. En dessous : configuration du format d'étiquettes code-barres (50×30mm, 40×25mm, etc.).",
+      "ONGLET « 🧾 Ticket » : personnalisez le ticket de caisse — ajoutez un logo (collez l'URL de l'image), modifiez le texte d'en-tête et de pied de page, activez/désactivez l'affichage de la TVA détaillée, du vendeur, du numéro de ticket.",
+      "ONGLET « 📺 Écran 2 » : personnalisez l'écran client — couleur de fond, couleur du texte, URL du logo, message d'accueil affiché quand le panier est vide.",
+      "ONGLET « 🏷️ Icônes catégories » : pour chaque catégorie de produit, choisissez un emoji qui sera affiché sur les cartes produits dans la grille de vente en caisse. Cliquez sur le champ emoji à côté de la catégorie et saisissez l'emoji souhaité.",
+      "ONGLET « Retours » : configurez la politique de retour — délai maximum (en jours), motifs autorisés, modes de remboursement disponibles (avoir, espèces, carte, échange).",
+      "ONGLET « 📏 Ordre tailles » : réorganisez l'ordre d'affichage des tailles dans les fiches produits et dans la caisse. Modifiez le numéro de rang de chaque taille (les tailles sont triées par rang croissant : XS=1, S=2, M=3, etc.). Les nouvelles tailles de vos produits sont importées automatiquement.",
+      "ONGLET « Thème » : choisissez les couleurs de l'interface (couleur principale, couleur d'accent).",
+      "ONGLET « Pointages » : historique des pointages IN/OUT de tous les utilisateurs avec date et heure.",
+      "ONGLET « Historique prix » : journal de toutes les modifications de prix sur vos produits (ancien prix → nouveau prix, date, utilisateur).",
+      "⚠️ Après chaque modification, cliquez toujours sur « Enregistrer » pour sauvegarder."
+    ]},
+    {icon:"📦",title:"Gestion du stock",desc:"Suivre les niveaux de stock et gérer les alertes.",steps:[
+      "Cliquez sur « Stock » dans la barre latérale gauche (3ème élément, icône grille).",
+      "La liste de tous les produits s'affiche avec le stock actuel de chaque variante (taille/couleur).",
+      "Les variantes en rupture (stock = 0) sont surlignées en rouge. Les variantes en stock bas sont en orange.",
+      "AJUSTER un stock : cliquez sur le produit, modifiez la quantité de la variante et enregistrez.",
+      "RÉCEPTION de marchandise : utilisez le bouton « Réception » pour ajouter du stock (livraison fournisseur).",
+      "Les alertes de stock apparaissent aussi sur le Dashboard (encadré orange) et dans le badge rouge sur l'icône « Stock » en mode caisse."
+    ]},
+    {icon:"🛡️",title:"Fiscal NF525",desc:"Conformité fiscale, clôtures Z, exports.",steps:[
+      "Cliquez sur « Fiscal NF525 » dans la barre latérale gauche (13ème élément, icône bouclier).",
+      "Plusieurs onglets sont disponibles en haut :",
+      "  • « Clôtures » : liste de toutes les clôtures Z effectuées. Chaque clôture est signée numériquement et horodatée.",
+      "  • « Vérification chaîne » : cliquez « Vérifier la chaîne » pour contrôler l'intégrité de toute la chaîne de signatures. Un statut vert = tout est conforme.",
+      "  • « Export FEC » : cliquez « Générer le FEC » pour télécharger le Fichier des Écritures Comptables au format réglementaire. Transmettez-le à votre comptable.",
+      "  • « Archive » : cliquez « Télécharger l'archive » pour obtenir un fichier JSON complet de toutes les données fiscales.",
+      "  • « Compteur » : affiche le numéro du dernier ticket et le Grand Total cumulé.",
+      "  • « TVA » : résumé de la TVA collectée par taux, utile pour les déclarations.",
+      "⚠️ Toutes ces données sont inaltérables. Aucune modification n'est possible après signature. C'est la garantie NF525."
+    ]},
+    {icon:"📋",title:"Journal d'audit",desc:"Traçabilité complète de toutes les actions.",steps:[
+      "Cliquez sur « Journal d'audit » dans la barre latérale gauche (14ème élément, icône activité).",
+      "Le journal liste toutes les actions effectuées sur le système : ventes, annulations, modifications de produits, connexions, changements de prix, etc.",
+      "Chaque entrée affiche : la date/heure, l'utilisateur, le type d'action, le détail et la référence.",
+      "FILTRER : utilisez les filtres en haut pour afficher uniquement un utilisateur ou un type d'action spécifique.",
+      "Onglet « JET » (Journal des Événements Techniques) : événements système (connexions, erreurs, synchronisations).",
+      "Onglet « Pointages » : historique des IN/OUT de tous les utilisateurs.",
+      "Onglet « Historique prix » : toutes les modifications de prix avec ancien/nouveau prix.",
+      "⚠️ Le journal d'audit est inaltérable (NF525). Il constitue une preuve en cas de contrôle fiscal."
+    ]},
+    {icon:"🔄",title:"Basculer vers le mode Caisse",desc:"Passer du Dashboard au mode Caisse et inversement.",steps:[
+      "Pour quitter le Dashboard et aller en mode Caisse : cliquez sur « Déconnexion » en bas de la barre latérale gauche (bouton rouge).",
+      "Sur l'écran de connexion, sélectionnez votre profil et choisissez « Mode Caisse » ou « Mode Dashboard ».",
+      "Le mode Caisse est destiné aux opérations quotidiennes (encaissements, retours, etc.).",
+      "Le mode Dashboard est destiné à la gestion (produits, stats, paramètres, utilisateurs, fiscal).",
+      "⚠️ Seuls les utilisateurs avec le rôle « Admin » peuvent accéder au mode Dashboard."
+    ]}
   ];
   return(<div style={{height:"100%",overflowY:"auto",padding:20,background:C.bg}}>
     <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:20}}>
       <div style={{width:44,height:44,borderRadius:14,background:`linear-gradient(135deg,${C.primary},${C.gradientB})`,display:"flex",alignItems:"center",justifyContent:"center"}}>
         <HelpCircle size={22} color="#fff"/></div>
       <div><h2 style={{fontSize:22,fontWeight:800,margin:0}}>Aide Dashboard</h2>
-        <p style={{fontSize:12,color:C.textMuted,margin:0}}>Guide complet de toutes les fonctionnalités du mode gestion</p></div></div>
-    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(340px,1fr))",gap:12}}>
-      {sections.map(s=>(<div key={s.title} style={{background:C.surface,borderRadius:16,padding:18,border:`1.5px solid ${C.border}`,boxShadow:`0 1px 4px ${C.shadow}`}}>
-        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}>
-          <span style={{fontSize:24}}>{s.icon}</span>
-          <div><div style={{fontSize:14,fontWeight:700}}>{s.title}</div>
-            <div style={{fontSize:11,color:C.textMuted}}>{s.desc}</div></div></div>
-        <div style={{display:"flex",flexDirection:"column",gap:4}}>
-          {s.steps.map((step,i)=>(<div key={i} style={{display:"flex",alignItems:"start",gap:8,padding:"4px 0",fontSize:11,color:C.text}}>
-            <span style={{minWidth:18,height:18,borderRadius:9,background:`${C.primary}15`,color:C.primary,fontSize:10,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{i+1}</span>
-            <span>{step}</span></div>))}</div></div>))}</div></div>);
+        <p style={{fontSize:12,color:C.textMuted,margin:0}}>Guide complet — cliquez sur une section pour voir les instructions détaillées</p></div></div>
+    <div style={{display:"flex",flexDirection:"column",gap:8}}>
+      {sections.map((s,idx)=>(<div key={s.title} style={{background:C.surface,borderRadius:16,border:`1.5px solid ${openIdx===idx?C.primary:C.border}`,boxShadow:`0 1px 4px ${C.shadow}`,overflow:"hidden",transition:"all 0.2s"}}>
+        <button onClick={()=>setOpenIdx(openIdx===idx?null:idx)} style={{width:"100%",display:"flex",alignItems:"center",gap:12,padding:"14px 18px",background:"transparent",border:"none",cursor:"pointer",fontFamily:"inherit",textAlign:"left"}}>
+          <span style={{fontSize:26}}>{s.icon}</span>
+          <div style={{flex:1}}><div style={{fontSize:14,fontWeight:700,color:C.text}}>{s.title}</div>
+            <div style={{fontSize:11,color:C.textMuted}}>{s.desc}</div></div>
+          <ChevronDown size={18} color={C.textMuted} style={{transform:openIdx===idx?"rotate(180deg)":"rotate(0deg)",transition:"transform 0.2s"}}/></button>
+        {openIdx===idx&&<div style={{padding:"0 18px 16px 18px",borderTop:`1px solid ${C.border}`}}>
+          <div style={{display:"flex",flexDirection:"column",gap:6,paddingTop:12}}>
+            {s.steps.map((step,i)=>(<div key={i} style={{display:"flex",alignItems:"start",gap:10,fontSize:12,color:C.text,lineHeight:1.5}}>
+              {!step.startsWith("  •")&&!step.startsWith("⚠️")&&!step.startsWith("ℹ️")?<span style={{minWidth:22,height:22,borderRadius:11,background:`${C.primary}15`,color:C.primary,fontSize:11,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:1}}>{i+1}</span>
+              :<span style={{minWidth:22}}/>}
+              <span style={{fontWeight:step.startsWith("⚠️")||step.startsWith("ℹ️")?600:step.startsWith("ONGLET")||step.startsWith("AJOUTER")||step.startsWith("MODIFIER")||step.startsWith("CRÉER")||step.startsWith("SUPPRIMER")||step.startsWith("DUPLIQUER")||step.startsWith("IMPRIMER")||step.startsWith("ACTIVER")||step.startsWith("HISTORIQUE")||step.startsWith("RGPD")||step.startsWith("FILTRER")||step.startsWith("RÉCEPTION")||step.startsWith("AJUSTER")||step.startsWith("UTILISER")?600:400,color:step.startsWith("⚠️")?C.warn:step.startsWith("ℹ️")?C.info:step.startsWith("  •")?C.textMuted:C.text}}>{step}</span></div>))}</div></div>}
+      </div>))}</div></div>);
 }
 
 function CashierNav({active,onNav}){
