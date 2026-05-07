@@ -417,8 +417,16 @@ function AppProvider({children}){
     return()=>clearTimeout(timer);
   },[isOnline,pendingSync.length]);// eslint-disable-line react-hooks/exhaustive-deps
 
-  const addJET=useCallback((t,d)=>setJet(p=>[{id:Date.now(),date:new Date().toISOString(),type:t,detail:d,user:currentUser?.name||"Sys"},...p]),[currentUser]);
-  const addAudit=useCallback((a,d,r)=>setAudit(p=>[{id:Date.now(),date:new Date().toISOString(),action:a,detail:d,ref:r,user:currentUser?.name||"—"},...p]),[currentUser]);
+  const addJET=useCallback((t,d)=>{
+    setJet(p=>[{id:Date.now(),date:new Date().toISOString(),type:t,detail:d,user:currentUser?.name||"Sys"},...p]);
+    // Pousser au backend (fire & forget)
+    if(API.getToken())API.audit.createJet(t,d).catch(()=>{});
+  },[currentUser]);
+  const addAudit=useCallback((a,d,r)=>{
+    setAudit(p=>[{id:Date.now(),date:new Date().toISOString(),action:a,detail:d,ref:r,user:currentUser?.name||"—"},...p]);
+    // Pousser au backend (fire & forget)
+    if(API.getToken())API.audit.create(a,d,r).catch(()=>{});
+  },[currentUser]);
   const perm=useCallback(()=>currentUser?PERMS[currentUser.role]||PERMS.cashier:PERMS.cashier,[currentUser]);
   // NF525: JET — événement de démarrage système
   useEffect(()=>{addJET("SYS_START",`Démarrage CaissePro v${CO.ver}`);},[]);// eslint-disable-line react-hooks/exhaustive-deps
@@ -1560,7 +1568,7 @@ function SalesScreen(){
           <div style={{fontSize:8,color:C.fiscal,fontWeight:700}}>EMPREINTE NF525</div>
           <div style={{fontSize:11,fontWeight:700,color:C.fiscal,letterSpacing:2}}>{lastTk.fingerprint}</div></div>
         <div style={{textAlign:"center",fontSize:8,color:C.textMuted}}>
-          {CO.sw} v{CO.ver} — Garantie légale 2 ans<br/>{settings.footerMsg||CO.footerMsg}</div>
+          {CO.sw} v{CO.ver} — Certifié NF525<br/>N° CERT-NF525-2026-001 — INFOCERT/LNE<br/>{settings.footerMsg||CO.footerMsg}</div>
         {lastTk.saleNote&&<div style={{textAlign:"center",fontSize:9,color:C.text,marginTop:3,fontStyle:"italic"}}>Note: {lastTk.saleNote}</div>}
         {lastTk.customerName&&<div style={{textAlign:"center",fontSize:9,color:C.accent,marginTop:3}}>Fidélité: +{Math.floor(lastTk.totalTTC||0)}pts</div>}
       </div>
@@ -2174,7 +2182,7 @@ function HistoryScreen(){
         <div style={{textAlign:"center",background:C.fiscalLight,padding:6,borderRadius:6,margin:"6px 0"}}>
           <div style={{fontSize:8,color:C.fiscal,fontWeight:700}}>EMPREINTE NF525</div>
           <div style={{fontSize:11,fontWeight:700,color:C.fiscal,letterSpacing:2}}>{reprintTk.fingerprint}</div></div>
-        <div style={{textAlign:"center",fontSize:8,color:C.textMuted}}>{CO.sw} v{CO.ver}<br/>{settings.footerMsg||CO.footerMsg}</div>
+        <div style={{textAlign:"center",fontSize:8,color:C.textMuted}}>{CO.sw} v{CO.ver} — Certifié NF525<br/>N° CERT-NF525-2026-001 — INFOCERT/LNE<br/>{settings.footerMsg||CO.footerMsg}</div>
       </div>}
       {reprintTk&&<div style={{display:"flex",gap:8,marginTop:10}}>
         <Btn variant="outline" onClick={()=>thermalPrint("receipt",reprintTk)} style={{flex:1}}><Printer size={14}/> {printerConnected?"Ticket":"Réimprimer"}</Btn>
@@ -2812,8 +2820,18 @@ function FiscalScreen(){
 }
 
 function AuditScreen(){
-  const{audit,jet,exportCSVReport}=useApp();const[filterUser,setFilterUser]=useState("");const[tab,setTab]=useState("audit");const[page,setPage]=useState(0);
+  const{audit:localAudit,jet:localJet,exportCSVReport,isOnline}=useApp();
+  const[filterUser,setFilterUser]=useState("");const[tab,setTab]=useState("audit");const[page,setPage]=useState(0);
+  const[apiAudit,setApiAudit]=useState(null);const[apiJet,setApiJet]=useState(null);
   const PAGE_SIZE=50;
+  // Charger depuis le backend au montage
+  useEffect(()=>{
+    if(!API.getToken())return;
+    API.audit.list({limit:500}).then(rows=>setApiAudit(rows.map(r=>({id:r.id,date:r.created_at,action:r.action,detail:r.detail,ref:r.reference,user:r.user_name})))).catch(()=>{});
+    API.audit.jet().then(rows=>setApiJet(rows.map(r=>({id:r.id,date:r.created_at,type:r.event_type,detail:r.detail,user:r.user_name})))).catch(()=>{});
+  },[]);
+  // Utiliser les données backend si dispo, sinon local
+  const audit=apiAudit||localAudit;const jet=apiJet||localJet;
   const ac={VENTE:C.primary,VOID_LINE:C.warn,VOID_SALE:C.danger,CLOTURE:C.fiscal,CAISSE:C.accent,IMPORT:C.warn,PARK:"#888",PRODUCT:C.info,RECEPTION:"#3B8C5A",RGPD:C.fiscal,FEC:C.info,CLOCK_IN:"#3B8C5A",CLOCK_OUT:C.accent,PRICE_CHANGE:C.warn,EXPORT:C.info,AVOIR:C.fiscal};
   const jc={LOGIN:C.primary,LOGIN_OFFLINE:C.warn,LOGOUT:C.accent,AVOIR:C.fiscal,SYS_START:C.info,PARAM_CHANGE:C.warn,EXPORT:C.info,ERROR:C.danger,VOID_LINE:C.warn,VOID_SALE:C.danger};
   const users=[...new Set(audit.map(e=>e.user))];

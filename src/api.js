@@ -116,7 +116,9 @@ export const fiscal = {
 // ══ Audit ══
 export const audit = {
   list: (params) => api('/api/audit?' + new URLSearchParams(params || {})),
+  create: (action, detail, reference) => api('/api/audit', { method: 'POST', body: JSON.stringify({ action, detail, reference }) }),
   jet: () => api('/api/audit/jet'),
+  createJet: (eventType, detail) => api('/api/audit/jet', { method: 'POST', body: JSON.stringify({ eventType, detail }) }),
   clock: () => api('/api/audit/clock'),
   priceHistory: () => api('/api/audit/price-history'),
 };
