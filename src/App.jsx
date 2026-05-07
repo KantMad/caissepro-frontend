@@ -1275,7 +1275,7 @@ function SalesScreen(){
     gDisc,gDiscType,setCartGD,promoCode,setPromoCode,calcPromoDiscount,isOnline,findByEAN,offlineMode,
     parked,parkCart,restoreCart,customers,addCustomer,selCust,setSelCust,perm,notify,
     stockAlerts,activePromos,avoirPayment,setAvoirPayment,getLoyaltyTier,tickets,saleNote,setSaleNote,favorites,toggleFavorite,getLastPriceForCustomer,settings,
-    printerConnected,thermalPrint,pendingSync,clearPendingSync,users,currentUser}=useApp();
+    printerConnected,thermalPrint,pendingSync,clearPendingSync,users,currentUser,avoirs,addAudit,addJET}=useApp();
   const[search,setSearch]=useState("");const[cat,setCat]=useState("Tous");const[vm,setVm]=useState(null);const[selSeller,setSelSeller]=useState(null);const[detaxe,setDetaxe]=useState(false);
   const[dm,setDm]=useState(null);const[dv,setDv]=useState("");const[gm,setGm]=useState(false);const[gv,setGv]=useState("");const[gtp,setGtp]=useState("percentage");
   const[lastTk,setLastTk]=useState(null);const[tkModal,setTkModal]=useState(false);const[busy,setBusy]=useState(false);
@@ -1283,6 +1283,8 @@ function SalesScreen(){
   const[cashNumpadModal,setCashNumpadModal]=useState(false);const[numpadValue,setNumpadValue]=useState("");
   const[custModal,setCustModal]=useState(false);const[parkedModal,setParkedModal]=useState(false);
   const[customModal,setCustomModal]=useState(false);const[customName,setCustomName]=useState("");const[customPrice,setCustomPrice]=useState("");
+  const[payMethodModal,setPayMethodModal]=useState(false);
+  const[retoucheModal,setRetoucheModal]=useState(false);const[retForm,setRetForm]=useState({client:"",phone:"",date:new Date().toISOString().split("T")[0],notes:"",items:[{desc:"",price:""}]});
   const[newCustModal,setNewCustModal]=useState(false);const[ncF,setNcF]=useState("");const[ncL,setNcL]=useState("");const[ncE,setNcE]=useState("");const[ncP,setNcP]=useState("");
   const[codeInput,setCodeInput]=useState("");
   const[confirmVoid,setConfirmVoid]=useState(false);const[voidReason,setVoidReason]=useState("");
@@ -1393,7 +1395,8 @@ function SalesScreen(){
           <Pause size={15}/>{parked.length>0&&<span style={{position:"absolute",top:-5,right:-5,width:18,height:18,borderRadius:9,
             background:C.danger,color:"#fff",fontSize:9,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",
             boxShadow:"0 2px 6px rgba(209,69,59,0.4)"}}>{parked.length}</span>}</Btn>
-        <Btn variant="outline" onClick={()=>setCustomModal(true)} style={{height:42,padding:"0 14px",borderRadius:14}} title="Article divers"><Edit size={15}/></Btn>
+        <Btn variant="outline" onClick={()=>setParkedModal(true)} style={{height:42,padding:"0 14px",borderRadius:14,position:"relative"}} title="Paniers en attente">
+          <Play size={15}/>{parked.length>0&&<span style={{position:"absolute",top:-5,right:-5,width:18,height:18,borderRadius:9,background:C.danger,color:"#fff",fontSize:9,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center"}}>{parked.length}</span>}</Btn>
       </div>
       {activePromos.length>0&&<div style={{background:`linear-gradient(135deg,${C.warnLight},#FFFBE8)`,borderRadius:10,padding:"6px 12px",marginBottom:8,
         display:"flex",alignItems:"center",gap:8,fontSize:11,border:`1px solid ${C.warn}18`}}>
@@ -1450,9 +1453,19 @@ function SalesScreen(){
           <div style={{width:40,height:40,borderRadius:12,background:`linear-gradient(135deg,${C.primary},${C.gradientB})`,display:"flex",alignItems:"center",justifyContent:"center",
             boxShadow:`0 4px 14px ${C.primary}25`}}><ShoppingCart size={19} color="#fff"/></div>
           <div style={{flex:1}}><div style={{fontSize:16,fontWeight:800,letterSpacing:"-0.3px"}}>Panier</div>
-            <div style={{fontSize:10,color:C.textMuted}}>{cart.length} article{cart.length>1?"s":""} — {cart.reduce((s,i)=>s+i.quantity,0)} pièce{cart.reduce((s,i)=>s+i.quantity,0)>1?"s":""}</div></div>
-          <Btn variant="ghost" onClick={parkCart} disabled={!cart.length} style={{padding:"6px 8px",borderRadius:8}} title="Mettre en attente"><Pause size={13}/></Btn>
+            <div style={{fontSize:10,color:C.textMuted}}>{cart.reduce((s,i)=>s+i.quantity,0)} pièce{cart.reduce((s,i)=>s+i.quantity,0)>1?"s":""}</div></div>
+          <Btn variant="outline" onClick={parkCart} disabled={!cart.length} style={{padding:"6px 10px",borderRadius:8,fontSize:9,fontWeight:700,gap:4,position:"relative"}} title="Mettre en attente"><Pause size={12}/> Attente
+            {parked.length>0&&<span style={{position:"absolute",top:-5,right:-5,width:16,height:16,borderRadius:8,background:C.danger,color:"#fff",fontSize:8,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center"}}>{parked.length}</span>}</Btn>
           {perm().canVoid&&<Btn variant="ghost" onClick={()=>{if(cart.length)setConfirmVoid(true);}} disabled={!cart.length} style={{padding:"6px 8px",color:C.danger,borderRadius:8}} title="Annuler"><XOctagon size={13}/></Btn>}
+        </div>
+
+        {/* Seller selection */}
+        <div style={{display:"flex",gap:4,marginBottom:6}}>
+          <select value={selSeller||""} onChange={e=>setSelSeller(e.target.value||null)} style={{flex:1,height:30,fontSize:10,padding:"4px 8px",borderRadius:10,border:`1px solid ${C.border}`,fontFamily:"inherit",background:C.surface,color:selSeller?C.text:C.textMuted}}>
+            <option value="">Vendeur: {currentUser?.name} (moi)</option>
+            {users.filter(u=>u.name!==currentUser?.name&&u.role!=="admin").map(u=>(<option key={u.id} value={u.name}>{u.name}</option>))}
+          </select>
+          <Input value={saleNote} onChange={e=>setSaleNote(e.target.value)} placeholder="Note…" style={{flex:1,height:30,fontSize:10,padding:"4px 10px",borderRadius:10}}/>
         </div>
 
         {/* Customer */}
@@ -1535,23 +1548,13 @@ function SalesScreen(){
         {detaxe&&<div style={{background:"#E8F5E9",borderRadius:8,padding:8,marginBottom:6,fontSize:10,color:"#2E7D32",border:"1px solid #A5D6A7"}}>
           Vente en détaxe — TVA à 0% — Réservé aux résidents hors UE (achat min. 100,01€)</div>}
 
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:5,marginBottom:5}}>
-          <Btn onClick={()=>quickPay("card")} disabled={!cart.length||busy} style={{height:46,borderRadius:12,background:`linear-gradient(135deg,${C.info},#5A92E8)`,padding:"0 10px",fontSize:12,gap:6,boxShadow:`0 3px 10px ${C.info}25`}}>
-            {busy?<span className="spin-loader"/>:<><CreditCard size={16}/> Carte</>}</Btn>
-          <Btn onClick={()=>{if(cart.length&&!busy){setNumpadValue("");setCashNumpadModal(true);}}} disabled={!cart.length||busy} style={{height:46,borderRadius:12,background:`linear-gradient(135deg,#2F9E55,${C.gradientB})`,padding:"0 10px",fontSize:12,gap:6,boxShadow:"0 3px 10px rgba(47,158,85,0.25)"}}>
-            {busy?<span className="spin-loader"/>:<><Banknote size={16}/> Espèces</>}</Btn></div>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:4,marginBottom:5}}>
-          <Btn onClick={()=>quickPay("giftcard")} disabled={!cart.length||busy} style={{height:38,borderRadius:10,background:`linear-gradient(135deg,${C.accent},#D4A574)`,padding:"0 6px",fontSize:10,gap:4}}><Gift size={13}/> Cadeau</Btn>
-          <Btn onClick={()=>quickPay("cheque")} disabled={!cart.length||busy} style={{height:38,borderRadius:10,background:"linear-gradient(135deg,#7B8794,#9FAAB6)",padding:"0 6px",fontSize:10,gap:4}}><FileText size={13}/> Chèque</Btn>
-          <Btn onClick={openPay} disabled={!cart.length||busy} style={{height:38,borderRadius:10,background:`linear-gradient(135deg,${C.fiscal},#8B6FC0)`,padding:"0 6px",fontSize:10,gap:4}}><Split size={13}/> Fractionné</Btn></div>
-        <div style={{display:"flex",gap:4,marginBottom:5}}>
-          <select value={selSeller||""} onChange={e=>setSelSeller(e.target.value||null)} style={{flex:1,height:30,fontSize:10,padding:"4px 8px",borderRadius:10,border:`1px solid ${C.border}`,fontFamily:"inherit",background:C.surface,color:selSeller?C.text:C.textMuted}}>
-            <option value="">Vendeur: {currentUser?.name} (moi)</option>
-            {users.filter(u=>u.name!==currentUser?.name&&u.role!=="admin").map(u=>(<option key={u.id} value={u.name}>{u.name}</option>))}
-          </select>
-          <Input value={saleNote} onChange={e=>setSaleNote(e.target.value)} placeholder="Note…" style={{flex:1,height:30,fontSize:10,padding:"4px 10px",borderRadius:10}}/>
+        <Btn onClick={()=>setPayMethodModal(true)} disabled={!cart.length||busy} style={{width:"100%",height:52,borderRadius:14,background:`linear-gradient(135deg,${C.primary},${C.gradientB})`,fontSize:14,gap:8,boxShadow:`0 4px 16px ${C.primary}30`,marginBottom:6,letterSpacing:"-0.3px"}}>
+          {busy?<span className="spin-loader"/>:<><Wallet size={18}/> Règlement — {totals.tTTC.toFixed(2)}€</>}</Btn>
+        <div style={{display:"flex",gap:4}}>
+          <Btn variant="outline" onClick={()=>setRetoucheModal(true)} style={{flex:1,height:30,fontSize:10,borderRadius:10,gap:4}}><Edit size={11}/> Retouche</Btn>
+          <Btn variant="outline" onClick={()=>setCustomModal(true)} style={{flex:1,height:30,fontSize:10,borderRadius:10,gap:4}}><Plus size={11}/> Divers</Btn>
+          <Btn variant="outline" onClick={clearCart} style={{flex:1,borderColor:`${C.danger}20`,color:C.danger,height:30,fontSize:10,borderRadius:10}}><RotateCcw size={10}/> Vider</Btn>
         </div>
-        <Btn variant="outline" onClick={clearCart} style={{width:"100%",borderColor:`${C.danger}20`,color:C.danger,height:30,fontSize:10,borderRadius:10}}><RotateCcw size={10}/> Vider le panier</Btn>
       </div>
     </div>
 
@@ -1766,6 +1769,111 @@ function SalesScreen(){
         style={{width:"100%",height:50,fontSize:15,borderRadius:14,background:`linear-gradient(135deg,#2F9E55,${C.gradientB})`,boxShadow:"0 4px 16px rgba(47,158,85,0.3)"}}>
         <Banknote size={18}/> Encaisser {totals.tTTC.toFixed(2)}€</Btn>
     </Modal>
+
+    {/* PAYMENT METHOD MODAL */}
+    <Modal open={payMethodModal} onClose={()=>setPayMethodModal(false)} title="Règlement" sub={`Total: ${totals.tTTC.toFixed(2)}€`}>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:10}}>
+        <button onClick={()=>{setPayMethodModal(false);quickPay("card");}} style={{padding:16,borderRadius:14,border:`2px solid ${C.info}25`,background:`${C.info}06`,cursor:"pointer",textAlign:"center",transition:"all 0.15s"}}
+          onMouseEnter={e=>e.currentTarget.style.borderColor=C.info} onMouseLeave={e=>e.currentTarget.style.borderColor=`${C.info}25`}>
+          <CreditCard size={24} color={C.info} style={{marginBottom:6}}/><div style={{fontSize:13,fontWeight:700,color:C.text}}>Carte bancaire</div><div style={{fontSize:10,color:C.textMuted}}>CB / Visa / Mastercard</div></button>
+        <button onClick={()=>{setPayMethodModal(false);setCardType("amex");quickPay("amex");}} style={{padding:16,borderRadius:14,border:`2px solid #006FCF25`,background:"#006FCF06",cursor:"pointer",textAlign:"center",transition:"all 0.15s"}}
+          onMouseEnter={e=>e.currentTarget.style.borderColor="#006FCF"} onMouseLeave={e=>e.currentTarget.style.borderColor="#006FCF25"}>
+          <CreditCard size={24} color="#006FCF" style={{marginBottom:6}}/><div style={{fontSize:13,fontWeight:700,color:C.text}}>American Express</div><div style={{fontSize:10,color:C.textMuted}}>AMEX</div></button>
+        <button onClick={()=>{setPayMethodModal(false);setNumpadValue("");setCashNumpadModal(true);}} style={{padding:16,borderRadius:14,border:`2px solid ${C.primary}25`,background:`${C.primary}06`,cursor:"pointer",textAlign:"center",transition:"all 0.15s"}}
+          onMouseEnter={e=>e.currentTarget.style.borderColor=C.primary} onMouseLeave={e=>e.currentTarget.style.borderColor=`${C.primary}25`}>
+          <Banknote size={24} color={C.primary} style={{marginBottom:6}}/><div style={{fontSize:13,fontWeight:700,color:C.text}}>Espèces</div><div style={{fontSize:10,color:C.textMuted}}>Avec rendu monnaie</div></button>
+        <button onClick={()=>{setPayMethodModal(false);quickPay("cheque");}} style={{padding:16,borderRadius:14,border:`2px solid #7B879425`,background:"#7B879406",cursor:"pointer",textAlign:"center",transition:"all 0.15s"}}
+          onMouseEnter={e=>e.currentTarget.style.borderColor="#7B8794"} onMouseLeave={e=>e.currentTarget.style.borderColor="#7B879425"}>
+          <FileText size={24} color="#7B8794" style={{marginBottom:6}}/><div style={{fontSize:13,fontWeight:700,color:C.text}}>Chèque</div><div style={{fontSize:10,color:C.textMuted}}>Paiement par chèque</div></button>
+        <button onClick={()=>{setPayMethodModal(false);quickPay("giftcard");}} style={{padding:16,borderRadius:14,border:`2px solid ${C.accent}25`,background:`${C.accent}06`,cursor:"pointer",textAlign:"center",transition:"all 0.15s"}}
+          onMouseEnter={e=>e.currentTarget.style.borderColor=C.accent} onMouseLeave={e=>e.currentTarget.style.borderColor=`${C.accent}25`}>
+          <Gift size={24} color={C.accent} style={{marginBottom:6}}/><div style={{fontSize:13,fontWeight:700,color:C.text}}>Carte cadeau</div><div style={{fontSize:10,color:C.textMuted}}>Paiement par carte cadeau</div></button>
+        {avoirs.filter(a=>!a.used&&a.remaining>0).length>0&&<button onClick={()=>{setPayMethodModal(false);const av=avoirs.filter(a=>!a.used&&a.remaining>0);
+          if(av.length){const amount=Math.min(av[0].remaining,totals.tTTC);setAvoirPayment(amount);notify(`Avoir ${av[0].code} appliqué: ${amount.toFixed(2)}€`);}}}
+          style={{padding:16,borderRadius:14,border:`2px solid ${C.fiscal}25`,background:`${C.fiscal}06`,cursor:"pointer",textAlign:"center",transition:"all 0.15s"}}
+          onMouseEnter={e=>e.currentTarget.style.borderColor=C.fiscal} onMouseLeave={e=>e.currentTarget.style.borderColor=`${C.fiscal}25`}>
+          <RotateCcw size={24} color={C.fiscal} style={{marginBottom:6}}/><div style={{fontSize:13,fontWeight:700,color:C.text}}>Avoir</div>
+          <div style={{fontSize:10,color:C.textMuted}}>{avoirs.filter(a=>!a.used&&a.remaining>0).length} avoir(s) dispo.</div></button>}
+      </div>
+      <div style={{borderTop:`1px solid ${C.border}`,paddingTop:10}}>
+        <button onClick={()=>{setPayMethodModal(false);openPay();}} style={{width:"100%",padding:14,borderRadius:14,border:`2px solid ${C.fiscal}25`,background:`${C.fiscal}06`,cursor:"pointer",textAlign:"center",transition:"all 0.15s",display:"flex",alignItems:"center",justifyContent:"center",gap:10}}
+          onMouseEnter={e=>e.currentTarget.style.borderColor=C.fiscal} onMouseLeave={e=>e.currentTarget.style.borderColor=`${C.fiscal}25`}>
+          <Split size={20} color={C.fiscal}/><div style={{textAlign:"left"}}><div style={{fontSize:13,fontWeight:700,color:C.text}}>Paiement fractionné</div>
+            <div style={{fontSize:10,color:C.textMuted}}>Répartir entre plusieurs moyens de paiement</div></div></button>
+      </div>
+    </Modal>
+
+    {/* RETOUCHE MODAL */}
+    <Modal open={retoucheModal} onClose={()=>setRetoucheModal(false)} title="Bon de retouche" wide>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
+        <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>NOM DU CLIENT</label>
+          <Input value={retForm.client} onChange={e=>setRetForm(f=>({...f,client:e.target.value}))} placeholder="Nom complet"/></div>
+        <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>TÉLÉPHONE</label>
+          <Input value={retForm.phone} onChange={e=>setRetForm(f=>({...f,phone:e.target.value}))} placeholder="06 XX XX XX XX"/></div>
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
+        <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>DATE DE RETRAIT</label>
+          <Input type="date" value={retForm.date} onChange={e=>setRetForm(f=>({...f,date:e.target.value}))}/></div>
+        <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>ASSOCIER UN CLIENT</label>
+          <select value="" onChange={e=>{const c=customers.find(x=>x.id===e.target.value);if(c)setRetForm(f=>({...f,client:`${c.firstName} ${c.lastName}`,phone:c.phone||""}));}}
+            style={{width:"100%",padding:10,borderRadius:10,border:`2px solid ${C.border}`,fontSize:12,fontFamily:"inherit"}}>
+            <option value="">— Sélectionner —</option>{customers.map(c=>(<option key={c.id} value={c.id}>{c.firstName} {c.lastName}</option>))}</select></div>
+      </div>
+      <div style={{marginBottom:12}}>
+        <label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>TRAVAUX DE RETOUCHE</label>
+        {retForm.items.map((item,idx)=>(<div key={idx} style={{display:"flex",gap:6,marginBottom:6}}>
+          <Input value={item.desc} onChange={e=>{const items=[...retForm.items];items[idx].desc=e.target.value;setRetForm(f=>({...f,items}));}} placeholder="Description (ex: Ourlet pantalon)" style={{flex:2}}/>
+          <Input type="number" step="0.01" value={item.price} onChange={e=>{const items=[...retForm.items];items[idx].price=e.target.value;setRetForm(f=>({...f,items}));}} placeholder="Prix €" style={{flex:1}}/>
+          {retForm.items.length>1&&<Btn variant="ghost" onClick={()=>{const items=retForm.items.filter((_,i)=>i!==idx);setRetForm(f=>({...f,items}));}} style={{padding:"4px 8px",color:C.danger}}><Trash2 size={12}/></Btn>}
+        </div>))}
+        <Btn variant="outline" onClick={()=>setRetForm(f=>({...f,items:[...f.items,{desc:"",price:""}]}))} style={{fontSize:10,padding:"4px 12px"}}><Plus size={11}/> Ajouter une ligne</Btn>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:4,marginTop:8}}>
+          {[{n:"Ourlet pantalon",p:15},{n:"Ourlet manches",p:10},{n:"Cintrer veste",p:20},{n:"Raccourcir robe",p:18},{n:"Changer fermeture",p:25},{n:"Reprendre taille",p:15},{n:"Doublure",p:30},{n:"Ajustement épaules",p:22}].map(sv=>(
+            <button key={sv.n} onClick={()=>setRetForm(f=>({...f,items:[...f.items.filter(i=>i.desc||i.price),{desc:sv.n,price:String(sv.p)}]}))}
+              style={{padding:"6px 4px",borderRadius:8,border:`1px solid ${C.border}`,background:C.surfaceAlt,cursor:"pointer",fontSize:9,fontWeight:600,textAlign:"center",transition:"all 0.1s"}}
+              onMouseEnter={e=>{e.currentTarget.style.borderColor=C.primary;e.currentTarget.style.background=C.primaryLight;}} onMouseLeave={e=>{e.currentTarget.style.borderColor=C.border;e.currentTarget.style.background=C.surfaceAlt;}}>
+              {sv.n}<br/><span style={{color:C.primary,fontWeight:700}}>{sv.p}€</span></button>))}</div>
+      </div>
+      <div style={{marginBottom:12}}><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>NOTES</label>
+        <textarea value={retForm.notes} onChange={e=>setRetForm(f=>({...f,notes:e.target.value}))} placeholder="Instructions particulières, couleur fil, remarques…"
+          style={{width:"100%",minHeight:60,padding:10,borderRadius:10,border:`2px solid ${C.border}`,fontSize:12,fontFamily:"inherit",resize:"vertical"}}/></div>
+      {(()=>{const retTotal=retForm.items.reduce((s,i)=>s+(parseFloat(i.price)||0),0);return retTotal>0&&
+        <div style={{display:"flex",justifyContent:"space-between",padding:"10px 14px",borderRadius:10,background:C.primaryLight,marginBottom:12}}>
+          <span style={{fontSize:13,fontWeight:700}}>Total retouche</span>
+          <span style={{fontSize:18,fontWeight:900,color:C.primary}}>{retTotal.toFixed(2)}€</span></div>;})()}
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+        <Btn variant="outline" onClick={()=>{
+          const retTotal=retForm.items.reduce((s,i)=>s+(parseFloat(i.price)||0),0);
+          retForm.items.filter(i=>i.desc&&i.price).forEach(i=>{addCustomItem(`Retouche: ${i.desc}`,parseFloat(i.price)/1.20,0.20);});
+          setRetoucheModal(false);notify(`Retouche ajoutée au panier (${retTotal.toFixed(2)}€)`);
+        }} disabled={!retForm.items.some(i=>i.desc&&i.price)}>
+          <ShoppingCart size={14}/> Ajouter au panier</Btn>
+        <Btn onClick={()=>{
+          const retTotal=retForm.items.reduce((s,i)=>s+(parseFloat(i.price)||0),0);
+          const bonNum=`RET-${Date.now().toString(36).toUpperCase()}`;
+          const bon={num:bonNum,client:retForm.client,phone:retForm.phone,dateRetrait:retForm.date,items:retForm.items.filter(i=>i.desc),notes:retForm.notes,total:retTotal,date:new Date().toISOString(),seller:selSeller||currentUser?.name};
+          // Add items to cart
+          retForm.items.filter(i=>i.desc&&i.price).forEach(i=>{addCustomItem(`Retouche: ${i.desc}`,parseFloat(i.price)/1.20,0.20);});
+          // Print bon
+          const w=window.open("","_blank","width=400,height=600");if(w){w.document.write(`<html><head><title>Bon de retouche ${bonNum}</title><style>body{font-family:'Courier New',monospace;font-size:12px;padding:10px;max-width:300px;margin:0 auto;}h2{text-align:center;font-size:14px;margin:4px 0;}hr{border:none;border-top:1px dashed #333;margin:6px 0;}.row{display:flex;justify-content:space-between;}.center{text-align:center;}</style></head><body>`+
+            `<h2>${settings.name||"CaissePro"}</h2><div class="center">${settings.address||""} ${settings.postalCode||""} ${settings.city||""}</div><hr>`+
+            `<h2>BON DE RETOUCHE</h2><div class="center">N° ${bonNum}</div><hr>`+
+            `<div class="row"><span>Client:</span><strong>${bon.client||"—"}</strong></div>`+
+            `<div class="row"><span>Tél:</span><span>${bon.phone||"—"}</span></div>`+
+            `<div class="row"><span>Date retrait:</span><span>${new Date(bon.dateRetrait).toLocaleDateString("fr-FR")}</span></div><hr>`+
+            bon.items.filter(i=>i.desc).map(i=>`<div class="row"><span>${i.desc}</span><strong>${parseFloat(i.price||0).toFixed(2)}€</strong></div>`).join("")+
+            `<hr><div class="row"><strong>TOTAL</strong><strong>${retTotal.toFixed(2)}€ TTC</strong></div><hr>`+
+            (bon.notes?`<div><strong>Notes:</strong> ${bon.notes}</div><hr>`:"")+
+            `<div class="center" style="font-size:10px;">Vendeur: ${bon.seller}<br>${new Date().toLocaleString("fr-FR")}<br>${settings.name||"CaissePro"} — ${settings.siret||""}</div>`+
+            `</body></html>`);w.document.close();setTimeout(()=>{w.print();},300);}
+          setRetoucheModal(false);setRetForm({client:"",phone:"",date:new Date().toISOString().split("T")[0],notes:"",items:[{desc:"",price:""}]});
+          notify(`Bon de retouche ${bonNum} créé et ajouté au panier`);
+          addAudit("RETOUCHE",`Bon ${bonNum} — ${bon.client} — ${retTotal.toFixed(2)}€`);
+        }} disabled={!retForm.items.some(i=>i.desc&&i.price)||!retForm.client}
+          style={{background:`linear-gradient(135deg,${C.primary},${C.gradientB})`}}>
+          <Printer size={14}/> Imprimer le bon + panier</Btn>
+      </div>
+    </Modal>
   </div>);
 }
 
@@ -1774,6 +1882,13 @@ function StatsScreen(){
   const{tickets,products,avoirs,bestSellers:allBestSellers,salesBySeller,salesByVariant,caEvolution,salesByCollection,exportCSVReport,perm,commissions,salesGoals,setSellerGoal}=useApp();
   const[tab,setTab]=useState("ca");
   const[dateFrom,setDateFrom]=useState("");const[dateTo,setDateTo]=useState("");const[catFilter,setCatFilter]=useState("");
+  const[apiSummary,setApiSummary]=useState(null);const[apiBySeller,setApiBySeller]=useState(null);const[apiByDay,setApiByDay]=useState(null);const[apiBestSellers,setApiBestSellers]=useState(null);
+  useEffect(()=>{
+    API.sales.stats().then(d=>setApiSummary(d)).catch(()=>{});
+    API.sales.bestSellers().then(d=>setApiBestSellers(Array.isArray(d)?d:[])).catch(()=>{});
+    API.sales.bySeller().then(d=>setApiBySeller(Array.isArray(d)?d:[])).catch(()=>{});
+    API.sales.byDay().then(d=>setApiByDay(Array.isArray(d)?d:[])).catch(()=>{});
+  },[]);
   const setPreset=(p)=>{const now=new Date();const fmt=d=>d.toISOString().split("T")[0];
     if(p==="today"){setDateFrom(fmt(now));setDateTo(fmt(now));}
     else if(p==="week"){const d=new Date(now);d.setDate(d.getDate()-d.getDay()+1);setDateFrom(fmt(d));setDateTo(fmt(now));}
@@ -1853,7 +1968,7 @@ function StatsScreen(){
           background:tab===t.id?C.primary:"transparent",color:tab===t.id?"#fff":C.text,fontSize:11,fontWeight:600,cursor:"pointer"}}>{t.l}</button>))}</div>
 
     {tab==="ca"&&<div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`}}>
-      <ResponsiveContainer width="100%" height={280}><LineChart data={fCAEvol}>
+      <ResponsiveContainer width="100%" height={280}><LineChart data={(!dateFrom&&!dateTo&&apiByDay&&apiByDay.length)?apiByDay.map(d=>({date:new Date(d.day||d.date).toLocaleDateString("fr-FR",{day:"2-digit",month:"short"}),ca:parseFloat(d.total||d.ca)||0})).reverse():fCAEvol}>
         <CartesianGrid strokeDasharray="3 3" stroke={C.border}/><XAxis dataKey="date" tick={{fontSize:10}}/><YAxis tick={{fontSize:10}}/>
         <Tooltip formatter={v=>`${v.toFixed(2)}€`}/><Line type="monotone" dataKey="ca" stroke={C.primary} strokeWidth={2} dot={{r:3}}/></LineChart></ResponsiveContainer></div>}
 
@@ -2928,6 +3043,7 @@ function CustomersScreen(){
   const[sel,setSel]=useState(null);const[search,setSearch]=useState("");
   const[editMode,setEditMode]=useState(false);
   const[editData,setEditData]=useState({});
+  const[custHistory,setCustHistory]=useState([]);const[loadingHist,setLoadingHist]=useState(false);
   const[newCustModal,setNewCustModal]=useState(false);
   const[nc,setNc]=useState({firstName:"",lastName:"",email:"",phone:"",city:"",notes:""});
   const[confirmDel,setConfirmDel]=useState(false);
@@ -2946,8 +3062,13 @@ function CustomersScreen(){
   const importCustCSV=()=>{let added=0;csvPreview.forEach(c=>{if(!c.firstName&&!c.lastName)return;if(c._dup)return;
     setCustomers(p=>[...p,{id:"c"+Date.now()+Math.random().toString(36).slice(2,5),firstName:c.firstName,lastName:c.lastName,email:c.email,phone:c.phone,city:c.city,notes:c.notes,points:0,totalSpent:0}]);added++;});
     notify(`${added} client(s) importé(s)`,"success");setCsvModal(false);setCsvStep(0);setCsvData([]);};
+  useEffect(()=>{if(!sel)return;setLoadingHist(true);setCustHistory([]);
+    API.customers.history(sel.id).then(data=>{setCustHistory(Array.isArray(data)?data:data.sales||[]);}).catch(()=>{
+      // Fallback: filter local tickets
+      setCustHistory(tickets.filter(t=>t.customerId===sel.id));
+    }).finally(()=>setLoadingHist(false));},[sel?.id]);
   const filtered=customers.filter(c=>!search||`${c.firstName} ${c.lastName} ${c.email} ${c.phone}`.toLowerCase().includes(search.toLowerCase()));
-  const custTickets=sel?tickets.filter(t=>t.customerId===sel.id):[];
+  const custTickets=custHistory.length?custHistory:(sel?tickets.filter(t=>t.customerId===sel.id):[]);
   const custAvg=custTickets.length?custTickets.reduce((s,t)=>s+(t.totalTTC||parseFloat(t.total_ttc)||0),0)/custTickets.length:0;
 
   const startEdit=()=>{setEditData({firstName:sel.firstName,lastName:sel.lastName,email:sel.email,phone:sel.phone,city:sel.city||""});setEditMode(true);};
@@ -3010,7 +3131,8 @@ function CustomersScreen(){
         </div>
         <div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`}}>
           <div style={{fontSize:14,fontWeight:700,marginBottom:8}}>Historique d'achat ({custTickets.length})</div>
-          {custTickets.length===0&&<div style={{color:C.textLight,fontSize:11}}>Aucun achat</div>}
+          {loadingHist&&<div style={{color:C.textLight,fontSize:11}}>Chargement…</div>}
+          {!loadingHist&&custTickets.length===0&&<div style={{color:C.textLight,fontSize:11}}>Aucun achat</div>}
           {custTickets.slice(0,20).map(t=>(<div key={t.ticketNumber} style={{display:"flex",justifyContent:"space-between",padding:6,borderBottom:`1px solid ${C.border}`,fontSize:11}}>
             <span>{t.ticketNumber} — {new Date(t.date||t.createdAt||t.created_at).toLocaleDateString("fr-FR")} — {(t.items||[]).length} art.</span>
             <span style={{fontWeight:700,color:C.primary}}>{(t.totalTTC||parseFloat(t.total_ttc)||0).toFixed(2)}€</span></div>))}</div>
@@ -5179,11 +5301,19 @@ function DashboardNav({active,onNav}){
 
 function DashOverview(){
   const{gt,tickets,closures,stockAlerts,bestSellers,perm:p}=useApp();
-  const margin=tickets.reduce((s,t)=>s+(parseFloat(t.margin)||0),0);
+  const[apiStats,setApiStats]=useState(null);const[apiBest,setApiBest]=useState(null);
+  useEffect(()=>{
+    API.sales.stats().then(d=>setApiStats(d)).catch(()=>{});
+    API.sales.bestSellers().then(d=>setApiBest(Array.isArray(d)?d:[])).catch(()=>{});
+  },[]);
+  // Use backend stats if available, fallback to local computation
+  const margin=apiStats?.total_margin??tickets.reduce((s,t)=>s+(parseFloat(t.margin)||0),0);
   const todayStr=new Date().toISOString().split("T")[0];
   const todayTk=tickets.filter(t=>(t.date||t.createdAt||t.created_at||"").startsWith(todayStr));
-  const todayCA=todayTk.reduce((s,t)=>s+(t.totalTTC||parseFloat(t.total_ttc)||0),0);
-  const todayAvg=todayTk.length?todayCA/todayTk.length:0;
+  const todayCA=apiStats?.today_ca??todayTk.reduce((s,t)=>s+(t.totalTTC||parseFloat(t.total_ttc)||0),0);
+  const todayCount=apiStats?.today_count??todayTk.length;
+  const todayAvg=todayCount?todayCA/todayCount:0;
+  const displayBest=apiBest&&apiBest.length?apiBest:bestSellers;
   return(<div style={{height:"100%",overflowY:"auto",padding:20,background:C.bg}}>
     <h2 style={{fontSize:22,fontWeight:800,marginBottom:16}}>Dashboard</h2>
 
@@ -5198,7 +5328,7 @@ function DashOverview(){
         <div style={{fontSize:10,color:C.primary}}>{new Date().toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long"})}</div></div>
       <div style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:16}}>
         <div style={{textAlign:"center"}}><div style={{fontSize:10,color:C.primary,fontWeight:600}}>Ventes</div>
-          <div style={{fontSize:20,fontWeight:900,color:C.primaryDark}}>{todayTk.length}</div></div>
+          <div style={{fontSize:20,fontWeight:900,color:C.primaryDark}}>{todayCount}</div></div>
         <div style={{textAlign:"center"}}><div style={{fontSize:10,color:C.primary,fontWeight:600}}>CA</div>
           <div style={{fontSize:20,fontWeight:900,color:C.primaryDark}}>{todayCA.toFixed(0)}€</div></div>
         <div style={{textAlign:"center"}}><div style={{fontSize:10,color:C.primary,fontWeight:600}}>Panier moy.</div>
@@ -5212,12 +5342,12 @@ function DashOverview(){
     {stockAlerts.length>0&&<div style={{background:C.warnLight,borderRadius:10,padding:12,marginBottom:12}}>
       <div style={{fontSize:12,fontWeight:700,color:C.warn,marginBottom:6}}><Bell size={14} style={{verticalAlign:"middle"}}/> Alertes de stock</div>
       <div style={{display:"flex",flexWrap:"wrap",gap:4}}>{stockAlerts.slice(0,8).map((a,i)=>(<Badge key={i} color={a.level==="rupture"?C.danger:C.warn}>{a.product.name} {a.variant.color}/{a.variant.size}: {a.variant.stock}</Badge>))}</div></div>}
-    {bestSellers.length>0&&<div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`}}>
+    {displayBest.length>0&&<div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`}}>
       <div style={{fontSize:14,fontWeight:700,marginBottom:8}}>Top 5 produits</div>
-      {bestSellers.slice(0,5).map((b,i)=>(<div key={b.sku} style={{display:"flex",alignItems:"center",gap:8,padding:6,borderBottom:`1px solid ${C.border}`}}>
+      {displayBest.slice(0,5).map((b,i)=>(<div key={b.sku||b.product_name||i} style={{display:"flex",alignItems:"center",gap:8,padding:6,borderBottom:`1px solid ${C.border}`}}>
         <span style={{fontSize:14,fontWeight:800,color:i<3?C.primary:C.textMuted,width:20}}>{i+1}</span>
-        <span style={{flex:1,fontSize:12,fontWeight:600}}>{b.name}</span>
-        <span style={{fontSize:12,fontWeight:700,color:C.primary}}>{b.qty} vendus — {b.revenue.toFixed(0)}€</span></div>))}</div>}
+        <span style={{flex:1,fontSize:12,fontWeight:600}}>{b.name||b.product_name}</span>
+        <span style={{fontSize:12,fontWeight:700,color:C.primary}}>{b.qty||b.total_qty} vendus — {(b.revenue||parseFloat(b.total_revenue)||0).toFixed(0)}€</span></div>))}</div>}
   </div>);
 }
 
