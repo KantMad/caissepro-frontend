@@ -6,7 +6,7 @@ import {
   Shield, Download, FileText, Settings, CheckCircle2, AlertTriangle, Save,
   Archive, Activity, Database, WifiOff, Pause, Play, Upload, Printer, Bell,
   Heart, Grid, Box, Star, Calendar, Zap, ScanLine, Split,
-  Mail, XOctagon, Edit, BarChart2, Check, X, HelpCircle, ChevronDown
+  Mail, XOctagon, Edit, BarChart2, Check, X, HelpCircle, ChevronDown, Scissors
 } from "lucide-react";
 import {
   PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer,
@@ -984,7 +984,7 @@ function AppProvider({children}){
     const fingerprint=hash.slice(0,8).toUpperCase();
 
     const avoir={avoirNumber,seq,date,originalTicket:ticket.ticketNumber,originalDate:ticket.date,
-      items,totalHT,totalTVA,totalTTC,reason:reason||"",refundMethod,
+      items,totalHT,totalTVA,totalTTC,remaining:totalTTC,used:false,reason:reason||"",refundMethod,
       userId:currentUser?.id,userName:currentUser?.name,
       customerId:ticket.customerId,customerName:ticket.customerName,
       hash,fingerprint};
@@ -1022,6 +1022,14 @@ function AppProvider({children}){
     notify(`Avoir ${avoirNumber} — ${totalTTC.toFixed(2)}€`,"success");
     return avoir;
   },[avoirSeq,avoirs,lastHash,currentUser,addAudit,addJET,notify,addPendingSync]);
+
+  // ══ CONSUME AVOIR (deduct amount when used as payment) ══
+  const consumeAvoir=useCallback((avoirNumber,amount)=>{
+    setAvoirs(p=>p.map(a=>{if(a.avoirNumber!==avoirNumber)return a;
+      const rem=Math.max(0,(a.remaining??a.totalTTC)-amount);
+      return{...a,remaining:rem,used:rem<=0};}));
+    addAudit("AVOIR_USE",`Avoir ${avoirNumber} utilisé: ${amount.toFixed(2)}€`);
+  },[addAudit]);
 
   // ══ FOOTFALL COUNTER ══
   const[footfall,setFootfall]=useState(()=>{try{const s=localStorage.getItem("caissepro_footfall");return s?JSON.parse(s):[];}catch(e){return[];}});
@@ -1150,7 +1158,7 @@ function AppProvider({children}){
   return<AppCtx.Provider value={{currentUser,login,logout,mode,setMode,offlineMode,products,setProducts,addProduct,customers,setCustomers,addCustomer,openCustomerDisplay,footfall,addFootfall,
     cart,addToCart,addCustomItem,removeFromCart,voidSale,updateQty,updateItemDisc,clearCart,gDisc,gDiscType,setCartGD,
     promoCode,setPromoCode,calcPromoDiscount,
-    cashReg,openReg,closeReg,isOnline,tickets,tSeq,lastHash,gt,audit,jet,closures,avoirs,
+    cashReg,openReg,closeReg,isOnline,tickets,tSeq,lastHash,gt,audit,jet,closures,avoirs,consumeAvoir,
     checkout,createClosure,exportArchive,exportFEC,exportCSVReport,exportCustomerRGPD,addAudit,addJET,
     promos,setPromos,activePromos,parked,parkCart,restoreCart,selCust,setSelCust,
     stockAlerts,stockMoves,addStockMove,receiveStock,
@@ -1275,7 +1283,7 @@ function SalesScreen(){
     gDisc,gDiscType,setCartGD,promoCode,setPromoCode,calcPromoDiscount,isOnline,findByEAN,offlineMode,
     parked,parkCart,restoreCart,customers,addCustomer,selCust,setSelCust,perm,notify,
     stockAlerts,activePromos,avoirPayment,setAvoirPayment,getLoyaltyTier,tickets,saleNote,setSaleNote,favorites,toggleFavorite,getLastPriceForCustomer,settings,
-    printerConnected,thermalPrint,pendingSync,clearPendingSync,users,currentUser,avoirs,addAudit,addJET}=useApp();
+    printerConnected,thermalPrint,pendingSync,clearPendingSync,users,currentUser,avoirs,consumeAvoir,addAudit,addJET}=useApp();
   const[search,setSearch]=useState("");const[cat,setCat]=useState("Tous");const[vm,setVm]=useState(null);const[selSeller,setSelSeller]=useState(null);const[detaxe,setDetaxe]=useState(false);
   const[dm,setDm]=useState(null);const[dv,setDv]=useState("");const[gm,setGm]=useState(false);const[gv,setGv]=useState("");const[gtp,setGtp]=useState("percentage");
   const[lastTk,setLastTk]=useState(null);const[tkModal,setTkModal]=useState(false);const[busy,setBusy]=useState(false);
@@ -1283,7 +1291,7 @@ function SalesScreen(){
   const[cashNumpadModal,setCashNumpadModal]=useState(false);const[numpadValue,setNumpadValue]=useState("");
   const[custModal,setCustModal]=useState(false);const[parkedModal,setParkedModal]=useState(false);
   const[customModal,setCustomModal]=useState(false);const[customName,setCustomName]=useState("");const[customPrice,setCustomPrice]=useState("");
-  const[payMethodModal,setPayMethodModal]=useState(false);
+  const[payMethodModal,setPayMethodModal]=useState(false);const[avoirSelectModal,setAvoirSelectModal]=useState(false);
   const[retoucheModal,setRetoucheModal]=useState(false);const[retForm,setRetForm]=useState({client:"",phone:"",date:new Date().toISOString().split("T")[0],notes:"",items:[{desc:"",price:""}]});
   const[newCustModal,setNewCustModal]=useState(false);const[ncF,setNcF]=useState("");const[ncL,setNcL]=useState("");const[ncE,setNcE]=useState("");const[ncP,setNcP]=useState("");
   const[codeInput,setCodeInput]=useState("");
@@ -1788,12 +1796,11 @@ function SalesScreen(){
         <button onClick={()=>{setPayMethodModal(false);quickPay("giftcard");}} style={{padding:16,borderRadius:14,border:`2px solid ${C.accent}25`,background:`${C.accent}06`,cursor:"pointer",textAlign:"center",transition:"all 0.15s"}}
           onMouseEnter={e=>e.currentTarget.style.borderColor=C.accent} onMouseLeave={e=>e.currentTarget.style.borderColor=`${C.accent}25`}>
           <Gift size={24} color={C.accent} style={{marginBottom:6}}/><div style={{fontSize:13,fontWeight:700,color:C.text}}>Carte cadeau</div><div style={{fontSize:10,color:C.textMuted}}>Paiement par carte cadeau</div></button>
-        {avoirs.filter(a=>!a.used&&a.remaining>0).length>0&&<button onClick={()=>{setPayMethodModal(false);const av=avoirs.filter(a=>!a.used&&a.remaining>0);
-          if(av.length){const amount=Math.min(av[0].remaining,totals.tTTC);setAvoirPayment(amount);notify(`Avoir ${av[0].code} appliqué: ${amount.toFixed(2)}€`);}}}
-          style={{padding:16,borderRadius:14,border:`2px solid ${C.fiscal}25`,background:`${C.fiscal}06`,cursor:"pointer",textAlign:"center",transition:"all 0.15s"}}
+        <button onClick={()=>{setPayMethodModal(false);setAvoirSelectModal(true);}}
+          style={{padding:16,borderRadius:14,border:`2px solid ${C.fiscal}25`,background:avoirs.filter(a=>!a.used&&(a.remaining||a.totalTTC)>0).length?`${C.fiscal}06`:`${C.border}08`,cursor:"pointer",textAlign:"center",transition:"all 0.15s",opacity:avoirs.filter(a=>!a.used&&(a.remaining||a.totalTTC)>0).length?1:0.5}}
           onMouseEnter={e=>e.currentTarget.style.borderColor=C.fiscal} onMouseLeave={e=>e.currentTarget.style.borderColor=`${C.fiscal}25`}>
           <RotateCcw size={24} color={C.fiscal} style={{marginBottom:6}}/><div style={{fontSize:13,fontWeight:700,color:C.text}}>Avoir</div>
-          <div style={{fontSize:10,color:C.textMuted}}>{avoirs.filter(a=>!a.used&&a.remaining>0).length} avoir(s) dispo.</div></button>}
+          <div style={{fontSize:10,color:C.textMuted}}>{avoirs.filter(a=>!a.used&&(a.remaining||a.totalTTC)>0).length} avoir(s) dispo.</div></button>
       </div>
       <div style={{borderTop:`1px solid ${C.border}`,paddingTop:10}}>
         <button onClick={()=>{setPayMethodModal(false);openPay();}} style={{width:"100%",padding:14,borderRadius:14,border:`2px solid ${C.fiscal}25`,background:`${C.fiscal}06`,cursor:"pointer",textAlign:"center",transition:"all 0.15s",display:"flex",alignItems:"center",justifyContent:"center",gap:10}}
@@ -1801,6 +1808,30 @@ function SalesScreen(){
           <Split size={20} color={C.fiscal}/><div style={{textAlign:"left"}}><div style={{fontSize:13,fontWeight:700,color:C.text}}>Paiement fractionné</div>
             <div style={{fontSize:10,color:C.textMuted}}>Répartir entre plusieurs moyens de paiement</div></div></button>
       </div>
+    </Modal>
+
+    {/* AVOIR SELECTION MODAL */}
+    <Modal open={avoirSelectModal} onClose={()=>setAvoirSelectModal(false)} title="Paiement par avoir" sub={`Total à payer: ${totals.tTTC.toFixed(2)}€`}>
+      {(()=>{const available=avoirs.filter(a=>!a.used&&(a.remaining??a.totalTTC)>0);
+        return available.length===0?<div style={{textAlign:"center",padding:30,color:C.textLight}}>
+          <RotateCcw size={32} color={C.border} style={{marginBottom:10}}/>
+          <div style={{fontSize:14,fontWeight:700,marginBottom:4}}>Aucun avoir disponible</div>
+          <div style={{fontSize:11}}>Les avoirs sont générés lors des retours en caisse.</div></div>
+        :<div style={{display:"flex",flexDirection:"column",gap:8}}>
+          <div style={{fontSize:11,color:C.textMuted,marginBottom:4}}>{available.length} avoir(s) disponible(s)</div>
+          {available.map(a=>{const rem=a.remaining??a.totalTTC;const canApply=Math.min(rem,totals.tTTC);
+            return(<div key={a.avoirNumber} style={{padding:14,borderRadius:14,border:`2px solid ${C.fiscal}25`,background:C.surfaceAlt,display:"flex",alignItems:"center",gap:12}}>
+              <div style={{flex:1}}>
+                <div style={{fontSize:13,fontWeight:700}}>{a.avoirNumber}</div>
+                <div style={{fontSize:10,color:C.textMuted}}>Ticket: {a.originalTicket} — {new Date(a.date).toLocaleDateString("fr-FR")}</div>
+                {a.customerName&&<div style={{fontSize:10,color:C.textMuted}}>Client: {a.customerName}</div>}
+                <div style={{fontSize:12,fontWeight:700,color:C.fiscal,marginTop:4}}>Solde: {rem.toFixed(2)}€</div></div>
+              <Btn onClick={()=>{setAvoirPayment(canApply);consumeAvoir(a.avoirNumber,canApply);setAvoirSelectModal(false);
+                if(canApply>=totals.tTTC){quickPay("avoir");}else{notify(`Avoir ${a.avoirNumber}: ${canApply.toFixed(2)}€ appliqué. Reste ${(totals.tTTC-canApply).toFixed(2)}€ à payer.`,"info");openPay();}}}
+                style={{background:`linear-gradient(135deg,${C.fiscal},#2D7A9C)`,padding:"10px 16px",fontSize:12}}>
+                Appliquer {canApply.toFixed(2)}€</Btn>
+            </div>);})}
+        </div>;})()}
     </Modal>
 
     {/* RETOUCHE MODAL */}
@@ -1828,7 +1859,7 @@ function SalesScreen(){
         </div>))}
         <Btn variant="outline" onClick={()=>setRetForm(f=>({...f,items:[...f.items,{desc:"",price:""}]}))} style={{fontSize:10,padding:"4px 12px"}}><Plus size={11}/> Ajouter une ligne</Btn>
         <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:4,marginTop:8}}>
-          {[{n:"Ourlet pantalon",p:15},{n:"Ourlet manches",p:10},{n:"Cintrer veste",p:20},{n:"Raccourcir robe",p:18},{n:"Changer fermeture",p:25},{n:"Reprendre taille",p:15},{n:"Doublure",p:30},{n:"Ajustement épaules",p:22}].map(sv=>(
+          {(settings.retoucheTypes||[{n:"Ourlet pantalon",p:15},{n:"Ourlet manches",p:10},{n:"Cintrer veste",p:20},{n:"Raccourcir robe",p:18},{n:"Changer fermeture",p:25},{n:"Reprendre taille",p:15},{n:"Doublure",p:30},{n:"Ajustement épaules",p:22}]).filter(sv=>sv.n).map(sv=>(
             <button key={sv.n} onClick={()=>setRetForm(f=>({...f,items:[...f.items.filter(i=>i.desc||i.price),{desc:sv.n,price:String(sv.p)}]}))}
               style={{padding:"6px 4px",borderRadius:8,border:`1px solid ${C.border}`,background:C.surfaceAlt,cursor:"pointer",fontSize:9,fontWeight:600,textAlign:"center",transition:"all 0.1s"}}
               onMouseEnter={e=>{e.currentTarget.style.borderColor=C.primary;e.currentTarget.style.background=C.primaryLight;}} onMouseLeave={e=>{e.currentTarget.style.borderColor=C.border;e.currentTarget.style.background=C.surfaceAlt;}}>
@@ -1844,7 +1875,8 @@ function SalesScreen(){
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
         <Btn variant="outline" onClick={()=>{
           const retTotal=retForm.items.reduce((s,i)=>s+(parseFloat(i.price)||0),0);
-          retForm.items.filter(i=>i.desc&&i.price).forEach(i=>{addCustomItem(`Retouche: ${i.desc}`,parseFloat(i.price)/1.20,0.20);});
+          const tva=(settings.retoucheTVA||20)/100;
+          retForm.items.filter(i=>i.desc&&i.price).forEach(i=>{addCustomItem(`Retouche: ${i.desc}`,parseFloat(i.price)/(1+tva),tva);});
           setRetoucheModal(false);notify(`Retouche ajoutée au panier (${retTotal.toFixed(2)}€)`);
         }} disabled={!retForm.items.some(i=>i.desc&&i.price)}>
           <ShoppingCart size={14}/> Ajouter au panier</Btn>
@@ -1853,7 +1885,8 @@ function SalesScreen(){
           const bonNum=`RET-${Date.now().toString(36).toUpperCase()}`;
           const bon={num:bonNum,client:retForm.client,phone:retForm.phone,dateRetrait:retForm.date,items:retForm.items.filter(i=>i.desc),notes:retForm.notes,total:retTotal,date:new Date().toISOString(),seller:selSeller||currentUser?.name};
           // Add items to cart
-          retForm.items.filter(i=>i.desc&&i.price).forEach(i=>{addCustomItem(`Retouche: ${i.desc}`,parseFloat(i.price)/1.20,0.20);});
+          const tva2=(settings.retoucheTVA||20)/100;
+          retForm.items.filter(i=>i.desc&&i.price).forEach(i=>{addCustomItem(`Retouche: ${i.desc}`,parseFloat(i.price)/(1+tva2),tva2);});
           // Print bon
           const w=window.open("","_blank","width=400,height=600");if(w){w.document.write(`<html><head><title>Bon de retouche ${bonNum}</title><style>body{font-family:'Courier New',monospace;font-size:12px;padding:10px;max-width:300px;margin:0 auto;}h2{text-align:center;font-size:14px;margin:4px 0;}hr{border:none;border-top:1px dashed #333;margin:6px 0;}.row{display:flex;justify-content:space-between;}.center{text-align:center;}</style></head><body>`+
             `<h2>${settings.name||"CaissePro"}</h2><div class="center">${settings.address||""} ${settings.postalCode||""} ${settings.city||""}</div><hr>`+
@@ -4041,7 +4074,7 @@ function SettingsScreen(){
   return(<div style={{height:"100%",overflowY:"auto",padding:20,background:C.bg}}>
     <h2 style={{fontSize:22,fontWeight:800,marginBottom:14}}>Paramètres</h2>
     <div style={{display:"flex",gap:6,marginBottom:14,flexWrap:"wrap"}}>
-      {[{id:"general",l:"Général"},{id:"pricing",l:"💰 Prix HT/TTC"},{id:"commission",l:"Commission"},{id:"stores",l:"Magasins"},{id:"printer",l:"🖨️ Imprimante"},{id:"receipt",l:"🧾 Ticket"},{id:"screen2",l:"📺 Écran 2"},{id:"caticons",l:"🏷️ Icônes catégories"},{id:"return",l:"Retours"},{id:"sizes",l:"📏 Ordre tailles"},{id:"theme",l:"Thème"},{id:"clock",l:"Pointages"},{id:"prices",l:"Historique prix"}].map(t=>(
+      {[{id:"general",l:"Général"},{id:"retouche",l:"✂️ Retouches"},{id:"pricing",l:"💰 Prix HT/TTC"},{id:"commission",l:"Commission"},{id:"stores",l:"Magasins"},{id:"printer",l:"🖨️ Imprimante"},{id:"receipt",l:"🧾 Ticket"},{id:"screen2",l:"📺 Écran 2"},{id:"caticons",l:"🏷️ Icônes catégories"},{id:"return",l:"Retours"},{id:"sizes",l:"📏 Ordre tailles"},{id:"theme",l:"Thème"},{id:"clock",l:"Pointages"},{id:"prices",l:"Historique prix"}].map(t=>(
         <button key={t.id} onClick={()=>setTab(t.id)} style={{padding:"5px 12px",borderRadius:8,border:`1.5px solid ${tab===t.id?C.primary:C.border}`,
           background:tab===t.id?C.primary:"transparent",color:tab===t.id?"#fff":C.text,fontSize:11,fontWeight:600,cursor:"pointer"}}>{t.l}</button>))}</div>
 
@@ -4050,6 +4083,55 @@ function SettingsScreen(){
         <div key={f.k} style={{marginBottom:10}}><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>{f.l}</label>
           <Input value={settings[f.k]||""} onChange={e=>setSettings(s=>({...s,[f.k]:e.target.value}))}/></div>))}
       <Btn onClick={()=>{saveSettingsToAPI(settings);addAudit("CONFIG","Paramètres mis à jour");notify("Paramètres sauvegardés","success");}} style={{width:"100%",height:40,marginTop:8,background:`linear-gradient(135deg,${C.primary},${C.gradientB})`}}><Save size={14}/> Enregistrer</Btn></div>}
+
+    {tab==="retouche"&&<div style={{maxWidth:650}}>
+      <div style={{background:`linear-gradient(135deg,${C.primaryLight},#DCF0E2)`,borderRadius:16,padding:20,border:`1.5px solid ${C.primary}22`,marginBottom:16}}>
+        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:6}}>
+          <Scissors size={20} color={C.primary}/>
+          <div><h3 style={{fontSize:16,fontWeight:800,margin:0}}>Types de retouches</h3>
+            <p style={{fontSize:11,color:C.textMuted,margin:0}}>Configurez les prestations de retouche proposées en caisse. Ces types apparaissent comme boutons rapides dans le bon de retouche.</p></div></div></div>
+
+      <div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`,marginBottom:14}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
+          <h4 style={{fontSize:13,fontWeight:700,margin:0}}>Prestations ({(settings.retoucheTypes||[]).length || "8 par défaut"})</h4>
+          <Btn variant="outline" onClick={()=>{const types=[...(settings.retoucheTypes||[{n:"Ourlet pantalon",p:15},{n:"Ourlet manches",p:10},{n:"Cintrer veste",p:20},{n:"Raccourcir robe",p:18},{n:"Changer fermeture",p:25},{n:"Reprendre taille",p:15},{n:"Doublure",p:30},{n:"Ajustement épaules",p:22}]),{n:"",p:""}];
+            setSettings(s=>({...s,retoucheTypes:types}));}} style={{fontSize:10,padding:"4px 12px"}}><Plus size={11}/> Ajouter</Btn></div>
+        <div style={{display:"flex",flexDirection:"column",gap:8}}>
+          {(settings.retoucheTypes||[{n:"Ourlet pantalon",p:15},{n:"Ourlet manches",p:10},{n:"Cintrer veste",p:20},{n:"Raccourcir robe",p:18},{n:"Changer fermeture",p:25},{n:"Reprendre taille",p:15},{n:"Doublure",p:30},{n:"Ajustement épaules",p:22}]).map((rt,i)=>(
+            <div key={i} style={{display:"flex",alignItems:"center",gap:8,padding:10,borderRadius:12,background:C.surfaceAlt,border:`1px solid ${C.border}`}}>
+              <span style={{fontSize:12,fontWeight:700,color:C.primary,width:24,textAlign:"center"}}>{i+1}</span>
+              <Input value={rt.n} onChange={e=>{const types=[...(settings.retoucheTypes||[{n:"Ourlet pantalon",p:15},{n:"Ourlet manches",p:10},{n:"Cintrer veste",p:20},{n:"Raccourcir robe",p:18},{n:"Changer fermeture",p:25},{n:"Reprendre taille",p:15},{n:"Doublure",p:30},{n:"Ajustement épaules",p:22}])];types[i]={...types[i],n:e.target.value};setSettings(s=>({...s,retoucheTypes:types}));}}
+                placeholder="Nom de la prestation" style={{flex:2,height:36}}/>
+              <div style={{display:"flex",alignItems:"center",gap:4}}>
+                <Input type="number" step="0.5" value={rt.p} onChange={e=>{const types=[...(settings.retoucheTypes||[{n:"Ourlet pantalon",p:15},{n:"Ourlet manches",p:10},{n:"Cintrer veste",p:20},{n:"Raccourcir robe",p:18},{n:"Changer fermeture",p:25},{n:"Reprendre taille",p:15},{n:"Doublure",p:30},{n:"Ajustement épaules",p:22}])];types[i]={...types[i],p:parseFloat(e.target.value)||0};setSettings(s=>({...s,retoucheTypes:types}));}}
+                  style={{width:80,height:36,textAlign:"right"}}/>
+                <span style={{fontSize:11,color:C.textMuted}}>€</span></div>
+              <Btn variant="ghost" onClick={()=>{const types=[...(settings.retoucheTypes||[{n:"Ourlet pantalon",p:15},{n:"Ourlet manches",p:10},{n:"Cintrer veste",p:20},{n:"Raccourcir robe",p:18},{n:"Changer fermeture",p:25},{n:"Reprendre taille",p:15},{n:"Doublure",p:30},{n:"Ajustement épaules",p:22}])];types.splice(i,1);setSettings(s=>({...s,retoucheTypes:types}));}}
+                style={{padding:"4px 8px",color:C.danger}}><Trash2 size={14}/></Btn>
+            </div>))}
+        </div>
+      </div>
+
+      <div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`,marginBottom:14}}>
+        <h4 style={{fontSize:13,fontWeight:700,marginBottom:8}}>Paramètres du bon de retouche</h4>
+        <div style={{display:"flex",flexDirection:"column",gap:10}}>
+          <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>TAUX DE TVA RETOUCHE (%)</label>
+            <Input type="number" step="0.1" value={settings.retoucheTVA||20} onChange={e=>setSettings(s=>({...s,retoucheTVA:parseFloat(e.target.value)||20}))} style={{width:120}}/></div>
+          <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>MESSAGE SUR LE BON</label>
+            <Input value={settings.retoucheMsg||""} onChange={e=>setSettings(s=>({...s,retoucheMsg:e.target.value}))} placeholder="Ex: Retrait sous 5 jours ouvrés"/></div>
+          <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>DÉLAI PAR DÉFAUT (jours)</label>
+            <Input type="number" value={settings.retoucheDelay||5} onChange={e=>setSettings(s=>({...s,retoucheDelay:parseInt(e.target.value)||5}))} style={{width:120}}/></div>
+        </div>
+      </div>
+
+      <div style={{background:C.warnLight,borderRadius:12,padding:14,border:`1px solid ${C.warn}33`,display:"flex",gap:10,alignItems:"start",marginBottom:14}}>
+        <AlertTriangle size={16} color={C.warn} style={{flexShrink:0,marginTop:2}}/>
+        <div style={{fontSize:11,color:"#92400E",lineHeight:1.5}}>
+          <strong>Utilisation :</strong> En caisse, cliquez sur le bouton <strong>Retouche</strong> pour créer un bon. Les prestations configurées ici apparaissent comme boutons rapides. Le bon de retouche s'imprime au format ticket de caisse et les articles sont ajoutés au panier.</div></div>
+
+      <Btn onClick={()=>{saveSettingsToAPI(settings);addAudit("CONFIG","Types de retouches mis à jour");notify("Paramètres retouches sauvegardés","success");}}
+        style={{width:"100%",height:44,background:`linear-gradient(135deg,${C.primary},${C.gradientB})`}}><Save size={14}/> Enregistrer</Btn>
+    </div>}
 
     {tab==="pricing"&&<div style={{maxWidth:550}}>
       <div style={{background:`linear-gradient(135deg,${C.primaryLight},#DCF0E2)`,borderRadius:16,padding:20,border:`1.5px solid ${C.primary}22`,marginBottom:16}}>
@@ -5307,12 +5389,14 @@ function DashOverview(){
     API.sales.bestSellers().then(d=>setApiBest(Array.isArray(d)?d:[])).catch(()=>{});
   },[]);
   // Use backend stats if available, fallback to local computation
-  const margin=apiStats?.total_margin??tickets.reduce((s,t)=>s+(parseFloat(t.margin)||0),0);
+  const margin=apiStats?parseFloat(apiStats.total_margin)||0:tickets.reduce((s,t)=>s+(parseFloat(t.margin)||0),0);
   const todayStr=new Date().toISOString().split("T")[0];
   const todayTk=tickets.filter(t=>(t.date||t.createdAt||t.created_at||"").startsWith(todayStr));
-  const todayCA=apiStats?.today_ca??todayTk.reduce((s,t)=>s+(t.totalTTC||parseFloat(t.total_ttc)||0),0);
-  const todayCount=apiStats?.today_count??todayTk.length;
+  const todayCA=todayTk.reduce((s,t)=>s+(t.totalTTC||parseFloat(t.total_ttc)||0),0);
+  const todayCount=todayTk.length;
   const todayAvg=todayCount?todayCA/todayCount:0;
+  const totalTickets=apiStats?parseInt(apiStats.ticket_count)||tickets.length:tickets.length;
+  const totalCA=apiStats?parseFloat(apiStats.grand_total)||parseFloat(gt)||0:parseFloat(gt)||0;
   const displayBest=apiBest&&apiBest.length?apiBest:bestSellers;
   return(<div style={{height:"100%",overflowY:"auto",padding:20,background:C.bg}}>
     <h2 style={{fontSize:22,fontWeight:800,marginBottom:16}}>Dashboard</h2>
@@ -5335,9 +5419,9 @@ function DashOverview(){
           <div style={{fontSize:20,fontWeight:900,color:C.primaryDark}}>{todayAvg.toFixed(1)}€</div></div></div></div>
 
     <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:16}}>
-      <SC icon={DollarSign} label="CA (GT)" value={`${(parseFloat(gt)||0).toFixed(0)}€`} color={C.primary}/>
+      <SC icon={DollarSign} label="CA (GT)" value={`${totalCA.toFixed(0)}€`} color={C.primary}/>
       {p().canViewMargin&&<SC icon={TrendingUp} label="Marge" value={`${margin.toFixed(0)}€`} color="#3B8C5A"/>}
-      <SC icon={Receipt} label="Tickets" value={tickets.length} color={C.info}/>
+      <SC icon={Receipt} label="Tickets" value={totalTickets} color={C.info}/>
       <SC icon={AlertTriangle} label="Alertes stock" value={stockAlerts.length} color={C.warn}/></div>
     {stockAlerts.length>0&&<div style={{background:C.warnLight,borderRadius:10,padding:12,marginBottom:12}}>
       <div style={{fontSize:12,fontWeight:700,color:C.warn,marginBottom:6}}><Bell size={14} style={{verticalAlign:"middle"}}/> Alertes de stock</div>
@@ -5347,7 +5431,7 @@ function DashOverview(){
       {displayBest.slice(0,5).map((b,i)=>(<div key={b.sku||b.product_name||i} style={{display:"flex",alignItems:"center",gap:8,padding:6,borderBottom:`1px solid ${C.border}`}}>
         <span style={{fontSize:14,fontWeight:800,color:i<3?C.primary:C.textMuted,width:20}}>{i+1}</span>
         <span style={{flex:1,fontSize:12,fontWeight:600}}>{b.name||b.product_name}</span>
-        <span style={{fontSize:12,fontWeight:700,color:C.primary}}>{b.qty||b.total_qty} vendus — {(b.revenue||parseFloat(b.total_revenue)||0).toFixed(0)}€</span></div>))}</div>}
+        <span style={{fontSize:12,fontWeight:700,color:C.primary}}>{b.qty||b.total_qty} vendus — {(parseFloat(b.revenue)||0).toFixed(0)}€</span></div>))}</div>}
   </div>);
 }
 
