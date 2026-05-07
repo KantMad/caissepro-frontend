@@ -370,20 +370,26 @@ function AppProvider({children}){
     return()=>{window.removeEventListener("online",on);window.removeEventListener("offline",off);};},[]);
 
   // ══ Auto-reconnect on page refresh if token exists ══
-  useEffect(()=>{
-    const token=API.getToken();if(!token||!currentUser)return;
-    (async()=>{try{
+  const loadAllData=useCallback(async()=>{
+    try{
       const[prods,custs,prms,setts,apiUsers]=await Promise.all([
         API.products.list(),API.customers.list(),API.settings.promos(),API.settings.get(),API.auth.users().catch(()=>null)]);
       setProducts(norm.products(prods));setCustomers(norm.customers(custs));setPromos(prms);setSettings(s=>({...s,...setts}));
       if(apiUsers?.length){const merged=[...apiUsers.map(u=>({id:u.id,name:u.name,role:u.role,pin:"****",apiSynced:true}))];
         const localOnly=users.filter(lu=>!apiUsers.find(au=>au.name===lu.name));setUsers([...merged,...localOnly]);}
       loadVariantOrderFromSettings(setts);
-    }catch(e){console.warn("Auto-reconnect échoué:",e.message);
-      // Token expiré → déconnecter
+      // Load tickets and closures from backend
+      try{const salesData=await API.sales.list({limit:200});if(salesData?.length)setTickets(salesData.map(s=>({...s,ticketNumber:s.ticket_number,totalHT:parseFloat(s.total_ht),totalTVA:parseFloat(s.total_tva),totalTTC:parseFloat(s.total_ttc),date:s.created_at,userName:s.user_name,paymentMethod:s.payment_method,customerName:s.customer_name,fingerprint:s.fingerprint})));}catch(e){}
+      try{const closData=await API.fiscal.closures();if(closData?.length)setClosures(closData.map(c=>({...c,type:c.closure_type,totalHT:parseFloat(c.total_ht),totalTVA:parseFloat(c.total_tva),totalTTC:parseFloat(c.total_ttc),totalMargin:parseFloat(c.total_margin||0),date:c.created_at,userName:c.user_name})));}catch(e){}
+    }catch(e){
+      console.warn("Chargement données échoué:",e.message);
       if(e.message?.includes("401")||e.message?.includes("Unauthorized")){setCurrentUser(null);API.clearToken();}
-    }})();
-  },[]);// eslint-disable-line react-hooks/exhaustive-deps
+    }
+  },[]);
+  useEffect(()=>{
+    const token=API.getToken();if(!token||!currentUser)return;
+    loadAllData();
+  },[currentUser]);
 
   // ══ Retry pending sync when back online ══
   const clearPendingSync=useCallback(()=>{setPendingSync([]);notify("File de synchronisation vidée","info");},[notify]);
@@ -474,7 +480,7 @@ function AppProvider({children}){
   const removeFromCart=(pid,vid,reason)=>{addAudit("VOID_LINE",`Suppression: ${pid}${reason?` — Motif: ${reason}`:""}`,pid);addJET("VOID_LINE",`Suppression ligne produit ${pid}${reason?` — ${reason}`:""}`);setCart(p=>p.filter(c=>!(c.product.id===pid&&(c.variant?.id===vid||!vid))));};
   const voidSale=(reason)=>{if(cart.length){addAudit("VOID_SALE",`Annulation panier: ${cart.length} articles — Motif: ${reason||"Non spécifié"}`);addJET("VOID_SALE",`Annulation panier ${cart.length} art. — ${reason||"Non spécifié"}`);setCart([]);setGDisc(0);setSelCust(null);}};
   const updateQty=(pid,vid,q)=>{if(q<1)return removeFromCart(pid,vid);setCart(p=>p.map(c=>c.product.id===pid&&c.variant?.id===vid?{...c,quantity:q}:c));};
-  const updateItemDisc=(pid,vid,d)=>setCart(p=>p.map(c=>c.product.id===pid&&c.variant?.id===vid?{...c,discount:d}:c));
+  const updateItemDisc=(pid,vid,d,dt)=>setCart(p=>p.map(c=>c.product.id===pid&&c.variant?.id===vid?{...c,discount:d,discountType:dt||"percent"}:c));
   const clearCart=()=>{setCart([]);setGDisc(0);setSelCust(null);setPromoCode("");};
   const setCartGD=(v,t)=>{setGDisc(v);setGDiscType(t);};
 
@@ -492,7 +498,7 @@ function AppProvider({children}){
   const calcPromoDiscount=useCallback((cartItems)=>{
     const pm=settings.pricingMode||"TTC";
     // Calculer les montants HT pour les promos (cohérent avec le checkout)
-    const getHT=(ci)=>{const raw=ci.product.price*ci.quantity*(1-(ci.discount||0)/100);
+    const getHT=(ci)=>{const raw=ci.discountType==="amount"?ci.product.price*ci.quantity-((ci.discount||0)*ci.quantity):ci.product.price*ci.quantity*(1-(ci.discount||0)/100);
       return pm==="TTC"?raw/(1+(ci.product.taxRate||0.20)):raw;};
     let promoDisc=0;const applied=[];
     activePromos.forEach(p=>{
@@ -521,15 +527,15 @@ function AppProvider({children}){
     if(!cart.length)return null;
     const pm=settings.pricingMode||"TTC";
     const items=cart.map(i=>{
-      const rawPrice=i.product.price*i.quantity*(1-i.discount/100);
+      const rawPrice=i.discountType==="amount"?i.product.price*i.quantity-((i.discount||0)*i.quantity):i.product.price*i.quantity*(1-i.discount/100);
       const lineHT=pm==="TTC"?rawPrice/(1+(i.product.taxRate||0.20)):rawPrice;
       const lineTVA=lineHT*(i.product.taxRate||0.20);
       const lineTTC=lineHT+lineTVA;
       return{
       product_id:i.isCustom?null:i.product.id,variant_id:i.isCustom?null:i.variant?.id,
       product_name:i.product.name,variant_color:i.variant?.color||"—",variant_size:i.variant?.size||"—",
-      quantity:i.quantity,unit_price:i.product.price,cost_price:i.product.costPrice||0,
-      tax_rate:i.product.taxRate||0.20,discount_percent:i.discount||0,is_custom:i.isCustom||false,
+      quantity:i.quantity,unit_price:pm==="TTC"?i.product.price/(1+(i.product.taxRate||0.20)):i.product.price,cost_price:pm==="TTC"?(i.product.costPrice||0)/(1+(i.product.taxRate||0.20)):i.product.costPrice||0,
+      tax_rate:i.product.taxRate||0.20,discount_percent:i.discountType==="amount"?0:i.discount||0,discount_amount:i.discountType==="amount"?(i.discount||0)*i.quantity:0,is_custom:i.isCustom||false,
       lineHT,lineTVA,lineTTC,
       product:{id:i.product.id,name:i.product.name,sku:i.product.sku,price:i.product.price,costPrice:i.product.costPrice,taxRate:i.product.taxRate,collection:i.product.collection,category:i.product.category},
       variant:i.variant?{id:i.variant.id,color:i.variant.color,size:i.variant.size}:null,
@@ -573,7 +579,7 @@ function AppProvider({children}){
       const seq=tSeq+1;const date=new Date().toISOString();
       const ticketNumber=`TK-${new Date().getFullYear()}-${String(seq).padStart(6,"0")}`;
       const paymentMethod=payments.length===1?payments[0].method:"MIXTE";
-      const margin=cart.reduce((s,i)=>s+((i.product.price-i.product.costPrice)*i.quantity*(1-i.discount/100)),0)*(tHT/sHT||0);
+      const margin=cart.reduce((s,i)=>{const netRevenue=i.discountType==="amount"?i.product.price*i.quantity-((i.discount||0)*i.quantity):i.product.price*i.quantity*(1-i.discount/100);return s+(netRevenue-i.product.costPrice*i.quantity);},0)*(tHT/sHT||0);
       // Décrémenter stock local (autorise négatif)
       setProducts(prev=>prev.map(p=>{const ci=cart.find(c=>c.product.id===p.id);if(!ci)return p;
         return{...p,variants:p.variants.map(v=>{const cv=cart.find(c=>c.product.id===p.id&&c.variant?.id===v.id);
@@ -730,9 +736,10 @@ function AppProvider({children}){
   // Closures — via API
   const createClosure=useCallback(async(type,aCash,aCard)=>{
     try{const cl=await API.fiscal.closure({type,actualCash:aCash,actualCard:aCard});
+      if(!cl||cl.error){throw new Error(cl?.error||"Réponse invalide du serveur");}
       setClosures(p=>[cl,...p]);
       if(cl.grandTotal)setGt(parseFloat(cl.grandTotal));
-      addAudit("CLOTURE",`Z ${type}`);return cl;}catch(e){
+      addAudit("CLOTURE",`Z ${type}`);notify("Clôture enregistrée","success");return cl;}catch(e){
       // Fallback local
       console.warn("Closure API failed, local fallback:",e.message);
       const today=new Date().toISOString().split("T")[0];
@@ -849,8 +856,8 @@ function AppProvider({children}){
     try{const res=await API.settings.openRegister(a);if(res?.id)setCashReg(prev=>({...prev,id:res.id}));
     }catch(e){addPendingSync({type:"openRegister",data:{openingAmount:a}});console.warn("Ouverture caisse locale:",e.message);}
   };
-  const closeReg=async()=>{
-    if(cashReg?.id){try{await API.settings.closeRegister(cashReg.id,{closedAt:new Date().toISOString()});
+  const closeReg=async(closingCash,closingCard)=>{
+    if(cashReg?.id){try{await API.settings.closeRegister(cashReg.id,{closingCash:closingCash||null,closingCard:closingCard||null});
     }catch(e){addPendingSync({type:"closeRegister",data:{registerId:cashReg.id}});console.warn("Fermeture caisse locale:",e.message);}}
     setCashReg(null);
   };
@@ -1180,14 +1187,14 @@ function SalesScreen(){
 
   const totals=useMemo(()=>{
     const pm=settings.pricingMode||"TTC";
-    const sHT=cart.reduce((s,i)=>{const raw=i.product.price*i.quantity*(1-i.discount/100);
+    const sHT=cart.reduce((s,i)=>{const raw=i.discountType==="amount"?i.product.price*i.quantity-((i.discount||0)*i.quantity):i.product.price*i.quantity*(1-i.discount/100);
       return s+(pm==="TTC"?raw/(1+(i.product.taxRate||0.20)):raw);},0);
     let gd=gDiscType==="percentage"?sHT*(gDisc/100):Math.min(gDisc,sHT);
     const{promoDisc,applied}=calcPromoDiscount(cart);
     gd+=promoDisc;gd=Math.min(gd,sHT);
     const tHT=sHT-gd;
     // Per-item TVA
-    const tTVA=cart.reduce((s,i)=>{const raw=i.product.price*i.quantity*(1-i.discount/100);
+    const tTVA=cart.reduce((s,i)=>{const raw=i.discountType==="amount"?i.product.price*i.quantity-((i.discount||0)*i.quantity):i.product.price*i.quantity*(1-i.discount/100);
       const lHT=pm==="TTC"?raw/(1+(i.product.taxRate||0.20)):raw;return s+lHT*(i.product.taxRate||0.20);},0)*(tHT/sHT||0);
     const tTTC=tHT+tTVA-avoirPayment;
     return{sHT,gd,promoDisc,applied,tHT,tTVA,tTTC:Math.max(0,tTTC)};
@@ -1340,7 +1347,7 @@ function SalesScreen(){
             <ScanLine size={24} style={{opacity:.4}}/></div>
           <div style={{fontSize:13,fontWeight:600,marginBottom:2}}>Panier vide</div>
           <div style={{fontSize:11}}>Scannez ou sélectionnez un produit</div></div>
-        :cart.map(i=>{const t=i.product.price*i.quantity;const d=t*(i.discount/100);
+        :cart.map(i=>{const t=i.product.price*i.quantity;const d=i.discountType==="amount"?(i.discount||0)*i.quantity:t*(i.discount/100);
           const cc=CAT_COLORS[i.product.category]||C.primary;
           const lastP=selCust&&!i.isCustom?getLastPriceForCustomer(selCust.id,i.product.id):null;
           return(
@@ -1369,8 +1376,8 @@ function SalesScreen(){
                 <button onClick={()=>updateQty(i.product.id,i.variant?.id,i.quantity-1)} style={{width:26,height:26,borderRadius:13,border:"none",background:C.surface,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:`0 1px 2px ${C.shadow}`,transition:"all 0.1s"}}><Minus size={11}/></button>
                 <span style={{width:28,textAlign:"center",fontSize:13,fontWeight:700}}>{i.quantity}</span>
                 <button onClick={()=>updateQty(i.product.id,i.variant?.id,i.quantity+1)} style={{width:26,height:26,borderRadius:13,border:"none",background:C.surface,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:`0 1px 2px ${C.shadow}`,transition:"all 0.1s"}}><Plus size={11}/></button></div>
-              <button onClick={()=>{setDm({pid:i.product.id,vid:i.variant?.id});setDv(String(i.discount));}} style={{padding:"3px 8px",borderRadius:8,border:`1px solid ${i.discount>0?cc:C.border}`,background:i.discount>0?`${cc}08`:"transparent",cursor:"pointer",fontSize:9,fontWeight:600,color:i.discount>0?cc:C.textMuted,transition:"all 0.15s"}}>
-                {i.discount>0?`-${i.discount}%`:"% Remise"}</button>
+              <button onClick={()=>{setDm({pid:i.product.id,vid:i.variant?.id,discType:i.discountType||"percent"});setDv(String(i.discount));}} style={{padding:"3px 8px",borderRadius:8,border:`1px solid ${i.discount>0?cc:C.border}`,background:i.discount>0?`${cc}08`:"transparent",cursor:"pointer",fontSize:9,fontWeight:600,color:i.discount>0?cc:C.textMuted,transition:"all 0.15s"}}>
+                {i.discount>0?`-${i.discount}${i.discountType==="amount"?"€":"%"}`:"Remise"}</button>
               <div style={{textAlign:"right"}}>{i.discount>0&&<div style={{fontSize:8,color:C.textLight,textDecoration:"line-through"}}>{t.toFixed(2)}€</div>}
                 <div style={{fontSize:14,fontWeight:800,color:cc,letterSpacing:"-0.3px"}}>{(t-d).toFixed(2)}€</div></div></div></div>);})}</div>
 
@@ -1392,8 +1399,7 @@ function SalesScreen(){
           <span style={{fontSize:22,fontWeight:900,color:C.primary,letterSpacing:"-0.5px"}}>{change.toFixed(2)}€</span></div>}
 
         <div style={{display:"flex",gap:4,marginBottom:6}}>
-          <Btn variant="outline" onClick={()=>{setGm(true);setGv(String(gDisc));setGtp(gDiscType);}} style={{flex:1,height:32,fontSize:10,padding:"0 6px",borderRadius:10}}><Percent size={11}/> Remise</Btn>
-          <Input type="number" value={cashGiven} onChange={e=>setCashGiven(e.target.value)} placeholder="Espèces reçues…" style={{flex:1,height:32,fontSize:10,padding:"4px 8px",borderRadius:10}}/></div>
+          <Btn variant="outline" onClick={()=>{setGm(true);setGv(String(gDisc));setGtp(gDiscType);}} style={{flex:1,height:32,fontSize:10,padding:"0 6px",borderRadius:10}}><Percent size={11}/> Remise globale</Btn></div>
 
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:5,marginBottom:5}}>
           <Btn onClick={()=>quickPay("card")} disabled={!cart.length||busy} style={{height:46,borderRadius:12,background:`linear-gradient(135deg,${C.info},#5A92E8)`,padding:"0 10px",fontSize:12,gap:6,boxShadow:`0 3px 10px ${C.info}25`}}>
@@ -1438,11 +1444,14 @@ function SalesScreen(){
       </>}</Modal>
 
     <Modal open={!!dm} onClose={()=>setDm(null)} title="Remise article">
-      <Input type="number" value={dv} onChange={e=>setDv(e.target.value)} style={{marginBottom:8,height:40}}/>
-      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:6,marginBottom:12}}>{[5,10,15,20].map(v=>(<Btn key={v} variant="outline" onClick={()=>setDv(String(v))} style={{fontSize:12}}>{v}%</Btn>))}</div>
-      {parseInt(dv)>maxDisc&&<div style={{padding:8,background:C.dangerLight,borderRadius:8,marginBottom:8,fontSize:11,color:C.danger}}>Remise max autorisée: {maxDisc}%</div>}
-      <Btn onClick={()=>{const d=parseFloat(dv);if(d>=0&&d<=maxDisc&&dm){updateItemDisc(dm.pid,dm.vid,d);setDm(null);}}}
-        disabled={parseInt(dv)>maxDisc} style={{width:"100%",height:40,background:`linear-gradient(135deg,${C.primary},${C.gradientB})`}}>Appliquer</Btn></Modal>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginBottom:10}}>
+        <Btn variant={dm?.discType!=="amount"?"primary":"outline"} onClick={()=>setDm(p=>({...p,discType:"percent"}))}>%</Btn>
+        <Btn variant={dm?.discType==="amount"?"primary":"outline"} onClick={()=>setDm(p=>({...p,discType:"amount"}))}>€</Btn></div>
+      <Input type="number" value={dv} onChange={e=>setDv(e.target.value)} placeholder={dm?.discType==="amount"?"Montant en €":"Pourcentage"} style={{marginBottom:8,height:40}}/>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:6,marginBottom:12}}>{dm?.discType==="amount"?[2,5,10,20].map(v=>(<Btn key={v} variant="outline" onClick={()=>setDv(String(v))} style={{fontSize:12}}>{v}€</Btn>)):[5,10,15,20].map(v=>(<Btn key={v} variant="outline" onClick={()=>setDv(String(v))} style={{fontSize:12}}>{v}%</Btn>))}</div>
+      {dm?.discType!=="amount"&&parseInt(dv)>maxDisc&&<div style={{padding:8,background:C.dangerLight,borderRadius:8,marginBottom:8,fontSize:11,color:C.danger}}>Remise max autorisée: {maxDisc}%</div>}
+      <Btn onClick={()=>{const d=parseFloat(dv);if(d>=0&&dm){updateItemDisc(dm.pid,dm.vid,d,dm.discType||"percent");setDm(null);}}}
+        disabled={dm?.discType!=="amount"&&parseInt(dv)>maxDisc} style={{width:"100%",height:40,background:`linear-gradient(135deg,${C.primary},${C.gradientB})`}}>Appliquer</Btn></Modal>
 
     <Modal open={gm} onClose={()=>setGm(false)} title="Remise globale">
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginBottom:10}}>
@@ -2570,7 +2579,7 @@ function ClosureScreen(){
         const todayStr=new Date().toISOString().split("T")[0];
         if(closures.some(c=>c.type==="daily"&&(c.period||c.date||"").startsWith(todayStr))){
           notify("Une clôture Z a déjà été faite aujourd'hui","error");return;}
-        const cl=await createClosure("daily",aCash?parseFloat(aCash):null,aCard?parseFloat(aCard):null);if(cl){closeReg();setReportModal(cl);}else{notify("Erreur lors de la clôture","danger");}}}
+        const cl=await createClosure("daily",aCash?parseFloat(aCash):null,aCard?parseFloat(aCard):null);if(cl){closeReg(aCash?parseFloat(aCash):null,aCard?parseFloat(aCard):null);setReportModal(cl);}else{notify("Erreur lors de la clôture","danger");}}}
         style={{width:"100%",height:44,marginBottom:8}}><Lock size={16}/> Clôture journalière (Z)</Btn>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
         <Btn variant="outline" onClick={async()=>{const cl=await createClosure("monthly",null,null);if(cl)setReportModal(cl);}} style={{height:36,fontSize:11}}><Calendar size={14}/> Clôture mensuelle</Btn>
