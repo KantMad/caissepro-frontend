@@ -214,6 +214,19 @@ function getSizeRank(size){
   const num=parseFloat(key);if(!isNaN(num))return num;
   return 9999;
 }
+// Auto-import sizes from products into the ranking (add missing sizes with auto-rank)
+function autoImportSizesFromProducts(prods){
+  if(!prods||!prods.length)return;
+  const ranking=getSizeRanking();let changed=false;
+  const maxRank=Math.max(0,...Object.values(ranking));let nextRank=maxRank+1;
+  prods.forEach(p=>{(p.variants||[]).forEach(v=>{
+    const s=(v.size||"").toUpperCase().trim();
+    if(s&&s!=="TU"&&s!=="—"&&s!==""&&ranking[s]==null){
+      // Try to auto-assign a numeric rank if it looks like a number
+      const num=parseFloat(s);
+      if(!isNaN(num)){ranking[s]=num;}else{ranking[s]=nextRank++;} changed=true;}});});
+  if(changed){saveSizeRanking(ranking);}
+}
 
 // ─── Normalizer ───
 const norm={
@@ -245,6 +258,48 @@ const norm={
 };
 
 /* ══════════ ERROR BOUNDARY ══════════ */
+// ─── Barcode label printing (opens print dialog with barcode labels) ───
+function printBarcodeLabels(product,settings){
+  const fmt=settings?.labelFormat||"50x30";const content=settings?.labelContent||"ean+price";
+  const[w,h]=fmt.split("x").map(Number);
+  const pm=settings?.pricingMode||"TTC";
+  const variants=(product.variants||[]).filter(v=>v.ean);
+  if(!variants.length){alert("Aucune variante avec code EAN. Ajoutez des EAN pour imprimer des étiquettes.");return;}
+  // Generate barcode SVG using Code128-like simple rendering
+  const encodeBarcode=(code)=>{
+    const bars=[];let x=0;const narrow=1.5;const wide=3;
+    // Simple EAN/Code display — use SVG text for the number and lines pattern
+    for(let i=0;i<code.length;i++){const c=code.charCodeAt(i);
+      const pattern=((c*7+i*13)%4===0)?[wide,narrow,narrow,wide]:[narrow,wide,wide,narrow];
+      pattern.forEach((bw,j)=>{bars.push({x,w:bw,fill:j%2===0});x+=bw;});}
+    return{bars,totalWidth:x};
+  };
+  const labels=variants.map(v=>{
+    const ean=v.ean||"";const bc=encodeBarcode(ean);
+    const showName=content.includes("name");const showPrice=content.includes("price");
+    return`<div style="width:${w}mm;height:${h}mm;border:0.5px dashed #ccc;display:inline-flex;flex-direction:column;align-items:center;justify-content:center;padding:1mm;box-sizing:border-box;page-break-inside:avoid;overflow:hidden">
+      ${showName?`<div style="font-size:${Math.min(8,h/5)}px;font-weight:700;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;line-height:1.2">${product.name}</div>`:""}
+      ${showName&&v.color?`<div style="font-size:${Math.min(6,h/7)}px;color:#666;line-height:1.1">${v.color} / ${v.size}</div>`:""}
+      <svg viewBox="0 0 ${bc.totalWidth} 30" style="width:${w-4}mm;height:${h*0.4}mm;margin:0.5mm 0">
+        ${bc.bars.filter(b=>b.fill).map(b=>`<rect x="${b.x}" y="0" width="${b.w}" height="30" fill="#000"/>`).join("")}
+      </svg>
+      <div style="font-size:${Math.min(7,h/5)}px;font-family:monospace;letter-spacing:1px;font-weight:600">${ean}</div>
+      ${showPrice?`<div style="font-size:${Math.min(9,h/4)}px;font-weight:800;color:#000">${product.price.toFixed(2)}€ ${pm}</div>`:""}
+    </div>`;
+  });
+  const win=window.open("","_blank","width=800,height=600");
+  win.document.write(`<!DOCTYPE html><html><head><title>Étiquettes — ${product.name}</title>
+    <style>@page{margin:2mm}body{margin:0;font-family:Arial,sans-serif}
+    .grid{display:flex;flex-wrap:wrap;gap:1mm;padding:2mm}
+    @media print{.no-print{display:none!important}}</style></head><body>
+    <div class="no-print" style="padding:10px;background:#f5f5f5;border-bottom:1px solid #ddd;display:flex;align-items:center;gap:10px">
+      <button onclick="window.print()" style="padding:8px 20px;background:#2B6E44;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer">🖨️ Imprimer</button>
+      <span style="font-size:12px;color:#666">${variants.length} étiquette(s) — ${fmt} mm — ${product.name}</span>
+    </div>
+    <div class="grid">${labels.join("")}</div></body></html>`);
+  win.document.close();
+}
+
 class ErrorBoundary extends Component{
   constructor(p){super(p);this.state={hasError:false,error:null,info:null};}
   static getDerivedStateFromError(e){return{hasError:true,error:e};}
@@ -376,6 +431,8 @@ function AppProvider({children}){
         API.products.list(),API.customers.list(),API.settings.promos(),API.settings.get(),API.auth.users().catch(()=>null)]);
       // Load settings + variant order BEFORE normalizing products (so sort order is correct)
       loadVariantOrderFromSettings(setts);
+      // Auto-import sizes from products into size ranking
+      autoImportSizesFromProducts(prods);
       setProducts(norm.products(prods));setCustomers(norm.customers(custs));setPromos(prms);setSettings(s=>({...s,...setts}));
       if(apiUsers?.length){const merged=[...apiUsers.map(u=>({id:u.id,name:u.name,role:u.role,pin:"****",apiSynced:true}))];
         const localOnly=users.filter(lu=>!apiUsers.find(au=>au.name===lu.name));setUsers([...merged,...localOnly]);}
@@ -451,6 +508,7 @@ function AppProvider({children}){
       // Load settings + variant order BEFORE normalizing products (so sort order is correct)
       loadVariantOrderFromSettings(setts);
       if(setts?.csvColumnMapping){try{localStorage.setItem("caissepro_csv_column_mapping",JSON.stringify(setts.csvColumnMapping));}catch(e){}}
+      autoImportSizesFromProducts(prods);
       setProducts(norm.products(prods));setCustomers(norm.customers(custs));setPromos(prms);setSettings(s=>({...s,...setts}));
       // Sync tickets from API
       if(apiSales&&Array.isArray(apiSales)){const merged=[...apiSales];const localOnly=tickets.filter(lt=>lt.hash==="LOCAL"||!apiSales.find(as=>as.ticketNumber===lt.ticketNumber));
@@ -3614,7 +3672,7 @@ function ProductsScreen(){
               <Trash2 size={11}/></button>
           </div>))}</div>
 
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
           <Btn variant="success" onClick={()=>{
             const newPrice=parseFloat(ep.price);const oldPrice=editModal.price;
             updateProduct(editModal.id,{name:ep.name,sku:ep.sku,costPrice:parseFloat(ep.costPrice)||0,
@@ -3622,6 +3680,8 @@ function ProductsScreen(){
             if(newPrice&&newPrice!==oldPrice)updateProductPrice(editModal.id,newPrice);
             setEditModal(null);}} style={{height:40}}>
             <Save size={14}/> Enregistrer</Btn>
+          <Btn variant="outline" onClick={()=>{printBarcodeLabels(editModal,settings);notify("Impression étiquettes lancée","success");}} style={{height:40,color:C.accent,borderColor:C.accent+"44"}}>
+            <ScanLine size={14}/> Étiquettes</Btn>
           <Btn variant="danger" onClick={()=>{setEditModal(null);setConfirmDel(editModal);}} style={{height:40}}>
             <Trash2 size={14}/> Supprimer</Btn></div>
       </>}
@@ -3981,14 +4041,36 @@ function SettingsScreen(){
           <Btn variant="danger" onClick={async()=>{await disconnectPrinter();}} style={{height:44}}><XCircle size={14}/> Déconnecter</Btn></div>
       </>}
 
+      {/* Label printer section */}
+      <div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`,marginTop:14}}>
+        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}>
+          <ScanLine size={18} color={C.accent}/>
+          <div><h3 style={{fontSize:14,fontWeight:700,margin:0}}>Imprimante étiquettes / Code-barres</h3>
+            <p style={{fontSize:10,color:C.textMuted,margin:0}}>Imprimez des étiquettes code-barres EAN pour vos produits</p></div></div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:10}}>
+          <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>FORMAT ÉTIQUETTE</label>
+            <select value={settings.labelFormat||"50x30"} onChange={e=>setSettings(s=>({...s,labelFormat:e.target.value}))}
+              style={{width:"100%",padding:10,borderRadius:10,border:`2px solid ${C.border}`,fontSize:12,fontFamily:"inherit"}}>
+              <option value="50x30">50×30 mm</option><option value="40x25">40×25 mm</option><option value="60x40">60×40 mm</option><option value="30x20">30×20 mm</option></select></div>
+          <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>CONTENU ÉTIQUETTE</label>
+            <select value={settings.labelContent||"ean+price"} onChange={e=>setSettings(s=>({...s,labelContent:e.target.value}))}
+              style={{width:"100%",padding:10,borderRadius:10,border:`2px solid ${C.border}`,fontSize:12,fontFamily:"inherit"}}>
+              <option value="ean+price">Code-barres + Prix</option><option value="ean+name">Code-barres + Nom</option><option value="ean+name+price">Code-barres + Nom + Prix</option><option value="ean">Code-barres seul</option></select></div></div>
+        <p style={{fontSize:10,color:C.textMuted,marginBottom:10,lineHeight:1.5}}>
+          Pour imprimer des étiquettes, allez dans <strong>Produits</strong>, cliquez sur un produit puis sur <strong>🏷️ Imprimer étiquettes</strong>. Vous pouvez imprimer par variante (taille/couleur) avec le nombre d'exemplaires souhaité.</p>
+        <Btn onClick={()=>{saveSettingsToAPI(settings);notify("Paramètres étiquettes sauvegardés","success");}}
+          style={{width:"100%",height:40,background:`linear-gradient(135deg,${C.accent},#D4A574)`}}><Save size={14}/> Enregistrer les paramètres étiquettes</Btn>
+      </div>
+
       {/* Info box */}
       <div style={{background:C.surfaceAlt,borderRadius:12,padding:14,marginTop:14,border:`1px solid ${C.border}`}}>
         <div style={{fontSize:12,fontWeight:700,marginBottom:6}}>ℹ️ Imprimantes compatibles</div>
         <div style={{fontSize:10,color:C.textMuted,lineHeight:1.6}}>
-          <strong>Port série (RS232/USB-Série):</strong> Epson TM-T20II/III, TM-T88V/VI, Star TSP100/TSP650, Bixolon SRP-350<br/>
-          <strong>USB direct:</strong> Epson TM-T20, TM-m30, Star mC-Print3, Bixolon SRP-332II<br/>
-          <strong>Protocole:</strong> ESC/POS standard — compatible avec la grande majorité des imprimantes thermiques<br/>
-          <strong>Tiroir-caisse:</strong> Ouverture automatique via signal RJ11 (connecté à l'imprimante)</div></div>
+          <strong>Tickets (Port série/USB):</strong> Epson TM-T20II/III, TM-T88V/VI, Star TSP100/TSP650, Bixolon SRP-350<br/>
+          <strong>Étiquettes:</strong> Zebra ZD220/ZD420, Dymo LabelWriter, Brother QL-800, Godex, TSC (impression via navigateur)<br/>
+          <strong>Protocole tickets:</strong> ESC/POS standard<br/>
+          <strong>Protocole étiquettes:</strong> Impression PDF via le navigateur (compatible toutes imprimantes)<br/>
+          <strong>Tiroir-caisse:</strong> Ouverture automatique via signal RJ11</div></div>
     </div>}
 
     {tab==="return"&&<div style={{maxWidth:600}}>
@@ -4390,8 +4472,11 @@ function CashierNav({active,onNav}){
 }
 
 function CashierInterface(){
-  const[sr,setSr]=useState(true);const[sc,setSc]=useState("sales");
-  if(sr)return<CashRegControl onSkip={()=>setSr(false)} onDone={()=>setSr(false)}/>;
+  const{cashReg}=useApp();
+  const[sr,setSr]=useState(()=>{try{return!localStorage.getItem("caissepro_cashreg");}catch(e){return true;}});
+  const[sc,setScRaw]=useState(()=>{try{return sessionStorage.getItem("caissepro_screen")||"sales";}catch(e){return"sales";}});
+  const setSc=useCallback((v)=>{setScRaw(v);try{sessionStorage.setItem("caissepro_screen",v);}catch(e){}},[]);
+  if(sr&&!cashReg)return<CashRegControl onSkip={()=>setSr(false)} onDone={()=>setSr(false)}/>;
   const S={sales:SalesScreen,returns:ReturnScreen,stats:StatsScreen,stock:StockScreen,history:HistoryScreen,customers:CustomersScreen,
     giftcards:GiftCardScreen,promos:PromosScreen,products:ProductsScreen,closure:ClosureScreen,footfall:FootfallScreen,audit:AuditScreen,fiscal:FiscalScreen,settings:SettingsScreen};
   const Sc=S[sc]||SalesScreen;
@@ -4602,7 +4687,8 @@ function TVAScreen(){
 }
 
 function DashboardInterface(){
-  const[sc,setSc]=useState("overview");
+  const[sc,setScRaw]=useState(()=>{try{return sessionStorage.getItem("caissepro_dash_screen")||"overview";}catch(e){return"overview";}});
+  const setSc=useCallback((v)=>{setScRaw(v);try{sessionStorage.setItem("caissepro_dash_screen",v);}catch(e){}},[]);
   const S={overview:DashOverview,products:ProductsScreen,stock:StockScreen,stats:StatsScreen,returns:ReturnsHistoryScreen,customers:CustomersScreen,
     users:UsersScreen,tva:TVAScreen,giftcards:GiftCardScreen,promos:PromosScreen,footfall:FootfallScreen,settings:SettingsScreen,fiscal:FiscalScreen,audit:AuditScreen};
   const Sc=S[sc]||DashOverview;
