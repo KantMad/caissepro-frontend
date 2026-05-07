@@ -292,8 +292,10 @@ const ConfirmDialog=({open,onClose,onConfirm,title,message})=>{if(!open)return n
 const AppCtx=createContext(null);const useApp=()=>useContext(AppCtx);
 
 function AppProvider({children}){
-  const[currentUser,setCurrentUser]=useState(null);
-  const[mode,setMode]=useState("cashier");
+  const[currentUser,setCurrentUserRaw]=useState(()=>{try{const s=sessionStorage.getItem("caissepro_user");return s?JSON.parse(s):null;}catch(e){return null;}});
+  const setCurrentUser=useCallback((u)=>{setCurrentUserRaw(u);try{if(u)sessionStorage.setItem("caissepro_user",JSON.stringify(u));else sessionStorage.removeItem("caissepro_user");}catch(e){}},[]);
+  const[mode,setMode]=useState(()=>{try{return sessionStorage.getItem("caissepro_mode")||"cashier";}catch(e){return"cashier";}});
+  useEffect(()=>{try{sessionStorage.setItem("caissepro_mode",mode);}catch(e){}},[mode]);
   const[products,setProducts]=useState([]);
   const[customers,setCustomers]=useState([]);
   const[cart,setCart]=useState([]);
@@ -366,6 +368,22 @@ function AppProvider({children}){
   useEffect(()=>{const on=()=>setIsOnline(true);const off=()=>setIsOnline(false);
     window.addEventListener("online",on);window.addEventListener("offline",off);
     return()=>{window.removeEventListener("online",on);window.removeEventListener("offline",off);};},[]);
+
+  // ══ Auto-reconnect on page refresh if token exists ══
+  useEffect(()=>{
+    const token=API.getToken();if(!token||!currentUser)return;
+    (async()=>{try{
+      const[prods,custs,prms,setts,apiUsers]=await Promise.all([
+        API.products.list(),API.customers.list(),API.settings.promos(),API.settings.get(),API.auth.users().catch(()=>null)]);
+      setProducts(norm.products(prods));setCustomers(norm.customers(custs));setPromos(prms);setSettings(s=>({...s,...setts}));
+      if(apiUsers?.length){const merged=[...apiUsers.map(u=>({id:u.id,name:u.name,role:u.role,pin:"****",apiSynced:true}))];
+        const localOnly=users.filter(lu=>!apiUsers.find(au=>au.name===lu.name));setUsers([...merged,...localOnly]);}
+      loadVariantOrderFromSettings(setts);
+    }catch(e){console.warn("Auto-reconnect échoué:",e.message);
+      // Token expiré → déconnecter
+      if(e.message?.includes("401")||e.message?.includes("Unauthorized")){setCurrentUser(null);API.clearToken();}
+    }})();
+  },[]);// eslint-disable-line react-hooks/exhaustive-deps
 
   // ══ Retry pending sync when back online ══
   const clearPendingSync=useCallback(()=>{setPendingSync([]);notify("File de synchronisation vidée","info");},[notify]);
@@ -4003,12 +4021,16 @@ function UsersScreen(){
     if(form.pin)apiData.password=form.pin;
     if(editUser){
       setUsers(p=>p.map(u=>u.id===editUser.id?{...u,name:form.name,role:form.role,...(form.pin?{pin:form.pin}:{})}:u));
-      // Sync modification avec l'API — avec gestion offline
+      // Sync modification avec l'API
       try{await API.auth.updateUser(editUser.id,apiData);
         setEditUser(null);notify("Utilisateur modifié et synchronisé","success");
       }catch(e){
-        addPendingSync({type:"updateUser",userId:editUser.id,data:apiData});
-        setEditUser(null);notify("Utilisateur modifié localement — synchro en attente (hors ligne)","warn");
+        console.error("updateUser error:",e.message,editUser.id,apiData);
+        setEditUser(null);
+        if(!isOnline||e.message?.includes("fetch")||e.message?.includes("network")||e.message?.includes("Failed")){
+          addPendingSync({type:"updateUser",userId:editUser.id,data:apiData});
+          notify("Hors ligne — synchro en attente","warn");
+        }else{notify(`Erreur serveur: ${e.message}`,"error");}
       }
     }else{
       try{
@@ -4016,10 +4038,13 @@ function UsersScreen(){
         setUsers(p=>[...p,{id:apiUser.id||("u"+Date.now()),name:form.name,role:form.role,pin:form.pin,apiSynced:true}]);
         setNewModal(false);notify("Utilisateur créé et synchronisé","success");
       }catch(e){
-        const localId="u"+Date.now();
-        setUsers(p=>[...p,{id:localId,name:form.name,role:form.role,pin:form.pin,pendingSync:true}]);
-        addPendingSync({type:"createUser",data:apiData,localId});
-        setNewModal(false);notify("Utilisateur créé localement — synchro en attente (hors ligne)","warn");
+        console.error("createUser error:",e.message,apiData);
+        if(!isOnline||e.message?.includes("fetch")||e.message?.includes("network")||e.message?.includes("Failed")){
+          const localId="u"+Date.now();
+          setUsers(p=>[...p,{id:localId,name:form.name,role:form.role,pin:form.pin,pendingSync:true}]);
+          addPendingSync({type:"createUser",data:apiData,localId});
+          setNewModal(false);notify("Hors ligne — synchro en attente","warn");
+        }else{setNewModal(false);notify(`Erreur serveur: ${e.message}`,"error");}
       }
     }
     setForm({name:"",role:"cashier",pin:""});};

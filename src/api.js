@@ -5,10 +5,11 @@
 const API_URL = import.meta.env.VITE_API_URL || 'https://api.techincash.app';
 
 let token = null;
+try { token = sessionStorage.getItem('caissepro_token'); } catch(e) {}
 
-export function setToken(t) { token = t; }
+export function setToken(t) { token = t; try { if(t) sessionStorage.setItem('caissepro_token', t); else sessionStorage.removeItem('caissepro_token'); } catch(e) {} }
 export function getToken() { return token; }
-export function clearToken() { token = null; }
+export function clearToken() { token = null; try { sessionStorage.removeItem('caissepro_token'); } catch(e) {} }
 
 async function api(path, options = {}) {
   const headers = { 'Content-Type': 'application/json', ...options.headers };
