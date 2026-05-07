@@ -343,6 +343,10 @@ function AppProvider({children}){
   const defaultUsers=[{id:"u1",name:"Admin",role:"admin",pin:"1234"},{id:"u2",name:"Sophie",role:"cashier",pin:"1234"},{id:"u3",name:"Marc",role:"cashier",pin:"1234"}];
   const[users,setUsersRaw]=useState(()=>{try{const s=localStorage.getItem("caissepro_users");return s?JSON.parse(s):defaultUsers;}catch(e){return defaultUsers;}});
   const setUsers=useCallback((v)=>{setUsersRaw(prev=>{const next=typeof v==="function"?v(prev):v;try{localStorage.setItem("caissepro_users",JSON.stringify(next));}catch(e){}return next;});},[]);
+  // ══ Pending sync queue — retry offline user/settings changes when back online ══
+  const[pendingSync,setPendingSync]=useState(()=>{try{const s=localStorage.getItem("caissepro_pendingSync");return s?JSON.parse(s):[];}catch(e){return[];}});
+  useEffect(()=>{try{localStorage.setItem("caissepro_pendingSync",JSON.stringify(pendingSync));}catch(e){}},[pendingSync]);
+  const addPendingSync=useCallback((action)=>{setPendingSync(p=>[...p,{...action,ts:Date.now()}]);},[]);
   const[tvaRates,setTvaRates]=useState([...DEFAULT_TVA_RATES]);
   useEffect(()=>{TVA_RATES=tvaRates;},[tvaRates]);
 
@@ -362,6 +366,31 @@ function AppProvider({children}){
   useEffect(()=>{const on=()=>setIsOnline(true);const off=()=>setIsOnline(false);
     window.addEventListener("online",on);window.addEventListener("offline",off);
     return()=>{window.removeEventListener("online",on);window.removeEventListener("offline",off);};},[]);
+
+  // ══ Retry pending sync when back online ══
+  useEffect(()=>{if(!isOnline||!pendingSync.length||!API.getToken())return;
+    const syncAll=async()=>{const failed=[];let synced=0;
+      for(const action of pendingSync){
+        try{
+          if(action.type==="updateUser")await API.auth.updateUser(action.userId,action.data);
+          else if(action.type==="createUser")await API.auth.createUser(action.data);
+          else if(action.type==="deleteUser")await API.auth.deleteUser(action.userId);
+          else if(action.type==="updateSettings")await API.settings.update(action.data);
+          else if(action.type==="openRegister")await API.settings.openRegister(action.data.openingAmount);
+          else if(action.type==="closeRegister")await API.settings.closeRegister(action.data.registerId,{closedAt:new Date().toISOString()});
+          else if(action.type==="offlineSale")await API.sales.checkout(action.data);
+          else if(action.type==="offlineClosure")await API.fiscal.closure(action.data);
+          else if(action.type==="offlineAvoir")await API.sales.void(action.data.saleId,action.data.reason);
+          else{failed.push(action);continue;}
+          synced++;
+        }catch(e){failed.push(action);}
+      }
+      setPendingSync(failed);
+      if(synced>0)notify(`${synced} modification(s) synchronisée(s) avec le serveur`,"success");
+      if(failed.length>0)notify(`${failed.length} synchro(s) en échec — nouvelle tentative au prochain retour en ligne`,"warn");
+    };
+    syncAll();
+  },[isOnline,pendingSync.length]);// eslint-disable-line react-hooks/exhaustive-deps
 
   const addJET=useCallback((t,d)=>setJet(p=>[{id:Date.now(),date:new Date().toISOString(),type:t,detail:d,user:currentUser?.name||"Sys"},...p]),[currentUser]);
   const addAudit=useCallback((a,d,r)=>setAudit(p=>[{id:Date.now(),date:new Date().toISOString(),action:a,detail:d,ref:r,user:currentUser?.name||"—"},...p]),[currentUser]);
@@ -409,8 +438,8 @@ function AppProvider({children}){
   const addToCart=(p,v)=>setCart(prev=>{const i=prev.findIndex(c=>c.product.id===p.id&&c.variant?.id===v?.id);
     if(i>=0){const n=[...prev];n[i]={...n[i],quantity:n[i].quantity+1};return n;}return[...prev,{product:p,variant:v,quantity:1,discount:0,isCustom:false}];});
   const addCustomItem=(name,price,taxRate)=>setCart(p=>[...p,{product:{id:`custom-${Date.now()}`,name,sku:"DIVERS",price,costPrice:0,taxRate,category:"Divers"},variant:{id:`cv-${Date.now()}`,color:"—",size:"—",ean:""},quantity:1,discount:0,isCustom:true}]);
-  const removeFromCart=(pid,vid)=>{addAudit("VOID_LINE",`Suppression: ${pid}`,pid);setCart(p=>p.filter(c=>!(c.product.id===pid&&(c.variant?.id===vid||!vid))));};
-  const voidSale=()=>{if(cart.length){addAudit("VOID_SALE",`Annulation panier: ${cart.length} articles`);setCart([]);setGDisc(0);setSelCust(null);}};
+  const removeFromCart=(pid,vid,reason)=>{addAudit("VOID_LINE",`Suppression: ${pid}${reason?` — Motif: ${reason}`:""}`,pid);addJET("VOID_LINE",`Suppression ligne produit ${pid}${reason?` — ${reason}`:""}`);setCart(p=>p.filter(c=>!(c.product.id===pid&&(c.variant?.id===vid||!vid))));};
+  const voidSale=(reason)=>{if(cart.length){addAudit("VOID_SALE",`Annulation panier: ${cart.length} articles — Motif: ${reason||"Non spécifié"}`);addJET("VOID_SALE",`Annulation panier ${cart.length} art. — ${reason||"Non spécifié"}`);setCart([]);setGDisc(0);setSelCust(null);}};
   const updateQty=(pid,vid,q)=>{if(q<1)return removeFromCart(pid,vid);setCart(p=>p.map(c=>c.product.id===pid&&c.variant?.id===vid?{...c,quantity:q}:c));};
   const updateItemDisc=(pid,vid,d)=>setCart(p=>p.map(c=>c.product.id===pid&&c.variant?.id===vid?{...c,discount:d}:c));
   const clearCart=()=>{setCart([]);setGDisc(0);setSelCust(null);setPromoCode("");};
@@ -531,9 +560,15 @@ function AppProvider({children}){
       setTickets(prev=>[ticket,...prev]);
       setCart([]);setGDisc(0);setSelCust(null);setPromoCode("");setAvoirPayment(0);setSaleNote("");
       addStockMove("VENTE",{name:"Panier",sku:"—"},{color:"—",size:"—"},-cart.reduce((s,i)=>s+i.quantity,0),ticketNumber);
-      notify("Vente enregistrée (hors-ligne)","warn");return ticket;
+      // Queue offline sale for sync when back online
+      addPendingSync({type:"offlineSale",data:{
+        items:items.map(({product,variant,...rest})=>rest),payments,customerId:selCust?.id||null,
+        globalDiscount:gd,saleNote:saleNote||null,promosApplied:applied,sessionId:cashReg?.id||null,
+        offlineTicketNumber:ticketNumber,offlineDate:date
+      }});
+      notify("Vente enregistrée (hors-ligne) — synchro en attente","warn");return ticket;
     }
-  },[cart,gDisc,gDiscType,currentUser,selCust,calcPromoDiscount,promoCode,saleNote,cashReg,tSeq,gt,avoirPayment,addStockMove,notify,settings.pricingMode]);
+  },[cart,gDisc,gDiscType,currentUser,selCust,calcPromoDiscount,promoCode,saleNote,cashReg,tSeq,gt,avoirPayment,addStockMove,notify,settings.pricingMode,addPendingSync]);
 
   // Stock receipt - via API
   const receiveStock=useCallback(async(productId,variantId,qty,supplier)=>{
@@ -693,9 +728,10 @@ function AppProvider({children}){
         byPayment:{cash,card,cheque:chequeLocal,giftcard:giftcardLocal},
         bySeller:pt.reduce((m,t)=>{const n=t.userName||"?";m[n]=(m[n]||0)+(t.totalTTC||0);return m;},{})};
       setClosures(p=>[cl,...p]);setGt(newGt);addAudit("CLOTURE",`Z ${type} (local)`);
-      notify("Clôture enregistrée (hors-ligne)","warn");return cl;
+      addPendingSync({type:"offlineClosure",data:{type,actualCash:aCash,actualCard:aCard,offlineId:cl.id,offlineDate:clDate}});
+      notify("Clôture enregistrée (hors-ligne) — synchro en attente","warn");return cl;
     }
-  },[addAudit,tickets,closures,gt,cashReg,currentUser,notify]);
+  },[addAudit,tickets,closures,gt,cashReg,currentUser,notify,addPendingSync]);
 
   // Exports — via API
   const exportFEC=useCallback(async()=>{try{await API.fiscal.fec();addJET("EXPORT","Export FEC");addAudit("FEC","Export fichier FEC");}catch(e){notify("Erreur: "+e.message,"error");}},[notify,addJET,addAudit]);
@@ -774,8 +810,17 @@ function AppProvider({children}){
       setCustomers(p=>[...p,nc]);notify("Client créé","success");return nc;
     }},[notify]);
 
-  const openReg=(a)=>{setCashReg({openingAmount:a,openDate:new Date().toISOString()});addAudit("CAISSE","Ouverture "+a+"€");};
-  const closeReg=()=>setCashReg(null);
+  const openReg=async(a)=>{
+    const reg={openingAmount:a,openDate:new Date().toISOString()};
+    setCashReg(reg);addAudit("CAISSE","Ouverture "+a+"€");
+    try{const res=await API.settings.openRegister(a);if(res?.id)setCashReg(prev=>({...prev,id:res.id}));
+    }catch(e){addPendingSync({type:"openRegister",data:{openingAmount:a}});console.warn("Ouverture caisse locale:",e.message);}
+  };
+  const closeReg=async()=>{
+    if(cashReg?.id){try{await API.settings.closeRegister(cashReg.id,{closedAt:new Date().toISOString()});
+    }catch(e){addPendingSync({type:"closeRegister",data:{registerId:cashReg.id}});console.warn("Fermeture caisse locale:",e.message);}}
+    setCashReg(null);
+  };
 
   // ══ GIFT CARDS ══
   const[giftCards,setGiftCards]=useState(()=>{try{const s=localStorage.getItem("caissepro_giftcards");return s?JSON.parse(s):[];}catch(e){return[];}});
@@ -845,7 +890,10 @@ function AppProvider({children}){
       if(apiResult?.seq)avoir.seq=apiResult.seq;
       if(apiResult?.hash)avoir.hash=apiResult.hash;
       if(apiResult?.fingerprint)avoir.fingerprint=apiResult.fingerprint;
-    }catch(e){console.warn("Avoir API échoué, mode local:",e.message);}
+    }catch(e){
+      console.warn("Avoir API échoué, mode local:",e.message);
+      addPendingSync({type:"offlineAvoir",data:{saleId:ticket.ticketNumber||ticket.id,reason,avoirNumber,items:items.map(i=>({productId:i.product_id||i.product?.id,variantId:i.variant_id||i.variant?.id,qty:i.quantity}))}});
+    }
 
     setAvoirSeq(seq);setAvoirs(p=>[avoir,...p]);
 
@@ -869,7 +917,7 @@ function AppProvider({children}){
     addJET("AVOIR",`Avoir ${avoirNumber} émis pour ${totalTTC.toFixed(2)}€`);
     notify(`Avoir ${avoirNumber} — ${totalTTC.toFixed(2)}€`,"success");
     return avoir;
-  },[avoirSeq,avoirs,lastHash,currentUser,addAudit,addJET,notify]);
+  },[avoirSeq,avoirs,lastHash,currentUser,addAudit,addJET,notify,addPendingSync]);
 
   // ══ PRODUCT EDIT — via API ══
   const updateProduct=useCallback(async(productId,updates)=>{
@@ -951,7 +999,7 @@ function AppProvider({children}){
     updateProduct,deleteProduct,addVariantToProduct,deleteVariant,
     updateCustomer,deleteCustomer,adjustStock,
     printerConnected,printerType,thermalPrint,connectPrinter,disconnectPrinter,
-    users,setUsers,tvaRates,setTvaRates,
+    users,setUsers,tvaRates,setTvaRates,addPendingSync,pendingSync,
   }}>{children}</AppCtx.Provider>;
 }
 
@@ -1056,7 +1104,7 @@ function SalesScreen(){
     gDisc,gDiscType,setCartGD,promoCode,setPromoCode,calcPromoDiscount,isOnline,findByEAN,offlineMode,
     parked,parkCart,restoreCart,customers,addCustomer,selCust,setSelCust,perm,notify,
     stockAlerts,activePromos,avoirPayment,setAvoirPayment,getLoyaltyTier,tickets,saleNote,setSaleNote,favorites,toggleFavorite,getLastPriceForCustomer,settings,
-    printerConnected,thermalPrint}=useApp();
+    printerConnected,thermalPrint,pendingSync}=useApp();
   const[search,setSearch]=useState("");const[cat,setCat]=useState("Tous");const[vm,setVm]=useState(null);
   const[dm,setDm]=useState(null);const[dv,setDv]=useState("");const[gm,setGm]=useState(false);const[gv,setGv]=useState("");const[gtp,setGtp]=useState("percentage");
   const[lastTk,setLastTk]=useState(null);const[tkModal,setTkModal]=useState(false);const[busy,setBusy]=useState(false);
@@ -1066,7 +1114,7 @@ function SalesScreen(){
   const[customModal,setCustomModal]=useState(false);const[customName,setCustomName]=useState("");const[customPrice,setCustomPrice]=useState("");
   const[newCustModal,setNewCustModal]=useState(false);const[ncF,setNcF]=useState("");const[ncL,setNcL]=useState("");const[ncE,setNcE]=useState("");const[ncP,setNcP]=useState("");
   const[codeInput,setCodeInput]=useState("");
-  const[confirmVoid,setConfirmVoid]=useState(false);
+  const[confirmVoid,setConfirmVoid]=useState(false);const[voidReason,setVoidReason]=useState("");
   const[showShortcuts,setShowShortcuts]=useState(false);
   const barcodeBuffer=useRef("");const barcodeTimer=useRef(null);
 
@@ -1142,7 +1190,8 @@ function SalesScreen(){
       display:"flex",alignItems:"center",gap:8,fontSize:11,fontWeight:600,color:offlineMode?"#92400E":C.danger,
       borderBottom:`1px solid ${offlineMode?"#F5D08044":"#E5A0A044"}`,animation:"slideDown 0.3s ease"}}>
       <WifiOff size={13}/> {offlineMode?"Mode hors-ligne — Données locales (serveur indisponible)":"Connexion internet perdue"}
-      {offlineMode&&<Badge color="#92400E">Local</Badge>}</div>}
+      {offlineMode&&<Badge color="#92400E">Local</Badge>}
+      {pendingSync.length>0&&<Badge color={C.warn}>⏳ {pendingSync.length} synchro(s) en attente</Badge>}</div>}
 
     {/* Products */}
     <div style={{flex:1,padding:16,display:"flex",flexDirection:"column",overflow:"hidden"}}>
@@ -1430,8 +1479,21 @@ function SalesScreen(){
         <Btn onClick={()=>{restoreCart(p.id);setParkedModal(false);}} style={{padding:"4px 10px",fontSize:11}}><Play size={12}/> Reprendre</Btn></div>))}</Modal>
 
     {/* Void confirmation */}
-    <ConfirmDialog open={confirmVoid} onClose={()=>setConfirmVoid(false)} onConfirm={voidSale}
-      title="Annuler le panier ?" message={`Êtes-vous sûr de vouloir annuler ${cart.length} article(s) pour un total de ${totals.tTTC.toFixed(2)}€ ? Cette action est irréversible.`}/>
+    <Modal open={confirmVoid} onClose={()=>{setConfirmVoid(false);setVoidReason("");}} title="Annuler le panier">
+      <div style={{marginBottom:12}}><AlertTriangle size={20} color={C.danger} style={{marginRight:8,verticalAlign:"middle"}}/>
+        <span style={{fontSize:13,color:C.textMuted}}>Annuler {cart.length} article(s) pour {totals.tTTC.toFixed(2)}€ ? Irréversible.</span></div>
+      <label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:4}}>MOTIF D'ANNULATION (obligatoire NF525)</label>
+      <select value={voidReason} onChange={e=>setVoidReason(e.target.value)} style={{width:"100%",padding:10,borderRadius:10,border:`2px solid ${C.border}`,fontSize:12,marginBottom:14,fontFamily:"inherit"}}>
+        <option value="">Sélectionner un motif…</option>
+        <option value="Erreur de saisie">Erreur de saisie</option>
+        <option value="Client annule">Client annule l'achat</option>
+        <option value="Produit indisponible">Produit indisponible</option>
+        <option value="Erreur de prix">Erreur de prix</option>
+        <option value="Autre">Autre</option></select>
+      <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
+        <Btn variant="outline" onClick={()=>{setConfirmVoid(false);setVoidReason("");}}>Annuler</Btn>
+        <Btn variant="danger" disabled={!voidReason} onClick={()=>{voidSale(voidReason);setConfirmVoid(false);setVoidReason("");}}>Confirmer l'annulation</Btn></div>
+    </Modal>
 
     {/* Keyboard shortcuts help */}
     <Modal open={showShortcuts} onClose={()=>setShowShortcuts(false)} title="Raccourcis clavier">
@@ -2000,6 +2062,7 @@ function HistoryScreen(){
   const[avoirDetail,setAvoirDetail]=useState(null);
   const[page,setPage]=useState(0);const PAGE_SIZE=25;
 
+  useEffect(()=>{setPage(0);},[search,dateFilter]);
   const filteredTickets=useMemo(()=>tickets.filter(t=>{
     const q=search.toLowerCase();
     const matchSearch=!q||(t.ticketNumber||"").toLowerCase().includes(q)||(t.customerName||"").toLowerCase().includes(q)||(t.userName||t.user_name||"").toLowerCase().includes(q);
@@ -2027,8 +2090,8 @@ function HistoryScreen(){
       <Input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Rechercher N°, client, caissier…" style={{width:220,height:32,fontSize:11,padding:"4px 10px"}}/>
       <Input type="date" value={dateFilter} onChange={e=>setDateFilter(e.target.value)} style={{width:140,height:32,fontSize:11,padding:"4px 10px"}}/></div>
 
-    {tab==="tickets"&&(<>{pagedTickets.length?pagedTickets.map(t=>(
-      <div key={t.ticketNumber} style={{display:"flex",alignItems:"center",gap:10,padding:10,borderRadius:12,background:C.surface,border:`1.5px solid ${C.border}`,marginBottom:5,transition:"all 0.12s"}}
+    {tab==="tickets"&&(<>{pagedTickets.length?pagedTickets.map((t,idx)=>(
+      <div key={t.ticketNumber||t.id||idx} style={{display:"flex",alignItems:"center",gap:10,padding:10,borderRadius:12,background:C.surface,border:`1.5px solid ${C.border}`,marginBottom:5,transition:"all 0.12s"}}
         onMouseEnter={e=>e.currentTarget.style.borderColor=C.primary+"44"} onMouseLeave={e=>e.currentTarget.style.borderColor=C.border}>
         <Receipt size={14} color={C.textMuted}/>
         <div style={{flex:1,cursor:"pointer"}} onClick={()=>setReprintTk(t)}>
@@ -2047,8 +2110,8 @@ function HistoryScreen(){
         <Btn variant="outline" disabled={page>=totalPages-1} onClick={()=>setPage(p=>p+1)} style={{fontSize:10,padding:"4px 10px"}}>Suivant</Btn>
       </div>}</>)}
 
-    {tab==="avoirs"&&(avoirs.length?avoirs.map(a=>(
-      <div key={a.avoirNumber} onClick={()=>setAvoirDetail(a)} style={{display:"flex",alignItems:"center",gap:10,padding:10,borderRadius:10,
+    {tab==="avoirs"&&(avoirs.length?avoirs.map((a,idx)=>(
+      <div key={a.avoirNumber||a.id||idx} onClick={()=>setAvoirDetail(a)} style={{display:"flex",alignItems:"center",gap:10,padding:10,borderRadius:10,
         background:C.surface,border:`1.5px solid ${C.danger}33`,marginBottom:5,cursor:"pointer"}}>
         <RotateCcw size={14} color={C.danger}/>
         <div style={{flex:1}}>
@@ -2726,7 +2789,7 @@ function AuditScreen(){
   const{audit,jet,exportCSVReport}=useApp();const[filterUser,setFilterUser]=useState("");const[tab,setTab]=useState("audit");const[page,setPage]=useState(0);
   const PAGE_SIZE=50;
   const ac={VENTE:C.primary,VOID_LINE:C.warn,VOID_SALE:C.danger,CLOTURE:C.fiscal,CAISSE:C.accent,IMPORT:C.warn,PARK:"#888",PRODUCT:C.info,RECEPTION:"#3B8C5A",RGPD:C.fiscal,FEC:C.info,CLOCK_IN:"#3B8C5A",CLOCK_OUT:C.accent,PRICE_CHANGE:C.warn,EXPORT:C.info,AVOIR:C.fiscal};
-  const jc={LOGIN:C.primary,LOGIN_OFFLINE:C.warn,LOGOUT:C.accent,AVOIR:C.fiscal,SYS_START:C.info,PARAM_CHANGE:C.warn,EXPORT:C.info,ERROR:C.danger};
+  const jc={LOGIN:C.primary,LOGIN_OFFLINE:C.warn,LOGOUT:C.accent,AVOIR:C.fiscal,SYS_START:C.info,PARAM_CHANGE:C.warn,EXPORT:C.info,ERROR:C.danger,VOID_LINE:C.warn,VOID_SALE:C.danger};
   const users=[...new Set(audit.map(e=>e.user))];
   const filtered=filterUser?(tab==="audit"?audit:jet).filter(e=>e.user===filterUser):(tab==="audit"?audit:jet);
   const totalPages=Math.ceil(filtered.length/PAGE_SIZE);const pageData=filtered.slice(page*PAGE_SIZE,(page+1)*PAGE_SIZE);
@@ -3870,7 +3933,7 @@ function PromosScreen(){
 }
 
 function CashierNav({active,onNav}){
-  const{currentUser,logout,isOnline,stockAlerts,clockIn,clockOut}=useApp();
+  const{currentUser,logout,isOnline,stockAlerts,clockIn,clockOut,pendingSync}=useApp();
   const items=[{id:"sales",l:"Vente",i:ShoppingCart},{id:"returns",l:"Retours",i:RotateCcw},{id:"stats",l:"Stats",i:BarChart3},{id:"stock",l:"Stock",i:Grid},
     {id:"products",l:"Produits",i:Package},{id:"history",l:"Tickets",i:Receipt},{id:"customers",l:"Clients",i:Users},{id:"giftcards",l:"Cadeaux",i:Gift},
     {id:"promos",l:"Promos",i:Zap},{id:"closure",l:"Clôture",i:Lock},
@@ -3881,6 +3944,7 @@ function CashierNav({active,onNav}){
     <div style={{display:"flex",alignItems:"center",gap:3,marginBottom:3}}>
       <div style={{width:7,height:7,borderRadius:4,background:isOnline?"#2F9E55":C.danger,boxShadow:isOnline?"0 0 6px #2F9E5555":"0 0 6px #D1453B55"}}/>
       <span style={{fontSize:8,color:C.textMuted,fontWeight:600}}>{isOnline?"Online":"Offline"}</span></div>
+    {pendingSync.length>0&&<div style={{fontSize:7,color:C.warn,fontWeight:700,marginBottom:2}} title={`${pendingSync.length} modification(s) en attente de synchronisation`}>⏳ {pendingSync.length} sync</div>}
     <div style={{display:"flex",gap:3,marginBottom:8}}>
       <button onClick={clockIn} title="Pointer entrée" style={{width:28,height:24,borderRadius:8,border:"none",cursor:"pointer",background:C.primaryLight,color:C.primary,fontSize:8,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",transition:"all 0.15s"}}>IN</button>
       <button onClick={clockOut} title="Pointer sortie" style={{width:28,height:24,borderRadius:8,border:"none",cursor:"pointer",background:C.dangerLight,color:C.danger,fontSize:8,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",transition:"all 0.15s"}}>OUT</button></div>
@@ -3916,27 +3980,33 @@ function CashierInterface(){
 
 /* ══════════ USERS SCREEN ══════════ */
 function UsersScreen(){
-  const{users,setUsers,notify}=useApp();
+  const{users,setUsers,notify,isOnline,addPendingSync}=useApp();
   const[editUser,setEditUser]=useState(null);const[newModal,setNewModal]=useState(false);
   const[form,setForm]=useState({name:"",role:"cashier",pin:""});
   const[confirmDel,setConfirmDel]=useState(null);
   const openEdit=(u)=>{setForm({name:u.name,role:u.role,pin:u.pin});setEditUser(u);};
   const saveUser=async()=>{if(!form.name||!form.pin){notify("Nom et PIN requis","error");return;}
+    const apiData={name:form.name,password:form.pin,role:form.role};
     if(editUser){
       setUsers(p=>p.map(u=>u.id===editUser.id?{...u,...form}:u));
-      // Sync modification avec l'API
-      API.auth.updateUser(editUser.id,{name:form.name,password:form.pin,role:form.role}).catch(e=>console.warn("Modif locale uniquement:",e.message));
-      setEditUser(null);notify("Utilisateur modifié","success");
-    }else{
-      // Créer côté API d'abord, puis local
-      try{
-        const apiUser=await API.auth.createUser({name:form.name,password:form.pin,role:form.role});
-        setUsers(p=>[...p,{id:apiUser.id||("u"+Date.now()),name:form.name,role:form.role,pin:form.pin,apiSynced:true}]);
+      // Sync modification avec l'API — avec gestion offline
+      try{await API.auth.updateUser(editUser.id,apiData);
+        setEditUser(null);notify("Utilisateur modifié et synchronisé","success");
       }catch(e){
-        setUsers(p=>[...p,{id:"u"+Date.now(),name:form.name,role:form.role,pin:form.pin}]);
-        console.warn("Utilisateur créé localement uniquement:",e.message);
+        addPendingSync({type:"updateUser",userId:editUser.id,data:apiData});
+        setEditUser(null);notify("Utilisateur modifié localement — synchro en attente (hors ligne)","warn");
       }
-      setNewModal(false);notify("Utilisateur créé","success");
+    }else{
+      try{
+        const apiUser=await API.auth.createUser(apiData);
+        setUsers(p=>[...p,{id:apiUser.id||("u"+Date.now()),name:form.name,role:form.role,pin:form.pin,apiSynced:true}]);
+        setNewModal(false);notify("Utilisateur créé et synchronisé","success");
+      }catch(e){
+        const localId="u"+Date.now();
+        setUsers(p=>[...p,{id:localId,name:form.name,role:form.role,pin:form.pin,pendingSync:true}]);
+        addPendingSync({type:"createUser",data:apiData,localId});
+        setNewModal(false);notify("Utilisateur créé localement — synchro en attente (hors ligne)","warn");
+      }
     }
     setForm({name:"",role:"cashier",pin:""});};
   return(<div style={{height:"100%",overflowY:"auto",padding:20,background:C.bg}}>
@@ -3950,6 +4020,7 @@ function UsersScreen(){
         <div style={{flex:1}}><div style={{fontSize:13,fontWeight:600}}>{u.name}</div>
           <div style={{fontSize:10,color:C.textMuted}}>{u.role==="admin"?"Administrateur":"Caissier(e)"} — PIN: ****</div></div>
         <Badge color={u.role==="admin"?C.accent:C.primary}>{u.role}</Badge>
+        {u.pendingSync&&<Badge color={C.warn}>⏳ Synchro en attente</Badge>}
         <Btn variant="outline" onClick={()=>openEdit(u)} style={{fontSize:10,padding:"4px 10px"}}><Settings size={11}/> Modifier</Btn>
         <Btn variant="ghost" onClick={()=>setConfirmDel(u)} style={{color:C.danger,padding:"4px 8px"}}><Trash2 size={11}/></Btn>
       </div>))}</div>
@@ -3961,10 +4032,10 @@ function UsersScreen(){
             <option value="admin">Administrateur</option><option value="cashier">Caissier(e)</option></select></div>
         <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>CODE PIN</label><Input type="password" value={form.pin} onChange={e=>setForm(p=>({...p,pin:e.target.value}))} placeholder="1234"/></div></div>
       <Btn onClick={saveUser} style={{width:"100%",height:40,background:`linear-gradient(135deg,${C.primary},${C.gradientB})`}}><Save size={14}/> {editUser?"Enregistrer":"Créer"}</Btn></Modal>
-    <ConfirmDialog open={!!confirmDel} onClose={()=>setConfirmDel(null)} onConfirm={()=>{
+    <ConfirmDialog open={!!confirmDel} onClose={()=>setConfirmDel(null)} onConfirm={async()=>{
       setUsers(p=>p.filter(u=>u.id!==confirmDel.id));
-      API.auth.deleteUser(confirmDel.id).catch(e=>console.warn("Suppression locale uniquement:",e.message));
-      notify("Utilisateur supprimé","warn");}}
+      try{await API.auth.deleteUser(confirmDel.id);notify("Utilisateur supprimé et synchronisé","warn");
+      }catch(e){addPendingSync({type:"deleteUser",userId:confirmDel.id});notify("Utilisateur supprimé localement — synchro en attente","warn");}}}
       title="Supprimer cet utilisateur ?" message={`Supprimer ${confirmDel?.name} ?`}/>
   </div>);
 }
