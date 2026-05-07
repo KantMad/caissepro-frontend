@@ -964,6 +964,16 @@ function AppProvider({children}){
     return avoir;
   },[avoirSeq,avoirs,lastHash,currentUser,addAudit,addJET,notify,addPendingSync]);
 
+  // ══ FOOTFALL COUNTER ══
+  const[footfall,setFootfall]=useState(()=>{try{const s=localStorage.getItem("caissepro_footfall");return s?JSON.parse(s):[];}catch(e){return[];}});
+  useEffect(()=>{try{localStorage.setItem("caissepro_footfall",JSON.stringify(footfall));}catch(e){}},[footfall]);
+  const addFootfall=useCallback((count,date)=>{
+    const d=date||new Date().toISOString().split("T")[0];
+    setFootfall(prev=>{const existing=prev.find(f=>f.date===d);
+      if(existing)return prev.map(f=>f.date===d?{...f,count}:f);
+      return[...prev,{date:d,count}].sort((a,b)=>b.date.localeCompare(a.date));});
+  },[]);
+
   // ══ PRODUCT EDIT — via API ══
   const updateProduct=useCallback(async(productId,updates)=>{
     try{await API.products.update(productId,updates);
@@ -1027,7 +1037,58 @@ function AppProvider({children}){
     }catch(e){notify("Erreur: "+e.message,"error");}
   },[products,addAudit,notify]);
 
-  return<AppCtx.Provider value={{currentUser,login,logout,mode,setMode,offlineMode,products,setProducts,addProduct,customers,setCustomers,addCustomer,
+  // ══ CUSTOMER DISPLAY (dual screen) ══
+  const customerDisplayRef=useRef(null);
+  const openCustomerDisplay=useCallback(()=>{
+    if(customerDisplayRef.current&&!customerDisplayRef.current.closed){customerDisplayRef.current.focus();return;}
+    const w=window.open("","CaisseProClient","width=800,height=600,menubar=no,toolbar=no,location=no,status=no");
+    if(!w){notify("Impossible d'ouvrir l'écran client — autorisez les popups","error");return;}
+    customerDisplayRef.current=w;
+    w.document.write(`<!DOCTYPE html><html><head><title>Ecran Client</title><style>
+      *{margin:0;padding:0;box-sizing:border-box}body{font-family:'DM Sans',system-ui,sans-serif;background:#F8FAF7;overflow:hidden}
+      #root{height:100vh;display:flex;flex-direction:column}
+      .header{background:linear-gradient(135deg,#2B6E44,#4DA768);color:#fff;padding:20px 30px;text-align:center}
+      .header h1{font-size:24px;font-weight:800}.header .sub{font-size:13px;opacity:0.8;margin-top:4px}
+      .items{flex:1;overflow-y:auto;padding:20px 30px}.item{display:flex;justify-content:space-between;padding:14px 0;border-bottom:1px solid #E8ECE5;font-size:16px}
+      .item .name{font-weight:600;flex:1}.item .qty{color:#666;margin:0 20px}.item .price{font-weight:800;color:#2B6E44;min-width:80px;text-align:right}
+      .total-bar{background:#fff;border-top:3px solid #2B6E44;padding:24px 30px;display:flex;justify-content:space-between;align-items:center}
+      .total-bar .label{font-size:20px;font-weight:700;color:#333}.total-bar .amount{font-size:36px;font-weight:900;color:#2B6E44}
+      .screensaver{height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;background:linear-gradient(135deg,#F8FAF7,#E8F0E3)}
+      .screensaver .logo{width:120px;height:120px;border-radius:30px;background:linear-gradient(135deg,#2B6E44,#4DA768);display:flex;align-items:center;justify-content:center;color:#fff;font-size:48px;font-weight:900;margin-bottom:20px;box-shadow:0 12px 40px rgba(43,110,68,0.3)}
+      .screensaver h2{font-size:28px;font-weight:800;color:#333;margin-bottom:8px}.screensaver p{font-size:16px;color:#666}
+      .screensaver .time{font-size:48px;font-weight:800;color:#2B6E44;margin-top:20px}
+    </style></head><body><div id="root"><div class="screensaver"><div class="logo">CP</div><h2></h2><p>Bienvenue</p><div class="time"></div></div></div>
+    <script>
+      function updateTime(){const t=document.querySelector('.time');if(t)t.textContent=new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});}
+      setInterval(updateTime,1000);updateTime();
+      window.updateCart=function(data){
+        const root=document.getElementById('root');
+        if(!data||!data.items||data.items.length===0){
+          root.innerHTML='<div class="screensaver"><div class="logo">CP</div><h2>'+data.storeName+'</h2><p>Bienvenue</p><div class="time"></div></div>';
+          updateTime();return;}
+        let html='<div class="header"><h1>'+data.storeName+'</h1><div class="sub">Votre panier</div></div>';
+        html+='<div class="items">';
+        data.items.forEach(function(i){html+='<div class="item"><span class="name">'+i.name+'</span><span class="qty">x'+i.qty+'</span><span class="price">'+i.price+'</span></div>';});
+        html+='</div>';
+        html+='<div class="total-bar"><span class="label">Total TTC</span><span class="amount">'+data.total+'</span></div>';
+        root.innerHTML=html;};
+    <\/script></body></html>`);
+    w.document.close();
+    notify("Ecran client ouvert — glissez-le sur le 2e moniteur","success");
+  },[notify]);
+
+  // Sync cart to customer display
+  useEffect(()=>{
+    if(!customerDisplayRef.current||customerDisplayRef.current.closed)return;
+    try{customerDisplayRef.current.updateCart({
+      storeName:settings.name||CO.name,
+      items:cart.map(i=>({name:i.product.name+(i.variant?` (${i.variant.color}/${i.variant.size})`:""),qty:i.quantity,
+        price:(i.product.price*i.quantity).toFixed(2)+"€"})),
+      total:cart.length>0?cart.reduce((s,i)=>s+i.product.price*i.quantity,0).toFixed(2)+"€":"0.00€"
+    });}catch(e){}
+  },[cart,settings.name]);
+
+  return<AppCtx.Provider value={{currentUser,login,logout,mode,setMode,offlineMode,products,setProducts,addProduct,customers,setCustomers,addCustomer,openCustomerDisplay,footfall,addFootfall,
     cart,addToCart,addCustomItem,removeFromCart,voidSale,updateQty,updateItemDisc,clearCart,gDisc,gDiscType,setCartGD,
     promoCode,setPromoCode,calcPromoDiscount,
     cashReg,openReg,closeReg,isOnline,tickets,tSeq,lastHash,gt,audit,jet,closures,avoirs,
@@ -4205,11 +4266,85 @@ function PromosScreen(){
   </div>);
 }
 
+/* ══════════ FOOTFALL COUNTER ══════════ */
+function FootfallScreen(){
+  const{footfall,addFootfall,tickets,notify}=useApp();
+  const[manualCount,setManualCount]=useState("");const[manualDate,setManualDate]=useState(new Date().toISOString().split("T")[0]);
+  const[counterUrl,setCounterUrl]=useState(()=>{try{return localStorage.getItem("caissepro_counter_url")||"";}catch(e){return"";}});
+
+  const todayStr=new Date().toISOString().split("T")[0];
+  const todayFootfall=footfall.find(f=>f.date===todayStr)?.count||0;
+  const todayTickets=tickets.filter(t=>(t.date||t.createdAt||t.created_at||"").startsWith(todayStr)).length;
+  const conversionRate=todayFootfall>0?(todayTickets/todayFootfall*100):0;
+
+  const fetchCounter=async()=>{if(!counterUrl){notify("URL du compteur non configurée","error");return;}
+    try{const res=await fetch(counterUrl);const data=await res.json();
+      if(data.count!=null){addFootfall(data.count);notify(`Compteur mis à jour: ${data.count} entrées`,"success");}
+      else{notify("Format de réponse invalide (attendu: {count: N})","error");}
+    }catch(e){notify("Erreur de connexion au compteur: "+e.message,"error");}};
+
+  const last7=footfall.filter(f=>{const d=new Date(f.date);const now=new Date();const diff=(now-d)/(1000*60*60*24);return diff<=7;});
+
+  return(<div style={{height:"100%",overflowY:"auto",padding:20,background:C.bg}}>
+    <h2 style={{fontSize:22,fontWeight:800,margin:"0 0 14px"}}>Compteur d'entrées</h2>
+
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12,marginBottom:20}}>
+      <div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`,textAlign:"center"}}>
+        <div style={{fontSize:10,fontWeight:600,color:C.textMuted,marginBottom:4}}>ENTRÉES AUJOURD'HUI</div>
+        <div style={{fontSize:32,fontWeight:900,color:C.primary}}>{todayFootfall}</div></div>
+      <div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`,textAlign:"center"}}>
+        <div style={{fontSize:10,fontWeight:600,color:C.textMuted,marginBottom:4}}>VENTES AUJOURD'HUI</div>
+        <div style={{fontSize:32,fontWeight:900,color:C.info}}>{todayTickets}</div></div>
+      <div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`,textAlign:"center"}}>
+        <div style={{fontSize:10,fontWeight:600,color:C.textMuted,marginBottom:4}}>TAUX DE CONVERSION</div>
+        <div style={{fontSize:32,fontWeight:900,color:conversionRate>=20?"#2F9E55":conversionRate>=10?C.warn:C.danger}}>{conversionRate.toFixed(1)}%</div></div>
+    </div>
+
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
+      <div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`}}>
+        <h3 style={{fontSize:14,fontWeight:700,marginBottom:10}}>Saisie manuelle</h3>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:10}}>
+          <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>DATE</label>
+            <Input type="date" value={manualDate} onChange={e=>setManualDate(e.target.value)} style={{height:36}}/></div>
+          <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>NB ENTRÉES</label>
+            <Input type="number" value={manualCount} onChange={e=>setManualCount(e.target.value)} placeholder="0" style={{height:36}}/></div></div>
+        <Btn onClick={()=>{const c=parseInt(manualCount);if(c>0&&manualDate){addFootfall(c,manualDate);notify(`${c} entrées enregistrées pour le ${manualDate}`,"success");setManualCount("");}}}
+          style={{width:"100%",height:40,background:`linear-gradient(135deg,${C.primary},${C.gradientB})`}}>Enregistrer</Btn>
+      </div>
+
+      <div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`}}>
+        <h3 style={{fontSize:14,fontWeight:700,marginBottom:10}}>Compteur automatique (API)</h3>
+        <div style={{marginBottom:10}}><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>URL DU COMPTEUR</label>
+          <Input value={counterUrl} onChange={e=>{setCounterUrl(e.target.value);try{localStorage.setItem("caissepro_counter_url",e.target.value);}catch(ex){}}}
+            placeholder="https://api.counter.example/today" style={{height:36}}/></div>
+        <div style={{fontSize:10,color:C.textMuted,marginBottom:8}}>Le compteur doit retourner du JSON: {"{"}"count": 123{"}"}</div>
+        <Btn variant="outline" onClick={fetchCounter} style={{width:"100%",height:36}}>Récupérer le comptage</Btn>
+      </div>
+    </div>
+
+    <div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`,marginTop:14}}>
+      <h3 style={{fontSize:14,fontWeight:700,marginBottom:10}}>Historique (7 derniers jours)</h3>
+      {last7.length===0&&<div style={{color:C.textLight,fontSize:11}}>Aucune donnée</div>}
+      <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+        {last7.length>0&&<thead><tr style={{borderBottom:`2px solid ${C.border}`}}>
+          {["Date","Entrées","Ventes","Conversion"].map(h=>(<th key={h} style={{padding:8,textAlign:"left",fontSize:10,fontWeight:700,color:C.textMuted}}>{h}</th>))}</tr></thead>}
+        <tbody>{last7.map(f=>{const dayTickets=tickets.filter(t=>(t.date||t.createdAt||t.created_at||"").startsWith(f.date)).length;
+          const conv=f.count>0?(dayTickets/f.count*100):0;
+          return(<tr key={f.date} style={{borderBottom:`1px solid ${C.border}`}}>
+            <td style={{padding:8,fontWeight:600}}>{new Date(f.date).toLocaleDateString("fr-FR",{weekday:"short",day:"numeric",month:"short"})}</td>
+            <td style={{padding:8,fontWeight:700,color:C.primary}}>{f.count}</td>
+            <td style={{padding:8}}>{dayTickets}</td>
+            <td style={{padding:8,fontWeight:700,color:conv>=20?"#2F9E55":conv>=10?C.warn:C.danger}}>{conv.toFixed(1)}%</td>
+          </tr>);})}</tbody></table>
+    </div>
+  </div>);
+}
+
 function CashierNav({active,onNav}){
-  const{currentUser,logout,isOnline,stockAlerts,clockIn,clockOut,pendingSync,clearPendingSync}=useApp();
+  const{currentUser,logout,isOnline,stockAlerts,clockIn,clockOut,pendingSync,clearPendingSync,openCustomerDisplay}=useApp();
   const items=[{id:"sales",l:"Vente",i:ShoppingCart},{id:"returns",l:"Retours",i:RotateCcw},{id:"stats",l:"Stats",i:BarChart3},{id:"stock",l:"Stock",i:Grid},
     {id:"products",l:"Produits",i:Package},{id:"history",l:"Tickets",i:Receipt},{id:"customers",l:"Clients",i:Users},{id:"giftcards",l:"Cadeaux",i:Gift},
-    {id:"promos",l:"Promos",i:Zap},{id:"closure",l:"Clôture",i:Lock},
+    {id:"promos",l:"Promos",i:Zap},{id:"closure",l:"Clôture",i:Lock},{id:"footfall",l:"Entrées",i:Activity},
     {id:"audit",l:"Audit",i:Activity},{id:"fiscal",l:"NF525",i:Shield},{id:"settings",l:"Réglages",i:Settings}];
   return(<div style={{width:76,background:C.surface,borderRight:`1px solid ${C.border}`,display:"flex",flexDirection:"column",alignItems:"center",padding:"12px 0",gap:2,boxShadow:`2px 0 12px ${C.shadow}`}}>
     <div style={{width:42,height:42,borderRadius:13,background:`linear-gradient(135deg,${C.primary},${C.gradientB})`,display:"flex",alignItems:"center",justifyContent:"center",
@@ -4235,7 +4370,12 @@ function CashierNav({active,onNav}){
           background:C.danger,color:"#fff",fontSize:8,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",
           boxShadow:`0 2px 6px ${C.danger}40`}}>{stockAlerts.length}</span>}
       </button>))}</div>
-    <div style={{borderTop:`1px solid ${C.border}`,paddingTop:8,width:"100%",display:"flex",justifyContent:"center"}}>
+    <div style={{borderTop:`1px solid ${C.border}`,paddingTop:8,width:"100%",display:"flex",flexDirection:"column",alignItems:"center",gap:4}}>
+      <button onClick={openCustomerDisplay} title="Écran client" style={{width:"calc(100% - 12px)",height:36,borderRadius:10,border:"none",cursor:"pointer",
+        display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:2,
+        background:`${C.info}08`,color:C.info,fontFamily:"inherit",transition:"all 0.15s",fontSize:8,fontWeight:600}}
+        onMouseEnter={e=>e.currentTarget.style.background=`${C.info}15`} onMouseLeave={e=>e.currentTarget.style.background=`${C.info}08`}>
+        <LayoutDashboard size={13}/><span>Écran 2</span></button>
       <button onClick={logout} title="Déconnexion" style={{width:"calc(100% - 12px)",height:44,borderRadius:12,border:"none",cursor:"pointer",
         display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:3,
         background:`${C.danger}08`,color:C.danger,fontFamily:"inherit",transition:"all 0.15s"}}
@@ -4247,7 +4387,7 @@ function CashierInterface(){
   const[sr,setSr]=useState(true);const[sc,setSc]=useState("sales");
   if(sr)return<CashRegControl onSkip={()=>setSr(false)} onDone={()=>setSr(false)}/>;
   const S={sales:SalesScreen,returns:ReturnScreen,stats:StatsScreen,stock:StockScreen,history:HistoryScreen,customers:CustomersScreen,
-    giftcards:GiftCardScreen,promos:PromosScreen,products:ProductsScreen,closure:ClosureScreen,audit:AuditScreen,fiscal:FiscalScreen,settings:SettingsScreen};
+    giftcards:GiftCardScreen,promos:PromosScreen,products:ProductsScreen,closure:ClosureScreen,footfall:FootfallScreen,audit:AuditScreen,fiscal:FiscalScreen,settings:SettingsScreen};
   const Sc=S[sc]||SalesScreen;
   return(<div style={{display:"flex",height:"100vh",fontFamily:"'DM Sans',system-ui,sans-serif"}}><CashierNav active={sc} onNav={setSc}/><div style={{flex:1,overflow:"hidden"}}><ErrorBoundary><Sc/></ErrorBoundary></div></div>);
 }
@@ -4330,7 +4470,7 @@ function DashboardNav({active,onNav}){
   const{logout,currentUser}=useApp();
   const items=[{id:"overview",l:"Dashboard",i:LayoutDashboard},{id:"products",l:"Produits",i:Package},{id:"stock",l:"Stock",i:Grid},
     {id:"stats",l:"Statistiques",i:BarChart3},{id:"returns",l:"Retours & Avoirs",i:RotateCcw},{id:"customers",l:"Clients",i:Users},{id:"users",l:"Utilisateurs",i:UserIcon},
-    {id:"tva",l:"Taux de TVA",i:Percent},{id:"giftcards",l:"Cartes cadeaux",i:Gift},{id:"promos",l:"Promotions",i:Zap},{id:"settings",l:"Paramètres",i:Settings},{id:"fiscal",l:"Fiscal NF525",i:Shield},{id:"audit",l:"Journal d'audit",i:Activity}];
+    {id:"tva",l:"Taux de TVA",i:Percent},{id:"giftcards",l:"Cartes cadeaux",i:Gift},{id:"promos",l:"Promotions",i:Zap},{id:"footfall",l:"Entrées",i:Activity},{id:"settings",l:"Paramètres",i:Settings},{id:"fiscal",l:"Fiscal NF525",i:Shield},{id:"audit",l:"Journal d'audit",i:Activity}];
   return(<div style={{width:230,background:"linear-gradient(180deg,#1A2830,#1E3035)",height:"100vh",display:"flex",flexDirection:"column"}}>
     <div style={{padding:"20px 18px",borderBottom:"1px solid rgba(255,255,255,0.06)"}}>
       <div style={{display:"flex",alignItems:"center",gap:10}}>
@@ -4458,7 +4598,7 @@ function TVAScreen(){
 function DashboardInterface(){
   const[sc,setSc]=useState("overview");
   const S={overview:DashOverview,products:ProductsScreen,stock:StockScreen,stats:StatsScreen,returns:ReturnsHistoryScreen,customers:CustomersScreen,
-    users:UsersScreen,tva:TVAScreen,giftcards:GiftCardScreen,promos:PromosScreen,settings:SettingsScreen,fiscal:FiscalScreen,audit:AuditScreen};
+    users:UsersScreen,tva:TVAScreen,giftcards:GiftCardScreen,promos:PromosScreen,footfall:FootfallScreen,settings:SettingsScreen,fiscal:FiscalScreen,audit:AuditScreen};
   const Sc=S[sc]||DashOverview;
   return(<div style={{display:"flex",height:"100vh",fontFamily:"'DM Sans',system-ui,sans-serif"}}><DashboardNav active={sc} onNav={setSc}/><div style={{flex:1,overflow:"hidden"}}><Sc/></div></div>);
 }
