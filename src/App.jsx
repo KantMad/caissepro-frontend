@@ -368,8 +368,10 @@ function AppProvider({children}){
     return()=>{window.removeEventListener("online",on);window.removeEventListener("offline",off);};},[]);
 
   // ══ Retry pending sync when back online ══
+  const clearPendingSync=useCallback(()=>{setPendingSync([]);notify("File de synchronisation vidée","info");},[notify]);
   useEffect(()=>{if(!isOnline||!pendingSync.length||!API.getToken())return;
-    const syncAll=async()=>{const failed=[];let synced=0;
+    // Debounce — ne pas retenter en boucle
+    const timer=setTimeout(async()=>{const failed=[];let synced=0;
       for(const action of pendingSync){
         try{
           if(action.type==="updateUser")await API.auth.updateUser(action.userId,action.data);
@@ -381,15 +383,20 @@ function AppProvider({children}){
           else if(action.type==="offlineSale")await API.sales.checkout(action.data);
           else if(action.type==="offlineClosure")await API.fiscal.closure(action.data);
           else if(action.type==="offlineAvoir")await API.sales.void(action.data.saleId,action.data.reason);
-          else{failed.push(action);continue;}
+          else{failed.push({...action,retries:(action.retries||0)+1,lastError:"Type inconnu"});continue;}
           synced++;
-        }catch(e){failed.push(action);}
+        }catch(e){
+          const retries=(action.retries||0)+1;
+          // Abandon après 3 tentatives — l'action est probablement invalide (ex: password ****)
+          if(retries>=3){console.warn(`Sync abandonné après ${retries} tentatives:`,action.type,e.message);
+          }else{failed.push({...action,retries,lastError:e.message});}
+        }
       }
       setPendingSync(failed);
       if(synced>0)notify(`${synced} modification(s) synchronisée(s) avec le serveur`,"success");
-      if(failed.length>0)notify(`${failed.length} synchro(s) en échec — nouvelle tentative au prochain retour en ligne`,"warn");
-    };
-    syncAll();
+      if(failed.length>0&&failed.some(f=>f.retries<3))notify(`${failed.length} synchro(s) en attente — nouvelle tentative prochainement`,"warn");
+    },2000);// 2s debounce
+    return()=>clearTimeout(timer);
   },[isOnline,pendingSync.length]);// eslint-disable-line react-hooks/exhaustive-deps
 
   const addJET=useCallback((t,d)=>setJet(p=>[{id:Date.now(),date:new Date().toISOString(),type:t,detail:d,user:currentUser?.name||"Sys"},...p]),[currentUser]);
@@ -999,7 +1006,7 @@ function AppProvider({children}){
     updateProduct,deleteProduct,addVariantToProduct,deleteVariant,
     updateCustomer,deleteCustomer,adjustStock,
     printerConnected,printerType,thermalPrint,connectPrinter,disconnectPrinter,
-    users,setUsers,tvaRates,setTvaRates,addPendingSync,pendingSync,
+    users,setUsers,tvaRates,setTvaRates,addPendingSync,pendingSync,clearPendingSync,
   }}>{children}</AppCtx.Provider>;
 }
 
@@ -1104,7 +1111,7 @@ function SalesScreen(){
     gDisc,gDiscType,setCartGD,promoCode,setPromoCode,calcPromoDiscount,isOnline,findByEAN,offlineMode,
     parked,parkCart,restoreCart,customers,addCustomer,selCust,setSelCust,perm,notify,
     stockAlerts,activePromos,avoirPayment,setAvoirPayment,getLoyaltyTier,tickets,saleNote,setSaleNote,favorites,toggleFavorite,getLastPriceForCustomer,settings,
-    printerConnected,thermalPrint,pendingSync}=useApp();
+    printerConnected,thermalPrint,pendingSync,clearPendingSync}=useApp();
   const[search,setSearch]=useState("");const[cat,setCat]=useState("Tous");const[vm,setVm]=useState(null);
   const[dm,setDm]=useState(null);const[dv,setDv]=useState("");const[gm,setGm]=useState(false);const[gv,setGv]=useState("");const[gtp,setGtp]=useState("percentage");
   const[lastTk,setLastTk]=useState(null);const[tkModal,setTkModal]=useState(false);const[busy,setBusy]=useState(false);
@@ -1191,7 +1198,8 @@ function SalesScreen(){
       borderBottom:`1px solid ${offlineMode?"#F5D08044":"#E5A0A044"}`,animation:"slideDown 0.3s ease"}}>
       <WifiOff size={13}/> {offlineMode?"Mode hors-ligne — Données locales (serveur indisponible)":"Connexion internet perdue"}
       {offlineMode&&<Badge color="#92400E">Local</Badge>}
-      {pendingSync.length>0&&<Badge color={C.warn}>⏳ {pendingSync.length} synchro(s) en attente</Badge>}</div>}
+      {pendingSync.length>0&&<span onClick={()=>{if(confirm(`${pendingSync.length} synchro(s) en attente.\nVoulez-vous vider la file ?`)){clearPendingSync();}}}
+        style={{cursor:"pointer"}}><Badge color={C.warn}>⏳ {pendingSync.length} synchro(s) en attente — cliquer pour purger</Badge></span>}</div>}
 
     {/* Products */}
     <div style={{flex:1,padding:16,display:"flex",flexDirection:"column",overflow:"hidden"}}>
@@ -3933,7 +3941,7 @@ function PromosScreen(){
 }
 
 function CashierNav({active,onNav}){
-  const{currentUser,logout,isOnline,stockAlerts,clockIn,clockOut,pendingSync}=useApp();
+  const{currentUser,logout,isOnline,stockAlerts,clockIn,clockOut,pendingSync,clearPendingSync}=useApp();
   const items=[{id:"sales",l:"Vente",i:ShoppingCart},{id:"returns",l:"Retours",i:RotateCcw},{id:"stats",l:"Stats",i:BarChart3},{id:"stock",l:"Stock",i:Grid},
     {id:"products",l:"Produits",i:Package},{id:"history",l:"Tickets",i:Receipt},{id:"customers",l:"Clients",i:Users},{id:"giftcards",l:"Cadeaux",i:Gift},
     {id:"promos",l:"Promos",i:Zap},{id:"closure",l:"Clôture",i:Lock},
@@ -3944,7 +3952,8 @@ function CashierNav({active,onNav}){
     <div style={{display:"flex",alignItems:"center",gap:3,marginBottom:3}}>
       <div style={{width:7,height:7,borderRadius:4,background:isOnline?"#2F9E55":C.danger,boxShadow:isOnline?"0 0 6px #2F9E5555":"0 0 6px #D1453B55"}}/>
       <span style={{fontSize:8,color:C.textMuted,fontWeight:600}}>{isOnline?"Online":"Offline"}</span></div>
-    {pendingSync.length>0&&<div style={{fontSize:7,color:C.warn,fontWeight:700,marginBottom:2}} title={`${pendingSync.length} modification(s) en attente de synchronisation`}>⏳ {pendingSync.length} sync</div>}
+    {pendingSync.length>0&&<div onClick={()=>{if(confirm(`${pendingSync.length} synchro(s) en échec.\n\nVoulez-vous vider la file d'attente ?`))clearPendingSync();}}
+      style={{fontSize:7,color:C.warn,fontWeight:700,marginBottom:2,cursor:"pointer"}} title="Cliquer pour vider la file de synchro">⏳ {pendingSync.length} sync</div>}
     <div style={{display:"flex",gap:3,marginBottom:8}}>
       <button onClick={clockIn} title="Pointer entrée" style={{width:28,height:24,borderRadius:8,border:"none",cursor:"pointer",background:C.primaryLight,color:C.primary,fontSize:8,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",transition:"all 0.15s"}}>IN</button>
       <button onClick={clockOut} title="Pointer sortie" style={{width:28,height:24,borderRadius:8,border:"none",cursor:"pointer",background:C.dangerLight,color:C.danger,fontSize:8,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",transition:"all 0.15s"}}>OUT</button></div>
