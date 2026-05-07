@@ -694,9 +694,13 @@ function AppProvider({children}){
 
   // Sales by seller
   const salesBySeller=useMemo(()=>{const m={};tickets.forEach(t=>{
-    const n=t.userName||t.user_name||"?";if(!m[n])m[n]={name:n,count:0,revenue:0,margin:0};
-    m[n].count++;m[n].revenue+=(t.totalTTC||parseFloat(t.total_ttc)||0);m[n].margin+=(parseFloat(t.margin)||0);});
-    return Object.values(m).sort((a,b)=>b.revenue-a.revenue);},[tickets]);
+    const n=t.sellerName||t.seller_name||t.userName||t.user_name||"?";if(!m[n])m[n]={name:n,count:0,revenue:0,margin:0,totalItems:0,customers:new Set()};
+    m[n].count++;m[n].revenue+=(t.totalTTC||parseFloat(t.total_ttc)||0);m[n].margin+=(parseFloat(t.margin)||0);
+    m[n].totalItems+=(t.items||[]).reduce((s,i)=>s+i.quantity,0);
+    if(t.customerId||t.customer_id)m[n].customers.add(t.customerId||t.customer_id);});
+    return Object.values(m).map(s=>({...s,avgBasket:s.count?s.revenue/s.count:0,avgItems:s.count?s.totalItems/s.count:0,
+      uniqueCustomers:s.customers.size,itemsPerCustomer:s.customers.size?s.totalItems/s.customers.size:0}))
+      .sort((a,b)=>b.revenue-a.revenue);},[tickets]);
 
   // Sales by size/color
   const salesByVariant=useMemo(()=>{const bySize={},byColor={};tickets.forEach(t=>(t.items||[]).forEach(i=>{
@@ -720,9 +724,10 @@ function AppProvider({children}){
 
   // ══ P3: Commission calculation (5% of margin) ══
   const commissions=useMemo(()=>{
-    return salesBySeller.map(s=>({...s,commission:s.margin*0.05,goal:salesGoals[s.name]||0,
-      goalProgress:salesGoals[s.name]?(s.revenue/salesGoals[s.name]*100):0}));
-  },[salesBySeller,salesGoals]);
+    return salesBySeller.map(s=>{const commRate=settings.commissionRates?.[s.name]||settings.defaultCommissionRate||0.05;
+      return{...s,commissionRate:commRate,commission:s.margin*commRate,goal:salesGoals[s.name]||0,
+      goalProgress:salesGoals[s.name]?(s.revenue/salesGoals[s.name]*100):0};});
+  },[salesBySeller,salesGoals,settings]);
 
   // ══ P3: Last price paid by customer ══
   const getLastPriceForCustomer=useCallback((customerId,productId)=>{
@@ -1511,10 +1516,22 @@ function SalesScreen(){
         style={{width:"100%",height:40,background:`linear-gradient(135deg,${C.primary},${C.gradientB})`}}>Créer et associer</Btn></Modal>
 
     {/* Custom item */}
-    <Modal open={customModal} onClose={()=>setCustomModal(false)} title="Article divers">
-      <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:12}}>
-        <Input value={customName} onChange={e=>setCustomName(e.target.value)} placeholder="Description (ex: Retouche ourlet)"/>
-        <Input type="number" step="0.01" value={customPrice} onChange={e=>setCustomPrice(e.target.value)} placeholder="Prix TTC"/></div>
+    <Modal open={customModal} onClose={()=>setCustomModal(false)} title="Article divers / Services">
+      <div style={{marginBottom:12}}>
+        <div style={{fontSize:10,fontWeight:700,color:C.textMuted,marginBottom:6}}>SERVICES RAPIDES</div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
+          {[{n:"Retouche bas de manches",p:10},{n:"Retouche bas d'ourlet",p:15},{n:"Retouche ajustement",p:20},{n:"Emballage cadeau",p:5}].map(sv=>(
+            <button key={sv.n} onClick={()=>{addCustomItem(sv.n,sv.p/1.20,0.20);setCustomModal(false);}}
+              style={{padding:"8px 10px",borderRadius:10,border:`1.5px solid ${C.border}`,background:C.surfaceAlt,cursor:"pointer",textAlign:"left",transition:"all 0.12s"}}
+              onMouseEnter={e=>{e.currentTarget.style.borderColor=C.primary;e.currentTarget.style.background=C.primaryLight;}}
+              onMouseLeave={e=>{e.currentTarget.style.borderColor=C.border;e.currentTarget.style.background=C.surfaceAlt;}}>
+              <div style={{fontSize:11,fontWeight:600}}>{sv.n}</div>
+              <div style={{fontSize:12,fontWeight:700,color:C.primary}}>{sv.p.toFixed(2)}€</div></button>))}</div></div>
+      <div style={{borderTop:`1px solid ${C.border}`,paddingTop:12,marginBottom:12}}>
+        <div style={{fontSize:10,fontWeight:700,color:C.textMuted,marginBottom:6}}>ARTICLE PERSONNALISÉ</div>
+        <div style={{display:"flex",flexDirection:"column",gap:8}}>
+          <Input value={customName} onChange={e=>setCustomName(e.target.value)} placeholder="Description (ex: Retouche ourlet)"/>
+          <Input type="number" step="0.01" value={customPrice} onChange={e=>setCustomPrice(e.target.value)} placeholder="Prix TTC"/></div></div>
       <Btn onClick={()=>{if(customName&&customPrice){const p=parseFloat(customPrice);addCustomItem(customName,p/1.20,0.20);
         setCustomModal(false);setCustomName("");setCustomPrice("");}}}
         style={{width:"100%",height:40,background:`linear-gradient(135deg,${C.primary},${C.gradientB})`}}>Ajouter au panier</Btn></Modal>
@@ -1569,7 +1586,7 @@ function SalesScreen(){
         <div>Caissier: {lastTk.userName}{lastTk.customerName?` — Client: ${lastTk.customerName}`:""}</div>
         <div style={{borderTop:"1px dashed #999",margin:"4px 0"}}/>
         {(lastTk.items||[]).map((i,k)=>{const sku=i.product?.sku||i.product_sku||"";const ean=i.variant?.ean||i.variant_ean||"";return(<div key={k}>
-          <div style={{display:"flex",justifyContent:"space-between"}}><span>{i.product?.name||i.product_name}{i.isCustom||i.is_custom?"":`(${i.variant?.color||i.variant_color}/${i.variant?.size||i.variant_size})`} x{i.quantity}{i.discount>0?` -${i.discount}%`:""}</span><span>{(i.lineTTC||i.line_ttc||(i.unit_price*i.quantity)).toFixed(2)}€</span></div>
+          <div style={{display:"flex",justifyContent:"space-between",gap:8}}><span style={{flex:1,wordBreak:"break-word",lineHeight:1.3}}>{i.product?.name||i.product_name}{i.isCustom||i.is_custom?"":`(${i.variant?.color||i.variant_color}/${i.variant?.size||i.variant_size})`} x{i.quantity}{i.discount>0?` -${i.discount}${i.discountType==="amount"?"€":"%"}`:""}</span><span style={{whiteSpace:"nowrap",fontWeight:600}}>{(i.lineTTC||i.line_ttc||(i.unit_price*i.quantity)).toFixed(2)}€</span></div>
           {(sku||ean)&&<div style={{fontSize:8,color:"#999"}}>{sku?`Réf: ${sku}`:""}{sku&&ean?" — ":""}{ean?`EAN: ${ean}`:""}</div>}
         </div>);})}
         <div style={{borderTop:"1px dashed #999",margin:"4px 0"}}/>
@@ -1732,13 +1749,16 @@ function StatsScreen(){
     {tab==="seller"&&<div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`}}>
       <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
         <thead><tr style={{borderBottom:`2px solid ${C.border}`}}>
-          {["Vendeur","Nb ventes","CA TTC",perm().canViewMargin?"Marge":"",perm().canViewMargin?"Commission (5%)":"","Objectif","Progression"].filter(Boolean).map(h=>(
+          {["Vendeur","Nb ventes","Nb pièces","Panier moyen","Art./vente",perm().canViewMargin?"Marge":"","CA TTC",perm().canViewMargin?"Commission":"","Objectif","Progression"].filter(Boolean).map(h=>(
             <th key={h} style={{padding:8,textAlign:"left",fontSize:10,fontWeight:700,color:C.textMuted}}>{h}</th>))}</tr></thead>
         <tbody>{fCommissions.map(s=>(<tr key={s.name} style={{borderBottom:`1px solid ${C.border}`}}>
           <td style={{padding:8,fontWeight:600}}>{s.name}</td>
           <td style={{padding:8}}>{s.count}</td>
-          <td style={{padding:8,fontWeight:700,color:C.primary}}>{s.revenue.toFixed(2)}€</td>
+          <td style={{padding:8,fontWeight:600}}>{s.totalItems||0}</td>
+          <td style={{padding:8,fontWeight:700,color:C.info}}>{(s.avgBasket||0).toFixed(2)}€</td>
+          <td style={{padding:8}}>{(s.avgItems||0).toFixed(1)}</td>
           {perm().canViewMargin&&<td style={{padding:8,color:"#3B8C5A"}}>{s.margin.toFixed(2)}€</td>}
+          <td style={{padding:8,fontWeight:700,color:C.primary}}>{s.revenue.toFixed(2)}€</td>
           {perm().canViewMargin&&<td style={{padding:8,color:C.accent,fontWeight:600}}>{s.commission.toFixed(2)}€</td>}
           <td style={{padding:8}}><input type="number" value={s.goal||""} onChange={e=>setSellerGoal(s.name,parseFloat(e.target.value)||0)}
             style={{width:70,padding:"2px 6px",borderRadius:6,border:`1px solid ${C.border}`,fontSize:11,fontFamily:"inherit"}} placeholder="€"/></td>
@@ -2183,8 +2203,8 @@ function HistoryScreen(){
         <div>Caissier: {reprintTk.userName}{reprintTk.customerName?` — Client: ${reprintTk.customerName}`:""}</div>
         <div style={{borderTop:"1px dashed #999",margin:"4px 0"}}/>
         {(reprintTk.items||[]).map((i,k)=>{const sku=i.product?.sku||i.product_sku||"";const ean=i.variant?.ean||i.variant_ean||"";return(<div key={k}>
-          <div style={{display:"flex",justifyContent:"space-between"}}><span>{i.product?.name||i.product_name}{!(i.isCustom||i.is_custom)?` (${i.variant?.color||i.variant_color}/${i.variant?.size||i.variant_size})`:""} x{i.quantity}{i.discount>0?` -${i.discount}%`:""}</span>
-          <span>{(i.lineTTC||i.line_ttc||(i.unit_price*i.quantity)).toFixed(2)}€</span></div>
+          <div style={{display:"flex",justifyContent:"space-between",gap:8}}><span style={{flex:1,wordBreak:"break-word",lineHeight:1.3}}>{i.product?.name||i.product_name}{!(i.isCustom||i.is_custom)?` (${i.variant?.color||i.variant_color}/${i.variant?.size||i.variant_size})`:""} x{i.quantity}{i.discount>0?` -${i.discount}${i.discountType==="amount"?"€":"%"}`:""}</span>
+          <span style={{whiteSpace:"nowrap",fontWeight:600}}>{(i.lineTTC||i.line_ttc||(i.unit_price*i.quantity)).toFixed(2)}€</span></div>
           {(sku||ean)&&<div style={{fontSize:8,color:"#999"}}>{sku?`Réf: ${sku}`:""}{sku&&ean?" — ":""}{ean?`EAN: ${ean}`:""}</div>}
         </div>);})}
         <div style={{borderTop:"1px dashed #999",margin:"4px 0"}}/>
@@ -3039,9 +3059,19 @@ function CSVImportWizard({open,onClose,existingProducts,onImportComplete}){
             if(match)updatedVariants.push({...v,existingId:match.id,existingEan:match.ean});
             else newVariants.push(v);
           });
-          updates.push({existing:existingMatch,incoming:product,newVariants,updatedVariants,
+          updates.push({existing:existingMatch,incoming:product,newVariants,updatedVariants,mode:"update",
             fieldsChanged:{name:product.name,price:product.price,costPrice:product.costPrice,
               taxRate:product.taxRate,category:product.category,collection:product.collection}});
+        }else if(duplicateAction==="addStock"){
+          // Add CSV quantities to existing stock instead of replacing
+          const newVariants=[];const updatedVariants=[];
+          product.variants.forEach(v=>{
+            const match=existingMatch.variants.find(ev=>(ev.ean&&ev.ean===v.ean)||(ev.size===v.size&&ev.color===v.color));
+            if(match)updatedVariants.push({...v,existingId:match.id,existingEan:match.ean,addQty:v.stock,existingStock:match.stock||0});
+            else newVariants.push(v);
+          });
+          updates.push({existing:existingMatch,incoming:product,newVariants,updatedVariants,mode:"addStock",
+            fieldsChanged:{}});
         }else skipped.push({existing:existingMatch,incoming:product});
       }else{newProducts.push(product);}
     });
@@ -3072,25 +3102,36 @@ function CSVImportWizard({open,onClose,existingProducts,onImportComplete}){
     // Update existing products — 3 steps: product fields, variant stock, new variants
     for(const u of processed.updates){
       let anySuccess=false;
-      try{
-        // Step 1: Update product core fields (price, name, category, etc.)
-        const fc=u.fieldsChanged;
-        await API.products.update(u.existing.id,{
-          name:fc.name||u.existing.name,price:fc.price||u.existing.price,
-          costPrice:fc.costPrice||u.existing.costPrice,taxRate:fc.taxRate??u.existing.taxRate,
-          category:fc.category||u.existing.category,collection:fc.collection||u.existing.collection
-        });
-        anySuccess=true;
-      }catch(e){console.warn(`CSV update: product fields failed for ${u.existing.name}:`,e.message);}
+
+      // For addStock mode, skip product field updates — only adjust stock
+      if(u.mode!=="addStock"){
+        try{
+          // Step 1: Update product core fields (price, name, category, etc.)
+          const fc=u.fieldsChanged;
+          await API.products.update(u.existing.id,{
+            name:fc.name||u.existing.name,price:fc.price||u.existing.price,
+            costPrice:fc.costPrice||u.existing.costPrice,taxRate:fc.taxRate??u.existing.taxRate,
+            category:fc.category||u.existing.category,collection:fc.collection||u.existing.collection
+          });
+          anySuccess=true;
+        }catch(e){console.warn(`CSV update: product fields failed for ${u.existing.name}:`,e.message);}
+      }
 
       // Step 2: Update stock for existing variants via stock.adjust
       for(const uv of u.updatedVariants){
         try{
-          const existingVariant=u.existing.variants.find(ev=>ev.id===uv.existingId);
-          if(existingVariant&&uv.stock!==existingVariant.stock){
-            const diff=uv.stock-(existingVariant.stock||0);
-            if(diff!==0)await API.stock.adjust({productId:u.existing.id,variantId:uv.existingId,quantity:diff,reason:"Import CSV - mise à jour stock"});
+          if(u.mode==="addStock"){
+            // addStock mode: add CSV quantity to existing stock
+            const addQty=uv.addQty||uv.stock||0;
+            if(addQty>0)await API.stock.adjust({productId:u.existing.id,variantId:uv.existingId,quantity:addQty,reason:"Import CSV - ajout quantité au stock existant"});
             anySuccess=true;
+          }else{
+            const existingVariant=u.existing.variants.find(ev=>ev.id===uv.existingId);
+            if(existingVariant&&uv.stock!==existingVariant.stock){
+              const diff=uv.stock-(existingVariant.stock||0);
+              if(diff!==0)await API.stock.adjust({productId:u.existing.id,variantId:uv.existingId,quantity:diff,reason:"Import CSV - mise à jour stock"});
+              anySuccess=true;
+            }
           }
         }catch(e){console.warn(`CSV update: stock adjust failed for variant ${uv.size}/${uv.color}:`,e.message);}
       }
@@ -3226,9 +3267,10 @@ function CSVImportWizard({open,onClose,existingProducts,onImportComplete}){
             <option value="name">Nom du produit</option>
           </select></div>
         <div style={{fontSize:10,fontWeight:600,color:C.textMuted,marginBottom:6}}>EN CAS DE DOUBLON</div>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
           {[{id:"skip",l:"Ignorer la ligne",d:"Les doublons ne seront pas importés",i:XCircle,c:C.warn},
-            {id:"update",l:"Mettre à jour",d:"Mettre à jour prix, stock, variantes du produit existant",i:Upload,c:C.primary}].map(o=>(
+            {id:"update",l:"Mettre à jour",d:"Mettre à jour prix, stock, variantes du produit existant",i:Upload,c:C.primary},
+            {id:"addStock",l:"Ajouter quantité",d:"Ajouter la quantité CSV au stock existant (réception)",i:Plus,c:"#3B8C5A"}].map(o=>(
             <button key={o.id} onClick={()=>setDuplicateAction(o.id)} style={{padding:12,borderRadius:12,
               border:`2px solid ${duplicateAction===o.id?o.c:C.border}`,background:duplicateAction===o.id?`${o.c}08`:"transparent",
               cursor:"pointer",textAlign:"left",transition:"all 0.15s"}}>
@@ -3644,7 +3686,7 @@ function ReturnsHistoryScreen(){
 }
 
 function SettingsScreen(){
-  const{settings,setSettings,saveSettingsToAPI,addAudit,theme,setTheme,clockEntries,priceHistory,printerConnected,printerType,connectPrinter,disconnectPrinter,thermalPrint,notify}=useApp();
+  const{settings,setSettings,saveSettingsToAPI,addAudit,theme,setTheme,clockEntries,priceHistory,printerConnected,printerType,connectPrinter,disconnectPrinter,thermalPrint,notify,users}=useApp();
   const[tab,setTab]=useState("general");
   const[printerBaud,setPrinterBaud]=useState("9600");
   const[printerWidth,setPrinterWidth]=useState("48");
@@ -3652,7 +3694,7 @@ function SettingsScreen(){
   return(<div style={{height:"100%",overflowY:"auto",padding:20,background:C.bg}}>
     <h2 style={{fontSize:22,fontWeight:800,marginBottom:14}}>Paramètres</h2>
     <div style={{display:"flex",gap:6,marginBottom:14,flexWrap:"wrap"}}>
-      {[{id:"general",l:"Général"},{id:"pricing",l:"💰 Prix HT/TTC"},{id:"printer",l:"🖨️ Imprimante"},{id:"return",l:"Retours"},{id:"sizes",l:"📏 Ordre tailles"},{id:"theme",l:"Thème"},{id:"clock",l:"Pointages"},{id:"prices",l:"Historique prix"}].map(t=>(
+      {[{id:"general",l:"Général"},{id:"pricing",l:"💰 Prix HT/TTC"},{id:"commission",l:"Commission"},{id:"printer",l:"🖨️ Imprimante"},{id:"return",l:"Retours"},{id:"sizes",l:"📏 Ordre tailles"},{id:"theme",l:"Thème"},{id:"clock",l:"Pointages"},{id:"prices",l:"Historique prix"}].map(t=>(
         <button key={t.id} onClick={()=>setTab(t.id)} style={{padding:"5px 12px",borderRadius:8,border:`1.5px solid ${tab===t.id?C.primary:C.border}`,
           background:tab===t.id?C.primary:"transparent",color:tab===t.id?"#fff":C.text,fontSize:11,fontWeight:600,cursor:"pointer"}}>{t.l}</button>))}</div>
 
@@ -3690,6 +3732,28 @@ function SettingsScreen(){
           <strong>Important :</strong> Ce réglage s'applique à tous vos produits. Si vous changez de TTC à HT (ou inversement),
           vérifiez que vos prix sont bien cohérents. Les prix existants ne sont pas recalculés automatiquement —
           seul le calcul de la TVA sur les tickets change.</div></div>
+    </div>}
+
+    {tab==="commission"&&<div style={{maxWidth:550}}>
+      <div style={{background:`linear-gradient(135deg,${C.primaryLight},#DCF0E2)`,borderRadius:16,padding:20,border:`1.5px solid ${C.primary}22`,marginBottom:16}}>
+        <h3 style={{fontSize:16,fontWeight:800,margin:"0 0 4px"}}>Taux de commission</h3>
+        <p style={{fontSize:11,color:C.textMuted,margin:0}}>Configurez le taux de commission sur la marge pour chaque vendeur. Par défaut : {((settings.defaultCommissionRate||0.05)*100).toFixed(1)}%</p></div>
+      <div style={{marginBottom:14}}>
+        <label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>Taux par défaut (%)</label>
+        <Input type="number" step="0.5" min="0" max="100" value={((settings.defaultCommissionRate||0.05)*100).toFixed(1)}
+          onChange={e=>setSettings(s=>({...s,defaultCommissionRate:parseFloat(e.target.value)/100||0.05}))}
+          style={{width:120}}/></div>
+      <div style={{fontSize:12,fontWeight:700,marginBottom:8}}>Taux par vendeur</div>
+      <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:14}}>
+        {(users||[]).map(u=>(<div key={u.id||u.name} style={{display:"flex",alignItems:"center",gap:10,padding:10,borderRadius:10,background:C.surfaceAlt,border:`1px solid ${C.border}`}}>
+          <span style={{flex:1,fontSize:12,fontWeight:600}}>{u.name}</span>
+          <Input type="number" step="0.5" min="0" max="100"
+            value={settings.commissionRates?.[u.name]!=null?(settings.commissionRates[u.name]*100).toFixed(1):""}
+            onChange={e=>{const val=e.target.value;setSettings(s=>({...s,commissionRates:{...s.commissionRates,[u.name]:val?parseFloat(val)/100:undefined}}));}}
+            placeholder={((settings.defaultCommissionRate||0.05)*100).toFixed(1)}
+            style={{width:80,textAlign:"right"}}/><span style={{fontSize:11,color:C.textMuted}}>%</span></div>))}
+      </div>
+      <Btn onClick={()=>{saveSettingsToAPI(settings);addAudit("CONFIG","Taux de commission mis à jour");notify("Taux de commission sauvegardés","success");}} style={{width:"100%",height:40,background:`linear-gradient(135deg,${C.primary},${C.gradientB})`}}><Save size={14}/> Enregistrer</Btn>
     </div>}
 
     {tab==="printer"&&<div style={{maxWidth:600}}>
