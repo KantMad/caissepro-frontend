@@ -3984,11 +3984,16 @@ function UsersScreen(){
   const[editUser,setEditUser]=useState(null);const[newModal,setNewModal]=useState(false);
   const[form,setForm]=useState({name:"",role:"cashier",pin:""});
   const[confirmDel,setConfirmDel]=useState(null);
-  const openEdit=(u)=>{setForm({name:u.name,role:u.role,pin:u.pin});setEditUser(u);};
-  const saveUser=async()=>{if(!form.name||!form.pin){notify("Nom et PIN requis","error");return;}
-    const apiData={name:form.name,password:form.pin,role:form.role};
+  const openEdit=(u)=>{setForm({name:u.name,role:u.role,pin:""});setEditUser(u);};
+  const saveUser=async()=>{
+    if(!form.name){notify("Nom requis","error");return;}
+    // Pour un nouvel utilisateur, le PIN est obligatoire. Pour une modification, il est optionnel.
+    if(!editUser&&!form.pin){notify("Nom et PIN requis","error");return;}
+    // Construire les données API — n'envoyer le password que s'il a été modifié
+    const apiData={name:form.name,role:form.role};
+    if(form.pin)apiData.password=form.pin;
     if(editUser){
-      setUsers(p=>p.map(u=>u.id===editUser.id?{...u,...form}:u));
+      setUsers(p=>p.map(u=>u.id===editUser.id?{...u,name:form.name,role:form.role,...(form.pin?{pin:form.pin}:{})}:u));
       // Sync modification avec l'API — avec gestion offline
       try{await API.auth.updateUser(editUser.id,apiData);
         setEditUser(null);notify("Utilisateur modifié et synchronisé","success");
@@ -4030,7 +4035,7 @@ function UsersScreen(){
         <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>RÔLE</label>
           <select value={form.role} onChange={e=>setForm(p=>({...p,role:e.target.value}))} style={{width:"100%",padding:10,borderRadius:10,border:`2px solid ${C.border}`,fontSize:12,fontFamily:"inherit"}}>
             <option value="admin">Administrateur</option><option value="cashier">Caissier(e)</option></select></div>
-        <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>CODE PIN</label><Input type="password" value={form.pin} onChange={e=>setForm(p=>({...p,pin:e.target.value}))} placeholder="1234"/></div></div>
+        <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>CODE PIN {editUser?"(laisser vide pour ne pas changer)":""}</label><Input type="password" value={form.pin} onChange={e=>setForm(p=>({...p,pin:e.target.value}))} placeholder={editUser?"Nouveau PIN (optionnel)":"1234"}/></div></div>
       <Btn onClick={saveUser} style={{width:"100%",height:40,background:`linear-gradient(135deg,${C.primary},${C.gradientB})`}}><Save size={14}/> {editUser?"Enregistrer":"Créer"}</Btn></Modal>
     <ConfirmDialog open={!!confirmDel} onClose={()=>setConfirmDel(null)} onConfirm={async()=>{
       setUsers(p=>p.filter(u=>u.id!==confirmDel.id));
