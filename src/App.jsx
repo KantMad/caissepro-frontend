@@ -523,7 +523,7 @@ function AppProvider({children}){
   },[currentUser]);
 
   // ══ CHECKOUT — API ou fallback local ══
-  const checkout=useCallback(async(payments)=>{
+  const checkout=useCallback(async(payments,sellerName)=>{
     if(!cart.length)return null;
     const pm=settings.pricingMode||"TTC";
     const items=cart.map(i=>{
@@ -560,7 +560,8 @@ function AppProvider({children}){
       const ticket=await API.sales.checkout({
         items:items.map(({product,variant,...rest})=>rest),payments,customerId:selCust?.id||null,
         globalDiscount:gd,saleNote:saleNote||null,
-        promosApplied:applied,sessionId:cashReg?.id||null
+        promosApplied:applied,sessionId:cashReg?.id||null,
+        sellerName:sellerName||null
       });
       const prods=await API.products.list();setProducts(norm.products(prods));
       if(selCust){setCustomers(prev=>prev.map(c=>c.id===selCust.id?{...c,points:(c.points||0)+Math.floor(parseFloat(ticket.totalTTC)),totalSpent:(c.totalSpent||0)+parseFloat(ticket.totalTTC)}:c));}
@@ -593,7 +594,7 @@ function AppProvider({children}){
       const ticket={ticketNumber,seq,date,items,payments,paymentMethod,
         totalHT:tHT,totalTVA:tTVA,totalTTC:tTTC,globalDiscount:gd,margin,
         hash,fingerprint,grandTotal:gt+tTTC,promosApplied:applied,
-        saleNote:saleNote||null,userName:currentUser?.name,
+        saleNote:saleNote||null,userName:currentUser?.name,sellerName:sellerName||currentUser?.name,
         customerId:selCust?.id,customerName:selCust?`${selCust.firstName} ${selCust.lastName}`:null};
       setTSeq(seq);setLastHash(hash);setGt(g=>g+tTTC);
       setTickets(prev=>[ticket,...prev]);
@@ -887,7 +888,7 @@ function AppProvider({children}){
   // ══ RETURNS / AVOIRS ══
   const[avoirSeq,setAvoirSeq]=useState(()=>{try{return parseInt(localStorage.getItem("caissepro_avoirseq"))||0;}catch(e){return 0;}});
   useEffect(()=>{try{localStorage.setItem("caissepro_avoirseq",String(avoirSeq));}catch(e){}},[avoirSeq]);
-  const processReturn=useCallback(async(ticket,returnItems,reason,refundMethod,doRestock=true)=>{
+  const processReturn=useCallback(async(ticket,returnItems,reason,refundMethod,doRestock=true,defective=false)=>{
     if(!returnItems.length)return null;
     // Validation: empêcher double-retour (vérifier si articles déjà retournés)
     const existingReturns=avoirs.filter(a=>a.originalTicket===ticket.ticketNumber);
@@ -940,11 +941,10 @@ function AppProvider({children}){
     // Restock: remettre en stock les articles retournés
     if(doRestock){
       for(const ri of returnItems){
-        try{await API.stock.adjust({productId:ri.productId,variantId:ri.variantId,quantity:ri.qty,reason:`Retour ${avoirNumber}`});}
+        try{await API.stock.adjust({productId:ri.productId,variantId:ri.variantId,quantity:ri.qty,reason:defective?`Retour défectueux ${avoirNumber}`:`Retour ${avoirNumber}`,defective});}
         catch(e){
-          // Fallback local: incrémenter stock localement
           setProducts(prev=>prev.map(p=>{if(p.id!==ri.productId)return p;
-            return{...p,variants:p.variants.map(v=>v.id===ri.variantId?{...v,stock:v.stock+ri.qty}:v)};}));
+            return{...p,variants:p.variants.map(v=>v.id===ri.variantId?{...v,stock:defective?v.stock:v.stock+ri.qty,defectiveStock:(v.defectiveStock||0)+(defective?ri.qty:0)}:v)};}));
         }
       }
       // Refresh stock from API
@@ -1144,8 +1144,8 @@ function SalesScreen(){
     gDisc,gDiscType,setCartGD,promoCode,setPromoCode,calcPromoDiscount,isOnline,findByEAN,offlineMode,
     parked,parkCart,restoreCart,customers,addCustomer,selCust,setSelCust,perm,notify,
     stockAlerts,activePromos,avoirPayment,setAvoirPayment,getLoyaltyTier,tickets,saleNote,setSaleNote,favorites,toggleFavorite,getLastPriceForCustomer,settings,
-    printerConnected,thermalPrint,pendingSync,clearPendingSync}=useApp();
-  const[search,setSearch]=useState("");const[cat,setCat]=useState("Tous");const[vm,setVm]=useState(null);
+    printerConnected,thermalPrint,pendingSync,clearPendingSync,users,currentUser}=useApp();
+  const[search,setSearch]=useState("");const[cat,setCat]=useState("Tous");const[vm,setVm]=useState(null);const[selSeller,setSelSeller]=useState(null);
   const[dm,setDm]=useState(null);const[dv,setDv]=useState("");const[gm,setGm]=useState(false);const[gv,setGv]=useState("");const[gtp,setGtp]=useState("percentage");
   const[lastTk,setLastTk]=useState(null);const[tkModal,setTkModal]=useState(false);const[busy,setBusy]=useState(false);
   const[payModal,setPayModal]=useState(false);const[cashGiven,setCashGiven]=useState("");
@@ -1200,16 +1200,16 @@ function SalesScreen(){
     return{sHT,gd,promoDisc,applied,tHT,tTVA,tTTC:Math.max(0,tTTC)};
   },[cart,gDisc,gDiscType,calcPromoDiscount,avoirPayment,settings.pricingMode]);
 
-  const[payCard,setPayCard]=useState("");const[payCash,setPayCash]=useState("");const[payGC,setPayGC]=useState("");const[payChq,setPayChq]=useState("");
-  const openPay=()=>{setPayCard("");setPayCash("");setPayGC("");setPayChq("");setCashGiven("");setPayModal(true);};
+  const[payCard,setPayCard]=useState("");const[payCash,setPayCash]=useState("");const[payGC,setPayGC]=useState("");const[payChq,setPayChq]=useState("");const[payAmex,setPayAmex]=useState("");
+  const openPay=()=>{setPayCard("");setPayCash("");setPayGC("");setPayChq("");setPayAmex("");setCashGiven("");setPayModal(true);};
   const doSplitPay=async()=>{const payments=[];
-    const c=parseFloat(payCard)||0;const ca=parseFloat(payCash)||0;const g=parseFloat(payGC)||0;const chq=parseFloat(payChq)||0;
-    if(c>0)payments.push({method:"card",amount:c});if(ca>0)payments.push({method:"cash",amount:ca});
+    const c=parseFloat(payCard)||0;const ca=parseFloat(payCash)||0;const g=parseFloat(payGC)||0;const chq=parseFloat(payChq)||0;const amx=parseFloat(payAmex)||0;
+    if(c>0)payments.push({method:"card",amount:c});if(amx>0)payments.push({method:"amex",amount:amx});if(ca>0)payments.push({method:"cash",amount:ca});
     if(g>0)payments.push({method:"giftcard",amount:g});if(chq>0)payments.push({method:"cheque",amount:chq});if(avoirPayment>0)payments.push({method:"avoir",amount:avoirPayment});
-    if(!payments.length)return;setBusy(true);const t=await checkout(payments);setBusy(false);if(t){setLastTk(t);setPayModal(false);setTkModal(true);}};
+    if(!payments.length)return;setBusy(true);const t=await checkout(payments,selSeller);setBusy(false);if(t){setLastTk(t);setPayModal(false);setTkModal(true);setSelSeller(null);}};
   const quickPay=async(method)=>{if(!cart.length||busy)return;setBusy(true);
     const payments=[{method,amount:totals.tTTC}];if(avoirPayment>0)payments.push({method:"avoir",amount:avoirPayment});
-    const t=await checkout(payments);setBusy(false);if(t){setLastTk(t);setTkModal(true);}};
+    const t=await checkout(payments,selSeller);setBusy(false);if(t){setLastTk(t);setTkModal(true);setSelSeller(null);}};
   const change=cashGiven?Math.max(0,parseFloat(cashGiven)-totals.tTTC):0;
   const maxDisc=perm().maxDiscount;
   const custTier=selCust?getLoyaltyTier(selCust.points):null;
@@ -1410,7 +1410,13 @@ function SalesScreen(){
           <Btn onClick={()=>quickPay("giftcard")} disabled={!cart.length||busy} style={{height:38,borderRadius:10,background:`linear-gradient(135deg,${C.accent},#D4A574)`,padding:"0 6px",fontSize:10,gap:4}}><Gift size={13}/> Cadeau</Btn>
           <Btn onClick={()=>quickPay("cheque")} disabled={!cart.length||busy} style={{height:38,borderRadius:10,background:"linear-gradient(135deg,#7B8794,#9FAAB6)",padding:"0 6px",fontSize:10,gap:4}}><FileText size={13}/> Chèque</Btn>
           <Btn onClick={openPay} disabled={!cart.length||busy} style={{height:38,borderRadius:10,background:`linear-gradient(135deg,${C.fiscal},#8B6FC0)`,padding:"0 6px",fontSize:10,gap:4}}><Split size={13}/> Fractionné</Btn></div>
-        <Input value={saleNote} onChange={e=>setSaleNote(e.target.value)} placeholder="Note sur la vente (optionnel)…" style={{marginBottom:5,height:30,fontSize:10,padding:"4px 10px",borderRadius:10}}/>
+        <div style={{display:"flex",gap:4,marginBottom:5}}>
+          <select value={selSeller||""} onChange={e=>setSelSeller(e.target.value||null)} style={{flex:1,height:30,fontSize:10,padding:"4px 8px",borderRadius:10,border:`1px solid ${C.border}`,fontFamily:"inherit",background:C.surface,color:selSeller?C.text:C.textMuted}}>
+            <option value="">Vendeur: {currentUser?.name} (moi)</option>
+            {users.filter(u=>u.name!==currentUser?.name&&u.role!=="admin").map(u=>(<option key={u.id} value={u.name}>{u.name}</option>))}
+          </select>
+          <Input value={saleNote} onChange={e=>setSaleNote(e.target.value)} placeholder="Note…" style={{flex:1,height:30,fontSize:10,padding:"4px 10px",borderRadius:10}}/>
+        </div>
         <Btn variant="outline" onClick={clearCart} style={{width:"100%",borderColor:`${C.danger}20`,color:C.danger,height:30,fontSize:10,borderRadius:10}}><RotateCcw size={10}/> Vider le panier</Btn>
       </div>
     </div>
@@ -1463,11 +1469,11 @@ function SalesScreen(){
         <Btn variant="success" onClick={()=>{const d=parseFloat(gv);if(d>=0){setCartGD(d,gtp);setGm(false);}}}>Appliquer</Btn></div></Modal>
 
     <Modal open={payModal} onClose={()=>setPayModal(false)} title="Paiement fractionné" sub={`Total: ${totals.tTTC.toFixed(2)}€`}>
-      {(()=>{const paid=(parseFloat(payCard)||0)+(parseFloat(payCash)||0)+(parseFloat(payGC)||0)+(parseFloat(payChq)||0)+(avoirPayment||0);
+      {(()=>{const paid=(parseFloat(payCard)||0)+(parseFloat(payAmex)||0)+(parseFloat(payCash)||0)+(parseFloat(payGC)||0)+(parseFloat(payChq)||0)+(avoirPayment||0);
         const remaining=Math.max(0,totals.tTTC-paid);
         return(<>
       <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:12}}>
-        {[{l:"CARTE",v:payCard,s:setPayCard,i:CreditCard,c:C.info},{l:"ESPÈCES",v:payCash,s:setPayCash,i:Banknote,c:C.primary},{l:"CARTE CADEAU",v:payGC,s:setPayGC,i:Gift,c:C.accent},{l:"CHÈQUE",v:payChq||"",s:v=>setPayChq(v),i:FileText,c:"#7B8794"}].map(x=>(
+        {[{l:"CARTE",v:payCard,s:setPayCard,i:CreditCard,c:C.info},{l:"AMEX",v:payAmex,s:setPayAmex,i:CreditCard,c:"#006FCF"},{l:"ESPÈCES",v:payCash,s:setPayCash,i:Banknote,c:C.primary},{l:"CARTE CADEAU",v:payGC,s:setPayGC,i:Gift,c:C.accent},{l:"CHÈQUE",v:payChq||"",s:v=>setPayChq(v),i:FileText,c:"#7B8794"}].map(x=>(
           <div key={x.l}><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"flex",alignItems:"center",gap:4,marginBottom:3}}><x.i size={11} color={x.c}/>{x.l}
             <button onClick={()=>x.s(String(remaining.toFixed(2)))} style={{marginLeft:"auto",background:"none",border:"none",cursor:"pointer",fontSize:9,color:C.primary,fontWeight:600}}>= Reste</button></label>
             <Input type="number" step="0.01" value={x.v} onChange={e=>x.s(e.target.value)} placeholder="0.00"/></div>))}
@@ -1554,7 +1560,7 @@ function SalesScreen(){
             boxShadow:"0 8px 32px rgba(47,158,85,0.35)",marginBottom:10,border:"3px solid rgba(47,158,85,0.2)"}}><CheckCircle2 size={36} color="#fff"/></div>
           <div style={{fontSize:11,fontWeight:600,color:"#3B8C5A",textTransform:"uppercase",letterSpacing:"1px",marginBottom:4}}>Vente confirmée</div>
           <div style={{fontSize:28,fontWeight:900,color:"#2F9E55",letterSpacing:"-1px"}}>{(lastTk.totalTTC||0).toFixed(2)}€</div>
-          <div style={{fontSize:12,color:C.textMuted,marginTop:2}}>Paiement {({cash:"Espèces",card:"CB",giftcard:"Cadeau",MIXTE:"Mixte",cheque:"Chèque"})[lastTk.paymentMethod]||lastTk.paymentMethod}</div></div>
+          <div style={{fontSize:12,color:C.textMuted,marginTop:2}}>Paiement {({cash:"Espèces",card:"CB",amex:"American Express",giftcard:"Cadeau",MIXTE:"Mixte",cheque:"Chèque"})[lastTk.paymentMethod]||lastTk.paymentMethod}</div></div>
         <div data-print-receipt style={{fontFamily:"'Courier New',monospace",fontSize:10,background:"#FAFAF8",borderRadius:12,padding:18,border:`1px solid ${C.border}`,boxShadow:`inset 0 1px 3px ${C.shadow}`}}>
         <div style={{textAlign:"center",marginBottom:8}}><div style={{fontSize:12,fontWeight:700}}>{settings.name||CO.name}</div>
           <div>{settings.address}, {settings.postalCode} {settings.city}</div><div>SIRET: {settings.siret} — TVA: {settings.tvaIntra}</div></div>
@@ -1572,7 +1578,7 @@ function SalesScreen(){
         <div style={{display:"flex",justifyContent:"space-between"}}><span>TVA</span><span>{(lastTk.totalTVA||0).toFixed(2)}€</span></div>
         <div style={{display:"flex",justifyContent:"space-between",fontSize:13,fontWeight:700,marginTop:3}}><span>TOTAL TTC</span><span>{(lastTk.totalTTC||0).toFixed(2)}€</span></div>
         <div style={{borderTop:"1px dashed #999",margin:"4px 0"}}/>
-        <div>Paiement: {lastTk.payments?.map(p=>`${({cash:"ESP",card:"CB",giftcard:"CAD",cheque:"CHQ",avoir:"AVOIR"})[p.method]} ${p.amount.toFixed(2)}€`).join(" + ")}</div>
+        <div>Paiement: {lastTk.payments?.map(p=>`${({cash:"ESP",card:"CB",amex:"AMEX",giftcard:"CAD",cheque:"CHQ",avoir:"AVOIR"})[p.method]||p.method} ${p.amount.toFixed(2)}€`).join(" + ")}</div>
         <div style={{textAlign:"center",background:C.fiscalLight,padding:6,borderRadius:6,margin:"4px 0"}}>
           <div style={{fontSize:8,color:C.fiscal,fontWeight:700}}>EMPREINTE NF525</div>
           <div style={{fontSize:11,fontWeight:700,color:C.fiscal,letterSpacing:2}}>{lastTk.fingerprint}</div></div>
@@ -1656,7 +1662,7 @@ function StatsScreen(){
     const d=new Date(t.date||t.createdAt||t.created_at).toLocaleDateString("fr-FR",{day:"2-digit",month:"short"});
     m[d]=(m[d]||0)+(t.totalTTC||parseFloat(t.total_ttc)||0);});
     return Object.entries(m).reverse().map(([d,v])=>({date:d,ca:Math.round(v*100)/100}));},[fTickets]);
-  const pieData=[...new Set(fTickets.map(t=>t.paymentMethod||t.payment_method))].map(m=>({name:({cash:"Espèces",card:"CB",giftcard:"Cadeau",MIXTE:"Mixte",avoir:"Avoir"})[m]||m,
+  const pieData=[...new Set(fTickets.map(t=>t.paymentMethod||t.payment_method))].map(m=>({name:({cash:"Espèces",card:"CB",amex:"Amex",giftcard:"Cadeau",MIXTE:"Mixte",avoir:"Avoir"})[m]||m,
     value:Math.round(fTickets.filter(t=>(t.paymentMethod||t.payment_method)===m).reduce((s,t)=>s+(t.totalTTC||parseFloat(t.total_ttc)||0),0)*100)/100}));
   const pieColors=[C.info,C.primary,C.accent,C.fiscal,C.warn];
   const byHour=useMemo(()=>{const h=Array(24).fill(0);fTickets.forEach(t=>{const hr=new Date(t.date||t.createdAt||t.created_at).getHours();
@@ -2097,8 +2103,8 @@ function StockScreen(){
 
 /* ══════════ HISTORY ══════════ */
 function HistoryScreen(){
-  const{tickets,avoirs,settings,processReturn,perm:p,printerConnected,thermalPrint}=useApp();
-  const[tab,setTab]=useState("tickets");const[reprintTk,setReprintTk]=useState(null);
+  const{tickets,avoirs,settings,processReturn,perm:p,printerConnected,thermalPrint,setAvoirPayment,setMode,notify,customers}=useApp();
+  const[tab,setTab]=useState("tickets");const[reprintTk,setReprintTk]=useState(null);const[reassignModal,setReassignModal]=useState(null);const[reassignCust,setReassignCust]=useState(null);
   const[search,setSearch]=useState("");const[dateFilter,setDateFilter]=useState("");
   const[returnModal,setReturnModal]=useState(null);
   const[returnItems,setReturnItems]=useState([]);const[returnReason,setReturnReason]=useState("");const[returnMethod,setReturnMethod]=useState("cash");
@@ -2187,7 +2193,7 @@ function HistoryScreen(){
         <div style={{display:"flex",justifyContent:"space-between"}}><span>TVA</span><span>{(reprintTk.totalTVA||0).toFixed(2)}€</span></div>
         <div style={{display:"flex",justifyContent:"space-between",fontSize:13,fontWeight:700,marginTop:3}}><span>TOTAL TTC</span><span>{(reprintTk.totalTTC||0).toFixed(2)}€</span></div>
         <div style={{borderTop:"1px dashed #999",margin:"4px 0"}}/>
-        <div>Paiement: {reprintTk.payments?.map(pm=>`${({cash:"ESP",card:"CB",giftcard:"CAD",cheque:"CHQ",avoir:"AVOIR"})[pm.method]||pm.method} ${pm.amount.toFixed(2)}€`).join(" + ")}</div>
+        <div>Paiement: {reprintTk.payments?.map(pm=>`${({cash:"ESP",card:"CB",amex:"AMEX",giftcard:"CAD",cheque:"CHQ",avoir:"AVOIR"})[pm.method]||pm.method} ${pm.amount.toFixed(2)}€`).join(" + ")}</div>
         <div style={{textAlign:"center",background:C.fiscalLight,padding:6,borderRadius:6,margin:"6px 0"}}>
           <div style={{fontSize:8,color:C.fiscal,fontWeight:700}}>EMPREINTE NF525</div>
           <div style={{fontSize:11,fontWeight:700,color:C.fiscal,letterSpacing:2}}>{reprintTk.fingerprint}</div></div>
@@ -2195,6 +2201,7 @@ function HistoryScreen(){
       </div>}
       {reprintTk&&<div style={{display:"flex",gap:8,marginTop:10}}>
         <Btn variant="outline" onClick={()=>thermalPrint("receipt",reprintTk)} style={{flex:1}}><Printer size={14}/> {printerConnected?"Ticket":"Réimprimer"}</Btn>
+        <Btn variant="outline" onClick={()=>{setReassignModal(reprintTk);setReassignCust(null);}} style={{flex:1}}><UserIcon size={14}/> Client</Btn>
         <Btn variant="outline" onClick={()=>{const s=encodeURIComponent(`Ticket ${reprintTk.ticketNumber} — ${settings.name||CO.name}`);
           const b=encodeURIComponent(`Bonjour,\n\nTicket N°${reprintTk.ticketNumber}\nDate: ${new Date(reprintTk.date||reprintTk.createdAt||"").toLocaleString("fr-FR")}\nTotal: ${(reprintTk.totalTTC||0).toFixed(2)}€\n\n${settings.name||CO.name}\nSIRET: ${settings.siret||CO.siret}`);
           window.open(`mailto:${reprintTk.customerName?"":""}?subject=${s}&body=${b}`);}} style={{flex:1}}><Mail size={14}/> Email</Btn>
@@ -2231,8 +2238,8 @@ function HistoryScreen(){
             <option value="Erreur de caisse">Erreur de caisse</option>
             <option value="Autre">Autre</option></select></div>
         <div style={{marginBottom:12}}><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>MODE DE REMBOURSEMENT</label>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6}}>
-            {[{id:"cash",l:"Espèces",i:Banknote},{id:"card",l:"Carte",i:CreditCard},{id:"avoir",l:"Avoir client",i:Gift}].map(m=>(
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:6}}>
+            {[{id:"cash",l:"Espèces",i:Banknote},{id:"card",l:"Carte",i:CreditCard},{id:"avoir",l:"Avoir client",i:Gift},{id:"exchange",l:"Échange immédiat",i:RotateCcw}].map(m=>(
               <button key={m.id} onClick={()=>setReturnMethod(m.id)} style={{padding:10,borderRadius:10,border:`2px solid ${returnMethod===m.id?C.danger:C.border}`,
                 background:returnMethod===m.id?C.dangerLight:"transparent",cursor:"pointer",textAlign:"center"}}>
                 <m.i size={16} color={returnMethod===m.id?C.danger:C.textMuted} style={{display:"block",margin:"0 auto 4px"}}/>
@@ -2241,7 +2248,9 @@ function HistoryScreen(){
           <span style={{fontSize:13,fontWeight:700,color:C.danger}}>Total remboursement</span>
           <span style={{fontSize:16,fontWeight:800,color:C.danger}}>{returnTotal.toFixed(2)}€</span></div>
         <Btn variant="danger" disabled={returnTotal===0||!returnReason} onClick={async()=>{
-          await processReturn(returnModal,returnItems.filter(i=>i.qty>0),returnReason,returnMethod);setReturnModal(null);}}
+          const avoir=await processReturn(returnModal,returnItems.filter(i=>i.qty>0),returnReason,returnMethod==="exchange"?"avoir":returnMethod);
+          if(avoir&&returnMethod==="exchange"){setAvoirPayment(avoir.totalTTC);setMode("cashier");notify(`Avoir ${avoir.avoirNumber} de ${avoir.totalTTC.toFixed(2)}€ appliqué — Scannez les nouveaux articles`,"success");}
+          setReturnModal(null);}}
           style={{width:"100%",height:44}}><RotateCcw size={16}/> Valider le retour</Btn>
         {!returnReason&&returnTotal>0&&<div style={{marginTop:6,fontSize:10,color:C.warn,textAlign:"center"}}>Veuillez sélectionner un motif de retour</div>}
       </>}
@@ -2274,16 +2283,37 @@ function HistoryScreen(){
       </div>}
       {avoirDetail&&<Btn variant="outline" onClick={()=>thermalPrint("avoir",avoirDetail)} style={{width:"100%",marginTop:10}}><Printer size={14}/> {printerConnected?"Ticket":"Imprimer"}</Btn>}
     </Modal>
+
+    <Modal open={!!reassignModal} onClose={()=>setReassignModal(null)} title="Changer le client">
+      {reassignModal&&<div>
+        <div style={{fontSize:11,color:C.textMuted,marginBottom:10}}>Ticket: {reassignModal.ticketNumber} — {(reassignModal.totalTTC||parseFloat(reassignModal.total_ttc)||0).toFixed(2)}€</div>
+        <div style={{display:"flex",flexDirection:"column",gap:4,maxHeight:300,overflowY:"auto"}}>
+          <button onClick={()=>setReassignCust(null)} style={{padding:8,borderRadius:8,border:`2px solid ${!reassignCust?C.primary:C.border}`,background:!reassignCust?C.primaryLight:"transparent",cursor:"pointer",textAlign:"left",fontSize:11,fontWeight:600}}>Aucun client</button>
+          {customers.map(c=>(<button key={c.id} onClick={()=>setReassignCust(c)}
+            style={{padding:8,borderRadius:8,border:`2px solid ${reassignCust?.id===c.id?C.primary:C.border}`,background:reassignCust?.id===c.id?C.primaryLight:"transparent",cursor:"pointer",textAlign:"left"}}>
+            <div style={{fontSize:11,fontWeight:600}}>{c.firstName} {c.lastName}</div>
+            <div style={{fontSize:9,color:C.textMuted}}>{c.email||c.phone||""}</div></button>))}
+        </div>
+        <Btn onClick={async()=>{
+          try{
+            const custId=reassignCust?.id||null;const custName=reassignCust?`${reassignCust.firstName} ${reassignCust.lastName}`:null;
+            if(reassignModal.id){try{await API.sales.update?.(reassignModal.id,{customerId:custId});}catch(e){}}
+            notify(`Client ${custName||"retiré"} attribué au ticket ${reassignModal.ticketNumber}`,"success");
+            setReassignModal(null);
+          }catch(e){notify("Erreur: "+e.message,"error");}
+        }} style={{width:"100%",height:40,marginTop:10,background:`linear-gradient(135deg,${C.primary},${C.gradientB})`}}>Attribuer</Btn>
+      </div>}
+    </Modal>
   </div>);
 }
 
 /* ══════════ RETURN SCREEN ══════════ */
 function ReturnScreen(){
-  const{tickets,products,processReturn,findByEAN,avoirs,settings,notify,printerConnected,thermalPrint}=useApp();
+  const{tickets,products,processReturn,findByEAN,avoirs,settings,notify,printerConnected,thermalPrint,setAvoirPayment,setMode:setAppMode}=useApp();
   const[mode,setMode]=useState("ticket");// ticket | scan | free
   const[searchTk,setSearchTk]=useState("");const[selectedTk,setSelectedTk]=useState(null);
   const[returnItems,setReturnItems]=useState([]);const[reason,setReason]=useState("Échange taille");
-  const[refundMethod,setRefundMethod]=useState("avoir");const[restock,setRestock]=useState(true);
+  const[refundMethod,setRefundMethod]=useState("avoir");const[restock,setRestock]=useState(true);const[defective,setDefective]=useState(false);
   const[searchProd,setSearchProd]=useState("");const[freeItem,setFreeItem]=useState(null);const[freeQty,setFreeQty]=useState(1);
   const[lastAvoir,setLastAvoir]=useState(null);
   const REASONS=["Échange taille","Échange couleur","Défectueux","N'aime plus","Cadeau à retourner","Erreur de commande","Autre"];
@@ -2319,8 +2349,17 @@ function ReturnScreen(){
       const lineTVA=lineHT*taxRate;
       return{product:{id:r.productId,name:r.productName,taxRate},variant:{id:r.variantId,color:r.variantColor,size:r.variantSize},
         quantity:r.maxQty,lineHT,lineTVA,lineTTC:lineHT+lineTVA};})};
-    const avoir=await processReturn(syntheticTicket,items,reason,refundMethod,restock);
-    if(avoir){setLastAvoir(avoir);setReturnItems([]);setSelectedTk(null);setSearchTk("");setSearchProd("");setFreeItem(null);}};
+    const avoir=await processReturn(syntheticTicket,items,reason,refundMethod==="exchange"?"avoir":refundMethod,restock,defective);
+    if(avoir){
+      if(refundMethod==="exchange"){
+        setAvoirPayment(avoir.totalTTC);
+        setAppMode("cashier");
+        notify(`Avoir ${avoir.avoirNumber} de ${avoir.totalTTC.toFixed(2)}€ appliqué — Scannez les nouveaux articles`,"success");
+        setReturnItems([]);setSelectedTk(null);setSearchTk("");setSearchProd("");setFreeItem(null);
+      } else {
+        setLastAvoir(avoir);setReturnItems([]);setSelectedTk(null);setSearchTk("");setSearchProd("");setFreeItem(null);
+      }
+    }};
 
   const returnWindow=settings.returnPolicy?.days||30;
   const isExpired=(tk)=>{if(!tk)return false;const d=new Date(tk.date||tk.createdAt||tk.created_at);
@@ -2459,9 +2498,13 @@ function ReturnScreen(){
                 <div style={{fontSize:9,color:C.textMuted}}>{m.d}</div></div>
             </button>))}</div></div>
 
-        <label style={{display:"flex",alignItems:"center",gap:6,fontSize:11,fontWeight:600,color:C.textMuted,marginBottom:12,cursor:"pointer"}}>
+        <label style={{display:"flex",alignItems:"center",gap:6,fontSize:11,fontWeight:600,color:C.textMuted,marginBottom:6,cursor:"pointer"}}>
           <input type="checkbox" checked={restock} onChange={e=>setRestock(e.target.checked)}
             style={{width:16,height:16,accentColor:C.primary}}/> Remettre en stock</label>
+        {restock&&<label style={{display:"flex",alignItems:"center",gap:6,fontSize:11,fontWeight:600,color:C.danger,marginBottom:12,cursor:"pointer",paddingLeft:22}}>
+          <input type="checkbox" checked={defective} onChange={e=>setDefective(e.target.checked)}
+            style={{width:16,height:16,accentColor:C.danger}}/> Produit défectueux (stock défectueux)</label>}
+        {!restock&&<div style={{marginBottom:12}}/>}
 
         <Btn onClick={doReturn} style={{width:"100%",height:44,background:`linear-gradient(135deg,${C.fiscal},#8B6FC0)`,fontSize:13}}>
           <RotateCcw size={16}/> Valider le retour — {returnTotal.toFixed(2)}€</Btn>
