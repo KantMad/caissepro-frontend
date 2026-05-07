@@ -1150,7 +1150,7 @@ function SalesScreen(){
     parked,parkCart,restoreCart,customers,addCustomer,selCust,setSelCust,perm,notify,
     stockAlerts,activePromos,avoirPayment,setAvoirPayment,getLoyaltyTier,tickets,saleNote,setSaleNote,favorites,toggleFavorite,getLastPriceForCustomer,settings,
     printerConnected,thermalPrint,pendingSync,clearPendingSync,users,currentUser}=useApp();
-  const[search,setSearch]=useState("");const[cat,setCat]=useState("Tous");const[vm,setVm]=useState(null);const[selSeller,setSelSeller]=useState(null);
+  const[search,setSearch]=useState("");const[cat,setCat]=useState("Tous");const[vm,setVm]=useState(null);const[selSeller,setSelSeller]=useState(null);const[detaxe,setDetaxe]=useState(false);
   const[dm,setDm]=useState(null);const[dv,setDv]=useState("");const[gm,setGm]=useState(false);const[gv,setGv]=useState("");const[gtp,setGtp]=useState("percentage");
   const[lastTk,setLastTk]=useState(null);const[tkModal,setTkModal]=useState(false);const[busy,setBusy]=useState(false);
   const[payModal,setPayModal]=useState(false);const[cashGiven,setCashGiven]=useState("");
@@ -1199,11 +1199,11 @@ function SalesScreen(){
     gd+=promoDisc;gd=Math.min(gd,sHT);
     const tHT=sHT-gd;
     // Per-item TVA
-    const tTVA=cart.reduce((s,i)=>{const raw=i.discountType==="amount"?i.product.price*i.quantity-((i.discount||0)*i.quantity):i.product.price*i.quantity*(1-i.discount/100);
+    const tTVA=detaxe?0:cart.reduce((s,i)=>{const raw=i.discountType==="amount"?i.product.price*i.quantity-((i.discount||0)*i.quantity):i.product.price*i.quantity*(1-i.discount/100);
       const lHT=pm==="TTC"?raw/(1+(i.product.taxRate||0.20)):raw;return s+lHT*(i.product.taxRate||0.20);},0)*(tHT/sHT||0);
     const tTTC=tHT+tTVA-avoirPayment;
     return{sHT,gd,promoDisc,applied,tHT,tTVA,tTTC:Math.max(0,tTTC)};
-  },[cart,gDisc,gDiscType,calcPromoDiscount,avoirPayment,settings.pricingMode]);
+  },[cart,gDisc,gDiscType,calcPromoDiscount,avoirPayment,settings.pricingMode,detaxe]);
 
   const[payCard,setPayCard]=useState("");const[payCash,setPayCash]=useState("");const[payGC,setPayGC]=useState("");const[payChq,setPayChq]=useState("");const[payAmex,setPayAmex]=useState("");
   const openPay=()=>{setPayCard("");setPayCash("");setPayGC("");setPayChq("");setPayAmex("");setCashGiven("");setPayModal(true);};
@@ -1211,10 +1211,10 @@ function SalesScreen(){
     const c=parseFloat(payCard)||0;const ca=parseFloat(payCash)||0;const g=parseFloat(payGC)||0;const chq=parseFloat(payChq)||0;const amx=parseFloat(payAmex)||0;
     if(c>0)payments.push({method:"card",amount:c});if(amx>0)payments.push({method:"amex",amount:amx});if(ca>0)payments.push({method:"cash",amount:ca});
     if(g>0)payments.push({method:"giftcard",amount:g});if(chq>0)payments.push({method:"cheque",amount:chq});if(avoirPayment>0)payments.push({method:"avoir",amount:avoirPayment});
-    if(!payments.length)return;setBusy(true);const t=await checkout(payments,selSeller);setBusy(false);if(t){setLastTk(t);setPayModal(false);setTkModal(true);setSelSeller(null);}};
+    if(!payments.length)return;setBusy(true);const t=await checkout(payments,selSeller);setBusy(false);if(t){setLastTk({...t,detaxe});setPayModal(false);setTkModal(true);setSelSeller(null);setDetaxe(false);}};
   const quickPay=async(method)=>{if(!cart.length||busy)return;setBusy(true);
     const payments=[{method,amount:totals.tTTC}];if(avoirPayment>0)payments.push({method:"avoir",amount:avoirPayment});
-    const t=await checkout(payments,selSeller);setBusy(false);if(t){setLastTk(t);setTkModal(true);setSelSeller(null);}};
+    const t=await checkout(payments,selSeller);setBusy(false);if(t){setLastTk({...t,detaxe});setTkModal(true);setSelSeller(null);setDetaxe(false);}};
   const change=cashGiven?Math.max(0,parseFloat(cashGiven)-totals.tTTC):0;
   const maxDisc=perm().maxDiscount;
   const custTier=selCust?getLoyaltyTier(selCust.points):null;
@@ -1404,7 +1404,10 @@ function SalesScreen(){
           <span style={{fontSize:22,fontWeight:900,color:C.primary,letterSpacing:"-0.5px"}}>{change.toFixed(2)}€</span></div>}
 
         <div style={{display:"flex",gap:4,marginBottom:6}}>
-          <Btn variant="outline" onClick={()=>{setGm(true);setGv(String(gDisc));setGtp(gDiscType);}} style={{flex:1,height:32,fontSize:10,padding:"0 6px",borderRadius:10}}><Percent size={11}/> Remise globale</Btn></div>
+          <Btn variant="outline" onClick={()=>{setGm(true);setGv(String(gDisc));setGtp(gDiscType);}} style={{flex:1,height:32,fontSize:10,padding:"0 6px",borderRadius:10}}><Percent size={11}/> Remise globale</Btn>
+          <Btn variant={detaxe?"success":"outline"} onClick={()=>setDetaxe(!detaxe)} style={{height:32,fontSize:10,padding:"0 10px",borderRadius:10,background:detaxe?`linear-gradient(135deg,#2F9E55,${C.gradientB})`:"transparent"}}>{detaxe?"✓ Détaxe":"Détaxe"}</Btn></div>
+        {detaxe&&<div style={{background:"#E8F5E9",borderRadius:8,padding:8,marginBottom:6,fontSize:10,color:"#2E7D32",border:"1px solid #A5D6A7"}}>
+          Vente en détaxe — TVA à 0% — Réservé aux résidents hors UE (achat min. 100,01€)</div>}
 
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:5,marginBottom:5}}>
           <Btn onClick={()=>quickPay("card")} disabled={!cart.length||busy} style={{height:46,borderRadius:12,background:`linear-gradient(135deg,${C.info},#5A92E8)`,padding:"0 10px",fontSize:12,gap:6,boxShadow:`0 3px 10px ${C.info}25`}}>
@@ -1599,6 +1602,7 @@ function SalesScreen(){
         <div style={{textAlign:"center",background:C.fiscalLight,padding:6,borderRadius:6,margin:"4px 0"}}>
           <div style={{fontSize:8,color:C.fiscal,fontWeight:700}}>EMPREINTE NF525</div>
           <div style={{fontSize:11,fontWeight:700,color:C.fiscal,letterSpacing:2}}>{lastTk.fingerprint}</div></div>
+        {lastTk.detaxe&&<div style={{textAlign:"center",background:"#E8F5E9",padding:6,borderRadius:6,margin:"4px 0",fontSize:9,color:"#2E7D32",fontWeight:700}}>VENTE EN DÉTAXE — TVA 0% — ART. 262 CGI</div>}
         <div style={{textAlign:"center",fontSize:8,color:C.textMuted}}>
           {CO.sw} v{CO.ver} — Certifié NF525<br/>N° CERT-NF525-2026-001 — INFOCERT/LNE<br/>{settings.footerMsg||CO.footerMsg}</div>
         {lastTk.saleNote&&<div style={{textAlign:"center",fontSize:9,color:C.text,marginTop:3,fontStyle:"italic"}}>Note: {lastTk.saleNote}</div>}
@@ -1918,13 +1922,15 @@ function StatsScreen(){
 
 /* ══════════ STOCK MATRIX ══════════ */
 function StockScreen(){
-  const{products,stockAlerts,stockMoves,receiveStock,stockAging,reorderSuggestions,adjustStock,notify,findByEAN}=useApp();
+  const{products,setProducts,stockAlerts,stockMoves,receiveStock,stockAging,reorderSuggestions,adjustStock,notify,findByEAN,users,addStockMove,addAudit,settings}=useApp();
   const[sel,setSel]=useState(products[0]?.id||"");const[tab,setTab]=useState("matrix");
   const[rcModal,setRcModal]=useState(false);const[rcProd,setRcProd]=useState("");const[rcVar,setRcVar]=useState("");const[rcQty,setRcQty]=useState("");const[rcSup,setRcSup]=useState("");
   const[adjProd,setAdjProd]=useState("");const[adjVar,setAdjVar]=useState("");const[adjQty,setAdjQty]=useState("");const[adjReason,setAdjReason]=useState("INVENTAIRE");
   const[invSearch,setInvSearch]=useState("");const[invCounts,setInvCounts]=useState({});
   const[stSearchMatrix,setStSearchMatrix]=useState("");const[stSearchReceipt,setStSearchReceipt]=useState("");const[stSearchAdj,setStSearchAdj]=useState("");
   const[csvStockModal,setCsvStockModal]=useState(false);const[csvStStep,setCsvStStep]=useState(0);const[csvStData,setCsvStData]=useState([]);const[csvStHeaders,setCsvStHeaders]=useState([]);const[csvStMapping,setCsvStMapping]=useState({});const[csvStPreview,setCsvStPreview]=useState([]);
+  const[tenProd,setTenProd]=useState("");const[tenVar,setTenVar]=useState("");const[tenUser,setTenUser]=useState("");const[tenQty,setTenQty]=useState("1");
+  const[trProd,setTrProd]=useState("");const[trVar,setTrVar]=useState("");const[trQty,setTrQty]=useState("1");const[trDest,setTrDest]=useState("");const[trRef,setTrRef]=useState("");
   const p=products.find(x=>x.id===sel);
   const sizes=[...new Set(p?.variants.map(v=>v.size)||[])];const colors=[...new Set(p?.variants.map(v=>v.color)||[])];
   return(<div style={{height:"100%",overflowY:"auto",padding:20,background:C.bg}}>
@@ -1934,7 +1940,7 @@ function StockScreen(){
       <div style={{flex:1}}/>
       <Btn variant="outline" onClick={()=>setRcModal(true)}><Upload size={14}/> Réception</Btn></div>
     <div style={{display:"flex",gap:6,marginBottom:12}}>
-      {[{id:"matrix",l:"Matrice"},{id:"alerts",l:"Alertes"},{id:"moves",l:"Mouvements"},{id:"inventory",l:"Inventaire"},{id:"adjust",l:"Ajustement"},{id:"aging",l:"Vieillissement"},{id:"reorder",l:"Réassort"}].map(t=>(
+      {[{id:"matrix",l:"Matrice"},{id:"alerts",l:"Alertes"},{id:"moves",l:"Mouvements"},{id:"inventory",l:"Inventaire"},{id:"adjust",l:"Ajustement"},{id:"tenues",l:"Tenues"},{id:"transfers",l:"Transferts"},{id:"aging",l:"Vieillissement"},{id:"reorder",l:"Réassort"}].map(t=>(
         <button key={t.id} onClick={()=>setTab(t.id)} style={{padding:"5px 12px",borderRadius:8,border:`1.5px solid ${tab===t.id?C.primary:C.border}`,
           background:tab===t.id?C.primary:"transparent",color:tab===t.id?"#fff":C.text,fontSize:11,fontWeight:600,cursor:"pointer"}}>{t.l}</button>))}</div>
 
@@ -2118,6 +2124,90 @@ function StockScreen(){
           setCsvStockModal(false);setCsvStStep(0);}}
           style={{width:"100%",height:40,background:`linear-gradient(135deg,${C.primary},${C.gradientB})`}}><Upload size={14}/> Réceptionner {csvStPreview.filter(r=>r.status==="found"&&r.qty>0).length} ligne(s)</Btn></div>}
     </Modal>
+
+    {tab==="tenues"&&<div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`}}>
+      <h3 style={{fontSize:14,fontWeight:700,marginBottom:10}}>Sortie stock — Tenue employé</h3>
+      <div style={{padding:10,background:C.warnLight,borderRadius:8,marginBottom:12,fontSize:11,color:"#92400E",border:`1px solid ${C.warn}33`}}>
+        Les articles sortis en tenue employé sont retirés du stock magasin et tracés dans les mouvements.</div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
+        <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>PRODUIT</label>
+          <select value={tenProd} onChange={e=>{setTenProd(e.target.value);setTenVar("");}} style={{width:"100%",padding:8,borderRadius:8,border:`1.5px solid ${C.border}`,fontSize:11,fontFamily:"inherit"}}>
+            <option value="">Sélectionner…</option>
+            {products.map(p=>(<option key={p.id} value={p.id}>{p.name} ({p.sku})</option>))}</select></div>
+        <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>VARIANTE</label>
+          <select value={tenVar} onChange={e=>setTenVar(e.target.value)} style={{width:"100%",padding:8,borderRadius:8,border:`1.5px solid ${C.border}`,fontSize:11,fontFamily:"inherit"}}>
+            <option value="">Sélectionner…</option>
+            {(products.find(p=>p.id===tenProd)?.variants||[]).map(v=>(<option key={v.id} value={v.id}>{v.color} / {v.size} (stock: {v.stock})</option>))}</select></div>
+        <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>EMPLOYÉ</label>
+          <select value={tenUser} onChange={e=>setTenUser(e.target.value)} style={{width:"100%",padding:8,borderRadius:8,border:`1.5px solid ${C.border}`,fontSize:11,fontFamily:"inherit"}}>
+            <option value="">Sélectionner…</option>
+            {(users||[]).map(u=>(<option key={u.id} value={u.name}>{u.name}</option>))}</select></div>
+        <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>QUANTITÉ</label>
+          <Input type="number" value={tenQty} onChange={e=>setTenQty(e.target.value)} min="1" style={{height:36}}/></div></div>
+      <Btn onClick={async()=>{if(!tenProd||!tenVar||!tenUser){notify("Remplissez tous les champs","error");return;}
+        const q=parseInt(tenQty)||1;const prod=products.find(p=>p.id===tenProd);const vari=prod?.variants.find(v=>v.id===tenVar);
+        if(!prod||!vari){notify("Produit introuvable","error");return;}
+        try{await API.stock.adjust({productId:tenProd,variantId:tenVar,quantity:-q,reason:`Tenue employé: ${tenUser}`});
+          const prods=await API.products.list();setProducts(norm.products(prods));}
+        catch(e){setProducts(prev=>prev.map(p=>p.id===tenProd?{...p,variants:p.variants.map(v=>v.id===tenVar?{...v,stock:Math.max(0,v.stock-q)}:v)}:p));}
+        addStockMove("TENUE",prod,vari,-q,`Tenue ${tenUser}`);
+        addAudit("TENUE",`${prod.name} ${vari.color}/${vari.size} x${q} — ${tenUser}`);
+        notify(`${prod.name} ${vari.color}/${vari.size} x${q} sorti en tenue pour ${tenUser}`,"success");
+        setTenProd("");setTenVar("");setTenUser("");setTenQty("1");}}
+        style={{width:"100%",height:44,background:`linear-gradient(135deg,${C.accent},#D4A574)`}}>Sortir en tenue employé</Btn>
+      <div style={{marginTop:16,fontSize:12,fontWeight:700,marginBottom:8}}>Historique tenues</div>
+      {stockMoves.filter(m=>m.type==="TENUE").length===0&&<div style={{color:C.textLight,fontSize:11}}>Aucune sortie tenue</div>}
+      {stockMoves.filter(m=>m.type==="TENUE").slice(0,20).map((m,i)=>(<div key={i} style={{display:"flex",alignItems:"center",gap:8,padding:6,borderBottom:`1px solid ${C.border}`,fontSize:11}}>
+        <span style={{color:C.textMuted,fontSize:9}}>{new Date(m.date).toLocaleDateString("fr-FR")}</span>
+        <span style={{fontWeight:600}}>{m.productName}</span>
+        <span style={{color:C.textMuted}}>{m.variantColor}/{m.variantSize}</span>
+        <span style={{fontWeight:700,color:C.danger}}>x{Math.abs(m.qty)}</span>
+        <span style={{color:C.accent,fontWeight:600}}>{m.ref}</span></div>))}</div>}
+
+    {tab==="transfers"&&<div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`}}>
+      <h3 style={{fontSize:14,fontWeight:700,marginBottom:10}}>Transfert de stock</h3>
+      <div style={{padding:10,background:C.primaryLight,borderRadius:8,marginBottom:12,fontSize:11,color:C.primaryDark,border:`1px solid ${C.primary}22`}}>
+        Transférez du stock vers un autre magasin ou une entité externe. Un justificatif est généré automatiquement.</div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
+        <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>PRODUIT</label>
+          <select value={trProd} onChange={e=>{setTrProd(e.target.value);setTrVar("");}} style={{width:"100%",padding:8,borderRadius:8,border:`1.5px solid ${C.border}`,fontSize:11,fontFamily:"inherit"}}>
+            <option value="">Sélectionner…</option>
+            {products.map(p=>(<option key={p.id} value={p.id}>{p.name} ({p.sku})</option>))}</select></div>
+        <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>VARIANTE</label>
+          <select value={trVar} onChange={e=>setTrVar(e.target.value)} style={{width:"100%",padding:8,borderRadius:8,border:`1.5px solid ${C.border}`,fontSize:11,fontFamily:"inherit"}}>
+            <option value="">Sélectionner…</option>
+            {(products.find(p=>p.id===trProd)?.variants||[]).map(v=>(<option key={v.id} value={v.id}>{v.color} / {v.size} (stock: {v.stock})</option>))}</select></div>
+        <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>DESTINATION</label>
+          <Input value={trDest} onChange={e=>setTrDest(e.target.value)} placeholder="Boutique Paris, Site web, Dépôt…" style={{height:36}}/></div>
+        <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>QUANTITÉ</label>
+          <Input type="number" value={trQty} onChange={e=>setTrQty(e.target.value)} min="1" style={{height:36}}/></div>
+        <div style={{gridColumn:"span 2"}}><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>RÉFÉRENCE / MOTIF</label>
+          <Input value={trRef} onChange={e=>setTrRef(e.target.value)} placeholder="N° bon de transfert, motif…" style={{height:36}}/></div></div>
+      <Btn onClick={async()=>{if(!trProd||!trVar||!trDest){notify("Remplissez produit, variante et destination","error");return;}
+        const q=parseInt(trQty)||1;const prod=products.find(p=>p.id===trProd);const vari=prod?.variants.find(v=>v.id===trVar);
+        if(!prod||!vari){notify("Produit introuvable","error");return;}
+        if(vari.stock<q){notify(`Stock insuffisant (${vari.stock} dispo)`,"error");return;}
+        const transferNum=`TR-${Date.now().toString(36).toUpperCase()}`;
+        try{await API.stock.adjust({productId:trProd,variantId:trVar,quantity:-q,reason:`Transfert ${transferNum} → ${trDest}`});
+          const prods=await API.products.list();setProducts(norm.products(prods));}
+        catch(e){setProducts(prev=>prev.map(p=>p.id===trProd?{...p,variants:p.variants.map(v=>v.id===trVar?{...v,stock:Math.max(0,v.stock-q)}:v)}:p));}
+        addStockMove("TRANSFERT",prod,vari,-q,`${transferNum} → ${trDest}`);
+        addAudit("TRANSFERT",`${prod.name} ${vari.color}/${vari.size} x${q} → ${trDest} (${trRef||"sans réf"})`,transferNum);
+        const slip=`JUSTIFICATIF DE TRANSFERT\n${"═".repeat(40)}\nN°: ${transferNum}\nDate: ${new Date().toLocaleString("fr-FR")}\nOrigine: ${settings.name||"Magasin"}\nDestination: ${trDest}\n${"─".repeat(40)}\nProduit: ${prod.name}\nVariante: ${vari.color} / ${vari.size}\nSKU: ${prod.sku}\nQuantité: ${q}\nRéférence: ${trRef||"—"}\n${"─".repeat(40)}\nOpérateur: ${(users||[]).find(u=>u.name)?.name||"—"}\n\nSignature origine: ________________\nSignature destination: ________________`;
+        const blob=new Blob([slip],{type:"text/plain"});const url=URL.createObjectURL(blob);
+        const a=document.createElement("a");a.href=url;a.download=`transfert-${transferNum}.txt`;a.click();URL.revokeObjectURL(url);
+        notify(`Transfert ${transferNum} — ${prod.name} x${q} → ${trDest} — Justificatif téléchargé`,"success");
+        setTrProd("");setTrVar("");setTrQty("1");setTrDest("");setTrRef("");}}
+        style={{width:"100%",height:44,background:`linear-gradient(135deg,${C.info},#5A92E8)`}}>Transférer et générer justificatif</Btn>
+      <div style={{marginTop:16,fontSize:12,fontWeight:700,marginBottom:8}}>Historique transferts</div>
+      {stockMoves.filter(m=>m.type==="TRANSFERT").length===0&&<div style={{color:C.textLight,fontSize:11}}>Aucun transfert</div>}
+      {stockMoves.filter(m=>m.type==="TRANSFERT").slice(0,20).map((m,i)=>(<div key={i} style={{display:"flex",alignItems:"center",gap:8,padding:6,borderBottom:`1px solid ${C.border}`,fontSize:11}}>
+        <span style={{color:C.textMuted,fontSize:9}}>{new Date(m.date).toLocaleDateString("fr-FR")}</span>
+        <span style={{fontWeight:600}}>{m.productName}</span>
+        <span style={{color:C.textMuted}}>{m.variantColor}/{m.variantSize}</span>
+        <span style={{fontWeight:700,color:C.info}}>x{Math.abs(m.qty)}</span>
+        <span style={{color:C.primary,fontWeight:600}}>{m.ref}</span></div>))}</div>}
+
   </div>);
 }
 
@@ -3694,7 +3784,7 @@ function SettingsScreen(){
   return(<div style={{height:"100%",overflowY:"auto",padding:20,background:C.bg}}>
     <h2 style={{fontSize:22,fontWeight:800,marginBottom:14}}>Paramètres</h2>
     <div style={{display:"flex",gap:6,marginBottom:14,flexWrap:"wrap"}}>
-      {[{id:"general",l:"Général"},{id:"pricing",l:"💰 Prix HT/TTC"},{id:"commission",l:"Commission"},{id:"printer",l:"🖨️ Imprimante"},{id:"return",l:"Retours"},{id:"sizes",l:"📏 Ordre tailles"},{id:"theme",l:"Thème"},{id:"clock",l:"Pointages"},{id:"prices",l:"Historique prix"}].map(t=>(
+      {[{id:"general",l:"Général"},{id:"pricing",l:"💰 Prix HT/TTC"},{id:"commission",l:"Commission"},{id:"stores",l:"Magasins"},{id:"printer",l:"🖨️ Imprimante"},{id:"return",l:"Retours"},{id:"sizes",l:"📏 Ordre tailles"},{id:"theme",l:"Thème"},{id:"clock",l:"Pointages"},{id:"prices",l:"Historique prix"}].map(t=>(
         <button key={t.id} onClick={()=>setTab(t.id)} style={{padding:"5px 12px",borderRadius:8,border:`1.5px solid ${tab===t.id?C.primary:C.border}`,
           background:tab===t.id?C.primary:"transparent",color:tab===t.id?"#fff":C.text,fontSize:11,fontWeight:600,cursor:"pointer"}}>{t.l}</button>))}</div>
 
@@ -3754,6 +3844,29 @@ function SettingsScreen(){
             style={{width:80,textAlign:"right"}}/><span style={{fontSize:11,color:C.textMuted}}>%</span></div>))}
       </div>
       <Btn onClick={()=>{saveSettingsToAPI(settings);addAudit("CONFIG","Taux de commission mis à jour");notify("Taux de commission sauvegardés","success");}} style={{width:"100%",height:40,background:`linear-gradient(135deg,${C.primary},${C.gradientB})`}}><Save size={14}/> Enregistrer</Btn>
+    </div>}
+
+    {tab==="stores"&&<div style={{maxWidth:600}}>
+      <div style={{background:`linear-gradient(135deg,${C.primaryLight},#DCF0E2)`,borderRadius:16,padding:20,border:`1.5px solid ${C.primary}22`,marginBottom:16}}>
+        <h3 style={{fontSize:16,fontWeight:800,margin:"0 0 4px"}}>Configuration multi-magasins</h3>
+        <p style={{fontSize:11,color:C.textMuted,margin:0}}>Définissez les magasins de votre réseau. Utilisé pour les transferts de stock et les rapports consolidés.</p></div>
+      <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:14}}>
+        {(settings.stores||[]).map((store,i)=>(<div key={i} style={{display:"flex",alignItems:"center",gap:8,padding:12,borderRadius:12,background:C.surfaceAlt,border:`1px solid ${C.border}`}}>
+          <div style={{flex:1}}>
+            <Input value={store.name} onChange={e=>{const stores=[...(settings.stores||[])];stores[i]={...stores[i],name:e.target.value};setSettings(s=>({...s,stores}));}}
+              placeholder="Nom du magasin" style={{marginBottom:4,fontWeight:600}}/>
+            <Input value={store.address||""} onChange={e=>{const stores=[...(settings.stores||[])];stores[i]={...stores[i],address:e.target.value};setSettings(s=>({...s,stores}));}}
+              placeholder="Adresse" style={{fontSize:11}}/>
+          </div>
+          <Btn variant="outline" onClick={()=>{const stores=(settings.stores||[]).filter((_,j)=>j!==i);setSettings(s=>({...s,stores}));}}
+            style={{height:36,width:36,padding:0,borderRadius:8,color:C.danger,borderColor:C.danger+"44"}}><Trash2 size={14}/></Btn>
+        </div>))}
+        {(settings.stores||[]).length===0&&<div style={{textAlign:"center",padding:20,color:C.textLight,fontSize:12}}>Aucun magasin configuré</div>}
+      </div>
+      <Btn variant="outline" onClick={()=>{const stores=[...(settings.stores||[]),{name:"",address:"",id:`store-${Date.now()}`}];setSettings(s=>({...s,stores}));}}
+        style={{width:"100%",height:36,marginBottom:12,borderRadius:10,fontSize:11}}><Plus size={12}/> Ajouter un magasin</Btn>
+      <Btn onClick={()=>{saveSettingsToAPI(settings);addAudit("CONFIG","Configuration magasins mise à jour");notify("Magasins sauvegardés","success");}}
+        style={{width:"100%",height:40,background:`linear-gradient(135deg,${C.primary},${C.gradientB})`}}><Save size={14}/> Enregistrer</Btn>
     </div>}
 
     {tab==="printer"&&<div style={{maxWidth:600}}>
