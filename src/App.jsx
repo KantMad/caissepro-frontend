@@ -6,7 +6,7 @@ import {
   Shield, Download, FileText, Settings, CheckCircle2, AlertTriangle, Save,
   Archive, Activity, Database, WifiOff, Pause, Play, Upload, Printer, Bell,
   Heart, Grid, Box, Star, Calendar, Zap, ScanLine, Split,
-  Mail, XOctagon, Edit, BarChart2, Check, X
+  Mail, XOctagon, Edit, BarChart2, Check, X, HelpCircle
 } from "lucide-react";
 import {
   PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer,
@@ -134,7 +134,8 @@ const SC=({icon:I,label,value,color:c,sub})=>(<div style={{background:C.surface,
   <div style={{fontSize:22,fontWeight:800,letterSpacing:"-0.5px"}}>{value}</div>
   {sub&&<div style={{fontSize:10,color:C.textMuted,marginTop:3}}>{sub}</div>}</div>);
 /* ══════════ CATEGORY ICON ══════════ */
-const catIcon=(cat)=>{const ic={"T-shirts":"👕","Jeans":"👖","Robes":"👗","Pulls":"🧶","Chemises":"👔","Vestes":"🧥","Divers":"📦"};return ic[cat]||"📦";};
+const DEFAULT_CAT_ICONS={"T-shirts":"👕","Jeans":"👖","Robes":"👗","Pulls":"🧶","Chemises":"👔","Vestes":"🧥","Pantalons":"👖","Chaussures":"👟","Accessoires":"👜","Divers":"📦"};
+const catIcon=(cat,settingsIcons)=>{const ic={...DEFAULT_CAT_ICONS,...(settingsIcons||{})};return ic[cat]||"📦";};
 /* ══════════ NUMPAD ══════════ */
 const Numpad=({value,onChange,onEnter,label})=>{
   const press=(k)=>{if(k==="C")onChange("");else if(k==="⌫")onChange(value.slice(0,-1));
@@ -1330,11 +1331,11 @@ function SalesScreen(){
     return{sHT,gd,promoDisc,applied,tHT,tTVA,tTTC:Math.max(0,tTTC)};
   },[cart,gDisc,gDiscType,calcPromoDiscount,avoirPayment,settings.pricingMode,detaxe]);
 
-  const[payCard,setPayCard]=useState("");const[payCash,setPayCash]=useState("");const[payGC,setPayGC]=useState("");const[payChq,setPayChq]=useState("");const[payAmex,setPayAmex]=useState("");
-  const openPay=()=>{setPayCard("");setPayCash("");setPayGC("");setPayChq("");setPayAmex("");setCashGiven("");setPayModal(true);};
+  const[payCard,setPayCard]=useState("");const[payCash,setPayCash]=useState("");const[payGC,setPayGC]=useState("");const[payChq,setPayChq]=useState("");const[payAmex,setPayAmex]=useState("");const[cardType,setCardType]=useState("card");
+  const openPay=()=>{setPayCard("");setPayCash("");setPayGC("");setPayChq("");setPayAmex("");setCashGiven("");setCardType("card");setPayModal(true);};
   const doSplitPay=async()=>{const payments=[];
-    const c=parseFloat(payCard)||0;const ca=parseFloat(payCash)||0;const g=parseFloat(payGC)||0;const chq=parseFloat(payChq)||0;const amx=parseFloat(payAmex)||0;
-    if(c>0)payments.push({method:"card",amount:c});if(amx>0)payments.push({method:"amex",amount:amx});if(ca>0)payments.push({method:"cash",amount:ca});
+    const c=parseFloat(payCard)||0;const ca=parseFloat(payCash)||0;const g=parseFloat(payGC)||0;const chq=parseFloat(payChq)||0;
+    if(c>0)payments.push({method:cardType,amount:c});if(ca>0)payments.push({method:"cash",amount:ca});
     if(g>0)payments.push({method:"giftcard",amount:g});if(chq>0)payments.push({method:"cheque",amount:chq});if(avoirPayment>0)payments.push({method:"avoir",amount:avoirPayment});
     if(!payments.length)return;setBusy(true);const t=await checkout(payments,selSeller);setBusy(false);if(t){setLastTk({...t,detaxe});setPayModal(false);setTkModal(true);setSelSeller(null);setDetaxe(false);}};
   const quickPay=async(method)=>{if(!cart.length||busy)return;setBusy(true);
@@ -1423,7 +1424,7 @@ function SalesScreen(){
           onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-3px)";e.currentTarget.style.boxShadow=`0 8px 24px ${C.shadowMd}`;e.currentTarget.style.borderColor=cc+"55";}}
           onMouseLeave={e=>{e.currentTarget.style.transform="translateY(0)";e.currentTarget.style.boxShadow=`0 1px 3px ${C.shadow}`;e.currentTarget.style.borderColor=C.border;}}>
           <div style={{aspectRatio:"1.1",background:`linear-gradient(155deg,${cc}08,${cc}04)`,display:"flex",alignItems:"center",justifyContent:"center",position:"relative",borderBottom:`1px solid ${C.border}`}}>
-            <span style={{fontSize:32,opacity:0.7,filter:"grayscale(0.2)"}}>{catIcon(p.category)}</span>
+            <span style={{fontSize:32,opacity:0.7,filter:"grayscale(0.2)"}}>{catIcon(p.category,settings.categoryIcons)}</span>
             {ts<=0&&<div style={{position:"absolute",top:6,left:6,zIndex:2}}>
               <Badge color={C.danger}>{ts<0?`Stock ${ts}`:"Rupture"}</Badge></div>}
             {ha&&ts>0&&<div style={{position:"absolute",top:6,left:6}}><div style={{width:8,height:8,borderRadius:4,background:C.warn,boxShadow:`0 0 0 2px ${C.surface}`}}/></div>}
@@ -1487,7 +1488,7 @@ function SalesScreen(){
             onMouseLeave={e=>e.currentTarget.style.boxShadow=`0 1px 3px ${C.shadow}`}>
             <div style={{display:"flex",gap:8,marginBottom:6}}>
               <div style={{width:36,height:36,borderRadius:10,background:`${cc}10`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-                <span style={{fontSize:16}}>{i.isCustom?"📝":catIcon(i.product.category)}</span></div>
+                <span style={{fontSize:16}}>{i.isCustom?"📝":catIcon(i.product.category,settings.categoryIcons)}</span></div>
               <div style={{flex:1,minWidth:0}}>
                 <div style={{fontSize:12,fontWeight:700,lineHeight:1.2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{i.product.name}{i.isCustom?" (divers)":""}</div>
                 {!i.isCustom&&<><div style={{display:"flex",gap:3,marginTop:3}}>
@@ -1558,7 +1559,7 @@ function SalesScreen(){
     <Modal open={!!vm} onClose={()=>setVm(null)} title="Choisir une variante" sub={vm?`${vm.name} — ${vm.price.toFixed(2)}€`:""}>
       {vm&&<>
         <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:14,padding:"10px 12px",background:C.surfaceAlt,borderRadius:12}}>
-          <span style={{fontSize:28}}>{catIcon(vm.category)}</span>
+          <span style={{fontSize:28}}>{catIcon(vm.category,settings.categoryIcons)}</span>
           <div><div style={{fontSize:13,fontWeight:700}}>{vm.name}</div>
             <div style={{fontSize:11,color:C.textMuted}}>{vm.category} — {vm.collection||"Sans collection"} — TVA {(vm.taxRate*100).toFixed(0)}%</div>
             {vm.sku&&<div style={{fontSize:10,fontFamily:"monospace",color:C.textMuted,marginTop:1}}>Réf: {vm.sku}</div>}</div>
@@ -1602,11 +1603,18 @@ function SalesScreen(){
         <Btn variant="success" onClick={()=>{const d=parseFloat(gv);if(d>=0){setCartGD(d,gtp);setGm(false);}}}>Appliquer</Btn></div></Modal>
 
     <Modal open={payModal} onClose={()=>setPayModal(false)} title="Paiement fractionné" sub={`Total: ${totals.tTTC.toFixed(2)}€`}>
-      {(()=>{const paid=(parseFloat(payCard)||0)+(parseFloat(payAmex)||0)+(parseFloat(payCash)||0)+(parseFloat(payGC)||0)+(parseFloat(payChq)||0)+(avoirPayment||0);
+      {(()=>{const paid=(parseFloat(payCard)||0)+(parseFloat(payCash)||0)+(parseFloat(payGC)||0)+(parseFloat(payChq)||0)+(avoirPayment||0);
         const remaining=Math.max(0,totals.tTTC-paid);
         return(<>
       <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:12}}>
-        {[{l:"CARTE",v:payCard,s:setPayCard,i:CreditCard,c:C.info},{l:"AMEX",v:payAmex,s:setPayAmex,i:CreditCard,c:"#006FCF"},{l:"ESPÈCES",v:payCash,s:setPayCash,i:Banknote,c:C.primary},{l:"CARTE CADEAU",v:payGC,s:setPayGC,i:Gift,c:C.accent},{l:"CHÈQUE",v:payChq||"",s:v=>setPayChq(v),i:FileText,c:"#7B8794"}].map(x=>(
+        <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"flex",alignItems:"center",gap:4,marginBottom:3}}>
+          <CreditCard size={11} color={cardType==="amex"?"#006FCF":C.info}/>
+          <span style={{display:"inline-flex",gap:2}}>
+            <button onClick={()=>setCardType("card")} style={{padding:"1px 6px",borderRadius:4,border:`1px solid ${cardType==="card"?C.info:C.border}`,background:cardType==="card"?C.info:"transparent",color:cardType==="card"?"#fff":C.textMuted,fontSize:9,fontWeight:700,cursor:"pointer"}}>CB</button>
+            <button onClick={()=>setCardType("amex")} style={{padding:"1px 6px",borderRadius:4,border:`1px solid ${cardType==="amex"?"#006FCF":C.border}`,background:cardType==="amex"?"#006FCF":"transparent",color:cardType==="amex"?"#fff":C.textMuted,fontSize:9,fontWeight:700,cursor:"pointer"}}>AMEX</button></span>
+          <button onClick={()=>setPayCard(String(remaining.toFixed(2)))} style={{marginLeft:"auto",background:"none",border:"none",cursor:"pointer",fontSize:9,color:C.primary,fontWeight:600}}>= Reste</button></label>
+          <Input type="number" step="0.01" value={payCard} onChange={e=>setPayCard(e.target.value)} placeholder="0.00"/></div>
+        {[{l:"ESPÈCES",v:payCash,s:setPayCash,i:Banknote,c:C.primary},{l:"CARTE CADEAU",v:payGC,s:setPayGC,i:Gift,c:C.accent},{l:"CHÈQUE",v:payChq||"",s:v=>setPayChq(v),i:FileText,c:"#7B8794"}].map(x=>(
           <div key={x.l}><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"flex",alignItems:"center",gap:4,marginBottom:3}}><x.i size={11} color={x.c}/>{x.l}
             <button onClick={()=>x.s(String(remaining.toFixed(2)))} style={{marginLeft:"auto",background:"none",border:"none",cursor:"pointer",fontSize:9,color:C.primary,fontWeight:600}}>= Reste</button></label>
             <Input type="number" step="0.01" value={x.v} onChange={e=>x.s(e.target.value)} placeholder="0.00"/></div>))}
@@ -3911,7 +3919,7 @@ function SettingsScreen(){
   return(<div style={{height:"100%",overflowY:"auto",padding:20,background:C.bg}}>
     <h2 style={{fontSize:22,fontWeight:800,marginBottom:14}}>Paramètres</h2>
     <div style={{display:"flex",gap:6,marginBottom:14,flexWrap:"wrap"}}>
-      {[{id:"general",l:"Général"},{id:"pricing",l:"💰 Prix HT/TTC"},{id:"commission",l:"Commission"},{id:"stores",l:"Magasins"},{id:"printer",l:"🖨️ Imprimante"},{id:"return",l:"Retours"},{id:"sizes",l:"📏 Ordre tailles"},{id:"theme",l:"Thème"},{id:"clock",l:"Pointages"},{id:"prices",l:"Historique prix"}].map(t=>(
+      {[{id:"general",l:"Général"},{id:"pricing",l:"💰 Prix HT/TTC"},{id:"commission",l:"Commission"},{id:"stores",l:"Magasins"},{id:"printer",l:"🖨️ Imprimante"},{id:"receipt",l:"🧾 Ticket"},{id:"screen2",l:"📺 Écran 2"},{id:"caticons",l:"🏷️ Icônes catégories"},{id:"return",l:"Retours"},{id:"sizes",l:"📏 Ordre tailles"},{id:"theme",l:"Thème"},{id:"clock",l:"Pointages"},{id:"prices",l:"Historique prix"}].map(t=>(
         <button key={t.id} onClick={()=>setTab(t.id)} style={{padding:"5px 12px",borderRadius:8,border:`1.5px solid ${tab===t.id?C.primary:C.border}`,
           background:tab===t.id?C.primary:"transparent",color:tab===t.id?"#fff":C.text,fontSize:11,fontWeight:600,cursor:"pointer"}}>{t.l}</button>))}</div>
 
@@ -4237,6 +4245,68 @@ function SettingsScreen(){
         <span>→</span>
         <span style={{color:"#3B8C5A",fontWeight:700}}>{e.newPrice.toFixed(2)}€</span>
         <span style={{color:C.textMuted,fontSize:9}}>{e.user} — {new Date(e.date).toLocaleDateString("fr-FR")}</span></div>))}</div>}
+
+    {tab==="receipt"&&<div style={{maxWidth:550}}>
+      <div style={{background:`linear-gradient(135deg,${C.primaryLight},#DCF0E2)`,borderRadius:16,padding:20,border:`1.5px solid ${C.primary}22`,marginBottom:16}}>
+        <h3 style={{fontSize:16,fontWeight:800,margin:"0 0 4px"}}>Personnalisation du ticket</h3>
+        <p style={{fontSize:11,color:C.textMuted,margin:0}}>Configurez l'apparence et les informations affichées sur vos tickets de caisse.</p></div>
+      <div style={{marginBottom:10}}><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>URL du logo</label>
+        <Input value={settings.receiptLogo||""} onChange={e=>setSettings(s=>({...s,receiptLogo:e.target.value}))} placeholder="https://example.com/logo.png"/></div>
+      <div style={{marginBottom:10}}><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>Message d'en-tête</label>
+        <Input value={settings.receiptHeader||""} onChange={e=>setSettings(s=>({...s,receiptHeader:e.target.value}))} placeholder="Merci pour votre achat !"/></div>
+      <div style={{marginBottom:10}}><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>Message de pied de page</label>
+        <Input value={settings.footerMsg||""} onChange={e=>setSettings(s=>({...s,footerMsg:e.target.value}))} placeholder="Merci de votre visite !"/></div>
+      <div style={{marginBottom:14}}>
+        <div style={{fontSize:12,fontWeight:700,marginBottom:8}}>Champs affichés sur le ticket</div>
+        {[{k:"showShopName",l:"Nom de la boutique"},{k:"showAddress",l:"Adresse"},{k:"showSiret",l:"SIRET"},{k:"showPhone",l:"Téléphone"},{k:"showTvaDetails",l:"Détails TVA"},{k:"showSellerName",l:"Nom du vendeur"},{k:"showDateTime",l:"Date et heure"}].map(f=>{
+          const rf=settings.receiptFields||{showShopName:true,showAddress:true,showSiret:true,showPhone:true,showTvaDetails:true,showSellerName:true,showDateTime:true};
+          const checked=rf[f.k]!==false;
+          return(<div key={f.k} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 10px",borderRadius:8,background:C.surfaceAlt,marginBottom:4,cursor:"pointer"}}
+            onClick={()=>setSettings(s=>({...s,receiptFields:{...(s.receiptFields||{showShopName:true,showAddress:true,showSiret:true,showPhone:true,showTvaDetails:true,showSellerName:true,showDateTime:true}),[f.k]:!checked}}))}>
+            <div style={{width:18,height:18,borderRadius:4,border:`2px solid ${checked?C.primary:C.border}`,background:checked?C.primary:"transparent",display:"flex",alignItems:"center",justifyContent:"center"}}>
+              {checked&&<Check size={12} color="#fff"/>}</div>
+            <span style={{fontSize:12,fontWeight:500}}>{f.l}</span></div>);})}</div>
+      <Btn onClick={()=>{saveSettingsToAPI(settings);addAudit("CONFIG","Paramètres ticket mis à jour");notify("Paramètres ticket sauvegardés","success");}} style={{width:"100%",height:40,background:`linear-gradient(135deg,${C.primary},${C.gradientB})`}}><Save size={14}/> Enregistrer</Btn>
+    </div>}
+
+    {tab==="screen2"&&<div style={{maxWidth:600}}>
+      <div style={{background:`linear-gradient(135deg,${C.primaryLight},#DCF0E2)`,borderRadius:16,padding:20,border:`1.5px solid ${C.primary}22`,marginBottom:16}}>
+        <h3 style={{fontSize:16,fontWeight:800,margin:"0 0 4px"}}>Personnalisation Écran 2</h3>
+        <p style={{fontSize:11,color:C.textMuted,margin:0}}>Configurez l'apparence de l'écran client (affichage secondaire).</p></div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
+        <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>Couleur de fond</label>
+          <div style={{display:"flex",gap:6,alignItems:"center"}}><input type="color" value={settings.screen2BgColor||"#1A2830"} onChange={e=>setSettings(s=>({...s,screen2BgColor:e.target.value}))} style={{width:36,height:36,border:"none",borderRadius:8,cursor:"pointer"}}/>
+            <Input value={settings.screen2BgColor||"#1A2830"} onChange={e=>setSettings(s=>({...s,screen2BgColor:e.target.value}))} style={{flex:1}}/></div></div>
+        <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>Couleur d'accent</label>
+          <div style={{display:"flex",gap:6,alignItems:"center"}}><input type="color" value={settings.screen2AccentColor||C.primary} onChange={e=>setSettings(s=>({...s,screen2AccentColor:e.target.value}))} style={{width:36,height:36,border:"none",borderRadius:8,cursor:"pointer"}}/>
+            <Input value={settings.screen2AccentColor||C.primary} onChange={e=>setSettings(s=>({...s,screen2AccentColor:e.target.value}))} style={{flex:1}}/></div></div></div>
+      <div style={{marginBottom:10}}><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>URL du logo</label>
+        <Input value={settings.screen2Logo||""} onChange={e=>setSettings(s=>({...s,screen2Logo:e.target.value}))} placeholder="https://example.com/logo.png"/></div>
+      <div style={{marginBottom:14}}><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>Message d'accueil</label>
+        <Input value={settings.screen2WelcomeMsg||""} onChange={e=>setSettings(s=>({...s,screen2WelcomeMsg:e.target.value}))} placeholder="Bienvenue"/></div>
+      <div style={{marginBottom:14}}>
+        <div style={{fontSize:12,fontWeight:700,marginBottom:8}}>Aperçu</div>
+        <div style={{width:"100%",height:180,borderRadius:14,background:settings.screen2BgColor||"#1A2830",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:10,border:`1.5px solid ${C.border}`}}>
+          {settings.screen2Logo&&<img src={settings.screen2Logo} alt="logo" style={{maxHeight:40,maxWidth:120,objectFit:"contain"}}/>}
+          <div style={{fontSize:20,fontWeight:800,color:settings.screen2AccentColor||C.primary}}>{settings.screen2WelcomeMsg||"Bienvenue"}</div>
+          <div style={{fontSize:10,color:"rgba(255,255,255,0.5)"}}>Aperçu de l'écran client</div></div></div>
+      <Btn onClick={()=>{saveSettingsToAPI(settings);addAudit("CONFIG","Paramètres Écran 2 mis à jour");notify("Paramètres Écran 2 sauvegardés","success");}} style={{width:"100%",height:40,background:`linear-gradient(135deg,${C.primary},${C.gradientB})`}}><Save size={14}/> Enregistrer</Btn>
+    </div>}
+
+    {tab==="caticons"&&(()=>{const cats=Object.keys({...DEFAULT_CAT_ICONS,...(settings.categoryIcons||{})});
+      return(<div style={{maxWidth:550}}>
+        <div style={{background:`linear-gradient(135deg,${C.primaryLight},#DCF0E2)`,borderRadius:16,padding:20,border:`1.5px solid ${C.primary}22`,marginBottom:16}}>
+          <h3 style={{fontSize:16,fontWeight:800,margin:"0 0 4px"}}>Icônes par catégorie</h3>
+          <p style={{fontSize:11,color:C.textMuted,margin:0}}>Associez un emoji à chaque catégorie de produits. L'emoji s'affiche sur les cartes produit en caisse.</p></div>
+        <div style={{display:"flex",flexDirection:"column",gap:6,marginBottom:14}}>
+          {cats.map(c=>{const val=(settings.categoryIcons||{})[c]||DEFAULT_CAT_ICONS[c]||"📦";
+            return(<div key={c} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderRadius:10,background:C.surfaceAlt,border:`1px solid ${C.border}`}}>
+              <span style={{fontSize:20}}>{val}</span>
+              <span style={{flex:1,fontSize:12,fontWeight:600}}>{c}</span>
+              <Input value={val} onChange={e=>setSettings(s=>({...s,categoryIcons:{...(s.categoryIcons||{}),[c]:e.target.value}}))} style={{width:60,textAlign:"center",fontSize:16}}/></div>);})}</div>
+        <Btn onClick={()=>{saveSettingsToAPI(settings);addAudit("CONFIG","Icônes catégories mis à jour");notify("Icônes sauvegardées","success");}} style={{width:"100%",height:40,background:`linear-gradient(135deg,${C.primary},${C.gradientB})`}}><Save size={14}/> Enregistrer</Btn>
+      </div>);})()}
+
   </div>);
 }
 
@@ -4428,12 +4498,78 @@ function FootfallScreen(){
   </div>);
 }
 
+function HelpCashierScreen(){
+  const sections=[
+    {icon:"🛒",title:"Encaisser une vente",desc:"Ajoutez des articles au panier et finalisez la vente.",steps:["Recherchez un produit par nom, SKU ou code-barres","Cliquez sur le produit pour l'ajouter au panier","Sélectionnez la variante (taille/couleur) si demandé","Ajustez la quantité avec +/- si nécessaire","Choisissez le mode de paiement (CB, espèces, etc.)","Validez la vente"]},
+    {icon:"💸",title:"Appliquer une remise",desc:"Remises par article ou globales sur le panier.",steps:["Remise article : cliquez sur le crayon à côté de l'article","Choisissez % ou montant fixe","Remise globale : bouton 'Remise globale' sous le panier","La remise max est configurable par rôle utilisateur"]},
+    {icon:"↩️",title:"Retours et échanges",desc:"Gérez les retours produits et les avoirs.",steps:["Allez dans l'onglet Retours","Recherchez le ticket d'origine","Sélectionnez les articles à retourner","Choisissez le mode de remboursement (avoir, espèces, carte, échange)","Indiquez le motif du retour","Validez le retour"]},
+    {icon:"💳",title:"Paiements multiples",desc:"Fractionnez un paiement entre plusieurs moyens.",steps:["Cliquez sur 'Fractionné' dans la barre de paiement","Répartissez le montant entre CB/AMEX, espèces, carte cadeau, chèque","Utilisez le bouton '= Reste' pour compléter automatiquement","Le toggle CB/AMEX permet de choisir le type de carte","Validez quand le reste à payer est à 0€"]},
+    {icon:"📷",title:"Scan code-barres",desc:"Utilisez un scanner USB ou Bluetooth.",steps:["Branchez votre scanner USB ou connectez-le en Bluetooth","Scannez le code-barres d'un produit","L'article est automatiquement ajouté au panier","Compatible avec les codes EAN-13 et EAN-8"]},
+    {icon:"❤️",title:"Client fidélité",desc:"Associez un client à la vente pour la fidélité.",steps:["Cliquez sur l'icône client dans le panier","Sélectionnez un client existant ou créez-en un nouveau","Les points fidélité sont automatiquement calculés","Le tier du client (Bronze/Silver/Gold) est affiché"]},
+    {icon:"⏸️",title:"Mettre en attente",desc:"Mettez un panier de côté pour le reprendre plus tard.",steps:["Cliquez sur 'Attente' ou appuyez sur F5","Le panier est sauvegardé avec la date et le client","Reprenez-le depuis le menu 'Paniers en attente'","Plusieurs paniers peuvent être en attente simultanément"]},
+    {icon:"🖨️",title:"Imprimer un ticket",desc:"Imprimez le ticket après une vente.",steps:["Après validation, le ticket s'affiche automatiquement","Cliquez sur 'Imprimer' pour l'impression thermique","Ou 'Envoyer par email' pour un envoi numérique","L'imprimante doit être configurée dans les Réglages"]},
+    {icon:"✈️",title:"Détaxe",desc:"Ventes en détaxe pour les résidents hors UE.",steps:["Activez le bouton 'Détaxe' avant le paiement","Achat minimum : 100,01€ requis","La TVA est mise à 0% sur tous les articles","Le ticket mentionne la détaxe"]},
+    {icon:"🔐",title:"Ouvrir/Fermer la caisse",desc:"Gérez l'ouverture et la clôture de caisse.",steps:["À l'ouverture : saisissez le fond de caisse (rapide ou par coupures)","En fin de journée : allez dans Clôture","Comptez les espèces et validez la clôture Z","Le rapport est archivé automatiquement (NF525)"]},
+    {icon:"⌨️",title:"Raccourcis clavier",desc:"Accélérez votre travail avec les raccourcis.",steps:["F2 : Paiement rapide par carte","F3 : Paiement rapide en espèces","F4 : Ouvrir le paiement fractionné","F5 : Mettre le panier en attente","F8 : Annuler le panier","Shift+? : Afficher les raccourcis"]}
+  ];
+  return(<div style={{height:"100%",overflowY:"auto",padding:20,background:C.bg}}>
+    <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:20}}>
+      <div style={{width:44,height:44,borderRadius:14,background:`linear-gradient(135deg,${C.primary},${C.gradientB})`,display:"flex",alignItems:"center",justifyContent:"center"}}>
+        <HelpCircle size={22} color="#fff"/></div>
+      <div><h2 style={{fontSize:22,fontWeight:800,margin:0}}>Aide Caissier</h2>
+        <p style={{fontSize:12,color:C.textMuted,margin:0}}>Guide complet de toutes les fonctionnalités du mode caisse</p></div></div>
+    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(340px,1fr))",gap:12}}>
+      {sections.map(s=>(<div key={s.title} style={{background:C.surface,borderRadius:16,padding:18,border:`1.5px solid ${C.border}`,boxShadow:`0 1px 4px ${C.shadow}`}}>
+        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}>
+          <span style={{fontSize:24}}>{s.icon}</span>
+          <div><div style={{fontSize:14,fontWeight:700}}>{s.title}</div>
+            <div style={{fontSize:11,color:C.textMuted}}>{s.desc}</div></div></div>
+        <div style={{display:"flex",flexDirection:"column",gap:4}}>
+          {s.steps.map((step,i)=>(<div key={i} style={{display:"flex",alignItems:"start",gap:8,padding:"4px 0",fontSize:11,color:C.text}}>
+            <span style={{minWidth:18,height:18,borderRadius:9,background:`${C.primary}15`,color:C.primary,fontSize:10,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{i+1}</span>
+            <span>{step}</span></div>))}</div></div>))}</div></div>);
+}
+
+function HelpDashboardScreen(){
+  const sections=[
+    {icon:"📦",title:"Gestion des produits",desc:"Ajoutez, modifiez et organisez votre catalogue.",steps:["Allez dans Produits pour voir la liste complète","Créez un produit avec nom, prix, catégorie, taux TVA","Ajoutez des variantes (taille, couleur, EAN, stock)","Modifiez les prix, stocks et informations à tout moment"]},
+    {icon:"📄",title:"Import CSV",desc:"Importez vos produits en masse depuis un fichier CSV.",steps:["Préparez un fichier CSV avec les colonnes requises","Cliquez sur 'Importer CSV' dans l'écran Produits","Mappez les colonnes si nécessaire","Vérifiez l'aperçu avant import","Validez l'import"]},
+    {icon:"📊",title:"Statistiques",desc:"Analysez vos performances de vente.",steps:["Consultez le CA, le panier moyen, le nombre de ventes","Visualisez les graphiques par période","Identifiez les produits les plus vendus","Analysez les performances par vendeur et par catégorie"]},
+    {icon:"↩️",title:"Retours & Avoirs",desc:"Historique complet des retours et avoirs émis.",steps:["Consultez la liste de tous les retours effectués","Filtrez par date, motif ou mode de remboursement","Analysez les statistiques de retours","Les avoirs sont traçables pour le contrôle fiscal"]},
+    {icon:"👥",title:"Gestion des clients",desc:"Base de données clients et fidélité.",steps:["Ajoutez des clients avec leurs coordonnées","Suivez les points de fidélité et le tier (Bronze/Silver/Gold)","Consultez l'historique d'achats par client","Exportez la base clients si nécessaire"]},
+    {icon:"👤",title:"Utilisateurs & rôles",desc:"Gérez les accès et permissions de votre équipe.",steps:["Créez des comptes pour chaque vendeur/manager","Attribuez un rôle : vendeur, manager ou admin","Configurez les permissions (remise max, accès stats, etc.)","Chaque action est tracée par utilisateur"]},
+    {icon:"⚙️",title:"Paramètres boutique",desc:"Configurez votre boutique et vos préférences.",steps:["Modifiez les informations de la boutique (nom, adresse, SIRET)","Configurez le mode de tarification (HT ou TTC)","Personnalisez les tickets de caisse","Configurez l'imprimante thermique"]},
+    {icon:"🛡️",title:"Fiscal NF525",desc:"Conformité fiscale française obligatoire.",steps:["Le système est conforme NF525 par défaut","Chaque vente, retour et annulation est signée","L'historique est inaltérable et auditable","Exportez les données pour le contrôle fiscal"]},
+    {icon:"📋",title:"Clôtures Z",desc:"Clôtures de caisse quotidiennes.",steps:["Effectuez une clôture Z en fin de journée","Comptez les espèces en caisse","Le système compare au montant théorique","Le rapport est archivé et signé (NF525)"]},
+    {icon:"📑",title:"Export FEC",desc:"Fichier des Écritures Comptables pour l'administration fiscale.",steps:["Allez dans l'onglet Fiscal NF525","Sélectionnez la période d'export","Générez le fichier FEC au format réglementaire","Transmettez-le à votre comptable ou à l'administration"]},
+    {icon:"🏷️",title:"Promotions",desc:"Créez et gérez des promotions.",steps:["Créez une promo par collection, quantité ou code promo","Définissez la valeur de la remise en pourcentage","Configurez les dates de début et fin","Activez/désactivez les promos à tout moment"]},
+    {icon:"📦",title:"Stock & inventaire",desc:"Suivi et gestion des stocks en temps réel.",steps:["Consultez l'état du stock de chaque variante","Recevez des alertes de stock bas automatiques","Effectuez des ajustements manuels de stock","Gérez les transferts entre magasins si multi-sites"]},
+    {icon:"🖨️",title:"Imprimante & étiquettes",desc:"Configuration de l'impression.",steps:["Connectez votre imprimante thermique (USB/série)","Configurez la largeur de papier (32 ou 48 colonnes)","Testez l'impression depuis les réglages","Les étiquettes peuvent être imprimées depuis la fiche produit"]}
+  ];
+  return(<div style={{height:"100%",overflowY:"auto",padding:20,background:C.bg}}>
+    <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:20}}>
+      <div style={{width:44,height:44,borderRadius:14,background:`linear-gradient(135deg,${C.primary},${C.gradientB})`,display:"flex",alignItems:"center",justifyContent:"center"}}>
+        <HelpCircle size={22} color="#fff"/></div>
+      <div><h2 style={{fontSize:22,fontWeight:800,margin:0}}>Aide Dashboard</h2>
+        <p style={{fontSize:12,color:C.textMuted,margin:0}}>Guide complet de toutes les fonctionnalités du mode gestion</p></div></div>
+    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(340px,1fr))",gap:12}}>
+      {sections.map(s=>(<div key={s.title} style={{background:C.surface,borderRadius:16,padding:18,border:`1.5px solid ${C.border}`,boxShadow:`0 1px 4px ${C.shadow}`}}>
+        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}>
+          <span style={{fontSize:24}}>{s.icon}</span>
+          <div><div style={{fontSize:14,fontWeight:700}}>{s.title}</div>
+            <div style={{fontSize:11,color:C.textMuted}}>{s.desc}</div></div></div>
+        <div style={{display:"flex",flexDirection:"column",gap:4}}>
+          {s.steps.map((step,i)=>(<div key={i} style={{display:"flex",alignItems:"start",gap:8,padding:"4px 0",fontSize:11,color:C.text}}>
+            <span style={{minWidth:18,height:18,borderRadius:9,background:`${C.primary}15`,color:C.primary,fontSize:10,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>{i+1}</span>
+            <span>{step}</span></div>))}</div></div>))}</div></div>);
+}
+
 function CashierNav({active,onNav}){
   const{currentUser,logout,isOnline,stockAlerts,clockIn,clockOut,pendingSync,clearPendingSync,openCustomerDisplay}=useApp();
   const items=[{id:"sales",l:"Vente",i:ShoppingCart},{id:"returns",l:"Retours",i:RotateCcw},{id:"stats",l:"Stats",i:BarChart3},{id:"stock",l:"Stock",i:Grid},
     {id:"products",l:"Produits",i:Package},{id:"history",l:"Tickets",i:Receipt},{id:"customers",l:"Clients",i:Users},{id:"giftcards",l:"Cadeaux",i:Gift},
     {id:"promos",l:"Promos",i:Zap},{id:"closure",l:"Clôture",i:Lock},{id:"footfall",l:"Entrées",i:Activity},
-    {id:"audit",l:"Audit",i:Activity},{id:"fiscal",l:"NF525",i:Shield},{id:"settings",l:"Réglages",i:Settings}];
+    {id:"audit",l:"Audit",i:Activity},{id:"fiscal",l:"NF525",i:Shield},{id:"settings",l:"Réglages",i:Settings},{id:"help",l:"Aide",i:HelpCircle}];
   return(<div style={{width:76,background:C.surface,borderRight:`1px solid ${C.border}`,display:"flex",flexDirection:"column",alignItems:"center",padding:"12px 0",gap:2,boxShadow:`2px 0 12px ${C.shadow}`}}>
     <div style={{width:42,height:42,borderRadius:13,background:`linear-gradient(135deg,${C.primary},${C.gradientB})`,display:"flex",alignItems:"center",justifyContent:"center",
       color:"#fff",fontWeight:800,fontSize:15,marginBottom:4,boxShadow:`0 4px 14px ${C.primary}25`,letterSpacing:"-0.5px"}}>{currentUser?.name?.[0]}</div>
@@ -4478,7 +4614,7 @@ function CashierInterface(){
   const setSc=useCallback((v)=>{setScRaw(v);try{sessionStorage.setItem("caissepro_screen",v);}catch(e){}},[]);
   if(sr&&!cashReg)return<CashRegControl onSkip={()=>setSr(false)} onDone={()=>setSr(false)}/>;
   const S={sales:SalesScreen,returns:ReturnScreen,stats:StatsScreen,stock:StockScreen,history:HistoryScreen,customers:CustomersScreen,
-    giftcards:GiftCardScreen,promos:PromosScreen,products:ProductsScreen,closure:ClosureScreen,footfall:FootfallScreen,audit:AuditScreen,fiscal:FiscalScreen,settings:SettingsScreen};
+    giftcards:GiftCardScreen,promos:PromosScreen,products:ProductsScreen,closure:ClosureScreen,footfall:FootfallScreen,audit:AuditScreen,fiscal:FiscalScreen,settings:SettingsScreen,help:HelpCashierScreen};
   const Sc=S[sc]||SalesScreen;
   return(<div style={{display:"flex",height:"100vh",fontFamily:"'DM Sans',system-ui,sans-serif"}}><CashierNav active={sc} onNav={setSc}/><div style={{flex:1,overflow:"hidden"}}><ErrorBoundary><Sc/></ErrorBoundary></div></div>);
 }
@@ -4561,7 +4697,7 @@ function DashboardNav({active,onNav}){
   const{logout,currentUser}=useApp();
   const items=[{id:"overview",l:"Dashboard",i:LayoutDashboard},{id:"products",l:"Produits",i:Package},{id:"stock",l:"Stock",i:Grid},
     {id:"stats",l:"Statistiques",i:BarChart3},{id:"returns",l:"Retours & Avoirs",i:RotateCcw},{id:"customers",l:"Clients",i:Users},{id:"users",l:"Utilisateurs",i:UserIcon},
-    {id:"tva",l:"Taux de TVA",i:Percent},{id:"giftcards",l:"Cartes cadeaux",i:Gift},{id:"promos",l:"Promotions",i:Zap},{id:"footfall",l:"Entrées",i:Activity},{id:"settings",l:"Paramètres",i:Settings},{id:"fiscal",l:"Fiscal NF525",i:Shield},{id:"audit",l:"Journal d'audit",i:Activity}];
+    {id:"tva",l:"Taux de TVA",i:Percent},{id:"giftcards",l:"Cartes cadeaux",i:Gift},{id:"promos",l:"Promotions",i:Zap},{id:"footfall",l:"Entrées",i:Activity},{id:"settings",l:"Paramètres",i:Settings},{id:"fiscal",l:"Fiscal NF525",i:Shield},{id:"audit",l:"Journal d'audit",i:Activity},{id:"help",l:"Aide",i:HelpCircle}];
   return(<div style={{width:230,background:"linear-gradient(180deg,#1A2830,#1E3035)",height:"100vh",display:"flex",flexDirection:"column"}}>
     <div style={{padding:"20px 18px",borderBottom:"1px solid rgba(255,255,255,0.06)"}}>
       <div style={{display:"flex",alignItems:"center",gap:10}}>
@@ -4690,7 +4826,7 @@ function DashboardInterface(){
   const[sc,setScRaw]=useState(()=>{try{return sessionStorage.getItem("caissepro_dash_screen")||"overview";}catch(e){return"overview";}});
   const setSc=useCallback((v)=>{setScRaw(v);try{sessionStorage.setItem("caissepro_dash_screen",v);}catch(e){}},[]);
   const S={overview:DashOverview,products:ProductsScreen,stock:StockScreen,stats:StatsScreen,returns:ReturnsHistoryScreen,customers:CustomersScreen,
-    users:UsersScreen,tva:TVAScreen,giftcards:GiftCardScreen,promos:PromosScreen,footfall:FootfallScreen,settings:SettingsScreen,fiscal:FiscalScreen,audit:AuditScreen};
+    users:UsersScreen,tva:TVAScreen,giftcards:GiftCardScreen,promos:PromosScreen,footfall:FootfallScreen,settings:SettingsScreen,fiscal:FiscalScreen,audit:AuditScreen,help:HelpDashboardScreen};
   const Sc=S[sc]||DashOverview;
   return(<div style={{display:"flex",height:"100vh",fontFamily:"'DM Sans',system-ui,sans-serif"}}><DashboardNav active={sc} onNav={setSc}/><div style={{flex:1,overflow:"hidden"}}><ErrorBoundary><Sc/></ErrorBoundary></div></div>);
 }
