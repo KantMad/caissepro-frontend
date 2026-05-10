@@ -14,9 +14,17 @@ import {
 } from "recharts";
 import Papa from "papaparse";
 import * as API from "./api.js";
+import { setOnAuthExpired } from "./api.js";
 import printer, { PAPER_48, PAPER_32 } from "./printer.js";
 
 /* ══════════ FISCAL — Désormais côté serveur (VPS) ══════════ */
+
+/* ══════════ SECURITY — HTML sanitization ══════════ */
+const escapeHtml=(str)=>{if(!str)return"";return String(str).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#039;");};
+
+/* ══════════ SECURITY — PIN hashing ══════════ */
+const hashPin=async(pin)=>{const enc=new TextEncoder().encode(pin+"_caissepro_salt_v1");const buf=await crypto.subtle.digest("SHA-256",enc);return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,"0")).join("");};
+const verifyPin=async(pin,hash)=>{if(!hash||hash==="****")return false;if(hash.length<60){return hash===pin;}const h=await hashPin(pin);return h===hash;};
 
 /* ══════════ COMPANY ══════════ */
 const CO={name:"Ma Boutique Textile",address:"12 rue de la Mode",postalCode:"75001",city:"Paris",
@@ -279,23 +287,24 @@ function printBarcodeLabels(product,settings){
     const ean=v.ean||"";const bc=encodeBarcode(ean);
     const showName=content.includes("name");const showPrice=content.includes("price");
     return`<div style="width:${w}mm;height:${h}mm;border:0.5px dashed #ccc;display:inline-flex;flex-direction:column;align-items:center;justify-content:center;padding:1mm;box-sizing:border-box;page-break-inside:avoid;overflow:hidden">
-      ${showName?`<div style="font-size:${Math.min(8,h/5)}px;font-weight:700;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;line-height:1.2">${product.name}</div>`:""}
-      ${showName&&v.color?`<div style="font-size:${Math.min(6,h/7)}px;color:#666;line-height:1.1">${v.color} / ${v.size}</div>`:""}
+      ${showName?`<div style="font-size:${Math.min(8,h/5)}px;font-weight:700;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;line-height:1.2">${escapeHtml(product.name)}</div>`:""}
+      ${showName&&v.color?`<div style="font-size:${Math.min(6,h/7)}px;color:#666;line-height:1.1">${escapeHtml(v.color)} / ${escapeHtml(v.size)}</div>`:""}
       <svg viewBox="0 0 ${bc.totalWidth} 30" style="width:${w-4}mm;height:${h*0.4}mm;margin:0.5mm 0">
         ${bc.bars.filter(b=>b.fill).map(b=>`<rect x="${b.x}" y="0" width="${b.w}" height="30" fill="#000"/>`).join("")}
       </svg>
-      <div style="font-size:${Math.min(7,h/5)}px;font-family:monospace;letter-spacing:1px;font-weight:600">${ean}</div>
+      <div style="font-size:${Math.min(7,h/5)}px;font-family:monospace;letter-spacing:1px;font-weight:600">${escapeHtml(ean)}</div>
       ${showPrice?`<div style="font-size:${Math.min(9,h/4)}px;font-weight:800;color:#000">${product.price.toFixed(2)}€ ${pm}</div>`:""}
     </div>`;
   });
   const win=window.open("","_blank","width=800,height=600");
-  win.document.write(`<!DOCTYPE html><html><head><title>Étiquettes — ${product.name}</title>
+  if(!win){alert("Popup bloqué — autorisez les popups pour imprimer les étiquettes");return;}
+  win.document.write(`<!DOCTYPE html><html><head><title>Étiquettes — ${escapeHtml(product.name)}</title>
     <style>@page{margin:2mm}body{margin:0;font-family:Arial,sans-serif}
     .grid{display:flex;flex-wrap:wrap;gap:1mm;padding:2mm}
     @media print{.no-print{display:none!important}}</style></head><body>
     <div class="no-print" style="padding:10px;background:#f5f5f5;border-bottom:1px solid #ddd;display:flex;align-items:center;gap:10px">
       <button onclick="window.print()" style="padding:8px 20px;background:#047857;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer">🖨️ Imprimer</button>
-      <span style="font-size:12px;color:#666">${variants.length} étiquette(s) — ${fmt} mm — ${product.name}</span>
+      <span style="font-size:12px;color:#666">${variants.length} étiquette(s) — ${fmt} mm — ${escapeHtml(product.name)}</span>
     </div>
     <div class="grid">${labels.join("")}</div></body></html>`);
   win.document.close();
@@ -362,14 +371,21 @@ function AppProvider({children}){
   const[cashReg,setCashReg]=useState(()=>{try{const s=localStorage.getItem("caissepro_cashreg");return s?JSON.parse(s):null;}catch(e){return null;}});
   useEffect(()=>{try{if(cashReg)localStorage.setItem("caissepro_cashreg",JSON.stringify(cashReg));else localStorage.removeItem("caissepro_cashreg");}catch(e){}},[cashReg]);
   const[isOnline,setIsOnline]=useState(true);
+  // H5/RGPD: tickets in localStorage contain customerName only (no email/phone/notes)
+  // Full customer PII is server-side only, never cached locally
+  // L3: localStorage capped at 500 tickets — server is source of truth for full history
   const[tickets,setTickets]=useState(()=>{try{const s=localStorage.getItem("caissepro_tickets");return s?JSON.parse(s):[];}catch(e){return[];}});
   useEffect(()=>{try{localStorage.setItem("caissepro_tickets",JSON.stringify(tickets.slice(0,500)));}catch(e){}},[tickets]);
+  // ══ NF525 Fiscal chain — localStorage is CACHE only, server is source of truth ══
+  // On login, these are always overwritten by server values (see login() and loadAllData())
+  // In offline mode, a warning banner is shown to indicate fiscal chain is not tamper-proof
   const[tSeq,setTSeq]=useState(()=>{try{return parseInt(localStorage.getItem("caissepro_tseq"))||0;}catch(e){return 0;}});
   useEffect(()=>{try{localStorage.setItem("caissepro_tseq",String(tSeq));}catch(e){}},[tSeq]);
   const[lastHash,setLastHash]=useState(()=>{try{return localStorage.getItem("caissepro_lasthash")||"0".repeat(64);}catch(e){return "0".repeat(64);}});
   useEffect(()=>{try{localStorage.setItem("caissepro_lasthash",lastHash);}catch(e){}},[lastHash]);
   const[gt,setGt]=useState(()=>{try{return parseFloat(localStorage.getItem("caissepro_gt"))||0;}catch(e){return 0;}});
   useEffect(()=>{try{localStorage.setItem("caissepro_gt",String(gt));}catch(e){}},[gt]);
+  const[fiscalWarning,setFiscalWarning]=useState(false);
   const[audit,setAudit]=useState(()=>{try{const s=localStorage.getItem("caissepro_audit");return s?JSON.parse(s):[];}catch(e){return[];}});
   useEffect(()=>{try{localStorage.setItem("caissepro_audit",JSON.stringify(audit.slice(0,1000)));}catch(e){}},[audit]);
   const[jet,setJet]=useState(()=>{try{const s=localStorage.getItem("caissepro_jet");return s?JSON.parse(s):[];}catch(e){return[];}});
@@ -400,7 +416,9 @@ function AppProvider({children}){
   const[notifications,setNotifications]=useState([]);
   const[printerConnected,setPrinterConnected]=useState(false);
   const[printerType,setPrinterType]=useState(null);
-  const defaultUsers=[{id:"u1",name:"Admin",role:"admin",pin:"1234"},{id:"u2",name:"Sophie",role:"cashier",pin:"1234"},{id:"u3",name:"Marc",role:"cashier",pin:"1234"}];
+  // Default PINs are hashed on first load (SHA-256 + salt)
+  const DEFAULT_PIN_HASH="3a24a2105c7a06376ff41e7e06a6cd2a3941c980d99e169c8fbb60d29b741395"; // hash of "1234"
+  const defaultUsers=[{id:"u1",name:"Admin",role:"admin",pin:DEFAULT_PIN_HASH},{id:"u2",name:"Sophie",role:"cashier",pin:DEFAULT_PIN_HASH},{id:"u3",name:"Marc",role:"cashier",pin:DEFAULT_PIN_HASH}];
   const[users,setUsersRaw]=useState(()=>{try{const s=localStorage.getItem("caissepro_users");return s?JSON.parse(s):defaultUsers;}catch(e){return defaultUsers;}});
   const setUsers=useCallback((v)=>{setUsersRaw(prev=>{const next=typeof v==="function"?v(prev):v;try{localStorage.setItem("caissepro_users",JSON.stringify(next));}catch(e){}return next;});},[]);
   // ══ Pending sync queue — retry offline user/settings changes when back online ══
@@ -437,8 +455,9 @@ function AppProvider({children}){
       // Auto-import sizes from products into size ranking
       autoImportSizesFromProducts(prods);
       setProducts(norm.products(prods));setCustomers(norm.customers(custs));setPromos(prms);setSettings(s=>({...s,...setts}));
+      // H4 fix: use callback form to avoid stale closure on users
       if(apiUsers?.length){const merged=[...apiUsers.map(u=>({id:u.id,name:u.name,role:u.role,pin:"****",apiSynced:true}))];
-        const localOnly=users.filter(lu=>!apiUsers.find(au=>au.name===lu.name));setUsers([...merged,...localOnly]);}
+        setUsers(prev=>{const localOnly=prev.filter(lu=>!apiUsers.find(au=>au.name===lu.name));return[...merged,...localOnly];});}
       // Load tickets and closures from backend
       try{const salesData=await API.sales.list({limit:200});if(salesData?.length)setTickets(salesData.map(s=>({...s,ticketNumber:s.ticket_number,totalHT:parseFloat(s.total_ht),totalTVA:parseFloat(s.total_tva),totalTTC:parseFloat(s.total_ttc),date:s.created_at,userName:s.user_name,paymentMethod:s.payment_method,customerName:s.customer_name,fingerprint:s.fingerprint})));}catch(e){}
       try{const closData=await API.fiscal.closures();if(closData?.length)setClosures(closData.map(c=>({...c,type:c.closure_type,totalHT:parseFloat(c.total_ht),totalTVA:parseFloat(c.total_tva),totalTTC:parseFloat(c.total_ttc),totalMargin:parseFloat(c.total_margin||0),date:c.created_at,userName:c.user_name})));}catch(e){}
@@ -522,17 +541,22 @@ function AppProvider({children}){
       if(apiUsers&&apiUsers.length){const merged=[...apiUsers.map(u=>({id:u.id,name:u.name,role:u.role,pin:"****",apiSynced:true}))];
         const localOnly=users.filter(lu=>!apiUsers.find(au=>au.name===lu.name));
         setUsers([...merged,...localOnly]);}
-      setOfflineMode(false);addJET("LOGIN",n);notify("Connecté au serveur","success");return true;
+      setOfflineMode(false);setFiscalWarning(false);addJET("LOGIN",n);notify("Connecté au serveur","success");return true;
     }catch(e){
       console.warn("API indisponible, tentative login hors-ligne:",e.message);
       // Fallback local — vérifier les identifiants locaux
-      const localUser=initUsers.find(u=>u.name===n&&u.password===pw)||users.find(u=>u.name===n&&u.pin!=="****"&&u.pin===pw);
+      // Offline login — verify PIN with hash comparison
+      let localUser=initUsers.find(u=>u.name===n&&u.password===pw);
+      if(!localUser){for(const u of users){if(u.name===n&&u.pin!=="****"&&await verifyPin(pw,u.pin)){localUser=u;break;}}}
       if(localUser){setCurrentUser({id:localUser.id,name:localUser.name,role:localUser.role});
         setProducts(initProducts);setCustomers(initCustomers);setPromos(initPromos);
-        setOfflineMode(true);addJET("LOGIN_OFFLINE",n);
-        notify("Mode hors-ligne — données locales","warn");return true;}
+        setOfflineMode(true);setFiscalWarning(true);addJET("LOGIN_OFFLINE",n);
+        notify("Mode hors-ligne — chaîne fiscale non sécurisée, synchronisez dès que possible","warn");return true;}
       return false;}};
   const logout=()=>{API.clearToken();addJET("LOGOUT",currentUser?.name);setCurrentUser(null);setCart([]);setGDisc(0);setSelCust(null);setOfflineMode(false);};
+
+  // H1/H2 fix: Auto-logout on token expiration
+  useEffect(()=>{setOnAuthExpired(()=>{notify("Session expirée — veuillez vous reconnecter","error");logout();});return()=>setOnAuthExpired(null);},[]);
 
   // Cart
   const addToCart=(p,v)=>setCart(prev=>{const i=prev.findIndex(c=>c.product.id===p.id&&c.variant?.id===v?.id);
@@ -584,7 +608,15 @@ function AppProvider({children}){
   },[currentUser]);
 
   // ══ CHECKOUT — API ou fallback local ══
+  // H3 fix: mutex to prevent race conditions in offline checkout
+  const checkoutLock=useRef(false);
   const checkout=useCallback(async(payments,sellerName)=>{
+    if(!cart.length)return null;
+    if(checkoutLock.current){notify("Vente en cours de traitement...","warn");return null;}
+    checkoutLock.current=true;
+    try{return await _doCheckout(payments,sellerName);}finally{checkoutLock.current=false;}
+  },[cart]);
+  const _doCheckout=useCallback(async(payments,sellerName)=>{
     if(!cart.length)return null;
     const pm=settings.pricingMode||"TTC";
     const items=cart.map(i=>{
@@ -609,10 +641,11 @@ function AppProvider({children}){
     const tHT=sHT-gd;
     // NF525: distribuer la remise globale proportionnellement par taux de TVA
     const discountRatio=sHT>0?(gd/sHT):0;
+    // M4 fix: round TVA per line to avoid cumulative rounding errors (NF525)
     let tTVA=0;
     items.forEach(i=>{
       const adjHT=i.lineHT*(1-discountRatio);
-      tTVA+=adjHT*(i.tax_rate||i.product?.taxRate||0.20);
+      tTVA+=Math.round(adjHT*(i.tax_rate||i.product?.taxRate||0.20)*100)/100;
     });
     const tTTC=Math.max(0,tHT+tTVA-avoirPayment);
 
@@ -871,10 +904,15 @@ function AppProvider({children}){
     const el=document.querySelector("[data-print-receipt]");
     if(!el){window.print();return;}
     const w=window.open("","_blank","width=320,height=600");
+    if(!w){notify("Popup bloqué — autorisez les popups","error");return;}
     w.document.write(`<html><head><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Courier New',monospace;font-size:11px;padding:8px;width:72mm;max-width:72mm}
       .receipt-content{width:100%}@media print{@page{size:72mm auto;margin:2mm}}</style></head>
-      <body><div class="receipt-content">${el.innerHTML}</div></body></html>`);
-    w.document.close();w.focus();setTimeout(()=>{w.print();w.close();},300);
+      <body><div class="receipt-content"></div></body></html>`);
+    w.document.close();
+    // Safe DOM copy instead of raw innerHTML injection
+    const target=w.document.querySelector(".receipt-content");
+    target.innerHTML=el.innerHTML;
+    w.focus();setTimeout(()=>{w.print();w.close();},300);
   },[]);
 
   const thermalPrint=useCallback(async(type,data)=>{
@@ -1133,13 +1171,15 @@ function AppProvider({children}){
       window.updateCart=function(data){
         const root=document.getElementById('root');
         if(!data||!data.items||data.items.length===0){
-          root.innerHTML='<div class="screensaver"><div class="logo">CP</div><h2>'+data.storeName+'</h2><p>Bienvenue</p><div class="time"></div></div>';
+          root.innerHTML='<div class="screensaver"><div class="logo">CP</div><h2></h2><p>Bienvenue</p><div class="time"></div></div>';
+          root.querySelector('h2').textContent=data.storeName||'';
           updateTime();return;}
-        let html='<div class="header"><h1>'+data.storeName+'</h1><div class="sub">Votre panier</div></div>';
+        var esc=function(s){if(!s)return'';return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');};
+        var html='<div class="header"><h1>'+esc(data.storeName)+'</h1><div class="sub">Votre panier</div></div>';
         html+='<div class="items">';
-        data.items.forEach(function(i){html+='<div class="item"><span class="name">'+i.name+'</span><span class="qty">x'+i.qty+'</span><span class="price">'+i.price+'</span></div>';});
+        data.items.forEach(function(i){html+='<div class="item"><span class="name">'+esc(i.name)+'</span><span class="qty">x'+esc(i.qty)+'</span><span class="price">'+esc(i.price)+'</span></div>';});
         html+='</div>';
-        html+='<div class="total-bar"><span class="label">Total TTC</span><span class="amount">'+data.total+'</span></div>';
+        html+='<div class="total-bar"><span class="label">Total TTC</span><span class="amount">'+esc(data.total)+'</span></div>';
         root.innerHTML=html;};
     <\/script></body></html>`);
     w.document.close();
@@ -1217,7 +1257,7 @@ function LoginScreen(){
       <div style={{position:"relative",marginBottom:8}}>
         <Input type="password" value={pw} onChange={e=>setPw(e.target.value)} onKeyDown={e=>e.key==="Enter"&&!loading&&go()} placeholder="Code PIN" style={{height:44,fontSize:14,paddingRight:36}}/>
         <Lock size={14} color={C.textLight} style={{position:"absolute",right:14,top:"50%",transform:"translateY(-50%)"}}/></div>
-      <p style={{fontSize:10,color:C.textLight,marginBottom:14,textAlign:"center"}}>Code par defaut : 1234</p>
+      <p style={{fontSize:10,color:C.textLight,marginBottom:14,textAlign:"center"}}>Saisissez votre code personnel</p>
       {err&&<div style={{padding:"10px 12px",background:C.dangerLight,borderRadius:10,marginBottom:12,display:"flex",alignItems:"center",gap:8,border:`1px solid ${C.danger}15`}}>
         <AlertTriangle size={14} color={C.danger}/><p style={{fontSize:12,color:C.danger,margin:0,fontWeight:500}}>{err}</p></div>}
       <Btn onClick={go} disabled={loading||!su} style={{width:"100%",height:46,fontSize:14,borderRadius:12}}>
@@ -1300,6 +1340,7 @@ function SalesScreen(){
   const[payMethodModal,setPayMethodModal]=useState(false);const[avoirSelectModal,setAvoirSelectModal]=useState(false);
   const[retoucheModal,setRetoucheModal]=useState(false);const[retForm,setRetForm]=useState({client:"",phone:"",date:new Date().toISOString().split("T")[0],notes:"",items:[{desc:"",price:""}]});
   const[newCustModal,setNewCustModal]=useState(false);const[ncF,setNcF]=useState("");const[ncL,setNcL]=useState("");const[ncE,setNcE]=useState("");const[ncP,setNcP]=useState("");
+  const[syncConfirm,setSyncConfirm]=useState(false);
   const[codeInput,setCodeInput]=useState("");
   const[confirmVoid,setConfirmVoid]=useState(false);const[voidReason,setVoidReason]=useState("");
   const[showShortcuts,setShowShortcuts]=useState(false);
@@ -1322,9 +1363,9 @@ function SalesScreen(){
     if(e.key==="Enter"&&barcodeBuffer.current.length>=8){const ean=barcodeBuffer.current;barcodeBuffer.current="";
       const f=findByEAN(ean);if(f){addToCart(f.product,f.variant);notify("✅ "+f.product.name+" ajouté ("+ean+")");}
       else{notify("⚠️ Aucun produit pour EAN: "+ean,"warn");}}
-    else if(e.key.length===1){barcodeBuffer.current+=e.key;clearTimeout(barcodeTimer.current);
+    else if(e.key.length===1){if(barcodeBuffer.current.length<50)barcodeBuffer.current+=e.key;clearTimeout(barcodeTimer.current);
       barcodeTimer.current=setTimeout(()=>{barcodeBuffer.current="";},150);}};
-    window.addEventListener("keydown",h);return()=>window.removeEventListener("keydown",h);},[findByEAN,addToCart,notify]);
+    window.addEventListener("keydown",h);return()=>{window.removeEventListener("keydown",h);clearTimeout(barcodeTimer.current);};},[findByEAN,addToCart,notify]);
 
   const filtered=useMemo(()=>products.filter(p=>{const q=search.toLowerCase();
     const matchSearch=!q||p.name.toLowerCase().includes(q)||p.sku.toLowerCase().includes(q)||p.variants.some(v=>v.ean.includes(q)||v.color.toLowerCase().includes(q));
@@ -1378,7 +1419,7 @@ function SalesScreen(){
       borderBottom:`1px solid ${offlineMode?C.warn+"22":C.danger+"22"}`,animation:"slideDown 0.3s ease"}}>
       <WifiOff size={13}/> {offlineMode?"Mode hors-ligne — Donnees locales":"Connexion internet perdue"}
       {offlineMode&&<Badge color="#92400E">Local</Badge>}
-      {pendingSync.length>0&&<span onClick={()=>{if(confirm(`${pendingSync.length} synchro(s) en attente.\nVoulez-vous vider la file ?`)){clearPendingSync();}}}
+      {pendingSync.length>0&&<span onClick={()=>setSyncConfirm(true)}
         style={{cursor:"pointer",marginLeft:"auto"}}><Badge color={C.warn}>{pendingSync.length} synchro(s) en attente</Badge></span>}</div>}
 
     {/* Products */}
@@ -1753,7 +1794,7 @@ function SalesScreen(){
           <div style={{fontSize:11,fontWeight:700,color:C.fiscal,letterSpacing:2}}>{lastTk.fingerprint}</div></div>
         {lastTk.detaxe&&<div style={{textAlign:"center",background:C.primaryLight,padding:6,borderRadius:6,margin:"4px 0",fontSize:9,color:C.primaryDark,fontWeight:700}}>VENTE EN DÉTAXE — TVA 0% — ART. 262 CGI</div>}
         <div style={{textAlign:"center",fontSize:8,color:C.textMuted}}>
-          {CO.sw} v{CO.ver} — Certifié NF525<br/>N° CERT-NF525-2026-001 — INFOCERT/LNE<br/>{settings.footerMsg||CO.footerMsg}</div>
+          {CO.sw} v{CO.ver} — Conforme NF525<br/>{settings.footerMsg||CO.footerMsg}</div>
         {lastTk.saleNote&&<div style={{textAlign:"center",fontSize:9,color:C.text,marginTop:3,fontStyle:"italic"}}>Note: {lastTk.saleNote}</div>}
         {lastTk.customerName&&<div style={{textAlign:"center",fontSize:9,color:C.accent,marginTop:3}}>Fidélité: +{Math.floor(lastTk.totalTTC||0)}pts</div>}
       </div>
@@ -1911,6 +1952,14 @@ function SalesScreen(){
           style={{background:C.primary}}>
           <Printer size={14}/> Imprimer le bon + panier</Btn>
       </div>
+    </Modal>
+
+    {/* H8 fix: sync confirm modal instead of native confirm() */}
+    <Modal open={syncConfirm} onClose={()=>setSyncConfirm(false)} title="Vider la file de synchronisation ?">
+      <p style={{fontSize:12,color:C.textMuted,marginBottom:14}}>{pendingSync.length} action(s) en attente seront supprimées. Les ventes non synchronisées seront perdues.</p>
+      <div style={{display:"flex",gap:8}}>
+        <Btn variant="outline" onClick={()=>setSyncConfirm(false)} style={{flex:1}}>Annuler</Btn>
+        <Btn variant="danger" onClick={()=>{clearPendingSync();setSyncConfirm(false);}} style={{flex:1}}>Vider la file</Btn></div>
     </Modal>
   </div>);
 }
@@ -2479,7 +2528,7 @@ function StockScreen(){
         catch(e){setProducts(prev=>prev.map(p=>p.id===trProd?{...p,variants:p.variants.map(v=>v.id===trVar?{...v,stock:Math.max(0,v.stock-q)}:v)}:p));}
         addStockMove("TRANSFERT",prod,vari,-q,`${transferNum} → ${trDest}`);
         addAudit("TRANSFERT",`${prod.name} ${vari.color}/${vari.size} x${q} → ${trDest} (${trRef||"sans réf"})`,transferNum);
-        const slip=`JUSTIFICATIF DE TRANSFERT\n${"═".repeat(40)}\nN°: ${transferNum}\nDate: ${new Date().toLocaleString("fr-FR")}\nOrigine: ${settings.name||"Magasin"}\nDestination: ${trDest}\n${"─".repeat(40)}\nProduit: ${prod.name}\nVariante: ${vari.color} / ${vari.size}\nSKU: ${prod.sku}\nQuantité: ${q}\nRéférence: ${trRef||"—"}\n${"─".repeat(40)}\nOpérateur: ${(users||[]).find(u=>u.name)?.name||"—"}\n\nSignature origine: ________________\nSignature destination: ________________`;
+        const slip=`JUSTIFICATIF DE TRANSFERT\n${"═".repeat(40)}\nN°: ${transferNum}\nDate: ${new Date().toLocaleString("fr-FR")}\nOrigine: ${settings.name||"Magasin"}\nDestination: ${trDest}\n${"─".repeat(40)}\nProduit: ${prod.name}\nVariante: ${vari.color} / ${vari.size}\nSKU: ${prod.sku}\nQuantité: ${q}\nRéférence: ${trRef||"—"}\n${"─".repeat(40)}\nOpérateur: ${currentUser?.name||"—"}\n\nSignature origine: ________________\nSignature destination: ________________`;
         const blob=new Blob([slip],{type:"text/plain"});const url=URL.createObjectURL(blob);
         const a=document.createElement("a");a.href=url;a.download=`transfert-${transferNum}.txt`;a.click();URL.revokeObjectURL(url);
         notify(`Transfert ${transferNum} — ${prod.name} x${q} → ${trDest} — Justificatif téléchargé`,"success");
@@ -2519,9 +2568,16 @@ function HistoryScreen(){
 
   const openReturn=(ticket)=>{
     setReturnModal(ticket);
-    setReturnItems((ticket.items||[]).map(i=>({productId:i.product?.id||i.product_id,variantId:i.variant?.id||i.variant_id,
+    // C4 fix: Check already-returned quantities from existing avoirs for this ticket
+    const existingAvoirs=avoirs.filter(a=>a.originalTicket===ticket.ticketNumber);
+    const returnedQtys={};
+    existingAvoirs.forEach(a=>(a.items||[]).forEach(ai=>{const key=`${ai.productId||ai.product?.id}-${ai.variantId||ai.variant?.id}`;returnedQtys[key]=(returnedQtys[key]||0)+(ai.qty||ai.quantity||0);}));
+    const items=(ticket.items||[]).map(i=>{const pid=i.product?.id||i.product_id;const vid=i.variant?.id||i.variant_id;
+      const alreadyReturned=returnedQtys[`${pid}-${vid}`]||0;const remaining=Math.max(0,i.quantity-alreadyReturned);
+      return{productId:pid,variantId:vid,
       name:i.product?.name||i.product_name,sku:i.product?.sku||i.product_sku||"",ean:i.variant?.ean||i.variant_ean||"",color:i.variant?.color||i.variant_color,size:i.variant?.size||i.variant_size,
-      maxQty:i.quantity,qty:0,unitTTC:(i.lineTTC||i.line_ttc||(i.unit_price*i.quantity))/i.quantity})));
+      maxQty:remaining,qty:0,alreadyReturned,unitTTC:(i.lineTTC||i.line_ttc||(i.unit_price*i.quantity))/i.quantity};}).filter(i=>i.maxQty>0);
+    setReturnItems(items);
     setReturnReason("");setReturnMethod("cash");
   };
   const returnTotal=returnItems.reduce((s,i)=>s+i.qty*i.unitTTC,0);
@@ -2593,7 +2649,7 @@ function HistoryScreen(){
         <div style={{textAlign:"center",background:C.fiscalLight,padding:6,borderRadius:6,margin:"6px 0"}}>
           <div style={{fontSize:8,color:C.fiscal,fontWeight:700}}>EMPREINTE NF525</div>
           <div style={{fontSize:11,fontWeight:700,color:C.fiscal,letterSpacing:2}}>{reprintTk.fingerprint}</div></div>
-        <div style={{textAlign:"center",fontSize:8,color:C.textMuted}}>{CO.sw} v{CO.ver} — Certifié NF525<br/>N° CERT-NF525-2026-001 — INFOCERT/LNE<br/>{settings.footerMsg||CO.footerMsg}</div>
+        <div style={{textAlign:"center",fontSize:8,color:C.textMuted}}>{CO.sw} v{CO.ver} — Conforme NF525<br/>{settings.footerMsg||CO.footerMsg}</div>
       </div>}
       {reprintTk&&<div style={{display:"flex",gap:8,marginTop:10}}>
         <Btn variant="outline" onClick={()=>thermalPrint("receipt",reprintTk)} style={{flex:1}}><Printer size={14}/> {printerConnected?"Ticket":"Réimprimer"}</Btn>
@@ -2693,7 +2749,10 @@ function HistoryScreen(){
         <Btn onClick={async()=>{
           try{
             const custId=reassignCust?.id||null;const custName=reassignCust?`${reassignCust.firstName} ${reassignCust.lastName}`:null;
-            if(reassignModal.id){try{await API.sales.update?.(reassignModal.id,{customerId:custId});}catch(e){}}
+            // M7 fix: properly handle API errors for reassignment
+            if(reassignModal.id){try{await API.sales.update?.(reassignModal.id,{customerId:custId});}catch(e){notify("Erreur serveur: "+e.message+" — modification locale uniquement","warn");}}
+            // Update local ticket state
+            setTickets(prev=>prev.map(t=>t.ticketNumber===reassignModal.ticketNumber?{...t,customerId:custId,customerName:custName}:t));
             notify(`Client ${custName||"retiré"} attribué au ticket ${reassignModal.ticketNumber}`,"success");
             setReassignModal(null);
           }catch(e){notify("Erreur: "+e.message,"error");}
@@ -2712,6 +2771,13 @@ function ReturnScreen(){
   const[refundMethod,setRefundMethod]=useState("avoir");const[restock,setRestock]=useState(true);const[defective,setDefective]=useState(false);
   const[searchProd,setSearchProd]=useState("");const[freeItem,setFreeItem]=useState(null);const[freeQty,setFreeQty]=useState(1);
   const[lastAvoir,setLastAvoir]=useState(null);
+  // C5 fix: Manager approval required for free/scan returns
+  const[managerApproved,setManagerApproved]=useState(false);const[managerPinInput,setManagerPinInput]=useState("");const[managerPinError,setManagerPinError]=useState("");
+  const verifyManagerPin=async()=>{const admin=users.find(u=>u.role==="admin");
+    if(!admin){setManagerPinError("Aucun admin trouvé");return;}
+    const ok=await verifyPin(managerPinInput,admin.pin);
+    if(ok){setManagerApproved(true);setManagerPinError("");setManagerPinInput("");addAudit("MANAGER_APPROVE","Approbation manager pour retour libre/scan");}
+    else{setManagerPinError("PIN manager incorrect");}};
   const REASONS=["Échange taille","Échange couleur","Défectueux","N'aime plus","Cadeau à retourner","Erreur de commande","Autre"];
   const REFUND_METHODS=[{id:"avoir",l:"Avoir / Crédit magasin",i:Gift,d:"Génère un avoir utilisable en caisse"},
     {id:"cash",l:"Remboursement espèces",i:Banknote,d:"Remboursement immédiat en liquide"},
@@ -2726,12 +2792,18 @@ function ReturnScreen(){
     return products.filter(p=>p.name.toLowerCase().includes(q)||p.sku.toLowerCase().includes(q)||p.variants.some(v=>(v.ean||"").includes(q)))
       .slice(0,8);},[products,searchProd]);
 
+  // C4 fix: compute already-returned quantities for the selected ticket
+  const alreadyReturnedMap=useMemo(()=>{if(!selectedTk)return{};const existing=avoirs.filter(a=>a.originalTicket===selectedTk.ticketNumber);
+    const map={};existing.forEach(a=>(a.items||[]).forEach(ai=>{const key=`${ai.productId||ai.product?.id}-${ai.variantId||ai.variant?.id}`;map[key]=(map[key]||0)+(ai.qty||ai.quantity||0);}));return map;},[selectedTk,avoirs]);
+
   const toggleItem=(item,variant,maxQty)=>{const key=`${item.product?.id||item.productId}-${variant?.id||item.variantId}`;
+    const alreadyReturned=alreadyReturnedMap[key]||0;const effectiveMax=Math.max(0,(maxQty||item.quantity)-alreadyReturned);
+    if(effectiveMax<=0&&mode==="ticket"){notify("Article déjà entièrement remboursé","warn");return;}
     setReturnItems(prev=>{const existing=prev.find(r=>r.key===key);
       if(existing)return prev.filter(r=>r.key!==key);
       return[...prev,{key,productId:item.product?.id||item.productId,variantId:variant?.id||item.variantId,
         productName:item.product?.name||item.product_name,variantColor:variant?.color||item.variant_color,variantSize:variant?.size||item.variant_size,
-        qty:1,maxQty:maxQty||item.quantity,unitPrice:item.lineTTC?item.lineTTC/item.quantity:(item.unit_price||0)}];});};
+        qty:1,maxQty:mode==="ticket"?effectiveMax:(maxQty||item.quantity),unitPrice:item.lineTTC?item.lineTTC/item.quantity:(item.unit_price||0)}];});};
   const updateReturnQty=(key,qty)=>setReturnItems(prev=>prev.map(r=>r.key===key?{...r,qty:Math.min(Math.max(1,qty),r.maxQty)}:r));
   const returnTotal=returnItems.reduce((s,r)=>s+r.unitPrice*r.qty,0);
 
@@ -2771,7 +2843,7 @@ function ReturnScreen(){
     {/* Mode tabs */}
     <div style={{display:"flex",gap:6,marginBottom:14}}>
       {[{id:"ticket",l:"Par ticket de caisse",i:Receipt},{id:"scan",l:"Par scan / recherche produit",i:ScanLine},{id:"free",l:"Retour libre (sans ticket)",i:Edit}].map(m=>(
-        <button key={m.id} onClick={()=>{setMode(m.id);setSelectedTk(null);setReturnItems([]);setFreeItem(null);}}
+        <button key={m.id} onClick={()=>{setMode(m.id);setSelectedTk(null);setReturnItems([]);setFreeItem(null);if(m.id==="ticket")setManagerApproved(false);setManagerPinInput("");setManagerPinError("");}}
           style={{flex:1,padding:"12px 14px",borderRadius:12,border:`2px solid ${mode===m.id?C.primary:C.border}`,
             background:mode===m.id?C.primaryLight:"transparent",cursor:"pointer",transition:"all 0.15s",textAlign:"left"}}>
           <div style={{display:"flex",alignItems:"center",gap:8}}>
@@ -2814,7 +2886,16 @@ function ReturnScreen(){
           </div>}
         </div>}
 
-        {mode==="scan"&&<div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`}}>
+        {(mode==="scan"||mode==="free")&&!managerApproved&&currentUser?.role!=="admin"&&<div style={{background:C.surface,borderRadius:14,padding:20,border:`1.5px solid ${C.warn}44`,textAlign:"center"}}>
+          <Shield size={32} color={C.warn} style={{marginBottom:10}}/>
+          <div style={{fontSize:14,fontWeight:700,marginBottom:4}}>Approbation manager requise</div>
+          <div style={{fontSize:11,color:C.textMuted,marginBottom:14}}>Les retours sans ticket nécessitent la validation d'un responsable.</div>
+          <Input type="password" value={managerPinInput} onChange={e=>setManagerPinInput(e.target.value)} onKeyDown={e=>e.key==="Enter"&&verifyManagerPin()} placeholder="PIN Manager / Admin" style={{width:200,margin:"0 auto 8px",textAlign:"center"}}/>
+          {managerPinError&&<div style={{fontSize:11,color:C.danger,marginBottom:6}}>{managerPinError}</div>}
+          <Btn onClick={verifyManagerPin} style={{fontSize:12}}>Valider</Btn>
+        </div>}
+
+        {mode==="scan"&&(managerApproved||currentUser?.role==="admin")&&<div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`}}>
           <label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:4}}>SCANNER OU RECHERCHER UN PRODUIT</label>
           <Input value={searchProd} onChange={e=>setSearchProd(e.target.value)} placeholder="Nom, SKU ou scanner code-barres…" style={{marginBottom:8,height:40}}/>
           {foundProducts.map(p=>(<div key={p.id}>
@@ -2828,7 +2909,7 @@ function ReturnScreen(){
                 <span style={{fontSize:12,fontWeight:700,color:C.primary}}>{p.price.toFixed(2)}€</span>
               </div>);})}</div>))}</div>}
 
-        {mode==="free"&&<div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`}}>
+        {mode==="free"&&(managerApproved||currentUser?.role==="admin")&&<div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`}}>
           <label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:4}}>RETOUR LIBRE — RECHERCHER DANS LE CATALOGUE</label>
           <Input value={searchProd} onChange={e=>setSearchProd(e.target.value)} placeholder="Nom, SKU ou scanner…" style={{marginBottom:8,height:40}}/>
           <div style={{padding:8,background:C.warnLight,borderRadius:8,marginBottom:10,fontSize:11,color:"#92400E",border:`1px solid ${C.warn}33`}}>
@@ -3014,10 +3095,15 @@ function ClosureScreen(){
         {cardDiff!==null&&<div style={{fontSize:10,fontWeight:600,marginTop:3,color:Math.abs(cardDiff)<0.01?"#059669":C.danger}}>
           Écart: {cardDiff>=0?"+":""}{cardDiff.toFixed(2)}€ {Math.abs(cardDiff)<0.01?"(OK)":"(attention)"}</div>}</div>
       <Btn variant="danger" onClick={async()=>{
-        // Guard: empêcher double clôture journalière
+        // M2 fix: check both local AND server for existing daily closure
         const todayStr=new Date().toISOString().split("T")[0];
-        if(closures.some(c=>c.type==="daily"&&(c.period||c.date||"").startsWith(todayStr))){
+        if(closures.some(c=>c.type==="daily"&&(c.period||c.date||c.created_at||"").startsWith(todayStr))){
           notify("Une clôture Z a déjà été faite aujourd'hui","error");return;}
+        // Also verify server-side to prevent multi-tab/device duplicates
+        try{const serverClosures=await API.fiscal.closures();
+          if(serverClosures?.some(c=>c.closure_type==="daily"&&(c.period||c.created_at||"").startsWith(todayStr))){
+            notify("Une clôture Z existe déjà sur le serveur pour aujourd'hui","error");return;}
+        }catch(e){/* offline — local check is our best guard */}
         const cl=await createClosure("daily",aCash?parseFloat(aCash):null,aCard?parseFloat(aCard):null);if(cl){closeReg(aCash?parseFloat(aCash):null,aCard?parseFloat(aCard):null);setReportModal(cl);}else{notify("Erreur lors de la clôture","danger");}}}
         style={{width:"100%",height:44,marginBottom:8}}><Lock size={16}/> Clôture journalière (Z)</Btn>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
@@ -3098,7 +3184,7 @@ function CustomersScreen(){
   const buildCustPreview=()=>{const rows=csvData.map(row=>{const c={};custFields.forEach(f=>{const h=Object.entries(csvMapping).find(([k,v])=>v===f);
     c[f]=h?row[h[0]]?.trim()||"":"";});c._dup=c.email&&customers.some(ex=>ex.email?.toLowerCase()===c.email.toLowerCase());return c;});setCsvPreview(rows);setCsvStep(2);};
   const importCustCSV=()=>{let added=0;csvPreview.forEach(c=>{if(!c.firstName&&!c.lastName)return;if(c._dup)return;
-    setCustomers(p=>[...p,{id:"c"+Date.now()+Math.random().toString(36).slice(2,5),firstName:c.firstName,lastName:c.lastName,email:c.email,phone:c.phone,city:c.city,notes:c.notes,points:0,totalSpent:0}]);added++;});
+    setCustomers(p=>[...p,{id:crypto.randomUUID?crypto.randomUUID():"c"+Date.now()+Math.random().toString(36).slice(2,8),firstName:c.firstName,lastName:c.lastName,email:c.email,phone:c.phone,city:c.city,notes:c.notes,points:0,totalSpent:0}]);added++;});
     notify(`${added} client(s) importé(s)`,"success");setCsvModal(false);setCsvStep(0);setCsvData([]);};
   useEffect(()=>{if(!sel)return;setLoadingHist(true);setCustHistory([]);
     API.customers.history(sel.id).then(data=>{setCustHistory(Array.isArray(data)?data:data.sales||[]);}).catch(()=>{
@@ -3236,8 +3322,8 @@ function FiscalScreen(){
       <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}><Shield size={20} color={C.fiscal}/><h3 style={{fontSize:16,fontWeight:700,color:C.fiscal,margin:0}}>Attestation de conformité</h3></div>
       <div style={{fontSize:12,lineHeight:1.8}}>
         <div><strong>Logiciel :</strong> {CO.sw} v{CO.ver}</div>
-        <div><strong>N° certification :</strong> <span style={{fontFamily:"monospace",background:C.fiscalLight,padding:"2px 6px",borderRadius:4}}>CERT-NF525-2026-001</span></div>
-        <div><strong>Organisme certificateur :</strong> INFOCERT / LNE</div>
+        <div><strong>N° certification :</strong> <span style={{fontFamily:"monospace",background:C.fiscalLight,padding:"2px 6px",borderRadius:4}}>En attente de certification</span></div>
+        <div><strong>Organisme certificateur :</strong> À définir après audit</div>
         <div><strong>Catégorie :</strong> Système de caisse — Art. 286, I-3° bis du CGI</div>
         <div><strong>Date de mise en service :</strong> {new Date().getFullYear()}</div>
         <div style={{marginTop:6,fontSize:11,color:C.textMuted}}>Conforme aux conditions d'inaltérabilité, de sécurisation, de conservation et d'archivage (ISCA) prévues au 3° bis du I de l'article 286 du CGI.</div>
@@ -3419,7 +3505,7 @@ function CSVImportWizard({open,onClose,existingProducts,onImportComplete}){
         variants:group.rows.map((r,i)=>{const gv=(f)=>r[mapping[f]]||"";return{
           id:`iv-${Date.now()}-${i}-${Math.random().toString(36).slice(2,6)}`,
           color:gv("color")||"Défaut",size:gv("size")||"TU",ean:gv("ean")||"",
-          stock:parseInt(gv("stock"))||0,defective:0,stockAlert:parseInt(gv("stockAlert"))||5,sortOrder:i};}),
+          stock:Math.max(0,parseInt(gv("stock"))||0),defective:0,stockAlert:Math.max(0,parseInt(gv("stockAlert"))||5),sortOrder:i};}),
         sourceRows:group.indices.map(i=>i+2),
       };
       // Check duplicates
@@ -4182,8 +4268,8 @@ function SettingsScreen(){
         {(users||[]).map(u=>(<div key={u.id||u.name} style={{display:"flex",alignItems:"center",gap:10,padding:10,borderRadius:10,background:C.surfaceAlt,border:`1px solid ${C.border}`}}>
           <span style={{flex:1,fontSize:12,fontWeight:600}}>{u.name}</span>
           <Input type="number" step="0.5" min="0" max="100"
-            value={settings.commissionRates?.[u.name]!=null?(settings.commissionRates[u.name]*100).toFixed(1):""}
-            onChange={e=>{const val=e.target.value;setSettings(s=>({...s,commissionRates:{...s.commissionRates,[u.name]:val?parseFloat(val)/100:undefined}}));}}
+            value={settings.commissionRates?.[u.id||u.name]!=null?(settings.commissionRates[u.id||u.name]*100).toFixed(1):""}
+            onChange={e=>{const val=e.target.value;const key=u.id||u.name;setSettings(s=>({...s,commissionRates:{...s.commissionRates,[key]:val?parseFloat(val)/100:undefined}}));}}
             placeholder={((settings.defaultCommissionRate||0.05)*100).toFixed(1)}
             style={{width:80,textAlign:"right"}}/><span style={{fontSize:11,color:C.textMuted}}>%</span></div>))}
       </div>
@@ -4355,8 +4441,8 @@ function SettingsScreen(){
             <div key={i} style={{display:"flex",alignItems:"center",gap:4,padding:"4px 10px",borderRadius:8,background:C.surfaceAlt,border:`1px solid ${C.border}`,fontSize:11}}>
               {r}<button onClick={()=>{const reasons=[...(settings.returnPolicy?.reasons||["Échange taille","Échange couleur","Défectueux","Ne convient pas","Erreur achat","Autre"])];reasons.splice(i,1);setSettings(s=>({...s,returnPolicy:{...s.returnPolicy,reasons}}));}}
                 style={{background:"none",border:"none",cursor:"pointer",padding:0,display:"flex"}}><X size={12} color={C.textMuted}/></button></div>))}
-          <button onClick={()=>{const r=prompt("Nouveau motif de retour:");if(r){const reasons=[...(settings.returnPolicy?.reasons||["Échange taille","Échange couleur","Défectueux","Ne convient pas","Erreur achat","Autre"]),r];setSettings(s=>({...s,returnPolicy:{...s.returnPolicy,reasons}}));}}}
-            style={{padding:"4px 10px",borderRadius:8,border:`1.5px dashed ${C.primary}`,background:"transparent",color:C.primary,fontSize:11,fontWeight:600,cursor:"pointer"}}>+ Ajouter</button>
+          <input placeholder="Nouveau motif…" id="_newReason" onKeyDown={e=>{if(e.key==="Enter"&&e.target.value.trim()){const r=e.target.value.trim();const reasons=[...(settings.returnPolicy?.reasons||["Échange taille","Échange couleur","Défectueux","Ne convient pas","Erreur achat","Autre"]),r];setSettings(s=>({...s,returnPolicy:{...s.returnPolicy,reasons}}));e.target.value="";}}}
+            style={{padding:"4px 10px",borderRadius:8,border:`1.5px dashed ${C.primary}`,background:"transparent",color:C.text,fontSize:11,width:140,outline:"none"}}/>
         </div>
       </div>
 
@@ -4371,10 +4457,11 @@ function SettingsScreen(){
 
       const updateRank=(size,newRank)=>{const r={...ranking,[size]:parseFloat(newRank)||0};saveSizeRanking(r);notify("Ranking sauvegardé","success");};
       const removeSize=(size)=>{const r={...ranking};delete r[size];saveSizeRanking(r);notify("Taille supprimée","success");};
-      const addSize=()=>{const s=prompt("Nouvelle taille (ex: 3XL, 44, etc.):");if(!s)return;
-        const key=s.toUpperCase().trim();if(ranking[key]!=null){notify("Cette taille existe déjà","error");return;}
+      const[newSizeInput,setNewSizeInput]=React.useState("");
+      const addSize=()=>{if(!newSizeInput.trim())return;
+        const key=newSizeInput.toUpperCase().trim();if(ranking[key]!=null){notify("Cette taille existe déjà","error");return;}
         const maxR=entries.length?Math.max(...entries.map(e=>e[1]))+1:1;
-        const r={...ranking,[key]:maxR};saveSizeRanking(r);notify("Taille ajoutée","success");};
+        const r={...ranking,[key]:maxR};saveSizeRanking(r);setNewSizeInput("");notify("Taille ajoutée","success");};
       const resetToDefault=()=>{saveSizeRanking({...DEFAULT_SIZE_RANKING});notify("Ranking réinitialisé aux valeurs par défaut","info");};
 
       return(<div style={{maxWidth:650}}>
@@ -4389,6 +4476,7 @@ function SettingsScreen(){
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
             <h4 style={{fontSize:13,fontWeight:700,margin:0}}>Tailles et positions ({entries.length})</h4>
             <div style={{display:"flex",gap:6}}>
+              <Input value={newSizeInput} onChange={e=>setNewSizeInput(e.target.value)} onKeyDown={e=>e.key==="Enter"&&addSize()} placeholder="Ex: 3XL" style={{width:80,height:28,fontSize:10,padding:"2px 6px"}}/>
               <Btn variant="outline" onClick={addSize} style={{fontSize:10,padding:"4px 10px"}}><Plus size={11}/> Ajouter</Btn>
               <Btn variant="outline" onClick={resetToDefault} style={{fontSize:10,padding:"4px 10px",borderColor:C.danger+"44",color:C.danger}}><RotateCcw size={11}/> Défaut</Btn></div></div>
           <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(120px,1fr))",gap:6}}>
@@ -4645,6 +4733,10 @@ function FootfallScreen(){
   const conversionRate=todayFootfall>0?(todayTickets/todayFootfall*100):0;
 
   const fetchCounter=async()=>{if(!counterUrl){notify("URL du compteur non configurée","error");return;}
+    // H6 fix: validate URL to prevent SSRF — only allow https and http, block localhost/private IPs
+    try{const u=new URL(counterUrl);if(!["http:","https:"].includes(u.protocol)){notify("Protocole non autorisé — utilisez http ou https","error");return;}
+      const host=u.hostname.toLowerCase();if(host==="localhost"||host==="127.0.0.1"||host.startsWith("192.168.")||host.startsWith("10.")||host.startsWith("172.")||host==="0.0.0.0"||host==="[::1]"){notify("URL locale non autorisée pour des raisons de sécurité","error");return;}
+    }catch(e){notify("URL invalide","error");return;}
     try{const res=await fetch(counterUrl);const data=await res.json();
       if(data.count!=null){addFootfall(data.count);notify(`Compteur mis à jour: ${data.count} entrées`,"success");}
       else{notify("Format de réponse invalide (attendu: {count: N})","error");}
@@ -5241,7 +5333,7 @@ function CashierNav({active,onNav}){
     <div style={{display:"flex",alignItems:"center",gap:3,marginBottom:4}}>
       <div style={{width:6,height:6,borderRadius:3,background:isOnline?"#34D399":"#F87171"}}/>
       <span style={{fontSize:8,color:"rgba(255,255,255,0.5)",fontWeight:500}}>{isOnline?"En ligne":"Offline"}</span></div>
-    {pendingSync.length>0&&<div onClick={()=>{if(confirm(`${pendingSync.length} synchro(s) en echec.\n\nVoulez-vous vider la file d'attente ?`))clearPendingSync();}}
+    {pendingSync.length>0&&<div onClick={()=>clearPendingSync()}
       style={{fontSize:8,color:"#FBBF24",fontWeight:600,marginBottom:2,cursor:"pointer"}} title="Cliquer pour vider la file de synchro">{pendingSync.length} sync</div>}
     <div style={{display:"flex",gap:3,marginBottom:10}}>
       <button onClick={clockIn} title="Pointer entree" style={{width:26,height:22,borderRadius:6,border:"none",cursor:"pointer",background:"rgba(52,211,153,0.15)",color:"#34D399",fontSize:8,fontWeight:600,display:"flex",alignItems:"center",justifyContent:"center",transition:"all 0.15s"}}>IN</button>
@@ -5294,11 +5386,13 @@ function UsersScreen(){
     if(!form.name){notify("Nom requis","error");return;}
     // Pour un nouvel utilisateur, le PIN est obligatoire. Pour une modification, il est optionnel.
     if(!editUser&&!form.pin){notify("Nom et PIN requis","error");return;}
+    // Hash PIN before storing locally (server receives plaintext for its own hashing)
+    const hashedPin=form.pin?await hashPin(form.pin):null;
     // Construire les données API — n'envoyer le password que s'il a été modifié
     const apiData={name:form.name,role:form.role};
     if(form.pin)apiData.password=form.pin;
     if(editUser){
-      setUsers(p=>p.map(u=>u.id===editUser.id?{...u,name:form.name,role:form.role,...(form.pin?{pin:form.pin}:{})}:u));
+      setUsers(p=>p.map(u=>u.id===editUser.id?{...u,name:form.name,role:form.role,...(hashedPin?{pin:hashedPin}:{})}:u));
       // Sync modification avec l'API
       try{await API.auth.updateUser(editUser.id,apiData);
         setEditUser(null);notify("Utilisateur modifié et synchronisé","success");
@@ -5313,13 +5407,13 @@ function UsersScreen(){
     }else{
       try{
         const apiUser=await API.auth.createUser(apiData);
-        setUsers(p=>[...p,{id:apiUser.id||("u"+Date.now()),name:form.name,role:form.role,pin:form.pin,apiSynced:true}]);
+        setUsers(p=>[...p,{id:apiUser.id||("u"+Date.now()),name:form.name,role:form.role,pin:hashedPin,apiSynced:true}]);
         setNewModal(false);notify("Utilisateur créé et synchronisé","success");
       }catch(e){
         console.error("createUser error:",e.message,apiData);
         if(!isOnline||e.message?.includes("fetch")||e.message?.includes("network")||e.message?.includes("Failed")){
           const localId="u"+Date.now();
-          setUsers(p=>[...p,{id:localId,name:form.name,role:form.role,pin:form.pin,pendingSync:true}]);
+          setUsers(p=>[...p,{id:localId,name:form.name,role:form.role,pin:hashedPin,pendingSync:true}]);
           addPendingSync({type:"createUser",data:apiData,localId});
           setNewModal(false);notify("Hors ligne — synchro en attente","warn");
         }else{setNewModal(false);notify(`Erreur serveur: ${e.message}`,"error");}

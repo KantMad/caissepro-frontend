@@ -4,6 +4,11 @@
 
 const API_URL = import.meta.env.VITE_API_URL || 'https://api.techincash.app';
 
+// M1 fix: warn if API URL is not HTTPS in production
+if (typeof window !== 'undefined' && API_URL.startsWith('http://') && window.location.hostname !== 'localhost') {
+  console.warn('[SECURITY] API_URL uses HTTP — credentials will be sent unencrypted. Use HTTPS in production.');
+}
+
 let token = null;
 try { token = sessionStorage.getItem('caissepro_token'); } catch(e) {}
 
@@ -11,17 +16,27 @@ export function setToken(t) { token = t; try { if(t) sessionStorage.setItem('cai
 export function getToken() { return token; }
 export function clearToken() { token = null; try { sessionStorage.removeItem('caissepro_token'); } catch(e) {} }
 
+// H1/H2 fix: 401 detection + automatic token invalidation
+let onAuthExpired = null;
+export function setOnAuthExpired(fn) { onAuthExpired = fn; }
+
 async function api(path, options = {}) {
   const headers = { 'Content-Type': 'application/json', ...options.headers };
   if (token) headers['Authorization'] = `Bearer ${token}`;
-  
+
   const res = await fetch(`${API_URL}${path}`, { ...options, headers });
-  
+
   if (!res.ok) {
+    // H2 fix: Auto-clear token on 401/403
+    if (res.status === 401 || res.status === 403) {
+      clearToken();
+      if (onAuthExpired) onAuthExpired();
+      throw new Error(`Session expirée (${res.status}) — reconnectez-vous`);
+    }
     const err = await res.json().catch(() => ({ error: res.statusText }));
     throw new Error(err.error || `Erreur ${res.status}`);
   }
-  
+
   // Handle file downloads (FEC, etc.)
   const ct = res.headers.get('content-type');
   if (ct && ct.includes('text/plain')) {
@@ -29,12 +44,16 @@ async function api(path, options = {}) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = res.headers.get('content-disposition')?.split('filename=')[1] || 'export.txt';
+    // M8 fix: safe filename extraction
+    const disposition = res.headers.get('content-disposition') || '';
+    const filenameMatch = disposition.match(/filename[^;=\n]*=["']?([^"';\n]*)["']?/);
+    const filename = filenameMatch ? filenameMatch[1].replace(/[^\w.\-]/g, '_') : 'export.txt';
+    a.download = filename;
     a.click();
     URL.revokeObjectURL(url);
     return { ok: true };
   }
-  
+
   return res.json();
 }
 
