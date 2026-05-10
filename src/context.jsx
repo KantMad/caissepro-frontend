@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect, useRef, createContext, useContext,
 import * as API from "./api.js";
 import { setOnAuthExpired } from "./api.js";
 import printer from "./printer.js";
-import { CO, DEFAULT_TVA_RATES, PERMS, initProducts, initUsers, initCustomers, LOYALTY_TIERS, initPromos } from "./constants.jsx";
+import { CO, DEFAULT_TVA_RATES, PERMS, initProducts, initUsers, initCustomers, LOYALTY_TIERS, initPromos, C } from "./constants.jsx";
 import { hashPin, verifyPin, sha256, norm, loadVariantOrderFromSettings, autoImportSizesFromProducts } from "./utils.jsx";
 import Papa from "papaparse";
 
