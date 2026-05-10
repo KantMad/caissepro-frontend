@@ -413,11 +413,11 @@ function StoresManagementScreen(){
       </div>))}</div>
 
     {/* Edit modal */}
-    {editStore&&<Modal title={`Modifier — ${editStore.name}`} onClose={()=>setEditStore(null)}>{formUI}</Modal>}
+    {editStore&&<Modal open={true} title={`Modifier — ${editStore.name}`} onClose={()=>setEditStore(null)}>{formUI}</Modal>}
     {/* New modal */}
-    {newModal&&<Modal title="Nouveau magasin" onClose={()=>setNewModal(false)}>{formUI}</Modal>}
+    {newModal&&<Modal open={true} title="Nouveau magasin" onClose={()=>setNewModal(false)}>{formUI}</Modal>}
     {/* Assign user modal */}
-    {assignModal&&<Modal title="Assigner un utilisateur" onClose={()=>setAssignModal(null)}>
+    {assignModal&&<Modal open={true} title="Assigner un utilisateur" onClose={()=>setAssignModal(null)}>
       <div style={{display:"flex",flexDirection:"column",gap:12}}>
         <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>UTILISATEUR</label>
           <select value={assignUserId} onChange={e=>setAssignUserId(e.target.value)} style={{width:"100%",padding:"10px 12px",borderRadius:10,border:`1.5px solid ${C.border}`,fontSize:13,fontFamily:"inherit",background:C.surface}}>
