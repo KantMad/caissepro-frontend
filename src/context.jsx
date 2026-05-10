@@ -202,7 +202,7 @@ function AppProvider({children}){
       setProducts(norm.products(prods));setCustomers(norm.customers(custs));setPromos(prms);setSettings(s=>({...s,...setts}));
       if(apiSales&&Array.isArray(apiSales)){const merged=[...apiSales];const localOnly=tickets.filter(lt=>lt.hash==="LOCAL"||!apiSales.find(as=>as.ticketNumber===lt.ticketNumber));
         setTickets([...localOnly,...merged].sort((a,b)=>new Date(b.date||b.createdAt||0)-new Date(a.date||a.createdAt||0)).slice(0,500));}
-      if(apiCounter){if(apiCounter.seq)setTSeq(apiCounter.seq);if(apiCounter.lastHash)setLastHash(apiCounter.lastHash);if(apiCounter.grandTotal!=null)setGt(parseFloat(apiCounter.grandTotal));}
+      if(apiCounter&&!Array.isArray(apiCounter)){const seq=apiCounter.ticket_seq??apiCounter.seq??0;setTSeq(seq);if(apiCounter.last_hash||apiCounter.lastHash)setLastHash(apiCounter.last_hash||apiCounter.lastHash);if(apiCounter.grand_total!=null||apiCounter.grandTotal!=null)setGt(parseFloat(apiCounter.grand_total??apiCounter.grandTotal));}
       if(apiUsers&&apiUsers.length){const merged=[...apiUsers.map(u=>({id:u.id,name:u.name,role:u.role,pin:"****",apiSynced:true}))];
         const localOnly=users.filter(lu=>!apiUsers.find(au=>au.name===lu.name));
         setUsers([...merged,...localOnly]);}
@@ -236,7 +236,7 @@ function AppProvider({children}){
       if(setts)setSettings(s=>({...s,...setts}));
       if(closData?.length)setClosures(closData.map(c=>({...c,type:c.closure_type,totalHT:parseFloat(c.total_ht),totalTVA:parseFloat(c.total_tva),totalTTC:parseFloat(c.total_ttc),totalMargin:parseFloat(c.total_margin||0),date:c.created_at,userName:c.user_name})));
       else setClosures([]);
-      if(apiCounter){if(apiCounter.seq!=null)setTSeq(apiCounter.seq);if(apiCounter.lastHash)setLastHash(apiCounter.lastHash);if(apiCounter.grandTotal!=null)setGt(parseFloat(apiCounter.grandTotal));}
+      if(apiCounter&&!Array.isArray(apiCounter)){const seq=apiCounter.ticket_seq??apiCounter.seq??0;setTSeq(seq);if(apiCounter.last_hash||apiCounter.lastHash)setLastHash(apiCounter.last_hash||apiCounter.lastHash);if(apiCounter.grand_total!=null||apiCounter.grandTotal!=null)setGt(parseFloat(apiCounter.grand_total??apiCounter.grandTotal));}
       else{setTSeq(0);setLastHash("0".repeat(64));setGt(0);}
       if(stockAl)setStockAlerts(stockAl);else setStockAlerts([]);
     }catch(e){console.warn("Erreur chargement magasin:",e.message);}
