@@ -2957,6 +2957,70 @@ function ReturnsHistoryScreen(){
   </div>);
 }
 
+function SizeSettingsTab({notify}){
+  const[newSizeInput,setNewSizeInput]=useState("");
+  const ranking=getSizeRanking();
+  const entries=Object.entries(ranking).sort((a,b)=>a[1]-b[1]);
+  const csvMap=getVariantOrderMap();
+  const csvProductCount=Object.keys(csvMap).length;
+
+  const updateRank=(size,newRank)=>{const r={...ranking,[size]:parseFloat(newRank)||0};saveSizeRanking(r);notify("Ranking sauvegardé","success");};
+  const removeSize=(size)=>{const r={...ranking};delete r[size];saveSizeRanking(r);notify("Taille supprimée","success");};
+  const addSize=()=>{if(!newSizeInput.trim())return;
+    const key=newSizeInput.toUpperCase().trim();if(ranking[key]!=null){notify("Cette taille existe déjà","error");return;}
+    const maxR=entries.length?Math.max(...entries.map(e=>e[1]))+1:1;
+    const r={...ranking,[key]:maxR};saveSizeRanking(r);setNewSizeInput("");notify("Taille ajoutée","success");};
+  const resetToDefault=()=>{saveSizeRanking({...DEFAULT_SIZE_RANKING});notify("Ranking réinitialisé aux valeurs par défaut","info");};
+
+  return(<div style={{maxWidth:650}}>
+    <div style={{background:C.primaryLight,borderRadius:16,padding:20,border:`1.5px solid ${C.primary}22`,marginBottom:16}}>
+      <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:6}}>
+        <Grid size={20} color={C.primary}/>
+        <div><h3 style={{fontSize:16,fontWeight:800,margin:0}}>Ranking des tailles</h3>
+          <p style={{fontSize:11,color:C.textMuted,margin:0}}>Ordre par défaut des tailles (S=3, M=4, L=5...). Utilisé quand un produit n'a pas d'ordre CSV spécifique.</p></div></div></div>
+
+    <div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`,marginBottom:14}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
+        <h4 style={{fontSize:13,fontWeight:700,margin:0}}>Tailles et positions ({entries.length})</h4>
+        <div style={{display:"flex",gap:6}}>
+          <Input value={newSizeInput} onChange={e=>setNewSizeInput(e.target.value)} onKeyDown={e=>e.key==="Enter"&&addSize()} placeholder="Ex: 3XL" style={{width:80,height:28,fontSize:10,padding:"2px 6px"}}/>
+          <Btn variant="outline" onClick={addSize} style={{fontSize:10,padding:"4px 10px"}}><Plus size={11}/> Ajouter</Btn>
+          <Btn variant="outline" onClick={resetToDefault} style={{fontSize:10,padding:"4px 10px",borderColor:C.danger+"44",color:C.danger}}><RotateCcw size={11}/> Défaut</Btn></div></div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(120px,1fr))",gap:6}}>
+        {entries.map(([size,rank])=>(
+          <div key={size} style={{display:"flex",alignItems:"center",gap:6,padding:"6px 10px",borderRadius:10,background:C.surfaceAlt,border:`1px solid ${C.border}`}}>
+            <span style={{fontSize:13,fontWeight:700,minWidth:40}}>{size}</span>
+            <span style={{fontSize:10,color:C.textMuted}}>=</span>
+            <input type="number" value={rank} onChange={e=>updateRank(size,e.target.value)}
+              style={{width:45,padding:"3px 5px",borderRadius:6,border:`1.5px solid ${C.border}`,fontSize:12,fontWeight:600,textAlign:"center",fontFamily:"inherit"}}/>
+            <button onClick={()=>removeSize(size)} style={{width:20,height:20,borderRadius:5,border:"none",background:C.dangerLight,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><X size={10} color={C.danger}/></button>
+          </div>))}
+      </div>
+    </div>
+
+    {csvProductCount>0&&<div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`,marginBottom:14}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
+        <div><h4 style={{fontSize:13,fontWeight:700,margin:0}}>Ordre CSV par produit</h4>
+          <p style={{fontSize:10,color:C.textMuted,margin:0}}>{csvProductCount} produit(s) avec un ordre CSV spécifique (prioritaire sur le ranking)</p></div>
+        <Btn variant="outline" onClick={()=>{saveVariantOrderMap({});notify("Ordres CSV réinitialisés","info");}} style={{fontSize:10,padding:"4px 10px",borderColor:C.danger+"44",color:C.danger}}><RotateCcw size={11}/> Effacer CSV</Btn></div>
+      <div style={{maxHeight:150,overflowY:"auto"}}>
+        {Object.entries(csvMap).slice(0,20).map(([sku,order])=>(
+          <div key={sku} style={{display:"flex",alignItems:"center",gap:8,padding:"4px 0",borderBottom:`1px solid ${C.border}`,fontSize:11}}>
+            <span style={{fontWeight:700,minWidth:100}}>{sku}</span>
+            <span style={{color:C.textMuted,flex:1}}>{order.map(k=>k.includes("|")?k.split("|")[1]:k).join(" → ")}</span>
+          </div>))}
+        {csvProductCount>20&&<div style={{fontSize:10,color:C.textMuted,padding:6}}>… et {csvProductCount-20} autres</div>}
+      </div>
+    </div>}
+
+    <div style={{background:C.warnLight,borderRadius:12,padding:14,border:`1px solid ${C.warn}33`,display:"flex",gap:10,alignItems:"start"}}>
+      <AlertTriangle size={16} color={C.warn} style={{flexShrink:0,marginTop:2}}/>
+      <div style={{fontSize:11,color:"#92400E",lineHeight:1.5}}>
+        <strong>Priorité :</strong> L'import CSV définit l'ordre pour chaque produit importé (prioritaire). Pour les produits sans import CSV, le ranking ci-dessus est utilisé (S avant M avant L, etc.).
+        Tout est synchronisé avec le backend.</div></div>
+  </div>);
+}
+
 function SettingsScreen(){
   const{settings,setSettings,saveSettingsToAPI,addAudit,theme,setTheme,clockEntries,priceHistory,printerConnected,printerType,connectPrinter,disconnectPrinter,thermalPrint,notify,users}=useApp();
   const[tab,setTab]=useState("general");
@@ -3250,70 +3314,7 @@ function SettingsScreen(){
       <Btn onClick={()=>{saveSettingsToAPI(settings);addAudit("CONFIG","Politique de retour mise à jour");notify("Paramètres de retour sauvegardés","success");}} style={{width:"100%",height:44,background:C.primary}}><Save size={14}/> Enregistrer les paramètres de retour</Btn>
     </div>}
 
-    {tab==="sizes"&&(()=>{
-      const ranking=getSizeRanking();
-      const entries=Object.entries(ranking).sort((a,b)=>a[1]-b[1]);
-      const csvMap=getVariantOrderMap();
-      const csvProductCount=Object.keys(csvMap).length;
-
-      const updateRank=(size,newRank)=>{const r={...ranking,[size]:parseFloat(newRank)||0};saveSizeRanking(r);notify("Ranking sauvegardé","success");};
-      const removeSize=(size)=>{const r={...ranking};delete r[size];saveSizeRanking(r);notify("Taille supprimée","success");};
-      const[newSizeInput,setNewSizeInput]=React.useState("");
-      const addSize=()=>{if(!newSizeInput.trim())return;
-        const key=newSizeInput.toUpperCase().trim();if(ranking[key]!=null){notify("Cette taille existe déjà","error");return;}
-        const maxR=entries.length?Math.max(...entries.map(e=>e[1]))+1:1;
-        const r={...ranking,[key]:maxR};saveSizeRanking(r);setNewSizeInput("");notify("Taille ajoutée","success");};
-      const resetToDefault=()=>{saveSizeRanking({...DEFAULT_SIZE_RANKING});notify("Ranking réinitialisé aux valeurs par défaut","info");};
-
-      return(<div style={{maxWidth:650}}>
-        {/* Section 1: Global size ranking */}
-        <div style={{background:C.primaryLight,borderRadius:16,padding:20,border:`1.5px solid ${C.primary}22`,marginBottom:16}}>
-          <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:6}}>
-            <Grid size={20} color={C.primary}/>
-            <div><h3 style={{fontSize:16,fontWeight:800,margin:0}}>Ranking des tailles</h3>
-              <p style={{fontSize:11,color:C.textMuted,margin:0}}>Ordre par défaut des tailles (S=3, M=4, L=5...). Utilisé quand un produit n'a pas d'ordre CSV spécifique.</p></div></div></div>
-
-        <div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`,marginBottom:14}}>
-          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
-            <h4 style={{fontSize:13,fontWeight:700,margin:0}}>Tailles et positions ({entries.length})</h4>
-            <div style={{display:"flex",gap:6}}>
-              <Input value={newSizeInput} onChange={e=>setNewSizeInput(e.target.value)} onKeyDown={e=>e.key==="Enter"&&addSize()} placeholder="Ex: 3XL" style={{width:80,height:28,fontSize:10,padding:"2px 6px"}}/>
-              <Btn variant="outline" onClick={addSize} style={{fontSize:10,padding:"4px 10px"}}><Plus size={11}/> Ajouter</Btn>
-              <Btn variant="outline" onClick={resetToDefault} style={{fontSize:10,padding:"4px 10px",borderColor:C.danger+"44",color:C.danger}}><RotateCcw size={11}/> Défaut</Btn></div></div>
-          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(120px,1fr))",gap:6}}>
-            {entries.map(([size,rank])=>(
-              <div key={size} style={{display:"flex",alignItems:"center",gap:6,padding:"6px 10px",borderRadius:10,background:C.surfaceAlt,border:`1px solid ${C.border}`}}>
-                <span style={{fontSize:13,fontWeight:700,minWidth:40}}>{size}</span>
-                <span style={{fontSize:10,color:C.textMuted}}>=</span>
-                <input type="number" value={rank} onChange={e=>updateRank(size,e.target.value)}
-                  style={{width:45,padding:"3px 5px",borderRadius:6,border:`1.5px solid ${C.border}`,fontSize:12,fontWeight:600,textAlign:"center",fontFamily:"inherit"}}/>
-                <button onClick={()=>removeSize(size)} style={{width:20,height:20,borderRadius:5,border:"none",background:C.dangerLight,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}><X size={10} color={C.danger}/></button>
-              </div>))}
-          </div>
-        </div>
-
-        {/* Section 2: CSV product orders */}
-        {csvProductCount>0&&<div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`,marginBottom:14}}>
-          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
-            <div><h4 style={{fontSize:13,fontWeight:700,margin:0}}>Ordre CSV par produit</h4>
-              <p style={{fontSize:10,color:C.textMuted,margin:0}}>{csvProductCount} produit(s) avec un ordre CSV spécifique (prioritaire sur le ranking)</p></div>
-            <Btn variant="outline" onClick={()=>{saveVariantOrderMap({});notify("Ordres CSV réinitialisés","info");}} style={{fontSize:10,padding:"4px 10px",borderColor:C.danger+"44",color:C.danger}}><RotateCcw size={11}/> Effacer CSV</Btn></div>
-          <div style={{maxHeight:150,overflowY:"auto"}}>
-            {Object.entries(csvMap).slice(0,20).map(([sku,order])=>(
-              <div key={sku} style={{display:"flex",alignItems:"center",gap:8,padding:"4px 0",borderBottom:`1px solid ${C.border}`,fontSize:11}}>
-                <span style={{fontWeight:700,minWidth:100}}>{sku}</span>
-                <span style={{color:C.textMuted,flex:1}}>{order.map(k=>k.includes("|")?k.split("|")[1]:k).join(" → ")}</span>
-              </div>))}
-            {csvProductCount>20&&<div style={{fontSize:10,color:C.textMuted,padding:6}}>… et {csvProductCount-20} autres</div>}
-          </div>
-        </div>}
-
-        <div style={{background:C.warnLight,borderRadius:12,padding:14,border:`1px solid ${C.warn}33`,display:"flex",gap:10,alignItems:"start"}}>
-          <AlertTriangle size={16} color={C.warn} style={{flexShrink:0,marginTop:2}}/>
-          <div style={{fontSize:11,color:"#92400E",lineHeight:1.5}}>
-            <strong>Priorité :</strong> L'import CSV définit l'ordre pour chaque produit importé (prioritaire). Pour les produits sans import CSV, le ranking ci-dessus est utilisé (S avant M avant L, etc.).
-            Tout est synchronisé avec le backend.</div></div>
-      </div>);})()}
+    {tab==="sizes"&&<SizeSettingsTab notify={notify}/>}
 
     {tab==="theme"&&<div style={{maxWidth:500}}>
       <div style={{marginBottom:10}}><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>COULEUR PRINCIPALE</label>
