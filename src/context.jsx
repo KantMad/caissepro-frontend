@@ -221,12 +221,24 @@ function AppProvider({children}){
   const switchViewingStore=useCallback(async(storeId)=>{
     setViewingStoreId(storeId);
     setStoreId(storeId==="all"?null:storeId);
-    // Reload data for the new store context
+    // Reload ALL data for the new store context
     try{
-      const[prods,apiSales,setts]=await Promise.all([API.products.list(),API.sales.list({limit:200}).catch(()=>null),API.settings.get().catch(()=>null)]);
+      const[prods,apiSales,setts,closData,apiCounter,stockAl]=await Promise.all([
+        API.products.list(),
+        API.sales.list({limit:200}).catch(()=>null),
+        API.settings.get().catch(()=>null),
+        API.fiscal.closures().catch(()=>null),
+        API.fiscal.counter().catch(()=>null),
+        API.stock.alerts().catch(()=>null),
+      ]);
       if(prods)setProducts(norm.products(prods));
       if(apiSales&&Array.isArray(apiSales))setTickets(apiSales.sort((a,b)=>new Date(b.date||b.createdAt||0)-new Date(a.date||a.createdAt||0)).slice(0,500));
       if(setts)setSettings(s=>({...s,...setts}));
+      if(closData?.length)setClosures(closData.map(c=>({...c,type:c.closure_type,totalHT:parseFloat(c.total_ht),totalTVA:parseFloat(c.total_tva),totalTTC:parseFloat(c.total_ttc),totalMargin:parseFloat(c.total_margin||0),date:c.created_at,userName:c.user_name})));
+      else setClosures([]);
+      if(apiCounter){if(apiCounter.seq!=null)setTSeq(apiCounter.seq);if(apiCounter.lastHash)setLastHash(apiCounter.lastHash);if(apiCounter.grandTotal!=null)setGt(parseFloat(apiCounter.grandTotal));}
+      else{setTSeq(0);setLastHash("0".repeat(64));setGt(0);}
+      if(stockAl)setStockAlerts(stockAl);else setStockAlerts([]);
     }catch(e){console.warn("Erreur chargement magasin:",e.message);}
     const storeName=storeId==="all"?"Tous les magasins":stores.find(s=>s.id===storeId)?.name||"";
     notify(`Vue: ${storeName}`,"info");

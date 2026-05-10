@@ -2114,11 +2114,13 @@ function CustomersScreen(){
 
 /* ══════════ FISCAL ══════════ */
 function FiscalScreen(){
-  const{gt,tSeq,lastHash,closures,exportArchive,exportFEC,perm:p,verifyChain,tvaSummary}=useApp();
+  const{gt,tSeq,lastHash,closures,exportArchive,exportFEC,perm:p,verifyChain,tvaSummary,currentStore,viewingStoreId,stores}=useApp();
+  const storeName=viewingStoreId==="all"?"Tous les magasins":viewingStoreId?stores.find(s=>s.id===viewingStoreId)?.name:currentStore?.name||"";
   const[chainResult,setChainResult]=useState(null);
   if(!p().canExport)return<div style={{padding:40,textAlign:"center",color:C.textMuted}}>Accès réservé aux administrateurs</div>;
   return(<div style={{height:"100%",overflowY:"auto",padding:20,background:C.bg}}>
-    <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:16}}><h2 style={{fontSize:22,fontWeight:800,margin:0}}>Conformité NF525</h2><Badge color={C.fiscal} bg={C.fiscalLight}>ISCA</Badge></div>
+    <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:16}}><h2 style={{fontSize:22,fontWeight:800,margin:0}}>Conformité NF525</h2><Badge color={C.fiscal} bg={C.fiscalLight}>ISCA</Badge>
+      {storeName&&<Badge color={C.primary}>{storeName}</Badge>}</div>
     <div style={{background:C.surface,borderRadius:14,padding:20,border:`1.5px solid ${C.fiscal}33`,marginBottom:14}}>
       <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}><Shield size={20} color={C.fiscal}/><h3 style={{fontSize:16,fontWeight:700,color:C.fiscal,margin:0}}>Attestation de conformité</h3></div>
       <div style={{fontSize:12,lineHeight:1.8}}>
@@ -2162,16 +2164,18 @@ function FiscalScreen(){
 }
 
 function AuditScreen(){
-  const{audit:localAudit,jet:localJet,exportCSVReport,isOnline}=useApp();
+  const{audit:localAudit,jet:localJet,exportCSVReport,isOnline,currentStore,viewingStoreId,stores,effectiveStoreId}=useApp();
+  const storeName=viewingStoreId==="all"?"Tous les magasins":viewingStoreId?stores.find(s=>s.id===viewingStoreId)?.name:currentStore?.name||"";
   const[filterUser,setFilterUser]=useState("");const[tab,setTab]=useState("audit");const[page,setPage]=useState(0);
   const[apiAudit,setApiAudit]=useState(null);const[apiJet,setApiJet]=useState(null);
   const PAGE_SIZE=50;
-  // Charger depuis le backend au montage
+  // Charger depuis le backend — recharger quand le magasin change
   useEffect(()=>{
     if(!API.getToken())return;
+    setApiAudit(null);setApiJet(null);setPage(0);
     API.audit.list({limit:500}).then(rows=>setApiAudit(rows.map(r=>({id:r.id,date:r.created_at,action:r.action,detail:r.detail,ref:r.reference,user:r.user_name})))).catch(()=>{});
     API.audit.jet().then(rows=>setApiJet(rows.map(r=>({id:r.id,date:r.created_at,type:r.event_type,detail:r.detail,user:r.user_name})))).catch(()=>{});
-  },[]);
+  },[effectiveStoreId]);
   // Utiliser les données backend si dispo, sinon local
   const audit=apiAudit||localAudit;const jet=apiJet||localJet;
   const ac={VENTE:C.primary,VOID_LINE:C.warn,VOID_SALE:C.danger,CLOTURE:C.fiscal,CAISSE:C.accent,IMPORT:C.warn,PARK:"#888",PRODUCT:C.info,RECEPTION:"#059669",RGPD:C.fiscal,FEC:C.info,CLOCK_IN:"#059669",CLOCK_OUT:C.accent,PRICE_CHANGE:C.warn,EXPORT:C.info,AVOIR:C.fiscal};
@@ -2182,6 +2186,7 @@ function AuditScreen(){
   return(<div style={{height:"100%",overflowY:"auto",padding:20,background:C.bg}}>
     <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:14}}>
       <h2 style={{fontSize:22,fontWeight:800,margin:0}}>{tab==="audit"?"Journal d'audit":"JET — Journal Événements Techniques"}</h2>
+      {storeName&&<Badge color={C.primary}>{storeName}</Badge>}
       <div style={{display:"flex",gap:4,marginLeft:8}}>
         {[{id:"audit",l:"Audit"},{id:"jet",l:"JET (NF525)"}].map(t=>(
           <button key={t.id} onClick={()=>{setTab(t.id);setPage(0);}} style={{padding:"5px 12px",borderRadius:8,border:`1.5px solid ${tab===t.id?C.fiscal:C.border}`,
