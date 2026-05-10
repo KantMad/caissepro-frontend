@@ -16,7 +16,7 @@ import Papa from "papaparse";
 import * as API from "./api.js";
 import printer, { PAPER_48, PAPER_32 } from "./printer.js";
 import { CO, DEFAULT_TVA_RATES, PERMS, initProducts, initUsers, initCustomers, LOYALTY_TIERS, initPromos, categories, C, CAT_COLORS } from "./constants.jsx";
-import { escapeHtml, hashPin, verifyPin, sha256, getPriceHT, getPriceTTC, catIcon, norm, variantKey, getSizeRank, printBarcodeLabels, getVariantOrderMap, setProductVariantOrder, DEFAULT_CAT_ICONS, DEFAULT_SIZE_RANKING, getSizeRanking, saveSizeRanking } from "./utils.jsx";
+import { escapeHtml, hashPin, verifyPin, sha256, getPriceHT, getPriceTTC, catIcon, norm, variantKey, getSizeRank, printBarcodeLabels, getVariantOrderMap, saveVariantOrderMap, setProductVariantOrder, DEFAULT_CAT_ICONS, DEFAULT_SIZE_RANKING, getSizeRanking, saveSizeRanking } from "./utils.jsx";
 import { Modal, Btn, Input, Badge, SC, Numpad, ConfirmDialog } from "./ui.jsx";
 import { useApp } from "./context.jsx";
 
