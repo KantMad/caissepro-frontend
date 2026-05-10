@@ -311,12 +311,16 @@ function StoresManagementScreen(){
   const{stores,setStores,users,notify,currentUser}=useApp();
   const[editStore,setEditStore]=useState(null);const[newModal,setNewModal]=useState(false);
   const[form,setForm]=useState({name:"",address:"",postalCode:"",city:"",phone:"",siret:""});
-  const[storeUsers,setStoreUsers]=useState([]);const[viewUsersId,setViewUsersId]=useState(null);
+  const[storeUsers,setStoreUsers]=useState({});const[viewUsersId,setViewUsersId]=useState(null);
   const[assignModal,setAssignModal]=useState(null);const[assignUserId,setAssignUserId]=useState("");const[assignRole,setAssignRole]=useState("cashier");
   const[loading,setLoading]=useState(false);
 
+  // Load users for a specific store
   const loadStoreUsers=async(storeId)=>{
-    try{const data=await API.stores.users(storeId);setStoreUsers(data);setViewUsersId(storeId);}catch(e){notify(e.message,"error");}};
+    try{const data=await API.stores.users(storeId);setStoreUsers(p=>({...p,[storeId]:data}));setViewUsersId(storeId);}catch(e){notify(e.message,"error");}};
+
+  // Load users for all stores on mount
+  useEffect(()=>{stores.forEach(s=>{API.stores.users(s.id).then(data=>setStoreUsers(p=>({...p,[s.id]:data}))).catch(()=>{});});},[stores]);
 
   const saveStore=async()=>{
     if(!form.name){notify("Nom requis","error");return;}
@@ -341,12 +345,16 @@ function StoresManagementScreen(){
   const assignUser=async()=>{
     if(!assignUserId){notify("Sélectionnez un utilisateur","error");return;}
     try{
-      await API.stores.assignUser(assignModal,{userId:assignUserId,role:assignRole,isPrimary:false});
-      notify("Utilisateur assigné","success");setAssignModal(null);loadStoreUsers(assignModal);
+      const storeId=assignModal;
+      await API.stores.assignUser(storeId,{userId:assignUserId,role:assignRole,isPrimary:false});
+      // Reload users for this store
+      const data=await API.stores.users(storeId);
+      setStoreUsers(p=>({...p,[storeId]:data}));
+      notify("Utilisateur assigné","success");setAssignModal(null);
     }catch(e){notify(e.message,"error");}};
 
   const removeUserFromStore=async(storeId,userId)=>{
-    try{await API.stores.removeUser(storeId,userId);setStoreUsers(p=>p.filter(u=>u.id!==userId));notify("Utilisateur retiré","warn");}catch(e){notify(e.message,"error");}};
+    try{await API.stores.removeUser(storeId,userId);setStoreUsers(p=>({...p,[storeId]:(p[storeId]||[]).filter(u=>u.id!==userId)}));notify("Utilisateur retiré","warn");}catch(e){notify(e.message,"error");}};
 
   const openEdit=(s)=>{setForm({name:s.name||"",address:s.address||"",postalCode:s.postal_code||"",city:s.city||"",phone:s.phone||"",siret:s.siret||""});setEditStore(s);};
   const openNew=()=>{setForm({name:"",address:"",postalCode:"",city:"",phone:"",siret:""});setNewModal(true);};
@@ -395,21 +403,22 @@ function StoresManagementScreen(){
                 onMouseEnter={e=>e.currentTarget.style.background="rgba(239,68,68,0.1)"} onMouseLeave={e=>e.currentTarget.style.background=C.surfaceAlt}><Trash2 size={13}/></button></div></div></div>
         <div style={{padding:"12px 18px",display:"flex",gap:8,flexWrap:"wrap"}}>
           {s.phone&&<span style={{fontSize:10,color:C.textMuted,background:C.surfaceAlt,padding:"3px 8px",borderRadius:6}}>{s.phone}</span>}
-          {s.siret&&<span style={{fontSize:10,color:C.textMuted,background:C.surfaceAlt,padding:"3px 8px",borderRadius:6}}>SIRET: {s.siret}</span>}
-          <button onClick={()=>{viewUsersId===s.id?setViewUsersId(null):loadStoreUsers(s.id);}} style={{fontSize:10,color:C.primary,background:C.primaryLight,padding:"3px 8px",borderRadius:6,border:"none",cursor:"pointer",fontWeight:600,fontFamily:"inherit"}}>
-            <Users size={10} style={{marginRight:3,verticalAlign:"middle"}}/>{viewUsersId===s.id?"Masquer":"Voir"} utilisateurs</button>
-          <button onClick={()=>{setAssignModal(s.id);setAssignUserId("");setAssignRole("cashier");}} style={{fontSize:10,color:"#059669",background:"rgba(5,150,105,0.08)",padding:"3px 8px",borderRadius:6,border:"none",cursor:"pointer",fontWeight:600,fontFamily:"inherit"}}>
-            <Plus size={10} style={{marginRight:2,verticalAlign:"middle"}}/>Assigner</button></div>
-        {viewUsersId===s.id&&<div style={{padding:"0 18px 14px"}}>
-          {storeUsers.length===0?<div style={{fontSize:11,color:C.textMuted,padding:"8px 0"}}>Aucun utilisateur assigné</div>:
+          {s.siret&&<span style={{fontSize:10,color:C.textMuted,background:C.surfaceAlt,padding:"3px 8px",borderRadius:6}}>SIRET: {s.siret}</span>}</div>
+        {/* Users assigned to this store — always visible */}
+        <div style={{padding:"0 18px 14px"}}>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
+            <div style={{fontSize:11,fontWeight:600,color:C.textMuted}}><Users size={11} style={{marginRight:4,verticalAlign:"middle"}}/>Utilisateurs ({(storeUsers[s.id]||[]).length})</div>
+            <button onClick={()=>{setAssignModal(s.id);setAssignUserId("");setAssignRole("cashier");}} style={{fontSize:10,color:"#059669",background:"rgba(5,150,105,0.08)",padding:"3px 8px",borderRadius:6,border:"none",cursor:"pointer",fontWeight:600,fontFamily:"inherit"}}>
+              <Plus size={10} style={{marginRight:2,verticalAlign:"middle"}}/>Ajouter</button></div>
+          {(storeUsers[s.id]||[]).length===0?<div style={{fontSize:11,color:C.textMuted,padding:"6px 0",fontStyle:"italic"}}>Aucun utilisateur assigné</div>:
           <div style={{display:"flex",flexDirection:"column",gap:4}}>
-            {storeUsers.map(u=>(<div key={u.id} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 10px",borderRadius:8,background:C.surfaceAlt}}>
+            {(storeUsers[s.id]||[]).map(u=>(<div key={u.id} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 10px",borderRadius:8,background:C.surfaceAlt}}>
               <div style={{width:24,height:24,borderRadius:6,background:C.primaryLight,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:700,color:C.primary}}>{u.name?.[0]}</div>
               <span style={{flex:1,fontSize:12,fontWeight:500}}>{u.name}</span>
               <Badge color={u.store_role==="admin"?C.primary:C.info}>{u.store_role||u.global_role}</Badge>
               {u.is_primary&&<Badge color="#059669">Principal</Badge>}
               <button onClick={()=>removeUserFromStore(s.id,u.id)} title="Retirer" style={{background:"none",border:"none",cursor:"pointer",color:C.danger,padding:2}}><Trash2 size={11}/></button>
-            </div>))}</div>}</div>}
+            </div>))}</div>}</div>
       </div>))}</div>
 
     {/* Edit modal */}
@@ -417,13 +426,15 @@ function StoresManagementScreen(){
     {/* New modal */}
     {newModal&&<Modal open={true} title="Nouveau magasin" onClose={()=>setNewModal(false)}>{formUI}</Modal>}
     {/* Assign user modal */}
-    {assignModal&&<Modal open={true} title="Assigner un utilisateur" onClose={()=>setAssignModal(null)}>
+    {assignModal&&<Modal open={true} title={`Ajouter un utilisateur — ${stores.find(s=>s.id===assignModal)?.name||""}`} onClose={()=>setAssignModal(null)}>
       <div style={{display:"flex",flexDirection:"column",gap:12}}>
-        <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>UTILISATEUR</label>
+        {(()=>{const assignedIds=(storeUsers[assignModal]||[]).map(u=>u.id);const available=users.filter(u=>!assignedIds.includes(u.id));
+          return available.length===0?<div style={{padding:12,textAlign:"center",color:C.textMuted,fontSize:13}}>Tous les utilisateurs sont déjà assignés à ce magasin</div>:
+          <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>UTILISATEUR</label>
           <select value={assignUserId} onChange={e=>setAssignUserId(e.target.value)} style={{width:"100%",padding:"10px 12px",borderRadius:10,border:`1.5px solid ${C.border}`,fontSize:13,fontFamily:"inherit",background:C.surface}}>
-            <option value="">Choisir...</option>
-            {users.map(u=>(<option key={u.id} value={u.id}>{u.name} ({u.role})</option>))}
-          </select></div>
+            <option value="">Choisir un utilisateur...</option>
+            {available.map(u=>(<option key={u.id} value={u.id}>{u.name} ({u.role})</option>))}
+          </select></div>;})()}
         <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>RÔLE DANS CE MAGASIN</label>
           <select value={assignRole} onChange={e=>setAssignRole(e.target.value)} style={{width:"100%",padding:"10px 12px",borderRadius:10,border:`1.5px solid ${C.border}`,fontSize:13,fontFamily:"inherit",background:C.surface}}>
             <option value="cashier">Caissier</option>
