@@ -3,7 +3,7 @@ import {
   ShoppingCart, Lock, User as UserIcon, Store, LayoutDashboard, LogOut, Wallet,
   BarChart3, Package, Receipt, RotateCcw, Users, TrendingUp, DollarSign,
   Shield, Download, FileText, Settings, CheckCircle2, AlertTriangle, Save,
-  Archive, Activity, Bell, Plus, Trash2, HelpCircle
+  Archive, Activity, Bell, Plus, Trash2, HelpCircle, Grid, Gift, Percent, Zap
 } from "lucide-react";
 import * as API from "./api.js";
 import { CO, PERMS, C, initUsers } from "./constants.jsx";
