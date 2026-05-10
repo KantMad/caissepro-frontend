@@ -2649,7 +2649,7 @@ function CSVImportWizard({open,onClose,existingProducts,onImportComplete}){
 /* ══════════ PRODUCTS MANAGEMENT ══════════ */
 function ProductsScreen(){
   const{products,setProducts,refreshProducts,addProduct,addAudit,notify,perm:p,exportCatalog,duplicateProduct,
-    updateProduct,deleteProduct,addVariantToProduct,deleteVariant,updateProductPrice,settings}=useApp();
+    updateProduct,deleteProduct,addVariantToProduct,deleteVariant,updateProductPrice,settings,tvaRates}=useApp();
   const pm=settings.pricingMode||"TTC";
   const[search,setSearch]=useState("");const[importWizardOpen,setImportWizardOpen]=useState(false);
   const[createModal,setCreateModal]=useState(false);
@@ -2706,7 +2706,7 @@ function ProductsScreen(){
           <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>PRIX ACHAT (€)</label><Input type="number" step="0.01" value={ep.costPrice||""} onChange={e=>setEp(p=>({...p,costPrice:e.target.value}))}/></div>
           <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>TVA</label>
             <select value={ep.taxRate||"0.20"} onChange={e=>setEp(p=>({...p,taxRate:e.target.value}))} style={{width:"100%",padding:10,borderRadius:10,border:`2px solid ${C.border}`,fontSize:12,fontFamily:"inherit"}}>
-              {TVA_RATES.map(t=>(<option key={t.id} value={t.rate}>{t.label}</option>))}</select></div>
+              {(tvaRates||DEFAULT_TVA_RATES).map(t=>(<option key={t.id} value={t.rate}>{t.label}</option>))}</select></div>
           <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>CATÉGORIE</label>
             <select value={ep.category||""} onChange={e=>setEp(p=>({...p,category:e.target.value}))} style={{width:"100%",padding:10,borderRadius:10,border:`2px solid ${C.border}`,fontSize:12,fontFamily:"inherit"}}>
               {categories.filter(c=>c!=="Tous").map(c=>(<option key={c} value={c}>{c}</option>))}</select></div>
@@ -2767,7 +2767,7 @@ function ProductsScreen(){
         <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>PRIX ACHAT (€)</label><Input type="number" step="0.01" value={np.costPrice} onChange={e=>setNp(p=>({...p,costPrice:e.target.value}))}/></div>
         <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>TVA</label>
           <select value={np.taxRate} onChange={e=>setNp(p=>({...p,taxRate:e.target.value}))} style={{width:"100%",padding:10,borderRadius:10,border:`2px solid ${C.border}`,fontSize:12,fontFamily:"inherit"}}>
-            {TVA_RATES.map(t=>(<option key={t.id} value={t.rate}>{t.label}</option>))}</select></div>
+            {(tvaRates||DEFAULT_TVA_RATES).map(t=>(<option key={t.id} value={t.rate}>{t.label}</option>))}</select></div>
         <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>CATÉGORIE</label>
           <select value={np.category} onChange={e=>setNp(p=>({...p,category:e.target.value}))} style={{width:"100%",padding:10,borderRadius:10,border:`2px solid ${C.border}`,fontSize:12,fontFamily:"inherit"}}>
             {categories.filter(c=>c!=="Tous").map(c=>(<option key={c} value={c}>{c}</option>))}</select></div>
