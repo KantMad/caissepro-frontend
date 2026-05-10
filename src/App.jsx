@@ -83,56 +83,56 @@ const initPromos=[
 const categories=["Tous","T-shirts","Jeans","Robes","Pulls","Chemises","Vestes"];
 
 /* ══════════ DESIGN ══════════ */
-const C={bg:"#F5F5F0",surface:"#FFFFFF",surfaceAlt:"#F0EFEB",surfaceHover:"#FAFAF8",text:"#1A1A1A",textMuted:"#7A7A7A",textLight:"#AEAEAE",
-  primary:"#2B6E44",primaryLight:"#E4F2E9",primaryDark:"#1B4A2E",accent:"#C4956A",accentLight:"#F5EDE5",
-  danger:"#D1453B",dangerLight:"#FDECEB",info:"#3D7BD9",infoLight:"#EBF2FD",border:"#E2E0DB",borderDark:"#CCC9C3",
-  gradientB:"#4DA768",fiscal:"#6B4FA0",fiscalLight:"#F0EEFE",warn:"#E0A818",warnLight:"#FEF8E3",
-  shadow:"rgba(0,0,0,0.06)",shadowMd:"rgba(0,0,0,0.10)",shadowLg:"rgba(0,0,0,0.14)"};
-const CAT_COLORS={"T-shirts":"#3D7BD9","Jeans":"#2B6E44","Robes":"#C4956A","Pulls":"#8B6FC0","Chemises":"#E0A818","Vestes":"#D1453B","Divers":"#7A7A7A"};
+const C={bg:"#F8FAFC",surface:"#FFFFFF",surfaceAlt:"#F1F5F9",surfaceHover:"#F8FAFC",text:"#0F172A",textMuted:"#64748B",textLight:"#94A3B8",
+  primary:"#047857",primaryLight:"#ECFDF5",primaryDark:"#022C22",accent:"#D97706",accentLight:"#FFFBEB",
+  danger:"#DC2626",dangerLight:"#FEF2F2",info:"#0369A1",infoLight:"#F0F9FF",border:"#E2E8F0",borderDark:"#CBD5E1",
+  gradientB:"#059669",fiscal:"#0F766E",fiscalLight:"#F0FDFA",warn:"#D97706",warnLight:"#FFFBEB",
+  shadow:"rgba(15,23,42,0.04)",shadowMd:"rgba(15,23,42,0.08)",shadowLg:"rgba(15,23,42,0.12)"};
+const CAT_COLORS={"T-shirts":"#0369A1","Jeans":"#047857","Robes":"#D97706","Pulls":"#7C3AED","Chemises":"#CA8A04","Vestes":"#DC2626","Divers":"#64748B"};
 
 /* ══════════ UI ══════════ */
 const Modal=({open,onClose,title,sub,children,wide})=>{if(!open)return null;return(
-  <div style={{position:"fixed",inset:0,zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",animation:"fadeIn 0.18s ease"}} onClick={onClose}>
-    <div style={{position:"absolute",inset:0,background:"rgba(10,10,10,0.45)",backdropFilter:"blur(8px)",WebkitBackdropFilter:"blur(8px)"}}/>
-    <div onClick={e=>e.stopPropagation()} style={{position:"relative",background:C.surface,borderRadius:24,padding:0,
-      width:wide?"800px":"480px",maxWidth:"94vw",maxHeight:"90vh",overflowY:"auto",
-      boxShadow:"0 32px 100px rgba(0,0,0,0.22), 0 0 0 1px rgba(0,0,0,0.04)",animation:"modalPop 0.25s cubic-bezier(0.34,1.56,0.64,1)"}}>
-      {title&&<div style={{padding:"20px 28px 0 28px",display:"flex",alignItems:"start",justifyContent:"space-between"}}>
-        <div><h2 style={{fontSize:19,fontWeight:800,marginBottom:sub?3:0,letterSpacing:"-0.3px"}}>{title}</h2>
-          {sub&&<p style={{fontSize:12,color:C.textMuted,marginTop:2}}>{sub}</p>}</div>
-        <button onClick={onClose} style={{background:C.surfaceAlt,border:"none",borderRadius:10,width:32,height:32,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginLeft:12,transition:"all 0.15s"}}
-          onMouseEnter={e=>e.currentTarget.style.background=C.dangerLight} onMouseLeave={e=>e.currentTarget.style.background=C.surfaceAlt}>
-          <XCircle size={15} color={C.textMuted}/></button></div>}
-      <div style={{padding:title?"16px 28px 28px":"28px"}}>{children}</div></div></div>);};
+  <div style={{position:"fixed",inset:0,zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",animation:"fadeIn 0.2s ease"}} onClick={onClose}>
+    <div style={{position:"absolute",inset:0,background:"rgba(15,23,42,0.5)",backdropFilter:"blur(12px)",WebkitBackdropFilter:"blur(12px)"}}/>
+    <div onClick={e=>e.stopPropagation()} style={{position:"relative",background:C.surface,borderRadius:20,padding:0,
+      width:wide?"820px":"480px",maxWidth:"94vw",maxHeight:"90vh",overflowY:"auto",
+      boxShadow:"0 24px 80px rgba(15,23,42,0.18), 0 0 0 1px rgba(15,23,42,0.05), inset 0 1px 0 rgba(255,255,255,0.8)",animation:"modalPop 0.25s cubic-bezier(0.34,1.56,0.64,1)"}}>
+      {title&&<div style={{padding:"24px 28px 0 28px",display:"flex",alignItems:"start",justifyContent:"space-between"}}>
+        <div><h2 style={{fontSize:18,fontWeight:700,marginBottom:sub?4:0,letterSpacing:"-0.4px",color:C.text}}>{title}</h2>
+          {sub&&<p style={{fontSize:12,color:C.textMuted,marginTop:2,lineHeight:1.4}}>{sub}</p>}</div>
+        <button onClick={onClose} style={{background:C.surfaceAlt,border:`1px solid ${C.border}`,borderRadius:8,width:30,height:30,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginLeft:12,transition:"all 0.15s"}}
+          onMouseEnter={e=>{e.currentTarget.style.background=C.dangerLight;e.currentTarget.style.borderColor=C.danger+"33";}} onMouseLeave={e=>{e.currentTarget.style.background=C.surfaceAlt;e.currentTarget.style.borderColor=C.border;}}>
+          <X size={14} color={C.textMuted}/></button></div>}
+      <div style={{padding:title?"20px 28px 28px":"28px"}}>{children}</div></div></div>);};
 const Btn=({children,onClick,variant="primary",disabled,style:s,...r})=>{
-  const b={display:"inline-flex",alignItems:"center",justifyContent:"center",gap:7,border:"none",borderRadius:12,
-    cursor:disabled?"not-allowed":"pointer",fontWeight:600,fontSize:13,padding:"10px 20px",opacity:disabled?0.45:1,fontFamily:"inherit",
-    transition:"all 0.15s ease",letterSpacing:"0.01em"};
-  const V={primary:{...b,background:C.primary,color:"#fff",boxShadow:`0 2px 8px ${C.primary}30`},
-    accent:{...b,background:C.accent,color:"#fff",boxShadow:`0 2px 8px ${C.accent}30`},
-    danger:{...b,background:C.danger,color:"#fff",boxShadow:`0 2px 8px ${C.danger}30`},
-    outline:{...b,background:"transparent",color:C.text,border:`1.5px solid ${C.border}`},
+  const b={display:"inline-flex",alignItems:"center",justifyContent:"center",gap:7,border:"none",borderRadius:10,
+    cursor:disabled?"not-allowed":"pointer",fontWeight:600,fontSize:13,padding:"10px 18px",opacity:disabled?0.5:1,fontFamily:"inherit",
+    transition:"all 0.2s cubic-bezier(0.16,1,0.3,1)",letterSpacing:"-0.01em"};
+  const V={primary:{...b,background:C.primary,color:"#fff",boxShadow:`0 1px 3px ${C.primary}40, 0 4px 12px ${C.primary}15`},
+    accent:{...b,background:C.accent,color:"#fff",boxShadow:`0 1px 3px ${C.accent}40, 0 4px 12px ${C.accent}15`},
+    danger:{...b,background:C.danger,color:"#fff",boxShadow:`0 1px 3px ${C.danger}40`},
+    outline:{...b,background:C.surface,color:C.text,border:`1.5px solid ${C.border}`,boxShadow:`0 1px 2px ${C.shadow}`},
     ghost:{...b,background:"transparent",color:C.textMuted,padding:"6px 10px",boxShadow:"none"},
-    success:{...b,background:"#2F9E55",color:"#fff",boxShadow:"0 2px 8px rgba(47,158,85,0.3)"},
-    info:{...b,background:C.info,color:"#fff",boxShadow:`0 2px 8px ${C.info}30`},
-    fiscal:{...b,background:C.fiscal,color:"#fff",boxShadow:`0 2px 8px ${C.fiscal}30`},
-    warn:{...b,background:C.warn,color:"#fff",boxShadow:`0 2px 8px ${C.warn}30`}};
+    success:{...b,background:"#059669",color:"#fff",boxShadow:"0 1px 3px rgba(5,150,105,0.4)"},
+    info:{...b,background:C.info,color:"#fff",boxShadow:`0 1px 3px ${C.info}40`},
+    fiscal:{...b,background:C.fiscal,color:"#fff",boxShadow:`0 1px 3px ${C.fiscal}40`},
+    warn:{...b,background:C.warn,color:"#fff",boxShadow:`0 1px 3px ${C.warn}40`}};
   return<button onClick={disabled?undefined:onClick} style={{...V[variant],...s}} {...r}>{children}</button>;};
-const Input=({style:s,...p})=>(<input {...p} style={{width:"100%",padding:"10px 14px",borderRadius:12,border:`1.5px solid ${C.border}`,
-  fontSize:13,background:C.surface,outline:"none",boxSizing:"border-box",fontFamily:"inherit",transition:"all 0.15s ease",...s}}
-  onFocus={e=>{e.target.style.borderColor=C.primary;e.target.style.boxShadow=`0 0 0 3px ${C.primary}15`;}}
+const Input=({style:s,...p})=>(<input {...p} style={{width:"100%",padding:"10px 14px",borderRadius:10,border:`1.5px solid ${C.border}`,
+  fontSize:13,background:C.surface,outline:"none",boxSizing:"border-box",fontFamily:"inherit",transition:"all 0.2s cubic-bezier(0.16,1,0.3,1)",color:C.text,...s}}
+  onFocus={e=>{e.target.style.borderColor=C.primary;e.target.style.boxShadow=`0 0 0 3px ${C.primary}12`;}}
   onBlur={e=>{e.target.style.borderColor=C.border;e.target.style.boxShadow="none";}}/>);
-const Badge=({children,color=C.primary,bg})=>(<span style={{display:"inline-flex",alignItems:"center",padding:"3px 9px",
-  borderRadius:20,fontSize:10,fontWeight:600,color,background:bg||`${color}15`,letterSpacing:"0.02em"}}>{children}</span>);
-const SC=({icon:I,label,value,color:c,sub})=>(<div style={{background:C.surface,borderRadius:16,padding:16,border:`1px solid ${C.border}`,
-  boxShadow:`0 1px 3px ${C.shadow}`,transition:"all 0.15s"}}
-  onMouseEnter={e=>{e.currentTarget.style.boxShadow=`0 4px 12px ${C.shadowMd}`;e.currentTarget.style.transform="translateY(-1px)";}}
-  onMouseLeave={e=>{e.currentTarget.style.boxShadow=`0 1px 3px ${C.shadow}`;e.currentTarget.style.transform="translateY(0)";}}>
-  <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8}}>
-    <div style={{width:28,height:28,borderRadius:8,background:`${c}12`,display:"flex",alignItems:"center",justifyContent:"center"}}><I size={14} color={c}/></div>
-    <span style={{fontSize:10,fontWeight:600,color:C.textMuted,textTransform:"uppercase",letterSpacing:"0.5px"}}>{label}</span></div>
-  <div style={{fontSize:22,fontWeight:800,letterSpacing:"-0.5px"}}>{value}</div>
-  {sub&&<div style={{fontSize:10,color:C.textMuted,marginTop:3}}>{sub}</div>}</div>);
+const Badge=({children,color=C.primary,bg})=>(<span style={{display:"inline-flex",alignItems:"center",padding:"3px 8px",
+  borderRadius:6,fontSize:10,fontWeight:600,color,background:bg||`${color}12`,letterSpacing:"-0.01em"}}>{children}</span>);
+const SC=({icon:I,label,value,color:c,sub})=>(<div style={{background:C.surface,borderRadius:14,padding:18,
+  boxShadow:`0 1px 3px ${C.shadow}, 0 0 0 1px ${C.border}`,transition:"all 0.2s cubic-bezier(0.16,1,0.3,1)"}}
+  onMouseEnter={e=>{e.currentTarget.style.boxShadow=`0 8px 24px ${C.shadowMd}, 0 0 0 1px ${C.border}`;e.currentTarget.style.transform="translateY(-2px)";}}
+  onMouseLeave={e=>{e.currentTarget.style.boxShadow=`0 1px 3px ${C.shadow}, 0 0 0 1px ${C.border}`;e.currentTarget.style.transform="translateY(0)";}}>
+  <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
+    <div style={{width:32,height:32,borderRadius:10,background:`${c}10`,display:"flex",alignItems:"center",justifyContent:"center"}}><I size={16} color={c}/></div>
+    <span style={{fontSize:11,fontWeight:500,color:C.textMuted,letterSpacing:"-0.01em"}}>{label}</span></div>
+  <div style={{fontSize:24,fontWeight:700,letterSpacing:"-0.5px",color:C.text}}>{value}</div>
+  {sub&&<div style={{fontSize:11,color:C.textMuted,marginTop:4}}>{sub}</div>}</div>);
 /* ══════════ CATEGORY ICON ══════════ */
 const DEFAULT_CAT_ICONS={"T-shirts":"👕","Jeans":"👖","Robes":"👗","Pulls":"🧶","Chemises":"👔","Vestes":"🧥","Pantalons":"👖","Chaussures":"👟","Accessoires":"👜","Divers":"📦"};
 const catIcon=(cat,settingsIcons)=>{const ic={...DEFAULT_CAT_ICONS,...(settingsIcons||{})};return ic[cat]||"📦";};
@@ -140,20 +140,20 @@ const catIcon=(cat,settingsIcons)=>{const ic={...DEFAULT_CAT_ICONS,...(settingsI
 const Numpad=({value,onChange,onEnter,label})=>{
   const press=(k)=>{if(k==="C")onChange("");else if(k==="⌫")onChange(value.slice(0,-1));
     else if(k==="."&&value.includes("."))return;else onChange(value+k);};
-  return(<div style={{background:C.surfaceAlt,borderRadius:16,padding:12}}>
-    {label&&<div style={{fontSize:10,fontWeight:600,color:C.textMuted,textTransform:"uppercase",marginBottom:6,letterSpacing:"0.5px"}}>{label}</div>}
-    <div style={{background:C.surface,borderRadius:10,padding:"8px 12px",marginBottom:8,textAlign:"right",fontSize:22,fontWeight:800,
-      minHeight:36,display:"flex",alignItems:"center",justifyContent:"flex-end",border:`1.5px solid ${C.border}`,letterSpacing:"-0.5px",color:C.primary}}>{value||"0"}<span style={{fontSize:13,color:C.textMuted,marginLeft:2}}>€</span></div>
-    <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:4}}>
+  return(<div style={{background:C.surfaceAlt,borderRadius:14,padding:14,border:`1px solid ${C.border}`}}>
+    {label&&<div style={{fontSize:11,fontWeight:500,color:C.textMuted,marginBottom:8,letterSpacing:"-0.01em"}}>{label}</div>}
+    <div style={{background:C.surface,borderRadius:10,padding:"10px 14px",marginBottom:10,textAlign:"right",fontSize:24,fontWeight:700,
+      minHeight:40,display:"flex",alignItems:"center",justifyContent:"flex-end",border:`1.5px solid ${C.border}`,letterSpacing:"-0.5px",color:C.text}}>{value||"0"}<span style={{fontSize:14,color:C.textLight,marginLeft:3,fontWeight:500}}>€</span></div>
+    <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:5}}>
       {["7","8","9","4","5","6","1","2","3",".","0","⌫"].map(k=>(
-        <button key={k} onClick={()=>press(k)} style={{height:40,borderRadius:10,border:"none",background:k==="⌫"?C.dangerLight:C.surface,
-          cursor:"pointer",fontSize:k==="⌫"?12:16,fontWeight:700,fontFamily:"inherit",color:k==="⌫"?C.danger:C.text,
-          boxShadow:`0 1px 2px ${C.shadow}`,transition:"all 0.1s"}}
-          onMouseDown={e=>e.currentTarget.style.transform="scale(0.95)"} onMouseUp={e=>e.currentTarget.style.transform="scale(1)"}>{k}</button>))}
+        <button key={k} onClick={()=>press(k)} style={{height:42,borderRadius:10,border:`1px solid ${k==="⌫"?C.danger+"22":C.border}`,background:k==="⌫"?C.dangerLight:C.surface,
+          cursor:"pointer",fontSize:k==="⌫"?13:16,fontWeight:600,fontFamily:"inherit",color:k==="⌫"?C.danger:C.text,
+          transition:"all 0.15s cubic-bezier(0.16,1,0.3,1)"}}
+          onMouseDown={e=>e.currentTarget.style.transform="scale(0.94)"} onMouseUp={e=>e.currentTarget.style.transform="scale(1)"}>{k}</button>))}
     </div>
-    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:4,marginTop:4}}>
-      <button onClick={()=>press("C")} style={{height:36,borderRadius:10,border:"none",background:C.warnLight,cursor:"pointer",fontSize:11,fontWeight:700,fontFamily:"inherit",color:C.warn}}>Effacer</button>
-      {onEnter&&<button onClick={onEnter} style={{height:36,borderRadius:10,border:"none",background:C.primary,cursor:"pointer",fontSize:11,fontWeight:700,fontFamily:"inherit",color:"#fff",boxShadow:`0 2px 6px ${C.primary}30`}}>Valider</button>}
+    <div style={{display:"grid",gridTemplateColumns:onEnter?"1fr 1fr":"1fr",gap:5,marginTop:5}}>
+      <button onClick={()=>press("C")} style={{height:38,borderRadius:10,border:`1px solid ${C.warn}22`,background:C.warnLight,cursor:"pointer",fontSize:11,fontWeight:600,fontFamily:"inherit",color:C.warn}}>Effacer</button>
+      {onEnter&&<button onClick={onEnter} style={{height:38,borderRadius:10,border:"none",background:C.primary,cursor:"pointer",fontSize:11,fontWeight:600,fontFamily:"inherit",color:"#fff"}}>Valider</button>}
     </div></div>);};
 
 /* ══════════ DATA NORMALIZERS ══════════ */
@@ -294,7 +294,7 @@ function printBarcodeLabels(product,settings){
     .grid{display:flex;flex-wrap:wrap;gap:1mm;padding:2mm}
     @media print{.no-print{display:none!important}}</style></head><body>
     <div class="no-print" style="padding:10px;background:#f5f5f5;border-bottom:1px solid #ddd;display:flex;align-items:center;gap:10px">
-      <button onclick="window.print()" style="padding:8px 20px;background:#2B6E44;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer">🖨️ Imprimer</button>
+      <button onclick="window.print()" style="padding:8px 20px;background:#047857;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer">🖨️ Imprimer</button>
       <span style="font-size:12px;color:#666">${variants.length} étiquette(s) — ${fmt} mm — ${product.name}</span>
     </div>
     <div class="grid">${labels.join("")}</div></body></html>`);
@@ -305,13 +305,13 @@ class ErrorBoundary extends Component{
   constructor(p){super(p);this.state={hasError:false,error:null,info:null};}
   static getDerivedStateFromError(e){return{hasError:true,error:e};}
   componentDidCatch(e,info){console.error("BOUNDARY_CATCH:",e.message,e.stack);this.setState({info});}
-  render(){if(this.state.hasError)return(<div style={{padding:40,background:"#FFF0F0",margin:20,borderRadius:16,border:"2px solid #D1453B"}}>
-    <h2 style={{color:"#D1453B",margin:"0 0 10px"}}>Erreur détectée</h2>
+  render(){if(this.state.hasError)return(<div style={{padding:40,background:"#FFF0F0",margin:20,borderRadius:16,border:"2px solid #DC2626"}}>
+    <h2 style={{color:"#DC2626",margin:"0 0 10px"}}>Erreur détectée</h2>
     <pre style={{fontSize:12,whiteSpace:"pre-wrap",color:"#333",background:"#fff",padding:12,borderRadius:8,maxHeight:200,overflowY:"auto"}}>{this.state.error?.message}</pre>
     <div style={{display:"flex",gap:10,marginTop:14}}>
-      <button onClick={()=>this.setState({hasError:false,error:null})} style={{padding:"10px 20px",background:"#2B6E44",color:"#fff",border:"none",borderRadius:10,cursor:"pointer",fontWeight:600,fontSize:13,fontFamily:"inherit"}}>
+      <button onClick={()=>this.setState({hasError:false,error:null})} style={{padding:"10px 20px",background:"#047857",color:"#fff",border:"none",borderRadius:10,cursor:"pointer",fontWeight:600,fontSize:13,fontFamily:"inherit"}}>
         ← Retour</button>
-      <button onClick={()=>{this.setState({hasError:false,error:null});window.location.reload();}} style={{padding:"10px 20px",background:"#D1453B",color:"#fff",border:"none",borderRadius:10,cursor:"pointer",fontWeight:600,fontSize:13,fontFamily:"inherit"}}>
+      <button onClick={()=>{this.setState({hasError:false,error:null});window.location.reload();}} style={{padding:"10px 20px",background:"#DC2626",color:"#fff",border:"none",borderRadius:10,cursor:"pointer",fontWeight:600,fontSize:13,fontFamily:"inherit"}}>
         Recharger la page</button></div>
   </div>);return this.props.children;}
 }
@@ -320,27 +320,29 @@ class ErrorBoundary extends Component{
 const ToastContainer=()=>{const{notifications}=useApp();
   if(!notifications?.length)return null;
   const icons={success:CheckCircle2,error:AlertTriangle,warn:AlertTriangle,info:Activity};
-  const bgs={success:"linear-gradient(135deg,#2F9E55,#3ABB6A)",error:`linear-gradient(135deg,${C.danger},#E06060)`,
-    warn:`linear-gradient(135deg,${C.warn},#F0C040)`,info:`linear-gradient(135deg,${C.info},#5A92E8)`};
-  return(<div style={{position:"fixed",top:20,right:20,zIndex:99999,display:"flex",flexDirection:"column",gap:8}}>
-    {notifications.map(n=>{const Ic=icons[n.type]||Activity;return(
-      <div key={n.id} style={{padding:"12px 20px",borderRadius:14,fontSize:12,fontWeight:600,
-        boxShadow:"0 12px 40px rgba(0,0,0,0.18)",animation:"slideIn 0.35s cubic-bezier(0.34,1.56,0.64,1)",
-        background:bgs[n.type]||bgs.info,color:"#fff",display:"flex",alignItems:"center",gap:8,backdropFilter:"blur(4px)",
-        maxWidth:360}}>
-        <div style={{width:24,height:24,borderRadius:8,background:"rgba(255,255,255,0.2)",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-          <Ic size={13}/></div>
+  const colors={success:{bg:"#ECFDF5",border:"#059669",text:"#065F46",icon:"#059669"},
+    error:{bg:"#FEF2F2",border:"#DC2626",text:"#991B1B",icon:"#DC2626"},
+    warn:{bg:"#FFFBEB",border:"#D97706",text:"#92400E",icon:"#D97706"},
+    info:{bg:"#F0F9FF",border:"#0369A1",text:"#0C4A6E",icon:"#0369A1"}};
+  return(<div style={{position:"fixed",top:16,right:16,zIndex:99999,display:"flex",flexDirection:"column",gap:8}}>
+    {notifications.map(n=>{const Ic=icons[n.type]||Activity;const cl=colors[n.type]||colors.info;return(
+      <div key={n.id} style={{padding:"12px 16px",borderRadius:12,fontSize:13,fontWeight:500,
+        boxShadow:"0 8px 32px rgba(15,23,42,0.12), 0 0 0 1px "+cl.border+"22",animation:"slideIn 0.3s cubic-bezier(0.34,1.56,0.64,1)",
+        background:cl.bg,color:cl.text,display:"flex",alignItems:"center",gap:10,borderLeft:`3px solid ${cl.border}`,
+        maxWidth:380}}>
+        <Ic size={15} color={cl.icon} style={{flexShrink:0}}/>
         <span style={{lineHeight:1.4}}>{n.msg}</span></div>);})}</div>);};
 
 /* ══════════ CONFIRM DIALOG ══════════ */
 const ConfirmDialog=({open,onClose,onConfirm,title,message})=>{if(!open)return null;return(
   <div style={{position:"fixed",inset:0,zIndex:99998,display:"flex",alignItems:"center",justifyContent:"center"}} onClick={onClose}>
-    <div style={{position:"absolute",inset:0,background:"rgba(0,0,0,0.4)",backdropFilter:"blur(4px)"}}/>
-    <div onClick={e=>e.stopPropagation()} style={{position:"relative",background:C.surface,borderRadius:16,padding:24,width:360,boxShadow:"0 24px 80px rgba(0,0,0,0.18)"}}>
-      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}><AlertTriangle size={20} color={C.danger}/>
-        <h3 style={{fontSize:16,fontWeight:700,margin:0}}>{title}</h3></div>
-      <p style={{fontSize:13,color:C.textMuted,marginBottom:16}}>{message}</p>
-      <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
+    <div style={{position:"absolute",inset:0,background:"rgba(15,23,42,0.5)",backdropFilter:"blur(8px)"}}/>
+    <div onClick={e=>e.stopPropagation()} style={{position:"relative",background:C.surface,borderRadius:16,padding:28,width:380,boxShadow:"0 24px 80px rgba(15,23,42,0.16), 0 0 0 1px rgba(15,23,42,0.05)"}}>
+      <div style={{width:40,height:40,borderRadius:12,background:C.dangerLight,display:"flex",alignItems:"center",justifyContent:"center",marginBottom:14}}>
+        <AlertTriangle size={20} color={C.danger}/></div>
+      <h3 style={{fontSize:16,fontWeight:700,margin:"0 0 6px",color:C.text}}>{title}</h3>
+      <p style={{fontSize:13,color:C.textMuted,marginBottom:20,lineHeight:1.5}}>{message}</p>
+      <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
         <Btn variant="outline" onClick={onClose}>Annuler</Btn>
         <Btn variant="danger" onClick={()=>{onConfirm();onClose();}}>Confirmer</Btn></div></div></div>);};
 
@@ -1114,16 +1116,16 @@ function AppProvider({children}){
     w.document.write(`<!DOCTYPE html><html><head><title>Ecran Client</title><style>
       *{margin:0;padding:0;box-sizing:border-box}body{font-family:'DM Sans',system-ui,sans-serif;background:#F8FAF7;overflow:hidden}
       #root{height:100vh;display:flex;flex-direction:column}
-      .header{background:linear-gradient(135deg,#2B6E44,#4DA768);color:#fff;padding:20px 30px;text-align:center}
+      .header{background:linear-gradient(135deg,#047857,#059669);color:#fff;padding:20px 30px;text-align:center}
       .header h1{font-size:24px;font-weight:800}.header .sub{font-size:13px;opacity:0.8;margin-top:4px}
       .items{flex:1;overflow-y:auto;padding:20px 30px}.item{display:flex;justify-content:space-between;padding:14px 0;border-bottom:1px solid #E8ECE5;font-size:16px}
-      .item .name{font-weight:600;flex:1}.item .qty{color:#666;margin:0 20px}.item .price{font-weight:800;color:#2B6E44;min-width:80px;text-align:right}
-      .total-bar{background:#fff;border-top:3px solid #2B6E44;padding:24px 30px;display:flex;justify-content:space-between;align-items:center}
-      .total-bar .label{font-size:20px;font-weight:700;color:#333}.total-bar .amount{font-size:36px;font-weight:900;color:#2B6E44}
+      .item .name{font-weight:600;flex:1}.item .qty{color:#666;margin:0 20px}.item .price{font-weight:800;color:#047857;min-width:80px;text-align:right}
+      .total-bar{background:#fff;border-top:3px solid #047857;padding:24px 30px;display:flex;justify-content:space-between;align-items:center}
+      .total-bar .label{font-size:20px;font-weight:700;color:#333}.total-bar .amount{font-size:36px;font-weight:900;color:#047857}
       .screensaver{height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;background:linear-gradient(135deg,#F8FAF7,#E8F0E3)}
-      .screensaver .logo{width:120px;height:120px;border-radius:30px;background:linear-gradient(135deg,#2B6E44,#4DA768);display:flex;align-items:center;justify-content:center;color:#fff;font-size:48px;font-weight:900;margin-bottom:20px;box-shadow:0 12px 40px rgba(43,110,68,0.3)}
+      .screensaver .logo{width:120px;height:120px;border-radius:30px;background:linear-gradient(135deg,#047857,#059669);display:flex;align-items:center;justify-content:center;color:#fff;font-size:48px;font-weight:900;margin-bottom:20px;box-shadow:0 12px 40px rgba(43,110,68,0.3)}
       .screensaver h2{font-size:28px;font-weight:800;color:#333;margin-bottom:8px}.screensaver p{font-size:16px;color:#666}
-      .screensaver .time{font-size:48px;font-weight:800;color:#2B6E44;margin-top:20px}
+      .screensaver .time{font-size:48px;font-weight:800;color:#047857;margin-top:20px}
     </style></head><body><div id="root"><div class="screensaver"><div class="logo">CP</div><h2></h2><p>Bienvenue</p><div class="time"></div></div></div>
     <script>
       function updateTime(){const t=document.querySelector('.time');if(t)t.textContent=new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});}
@@ -1186,36 +1188,39 @@ function LoginScreen(){
     }).catch(()=>{});
   },[]);
   const allUsers=users&&users.length?users:initUsers;
-  const go=async()=>{if(!su){setErr("Sélectionnez un profil");return;}const u=allUsers.find(u=>u.id===su);if(!u){setErr("Profil introuvable");return;}
+  const go=async()=>{if(!su){setErr("Selectionnez un profil");return;}const u=allUsers.find(u=>u.id===su);if(!u){setErr("Profil introuvable");return;}
     setLoading(true);setErr("");try{const ok=await login(u.name,pw||u.pin);if(ok)setIM(m);else setErr("Code incorrect ou serveur indisponible");}catch(e){setErr("Erreur de connexion: "+e.message);}finally{setLoading(false);}};
-  return(<div style={{minHeight:"100vh",background:`linear-gradient(160deg,#E4F2E9 0%,${C.bg} 40%,${C.accentLight} 100%)`,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
-    <div style={{width:440,background:"rgba(255,255,255,0.95)",backdropFilter:"blur(30px)",WebkitBackdropFilter:"blur(30px)",borderRadius:32,padding:44,
-      boxShadow:"0 32px 100px rgba(0,0,0,0.10), 0 0 0 1px rgba(255,255,255,0.6) inset",animation:"fadeIn 0.4s ease"}}>
-      <div style={{textAlign:"center",marginBottom:32}}>
-        <div style={{width:76,height:76,borderRadius:20,background:`linear-gradient(135deg,${C.primary},${C.gradientB})`,display:"inline-flex",alignItems:"center",justifyContent:"center",marginBottom:16,
-          boxShadow:`0 12px 32px ${C.primary}30`}}><Store size={38} color="#fff"/></div>
-        <h1 style={{fontSize:28,fontWeight:900,margin:"0 0 6px",letterSpacing:"-0.8px"}}>CaissePro</h1>
-        <p style={{color:C.textMuted,fontSize:12,fontWeight:500}}>v{CO.ver} — Certifié NF525 — Logiciel de caisse textile</p></div>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:18}}>
-        {[{id:"cashier",i:Store,l:"Caisse",d:"Point de vente"},{id:"dashboard",i:LayoutDashboard,l:"Dashboard",d:"Gestion & stats"}].map(x=>(
-          <button key={x.id} onClick={()=>setM(x.id)} style={{padding:14,borderRadius:14,border:`2px solid ${m===x.id?C.primary:C.border}`,background:m===x.id?C.primaryLight:"transparent",cursor:"pointer",transition:"all 0.15s"}}>
-            <x.i size={24} color={m===x.id?C.primary:C.textMuted} style={{margin:"0 auto 6px",display:"block"}}/>
-            <div style={{fontSize:12,fontWeight:700,color:m===x.id?C.primary:C.text}}>{x.l}</div>
-            <div style={{fontSize:9,color:C.textMuted,marginTop:2}}>{x.d}</div></button>))}</div>
+  return(<div style={{minHeight:"100vh",background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+    <div style={{width:420,background:C.surface,borderRadius:20,padding:40,
+      boxShadow:"0 20px 60px rgba(15,23,42,0.08), 0 0 0 1px rgba(15,23,42,0.04)",animation:"fadeIn 0.4s ease"}}>
+      <div style={{marginBottom:32}}>
+        <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:20}}>
+          <div style={{width:44,height:44,borderRadius:12,background:C.primary,display:"flex",alignItems:"center",justifyContent:"center"}}>
+            <Store size={22} color="#fff"/></div>
+          <div><h1 style={{fontSize:22,fontWeight:700,margin:0,letterSpacing:"-0.5px",color:C.text}}>CaissePro</h1>
+            <p style={{color:C.textMuted,fontSize:11,margin:0}}>v{CO.ver} — NF525</p></div></div>
+        <p style={{color:C.textMuted,fontSize:13,lineHeight:1.5}}>Selectionnez votre profil pour commencer</p></div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:20}}>
+        {[{id:"cashier",i:Store,l:"Caisse",d:"Point de vente"},{id:"dashboard",i:LayoutDashboard,l:"Dashboard",d:"Gestion"}].map(x=>(
+          <button key={x.id} onClick={()=>setM(x.id)} style={{padding:"14px 12px",borderRadius:12,border:`1.5px solid ${m===x.id?C.primary:C.border}`,
+            background:m===x.id?C.primaryLight:C.surface,cursor:"pointer",transition:"all 0.2s cubic-bezier(0.16,1,0.3,1)"}}>
+            <x.i size={20} color={m===x.id?C.primary:C.textLight} style={{margin:"0 auto 8px",display:"block"}}/>
+            <div style={{fontSize:12,fontWeight:600,color:m===x.id?C.primary:C.text}}>{x.l}</div>
+            <div style={{fontSize:10,color:C.textMuted,marginTop:2}}>{x.d}</div></button>))}</div>
       <div style={{display:"flex",flexDirection:"column",gap:6,marginBottom:16}}>
-        {allUsers.map(u=>(<button key={u.id} onClick={()=>setSu(u.id)} style={{display:"flex",alignItems:"center",gap:10,padding:10,borderRadius:12,
-          border:`2px solid ${su===u.id?C.primary:C.border}`,background:su===u.id?C.primaryLight:"transparent",cursor:"pointer",transition:"all 0.15s"}}>
-          <div style={{width:38,height:38,borderRadius:19,background:su===u.id?`linear-gradient(135deg,${C.primary},${C.gradientB})`:C.surfaceAlt,display:"flex",alignItems:"center",justifyContent:"center",transition:"all 0.15s"}}>
-            <UserIcon size={18} color={su===u.id?"#fff":C.textMuted}/></div>
-          <div style={{textAlign:"left",flex:1}}><div style={{fontSize:13,fontWeight:600}}>{u.name}</div><div style={{fontSize:10,color:C.textMuted,textTransform:"capitalize"}}>{u.role==="admin"?"Administrateur":"Caissier(e)"}</div></div>
+        {allUsers.map(u=>(<button key={u.id} onClick={()=>setSu(u.id)} style={{display:"flex",alignItems:"center",gap:12,padding:"10px 12px",borderRadius:10,
+          border:`1.5px solid ${su===u.id?C.primary:C.border}`,background:su===u.id?C.primaryLight:C.surface,cursor:"pointer",transition:"all 0.2s cubic-bezier(0.16,1,0.3,1)"}}>
+          <div style={{width:36,height:36,borderRadius:10,background:su===u.id?C.primary:C.surfaceAlt,display:"flex",alignItems:"center",justifyContent:"center",transition:"all 0.2s"}}>
+            <UserIcon size={16} color={su===u.id?"#fff":C.textMuted}/></div>
+          <div style={{textAlign:"left",flex:1}}><div style={{fontSize:13,fontWeight:600,color:C.text}}>{u.name}</div><div style={{fontSize:10,color:C.textMuted}}>{u.role==="admin"?"Administrateur":"Caissier(e)"}</div></div>
           {su===u.id&&<CheckCircle2 size={16} color={C.primary}/>}</button>))}</div>
-      <div style={{position:"relative",marginBottom:6}}>
+      <div style={{position:"relative",marginBottom:8}}>
         <Input type="password" value={pw} onChange={e=>setPw(e.target.value)} onKeyDown={e=>e.key==="Enter"&&!loading&&go()} placeholder="Code PIN" style={{height:44,fontSize:14,paddingRight:36}}/>
-        <Lock size={14} color={C.textLight} style={{position:"absolute",right:12,top:"50%",transform:"translateY(-50%)"}}/></div>
-      <p style={{fontSize:9,color:C.textLight,marginBottom:12,textAlign:"center"}}>Code par défaut : 1234</p>
-      {err&&<div style={{padding:10,background:C.dangerLight,borderRadius:10,marginBottom:10,display:"flex",alignItems:"center",gap:6}}>
-        <AlertTriangle size={13} color={C.danger}/><p style={{fontSize:11,color:C.danger,margin:0,fontWeight:600}}>{err}</p></div>}
-      <Btn onClick={go} disabled={loading||!su} style={{width:"100%",height:48,fontSize:14,borderRadius:14,background:`linear-gradient(135deg,${C.primary},${C.gradientB})`,boxShadow:`0 4px 16px ${C.primary}33`}}>
+        <Lock size={14} color={C.textLight} style={{position:"absolute",right:14,top:"50%",transform:"translateY(-50%)"}}/></div>
+      <p style={{fontSize:10,color:C.textLight,marginBottom:14,textAlign:"center"}}>Code par defaut : 1234</p>
+      {err&&<div style={{padding:"10px 12px",background:C.dangerLight,borderRadius:10,marginBottom:12,display:"flex",alignItems:"center",gap:8,border:`1px solid ${C.danger}15`}}>
+        <AlertTriangle size={14} color={C.danger}/><p style={{fontSize:12,color:C.danger,margin:0,fontWeight:500}}>{err}</p></div>}
+      <Btn onClick={go} disabled={loading||!su} style={{width:"100%",height:46,fontSize:14,borderRadius:12}}>
         {loading?<><span style={{display:"inline-block",width:16,height:16,border:"2px solid rgba(255,255,255,0.3)",borderTopColor:"#fff",borderRadius:"50%",animation:"spin 0.6s linear infinite"}}/> Connexion...</>:"Connexion"}</Btn>
     </div></div>);
 }
@@ -1227,12 +1232,13 @@ function CashRegControl({onSkip,onDone}){
   const[denom,setDenom]=useState(()=>{const d={};bills.concat(coins).forEach(x=>d[x.v]=0);return d;});
   const denomTotal=Object.entries(denom).reduce((s,[v,n])=>s+parseFloat(v)*n,0);
   const quickAmounts=[50,100,150,200,300];
-  return(<div style={{minHeight:"100vh",background:`linear-gradient(145deg,#E8F0EB,${C.bg})`,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
-    <div style={{width:denomMode?600:440,background:"rgba(255,255,255,0.92)",backdropFilter:"blur(24px)",borderRadius:28,padding:36,boxShadow:"0 24px 80px rgba(0,0,0,0.08)",transition:"width 0.3s",maxHeight:"90vh",overflowY:"auto"}}>
-      <div style={{textAlign:"center",marginBottom:20}}>
-        <div style={{width:60,height:60,borderRadius:16,background:`linear-gradient(135deg,${C.accent},#D4A574)`,display:"inline-flex",alignItems:"center",justifyContent:"center",marginBottom:12,boxShadow:`0 8px 24px ${C.accent}33`}}><Wallet size={30} color="#fff"/></div>
-        <h1 style={{fontSize:22,fontWeight:800,margin:"0 0 4px"}}>Ouverture de caisse</h1>
-        <p style={{color:C.textMuted,fontSize:12}}>Bienvenue {currentUser?.name} — {new Date().toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long"})}</p></div>
+  return(<div style={{minHeight:"100vh",background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+    <div style={{width:denomMode?580:440,background:C.surface,borderRadius:20,padding:36,boxShadow:"0 20px 60px rgba(15,23,42,0.08), 0 0 0 1px rgba(15,23,42,0.04)",transition:"width 0.3s",maxHeight:"90vh",overflowY:"auto"}}>
+      <div style={{marginBottom:24}}>
+        <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:12}}>
+          <div style={{width:44,height:44,borderRadius:12,background:C.accent,display:"flex",alignItems:"center",justifyContent:"center"}}><Wallet size={22} color="#fff"/></div>
+          <div><h1 style={{fontSize:20,fontWeight:700,margin:0,letterSpacing:"-0.4px"}}>Ouverture de caisse</h1>
+            <p style={{color:C.textMuted,fontSize:12,margin:0}}>Bienvenue {currentUser?.name} — {new Date().toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long"})}</p></div></div></div>
 
       <div style={{display:"flex",gap:6,justifyContent:"center",marginBottom:14}}>
         <button onClick={()=>setDenomMode(false)} style={{padding:"6px 14px",borderRadius:8,border:`1.5px solid ${!denomMode?C.accent:C.border}`,background:!denomMode?C.accentLight:"transparent",
@@ -1265,7 +1271,7 @@ function CashRegControl({onSkip,onDone}){
               <input type="number" min="0" value={denom[c.v]||""} onChange={e=>{const n=parseInt(e.target.value)||0;setDenom(d=>({...d,[c.v]:n}));}}
                 style={{width:40,padding:"3px 4px",borderRadius:6,border:`1px solid ${C.border}`,fontSize:12,fontWeight:700,textAlign:"center",fontFamily:"inherit"}}/>
             </div>))}</div></div>
-        <div style={{background:`linear-gradient(135deg,${C.accentLight},#F5E6D8)`,borderRadius:14,padding:14,marginBottom:14,display:"flex",justifyContent:"space-between",alignItems:"center",border:`1px solid ${C.accent}22`}}>
+        <div style={{background:C.accentLight,borderRadius:14,padding:14,marginBottom:14,display:"flex",justifyContent:"space-between",alignItems:"center",border:`1px solid ${C.accent}22`}}>
           <span style={{fontSize:14,fontWeight:700,color:C.accent}}>Total fond de caisse</span>
           <span style={{fontSize:22,fontWeight:900,color:C.accent}}>{denomTotal.toFixed(2)}€</span></div>
       </>}
@@ -1273,7 +1279,7 @@ function CashRegControl({onSkip,onDone}){
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
         <Btn variant="outline" onClick={onSkip} style={{height:48,borderRadius:12}}><XCircle size={14}/> Passer</Btn>
         <Btn onClick={()=>{const amt=denomMode?denomTotal:parseFloat(a);if(amt){openReg(amt);onDone();}}} disabled={denomMode?denomTotal===0:!a}
-          style={{height:48,borderRadius:12,background:`linear-gradient(135deg,${C.accent},#D4A574)`,boxShadow:(denomMode?denomTotal>0:a)?`0 4px 16px ${C.accent}33`:"none"}}><Wallet size={14}/> Ouvrir la caisse</Btn>
+          style={{height:48,borderRadius:12,background:C.accent,boxShadow:(denomMode?denomTotal>0:a)?`0 4px 16px ${C.accent}33`:"none"}}><Wallet size={14}/> Ouvrir la caisse</Btn>
       </div></div></div>);
 }
 
@@ -1366,34 +1372,33 @@ function SalesScreen(){
   const todayCA=todayTickets.reduce((s,t)=>s+(t.totalTTC||parseFloat(t.total_ttc)||0),0);
 
   return(<div style={{display:"flex",height:"100%",background:C.bg,fontSize:13}}>
-    {(offlineMode||!isOnline)&&<div style={{position:"absolute",top:0,left:74,right:0,zIndex:100,
-      background:offlineMode?"linear-gradient(90deg,#FEF3C7,#FDF6E3)":"linear-gradient(90deg,#FCEAEA,#FFF0F0)",padding:"7px 18px",
-      display:"flex",alignItems:"center",gap:8,fontSize:11,fontWeight:600,color:offlineMode?"#92400E":C.danger,
-      borderBottom:`1px solid ${offlineMode?"#F5D08044":"#E5A0A044"}`,animation:"slideDown 0.3s ease"}}>
-      <WifiOff size={13}/> {offlineMode?"Mode hors-ligne — Données locales (serveur indisponible)":"Connexion internet perdue"}
+    {(offlineMode||!isOnline)&&<div style={{position:"absolute",top:0,left:72,right:0,zIndex:100,
+      background:offlineMode?C.warnLight:C.dangerLight,padding:"8px 18px",
+      display:"flex",alignItems:"center",gap:8,fontSize:12,fontWeight:500,color:offlineMode?"#92400E":C.danger,
+      borderBottom:`1px solid ${offlineMode?C.warn+"22":C.danger+"22"}`,animation:"slideDown 0.3s ease"}}>
+      <WifiOff size={13}/> {offlineMode?"Mode hors-ligne — Donnees locales":"Connexion internet perdue"}
       {offlineMode&&<Badge color="#92400E">Local</Badge>}
       {pendingSync.length>0&&<span onClick={()=>{if(confirm(`${pendingSync.length} synchro(s) en attente.\nVoulez-vous vider la file ?`)){clearPendingSync();}}}
-        style={{cursor:"pointer"}}><Badge color={C.warn}>⏳ {pendingSync.length} synchro(s) en attente — cliquer pour purger</Badge></span>}</div>}
+        style={{cursor:"pointer",marginLeft:"auto"}}><Badge color={C.warn}>{pendingSync.length} synchro(s) en attente</Badge></span>}</div>}
 
     {/* Products */}
     <div style={{flex:1,padding:16,display:"flex",flexDirection:"column",overflow:"hidden"}}>
       {/* Daily summary bar */}
-      <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10,padding:"10px 16px",
-        background:`linear-gradient(135deg,${C.primaryLight},#DCF0E2)`,borderRadius:14,border:`1px solid ${C.primary}12`,
-        boxShadow:`0 2px 8px ${C.primary}08`}}>
-        <div style={{width:28,height:28,borderRadius:8,background:`${C.primary}15`,display:"flex",alignItems:"center",justifyContent:"center"}}>
-          <Activity size={14} color={C.primary}/></div>
-        <div><span style={{fontSize:12,fontWeight:700,color:C.primaryDark}}>Aujourd'hui</span>
-          <span style={{fontSize:10,color:C.primary,marginLeft:6}}>{new Date().toLocaleDateString("fr-FR",{weekday:"short",day:"numeric",month:"short"})}</span></div>
-        <div style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:8}}>
-          <Badge color={C.primary}>{todayTickets.length} vente{todayTickets.length>1?"s":""}</Badge>
-          <span style={{fontSize:16,fontWeight:800,color:C.primary,letterSpacing:"-0.5px"}}>{todayCA.toFixed(2)}€</span>
-          {stockAlerts.length>0&&<Badge color={C.danger}>{stockAlerts.length} alerte{stockAlerts.length>1?"s":""}</Badge>}
-          <span style={{fontSize:9,color:printerConnected?"#3B8C5A":C.textLight,display:"flex",alignItems:"center",gap:3,padding:"3px 8px",borderRadius:6,
-            background:printerConnected?"#3B8C5A10":C.surface,border:`1px solid ${printerConnected?"#3B8C5A33":"transparent"}`}}>
-            <Printer size={10}/> {printerConnected?"ESC/POS":"—"}</span>
-          <span style={{fontSize:9,color:C.textMuted,cursor:"pointer",display:"flex",alignItems:"center",gap:3,padding:"3px 8px",borderRadius:6,background:C.surface}} onClick={()=>setShowShortcuts(true)}>
-            <kbd style={{fontSize:9,fontWeight:700}}>?</kbd> Raccourcis</span></div>
+      <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:12,padding:"10px 16px",
+        background:C.surface,borderRadius:12,border:`1px solid ${C.border}`,
+        boxShadow:`0 1px 3px ${C.shadow}`}}>
+        <div style={{display:"flex",alignItems:"center",gap:8}}>
+          <div style={{width:6,height:6,borderRadius:3,background:C.primary}}/>
+          <span style={{fontSize:12,fontWeight:600,color:C.text}}>{new Date().toLocaleDateString("fr-FR",{weekday:"short",day:"numeric",month:"short"})}</span></div>
+        <div style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:12}}>
+          <span style={{fontSize:12,color:C.textMuted}}>{todayTickets.length} vente{todayTickets.length>1?"s":""}</span>
+          <span style={{fontSize:14,fontWeight:700,color:C.primary,letterSpacing:"-0.3px"}}>{todayCA.toFixed(2)}€</span>
+          {stockAlerts.length>0&&<Badge color={C.danger}>{stockAlerts.length}</Badge>}
+          <span style={{fontSize:10,color:printerConnected?"#059669":C.textLight,display:"flex",alignItems:"center",gap:3,padding:"3px 8px",borderRadius:6,
+            background:printerConnected?"#05966908":C.surfaceAlt}}>
+            <Printer size={10}/> {printerConnected?"ESC/POS":"-"}</span>
+          <span style={{fontSize:10,color:C.textMuted,cursor:"pointer",display:"flex",alignItems:"center",gap:3,padding:"3px 8px",borderRadius:6,background:C.surfaceAlt}} onClick={()=>setShowShortcuts(true)}>
+            ? Raccourcis</span></div>
       </div>
       <div style={{display:"flex",gap:8,marginBottom:10}}>
         <div style={{position:"relative",flex:1}}>
@@ -1406,7 +1411,7 @@ function SalesScreen(){
         <Btn variant="outline" onClick={()=>setParkedModal(true)} style={{height:42,padding:"0 14px",borderRadius:14,position:"relative"}} title="Paniers en attente">
           <Play size={15}/>{parked.length>0&&<span style={{position:"absolute",top:-5,right:-5,width:18,height:18,borderRadius:9,background:C.danger,color:"#fff",fontSize:9,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center"}}>{parked.length}</span>}</Btn>
       </div>
-      {activePromos.length>0&&<div style={{background:`linear-gradient(135deg,${C.warnLight},#FFFBE8)`,borderRadius:10,padding:"6px 12px",marginBottom:8,
+      {activePromos.length>0&&<div style={{background:C.warnLight,borderRadius:10,padding:"6px 12px",marginBottom:8,
         display:"flex",alignItems:"center",gap:8,fontSize:11,border:`1px solid ${C.warn}18`}}>
         <Zap size={13} color={C.warn}/><span style={{fontWeight:600,color:"#92720E"}}>Promos actives:</span>{activePromos.map(p=><Badge key={p.id} color={C.warn}>{p.name}</Badge>)}</div>}
       <div style={{display:"flex",gap:5,marginBottom:10,overflowX:"auto",flexShrink:0,paddingBottom:2}}>
@@ -1434,7 +1439,7 @@ function SalesScreen(){
             animation:"fadeIn 0.25s ease",overflow:"hidden",boxShadow:`0 1px 3px ${C.shadow}`}}
           onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-3px)";e.currentTarget.style.boxShadow=`0 8px 24px ${C.shadowMd}`;e.currentTarget.style.borderColor=cc+"55";}}
           onMouseLeave={e=>{e.currentTarget.style.transform="translateY(0)";e.currentTarget.style.boxShadow=`0 1px 3px ${C.shadow}`;e.currentTarget.style.borderColor=C.border;}}>
-          <div style={{aspectRatio:"1.1",background:`linear-gradient(155deg,${cc}08,${cc}04)`,display:"flex",alignItems:"center",justifyContent:"center",position:"relative",borderBottom:`1px solid ${C.border}`}}>
+          <div style={{aspectRatio:"1.1",background:`${cc}06`,display:"flex",alignItems:"center",justifyContent:"center",position:"relative",borderBottom:`1px solid ${C.border}`}}>
             <span style={{fontSize:32,opacity:0.7,filter:"grayscale(0.2)"}}>{catIcon(p.category,settings.categoryIcons)}</span>
             {ts<=0&&<div style={{position:"absolute",top:6,left:6,zIndex:2}}>
               <Badge color={C.danger}>{ts<0?`Stock ${ts}`:"Rupture"}</Badge></div>}
@@ -1458,7 +1463,7 @@ function SalesScreen(){
       {/* Cart header */}
       <div style={{padding:"14px 16px 10px",borderBottom:`1px solid ${C.border}`}}>
         <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}>
-          <div style={{width:40,height:40,borderRadius:12,background:`linear-gradient(135deg,${C.primary},${C.gradientB})`,display:"flex",alignItems:"center",justifyContent:"center",
+          <div style={{width:40,height:40,borderRadius:12,background:C.primary,display:"flex",alignItems:"center",justifyContent:"center",
             boxShadow:`0 4px 14px ${C.primary}25`}}><ShoppingCart size={19} color="#fff"/></div>
           <div style={{flex:1}}><div style={{fontSize:16,fontWeight:800,letterSpacing:"-0.3px"}}>Panier</div>
             <div style={{fontSize:10,color:C.textMuted}}>{cart.reduce((s,i)=>s+i.quantity,0)} pièce{cart.reduce((s,i)=>s+i.quantity,0)>1?"s":""}</div></div>
@@ -1481,7 +1486,7 @@ function SalesScreen(){
           border:`1.5px dashed ${selCust?C.primary:C.border}`,background:selCust?`${C.primary}08`:"transparent",cursor:"pointer",marginBottom:6,
           fontSize:11,fontWeight:600,color:selCust?C.primary:C.textMuted,transition:"all 0.15s"}}
           onMouseEnter={e=>{if(!selCust)e.currentTarget.style.borderColor=C.primary+"66";}} onMouseLeave={e=>{if(!selCust)e.currentTarget.style.borderColor=C.border;}}>
-          {selCust?<><div style={{width:24,height:24,borderRadius:12,background:`linear-gradient(135deg,${C.primary},${C.gradientB})`,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontSize:9,fontWeight:700}}>{selCust.firstName[0]}{selCust.lastName[0]}</div>{selCust.firstName} {selCust.lastName} — {selCust.points}pts <Badge color={C.accent}>{custTier?.name}</Badge></>
+          {selCust?<><div style={{width:24,height:24,borderRadius:12,background:C.primary,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontSize:9,fontWeight:700}}>{selCust.firstName[0]}{selCust.lastName[0]}</div>{selCust.firstName} {selCust.lastName} — {selCust.points}pts <Badge color={C.accent}>{custTier?.name}</Badge></>
           :<><Users size={13}/> Associer un client</>}
         </button>
 
@@ -1537,7 +1542,7 @@ function SalesScreen(){
       <div style={{padding:"0 12px 12px",borderTop:`1px solid ${C.border}`}}>
         <div style={{background:C.surfaceAlt,borderRadius:14,padding:14,margin:"10px 0 8px",fontSize:11}}>
           <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><span style={{color:C.textMuted}}>Sous-total HT</span><span style={{fontWeight:600}}>{totals.sHT.toFixed(2)}€</span></div>
-          {totals.gd>0&&<div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><span style={{color:"#2F9E55",display:"flex",alignItems:"center",gap:3}}><Percent size={10}/> Remises & promos</span><span style={{fontWeight:700,color:"#2F9E55"}}>-{totals.gd.toFixed(2)}€</span></div>}
+          {totals.gd>0&&<div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><span style={{color:"#059669",display:"flex",alignItems:"center",gap:3}}><Percent size={10}/> Remises & promos</span><span style={{fontWeight:700,color:"#059669"}}>-{totals.gd.toFixed(2)}€</span></div>}
           {totals.applied?.length>0&&<div style={{background:`${C.warn}10`,borderRadius:8,padding:"4px 8px",marginBottom:4,border:`1px solid ${C.warn}15`}}>{totals.applied.map((a,i)=><div key={i} style={{fontSize:9,color:"#92720E",fontWeight:600}}>✓ {a}</div>)}</div>}
           <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><span style={{color:C.textMuted}}>TVA</span><span style={{fontWeight:600}}>{totals.tTVA.toFixed(2)}€</span></div>
           {avoirPayment>0&&<div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><span style={{color:C.fiscal}}>Avoir appliqué</span><span style={{fontWeight:700,color:C.fiscal}}>-{avoirPayment.toFixed(2)}€</span></div>}
@@ -1545,18 +1550,18 @@ function SalesScreen(){
             <span style={{fontSize:16,fontWeight:800}}>Total TTC</span>
             <span style={{fontSize:24,fontWeight:900,color:C.primary,letterSpacing:"-0.8px"}}>{totals.tTTC.toFixed(2)}€</span></div></div>
 
-        {cashGiven&&parseFloat(cashGiven)>0&&<div style={{background:`linear-gradient(135deg,${C.primaryLight},#D4F0DE)`,borderRadius:12,padding:12,marginBottom:8,display:"flex",justifyContent:"space-between",alignItems:"center",
+        {cashGiven&&parseFloat(cashGiven)>0&&<div style={{background:C.primaryLight,borderRadius:12,padding:12,marginBottom:8,display:"flex",justifyContent:"space-between",alignItems:"center",
           border:`1px solid ${C.primary}15`,boxShadow:`0 2px 8px ${C.primary}10`}}>
           <span style={{fontSize:13,fontWeight:700,color:C.primaryDark}}>Rendu monnaie</span>
           <span style={{fontSize:22,fontWeight:900,color:C.primary,letterSpacing:"-0.5px"}}>{change.toFixed(2)}€</span></div>}
 
         <div style={{display:"flex",gap:4,marginBottom:6}}>
           <Btn variant="outline" onClick={()=>{setGm(true);setGv(String(gDisc));setGtp(gDiscType);}} style={{flex:1,height:32,fontSize:10,padding:"0 6px",borderRadius:10}}><Percent size={11}/> Remise globale</Btn>
-          <Btn variant={detaxe?"success":"outline"} onClick={()=>setDetaxe(!detaxe)} style={{height:32,fontSize:10,padding:"0 10px",borderRadius:10,background:detaxe?`linear-gradient(135deg,#2F9E55,${C.gradientB})`:"transparent"}}>{detaxe?"✓ Détaxe":"Détaxe"}</Btn></div>
-        {detaxe&&<div style={{background:"#E8F5E9",borderRadius:8,padding:8,marginBottom:6,fontSize:10,color:"#2E7D32",border:"1px solid #A5D6A7"}}>
+          <Btn variant={detaxe?"success":"outline"} onClick={()=>setDetaxe(!detaxe)} style={{height:32,fontSize:10,padding:"0 10px",borderRadius:10,background:detaxe?C.primary:"transparent"}}>{detaxe?"✓ Détaxe":"Détaxe"}</Btn></div>
+        {detaxe&&<div style={{background:C.primaryLight,borderRadius:8,padding:8,marginBottom:6,fontSize:10,color:C.primaryDark,border:`1px solid ${C.primary}30`}}>
           Vente en détaxe — TVA à 0% — Réservé aux résidents hors UE (achat min. 100,01€)</div>}
 
-        <Btn onClick={()=>setPayMethodModal(true)} disabled={!cart.length||busy} style={{width:"100%",height:52,borderRadius:14,background:`linear-gradient(135deg,${C.primary},${C.gradientB})`,fontSize:14,gap:8,boxShadow:`0 4px 16px ${C.primary}30`,marginBottom:6,letterSpacing:"-0.3px"}}>
+        <Btn onClick={()=>setPayMethodModal(true)} disabled={!cart.length||busy} style={{width:"100%",height:52,borderRadius:14,background:C.primary,fontSize:14,gap:8,boxShadow:`0 4px 16px ${C.primary}30`,marginBottom:6,letterSpacing:"-0.3px"}}>
           {busy?<span className="spin-loader"/>:<><Wallet size={18}/> Règlement — {totals.tTTC.toFixed(2)}€</>}</Btn>
         <div style={{display:"flex",gap:4}}>
           <Btn variant="outline" onClick={()=>setRetoucheModal(true)} style={{flex:1,height:30,fontSize:10,borderRadius:10,gap:4}}><Edit size={11}/> Retouche</Btn>
@@ -1602,7 +1607,7 @@ function SalesScreen(){
       <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:6,marginBottom:12}}>{dm?.discType==="amount"?[2,5,10,20].map(v=>(<Btn key={v} variant="outline" onClick={()=>setDv(String(v))} style={{fontSize:12}}>{v}€</Btn>)):[5,10,15,20].map(v=>(<Btn key={v} variant="outline" onClick={()=>setDv(String(v))} style={{fontSize:12}}>{v}%</Btn>))}</div>
       {dm?.discType!=="amount"&&parseInt(dv)>maxDisc&&<div style={{padding:8,background:C.dangerLight,borderRadius:8,marginBottom:8,fontSize:11,color:C.danger}}>Remise max autorisée: {maxDisc}%</div>}
       <Btn onClick={()=>{const d=parseFloat(dv);if(d>=0&&dm){updateItemDisc(dm.pid,dm.vid,d,dm.discType||"percent");setDm(null);}}}
-        disabled={dm?.discType!=="amount"&&parseInt(dv)>maxDisc} style={{width:"100%",height:40,background:`linear-gradient(135deg,${C.primary},${C.gradientB})`}}>Appliquer</Btn></Modal>
+        disabled={dm?.discType!=="amount"&&parseInt(dv)>maxDisc} style={{width:"100%",height:40,background:C.primary}}>Appliquer</Btn></Modal>
 
     <Modal open={gm} onClose={()=>setGm(false)} title="Remise globale">
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginBottom:10}}>
@@ -1635,7 +1640,7 @@ function SalesScreen(){
       <div style={{display:"flex",justifyContent:"space-between",padding:"8px 12px",borderRadius:8,background:remaining>0.01?C.warnLight:C.primaryLight,marginBottom:10}}>
         <span style={{fontSize:11,fontWeight:600,color:remaining>0.01?C.warn:C.primary}}>Reste à payer</span>
         <span style={{fontSize:13,fontWeight:800,color:remaining>0.01?C.warn:C.primary}}>{remaining.toFixed(2)}€</span></div>
-      <Btn onClick={doSplitPay} disabled={busy||remaining>0.01} style={{width:"100%",height:44,background:`linear-gradient(135deg,${C.fiscal},#8B6FC0)`}}><Split size={16}/> Valider</Btn>
+      <Btn onClick={doSplitPay} disabled={busy||remaining>0.01} style={{width:"100%",height:44,background:C.fiscal}}><Split size={16}/> Valider</Btn>
       </>);})()}</Modal>
 
     <Modal open={custModal} onClose={()=>setCustModal(false)} title="Client">
@@ -1644,7 +1649,7 @@ function SalesScreen(){
         <Btn variant="outline" onClick={()=>{setCustModal(false);setNewCustModal(true);}}><Plus size={14}/> Nouveau client</Btn>
         {customers.map(c=>{const tier=getLoyaltyTier(c.points);return(<button key={c.id} onClick={()=>{setSelCust(c);setCustModal(false);}} style={{display:"flex",alignItems:"center",gap:10,
           padding:10,borderRadius:10,border:`1.5px solid ${selCust?.id===c.id?C.primary:C.border}`,background:selCust?.id===c.id?C.primaryLight:"transparent",cursor:"pointer"}}>
-          <div style={{width:32,height:32,borderRadius:16,background:`linear-gradient(135deg,${C.primary},${C.gradientB})`,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:700,fontSize:11}}>{c.firstName[0]}{c.lastName[0]}</div>
+          <div style={{width:32,height:32,borderRadius:16,background:C.primary,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:700,fontSize:11}}>{c.firstName[0]}{c.lastName[0]}</div>
           <div style={{flex:1,textAlign:"left"}}><div style={{fontSize:12,fontWeight:600}}>{c.firstName} {c.lastName}</div>
             <div style={{fontSize:10,color:C.textMuted}}>{c.phone}</div></div>
           <div style={{textAlign:"right"}}><Badge color={C.accent}>{tier.name} — {c.points}pts</Badge></div>
@@ -1660,7 +1665,7 @@ function SalesScreen(){
         <Input value={ncP} onChange={e=>setNcP(e.target.value)} placeholder="Téléphone"/></div>
       <Btn onClick={async()=>{if(ncF&&ncL){const c=await addCustomer({firstName:ncF,lastName:ncL,email:ncE,phone:ncP,city:"",notes:""});
         if(c){setSelCust(c);setNewCustModal(false);setNcF("");setNcL("");setNcE("");setNcP("");}}}}
-        style={{width:"100%",height:40,background:`linear-gradient(135deg,${C.primary},${C.gradientB})`}}>Créer et associer</Btn></Modal>
+        style={{width:"100%",height:40,background:C.primary}}>Créer et associer</Btn></Modal>
 
     {/* Custom item */}
     <Modal open={customModal} onClose={()=>setCustomModal(false)} title="Article divers / Services">
@@ -1681,7 +1686,7 @@ function SalesScreen(){
           <Input type="number" step="0.01" value={customPrice} onChange={e=>setCustomPrice(e.target.value)} placeholder="Prix TTC"/></div></div>
       <Btn onClick={()=>{if(customName&&customPrice){const p=parseFloat(customPrice);addCustomItem(customName,p/1.20,0.20);
         setCustomModal(false);setCustomName("");setCustomPrice("");}}}
-        style={{width:"100%",height:40,background:`linear-gradient(135deg,${C.primary},${C.gradientB})`}}>Ajouter au panier</Btn></Modal>
+        style={{width:"100%",height:40,background:C.primary}}>Ajouter au panier</Btn></Modal>
 
     {/* Parked */}
     <Modal open={parkedModal} onClose={()=>setParkedModal(false)} title="Paniers en attente">
@@ -1720,10 +1725,10 @@ function SalesScreen(){
     <Modal open={tkModal} onClose={()=>setTkModal(false)} title="Vente confirmée" wide>
       {lastTk&&(<>
         <div style={{textAlign:"center",marginBottom:20,animation:"successPulse 0.5s ease"}}>
-          <div style={{width:72,height:72,borderRadius:36,background:"linear-gradient(135deg,#2F9E55,#4DA768)",display:"inline-flex",alignItems:"center",justifyContent:"center",
+          <div style={{width:72,height:72,borderRadius:36,background:"#059669",display:"inline-flex",alignItems:"center",justifyContent:"center",
             boxShadow:"0 8px 32px rgba(47,158,85,0.35)",marginBottom:10,border:"3px solid rgba(47,158,85,0.2)"}}><CheckCircle2 size={36} color="#fff"/></div>
-          <div style={{fontSize:11,fontWeight:600,color:"#3B8C5A",textTransform:"uppercase",letterSpacing:"1px",marginBottom:4}}>Vente confirmée</div>
-          <div style={{fontSize:28,fontWeight:900,color:"#2F9E55",letterSpacing:"-1px"}}>{(lastTk.totalTTC||0).toFixed(2)}€</div>
+          <div style={{fontSize:11,fontWeight:600,color:"#059669",textTransform:"uppercase",letterSpacing:"1px",marginBottom:4}}>Vente confirmée</div>
+          <div style={{fontSize:28,fontWeight:900,color:"#059669",letterSpacing:"-1px"}}>{(lastTk.totalTTC||0).toFixed(2)}€</div>
           <div style={{fontSize:12,color:C.textMuted,marginTop:2}}>Paiement {({cash:"Espèces",card:"CB",amex:"American Express",giftcard:"Cadeau",MIXTE:"Mixte",cheque:"Chèque"})[lastTk.paymentMethod]||lastTk.paymentMethod}</div></div>
         <div data-print-receipt style={{fontFamily:"'Courier New',monospace",fontSize:10,background:"#FAFAF8",borderRadius:12,padding:18,border:`1px solid ${C.border}`,boxShadow:`inset 0 1px 3px ${C.shadow}`}}>
         <div style={{textAlign:"center",marginBottom:8}}><div style={{fontSize:12,fontWeight:700}}>{settings.name||CO.name}</div>
@@ -1737,7 +1742,7 @@ function SalesScreen(){
           {(sku||ean)&&<div style={{fontSize:8,color:"#999"}}>{sku?`Réf: ${sku}`:""}{sku&&ean?" — ":""}{ean?`EAN: ${ean}`:""}</div>}
         </div>);})}
         <div style={{borderTop:"1px dashed #999",margin:"4px 0"}}/>
-        {lastTk.promosApplied?.length>0&&lastTk.promosApplied.map((a,i)=><div key={i} style={{color:"#3B8C5A",fontSize:9}}>✓ {a}</div>)}
+        {lastTk.promosApplied?.length>0&&lastTk.promosApplied.map((a,i)=><div key={i} style={{color:"#059669",fontSize:9}}>✓ {a}</div>)}
         <div style={{display:"flex",justifyContent:"space-between"}}><span>Total HT</span><span>{(lastTk.totalHT||0).toFixed(2)}€</span></div>
         <div style={{display:"flex",justifyContent:"space-between"}}><span>TVA</span><span>{(lastTk.totalTVA||0).toFixed(2)}€</span></div>
         <div style={{display:"flex",justifyContent:"space-between",fontSize:13,fontWeight:700,marginTop:3}}><span>TOTAL TTC</span><span>{(lastTk.totalTTC||0).toFixed(2)}€</span></div>
@@ -1746,7 +1751,7 @@ function SalesScreen(){
         <div style={{textAlign:"center",background:C.fiscalLight,padding:6,borderRadius:6,margin:"4px 0"}}>
           <div style={{fontSize:8,color:C.fiscal,fontWeight:700}}>EMPREINTE NF525</div>
           <div style={{fontSize:11,fontWeight:700,color:C.fiscal,letterSpacing:2}}>{lastTk.fingerprint}</div></div>
-        {lastTk.detaxe&&<div style={{textAlign:"center",background:"#E8F5E9",padding:6,borderRadius:6,margin:"4px 0",fontSize:9,color:"#2E7D32",fontWeight:700}}>VENTE EN DÉTAXE — TVA 0% — ART. 262 CGI</div>}
+        {lastTk.detaxe&&<div style={{textAlign:"center",background:C.primaryLight,padding:6,borderRadius:6,margin:"4px 0",fontSize:9,color:C.primaryDark,fontWeight:700}}>VENTE EN DÉTAXE — TVA 0% — ART. 262 CGI</div>}
         <div style={{textAlign:"center",fontSize:8,color:C.textMuted}}>
           {CO.sw} v{CO.ver} — Certifié NF525<br/>N° CERT-NF525-2026-001 — INFOCERT/LNE<br/>{settings.footerMsg||CO.footerMsg}</div>
         {lastTk.saleNote&&<div style={{textAlign:"center",fontSize:9,color:C.text,marginTop:3,fontStyle:"italic"}}>Note: {lastTk.saleNote}</div>}
@@ -1763,7 +1768,7 @@ function SalesScreen(){
     <Modal open={cashNumpadModal} onClose={()=>setCashNumpadModal(false)} title="Paiement Espèces" sub={`Total: ${totals.tTTC.toFixed(2)}€`}>
       <div style={{marginBottom:12}}>
         <Numpad value={numpadValue} onChange={setNumpadValue} label="Montant donné par le client"/>
-        {parseFloat(numpadValue)>0&&<div style={{background:`linear-gradient(135deg,${C.primaryLight},#D4F0DE)`,borderRadius:12,padding:14,marginTop:10,
+        {parseFloat(numpadValue)>0&&<div style={{background:C.primaryLight,borderRadius:12,padding:14,marginTop:10,
           display:"flex",justifyContent:"space-between",alignItems:"center",border:`1px solid ${C.primary}15`}}>
           <span style={{fontSize:14,fontWeight:700,color:C.primaryDark}}>Rendu monnaie</span>
           <span style={{fontSize:26,fontWeight:900,color:C.primary,letterSpacing:"-0.5px"}}>{Math.max(0,parseFloat(numpadValue)-totals.tTTC).toFixed(2)}€</span></div>}
@@ -1774,7 +1779,7 @@ function SalesScreen(){
       </div>
       <Btn onClick={async()=>{setCashNumpadModal(false);setCashGiven(numpadValue);await quickPay("cash");}}
         disabled={!numpadValue||parseFloat(numpadValue)<totals.tTTC}
-        style={{width:"100%",height:50,fontSize:15,borderRadius:14,background:`linear-gradient(135deg,#2F9E55,${C.gradientB})`,boxShadow:"0 4px 16px rgba(47,158,85,0.3)"}}>
+        style={{width:"100%",height:50,fontSize:15,borderRadius:14,background:"#059669",boxShadow:`0 4px 16px ${C.primary}30`}}>
         <Banknote size={18}/> Encaisser {totals.tTTC.toFixed(2)}€</Btn>
     </Modal>
 
@@ -1828,7 +1833,7 @@ function SalesScreen(){
                 <div style={{fontSize:12,fontWeight:700,color:C.fiscal,marginTop:4}}>Solde: {rem.toFixed(2)}€</div></div>
               <Btn onClick={()=>{setAvoirPayment(canApply);consumeAvoir(a.avoirNumber,canApply);setAvoirSelectModal(false);
                 if(canApply>=totals.tTTC){quickPay("avoir");}else{notify(`Avoir ${a.avoirNumber}: ${canApply.toFixed(2)}€ appliqué. Reste ${(totals.tTTC-canApply).toFixed(2)}€ à payer.`,"info");openPay();}}}
-                style={{background:`linear-gradient(135deg,${C.fiscal},#2D7A9C)`,padding:"10px 16px",fontSize:12}}>
+                style={{background:C.fiscal,padding:"10px 16px",fontSize:12}}>
                 Appliquer {canApply.toFixed(2)}€</Btn>
             </div>);})}
         </div>;})()}
@@ -1903,7 +1908,7 @@ function SalesScreen(){
           notify(`Bon de retouche ${bonNum} créé et ajouté au panier`);
           addAudit("RETOUCHE",`Bon ${bonNum} — ${bon.client} — ${retTotal.toFixed(2)}€`);
         }} disabled={!retForm.items.some(i=>i.desc&&i.price)||!retForm.client}
-          style={{background:`linear-gradient(135deg,${C.primary},${C.gradientB})`}}>
+          style={{background:C.primary}}>
           <Printer size={14}/> Imprimer le bon + panier</Btn>
       </div>
     </Modal>
@@ -1941,7 +1946,7 @@ function StatsScreen(){
   const prevStats=useMemo(()=>{const t=prevTickets.reduce((s,t)=>s+(t.totalTTC||parseFloat(t.total_ttc)||0),0);return{tTTC:t,count:prevTickets.length};},[prevTickets]);
   const pctChange=(cur,prev)=>{if(!prev)return null;const pct=((cur-prev)/prev*100);return pct;};
   const PctBadge=({cur,prev})=>{const p=pctChange(cur,prev);if(p===null||!dateFrom)return null;
-    return<Badge color={p>=0?"#3B8C5A":C.danger}>{p>=0?"+":""}{p.toFixed(1)}%</Badge>;};
+    return<Badge color={p>=0?"#059669":C.danger}>{p>=0?"+":""}{p.toFixed(1)}%</Badge>;};
   const fBestSellers=useMemo(()=>{const m={};fTickets.forEach(t=>(t.items||[]).forEach(i=>{
     const k=i.product?.sku||i.product_name;if(!m[k])m[k]={name:i.product?.name||i.product_name,sku:k,qty:0,revenue:0,margin:0};
     m[k].qty+=i.quantity;m[k].revenue+=(i.lineTTC||i.line_ttc||0);m[k].margin+=((i.lineHT||i.line_ht||0)-(i.product?.costPrice||i.cost_price||0)*i.quantity);}));
@@ -1992,8 +1997,8 @@ function StatsScreen(){
       <div><SC icon={DollarSign} label="CA TTC" value={`${stats.tTTC.toFixed(0)}€`} color={C.primary} sub={<PctBadge cur={stats.tTTC} prev={prevStats.tTTC}/>}/></div>
       <div><SC icon={Receipt} label="Tickets" value={stats.count} color={C.info} sub={<PctBadge cur={stats.count} prev={prevStats.count}/>}/></div>
       <SC icon={TrendingUp} label="Panier moy." value={`${stats.avg.toFixed(1)}€`} color={C.accent}/>
-      {perm().canViewMargin&&<SC icon={BarChart2} label="Marge" value={`${stats.margin.toFixed(0)}€`} color="#3B8C5A"/>}
-      <SC icon={BarChart2} label="Marge %" value={stats.tHT>0?`${(stats.margin/stats.tHT*100).toFixed(1)}%`:"—"} color="#3B8C5A"/></div>
+      {perm().canViewMargin&&<SC icon={BarChart2} label="Marge" value={`${stats.margin.toFixed(0)}€`} color="#059669"/>}
+      <SC icon={BarChart2} label="Marge %" value={stats.tHT>0?`${(stats.margin/stats.tHT*100).toFixed(1)}%`:"—"} color="#059669"/></div>
 
     <div style={{display:"flex",gap:6,marginBottom:14,flexWrap:"wrap"}}>
       {[{id:"ca",l:"Évolution CA"},{id:"compare",l:"Comparaison"},{id:"hour",l:"CA par heure"},{id:"dow",l:"CA par jour"},{id:"best",l:"Best-sellers"},{id:"variantDetail",l:"Détail variantes"},{id:"seller",l:"Par vendeur"},{id:"variant",l:"Tailles/Couleurs"},{id:"collection",l:"Collections"},{id:"customers",l:"Clients"},{id:"returns",l:"Retours"},{id:"pay",l:"Paiements"},{id:"discounts",l:"Remises"}].map(t=>(
@@ -2028,7 +2033,7 @@ function StatsScreen(){
           <td style={{padding:8,color:C.textMuted,fontFamily:"monospace"}}>{p.sku}</td>
           <td style={{padding:8,fontWeight:700}}>{p.qty}</td>
           <td style={{padding:8,fontWeight:700,color:C.primary}}>{p.revenue.toFixed(2)}€</td>
-          {perm().canViewMargin&&<td style={{padding:8,color:"#3B8C5A",fontWeight:600}}>{p.margin.toFixed(2)}€</td>}
+          {perm().canViewMargin&&<td style={{padding:8,color:"#059669",fontWeight:600}}>{p.margin.toFixed(2)}€</td>}
         </tr>))}</tbody></table></div>}
 
     {tab==="seller"&&<div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`}}>
@@ -2042,15 +2047,15 @@ function StatsScreen(){
           <td style={{padding:8,fontWeight:600}}>{s.totalItems||0}</td>
           <td style={{padding:8,fontWeight:700,color:C.info}}>{(s.avgBasket||0).toFixed(2)}€</td>
           <td style={{padding:8}}>{(s.avgItems||0).toFixed(1)}</td>
-          {perm().canViewMargin&&<td style={{padding:8,color:"#3B8C5A"}}>{s.margin.toFixed(2)}€</td>}
+          {perm().canViewMargin&&<td style={{padding:8,color:"#059669"}}>{s.margin.toFixed(2)}€</td>}
           <td style={{padding:8,fontWeight:700,color:C.primary}}>{s.revenue.toFixed(2)}€</td>
           {perm().canViewMargin&&<td style={{padding:8,color:C.accent,fontWeight:600}}>{s.commission.toFixed(2)}€</td>}
           <td style={{padding:8}}><input type="number" value={s.goal||""} onChange={e=>setSellerGoal(s.name,parseFloat(e.target.value)||0)}
             style={{width:70,padding:"2px 6px",borderRadius:6,border:`1px solid ${C.border}`,fontSize:11,fontFamily:"inherit"}} placeholder="€"/></td>
           <td style={{padding:8}}>{s.goal>0?<div style={{display:"flex",alignItems:"center",gap:6}}>
             <div style={{flex:1,height:6,background:C.surfaceAlt,borderRadius:3,overflow:"hidden"}}>
-              <div style={{width:`${Math.min(100,s.goalProgress)}%`,height:"100%",background:s.goalProgress>=100?"#3B8C5A":C.primary,borderRadius:3}}/></div>
-            <span style={{fontSize:10,fontWeight:600,color:s.goalProgress>=100?"#3B8C5A":C.textMuted}}>{s.goalProgress.toFixed(0)}%</span></div>:"—"}</td>
+              <div style={{width:`${Math.min(100,s.goalProgress)}%`,height:"100%",background:s.goalProgress>=100?"#059669":C.primary,borderRadius:3}}/></div>
+            <span style={{fontSize:10,fontWeight:600,color:s.goalProgress>=100?"#059669":C.textMuted}}>{s.goalProgress.toFixed(0)}%</span></div>:"—"}</td>
         </tr>))}</tbody></table></div>}
 
     {tab==="variant"&&<div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
@@ -2074,7 +2079,7 @@ function StatsScreen(){
           <td style={{padding:8,fontWeight:600}}><Badge color={C.info}>{s.name}</Badge></td>
           <td style={{padding:8}}>{s.qty}</td>
           <td style={{padding:8,fontWeight:700,color:C.primary}}>{s.revenue.toFixed(2)}€</td>
-          <td style={{padding:8,color:"#3B8C5A"}}>{s.margin.toFixed(2)}€</td></tr>))}</tbody></table></div>}
+          <td style={{padding:8,color:"#059669"}}>{s.margin.toFixed(2)}€</td></tr>))}</tbody></table></div>}
 
     {tab==="pay"&&<div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`}}>
       <ResponsiveContainer width="100%" height={220}><PieChart><Pie data={pieData} cx="50%" cy="50%" innerRadius={50} outerRadius={80} paddingAngle={3} dataKey="value">
@@ -2094,7 +2099,7 @@ function StatsScreen(){
                 <div style={{fontSize:10,color:C.textMuted,fontWeight:600,marginBottom:4}}>{x.l}</div>
                 <div style={{fontSize:20,fontWeight:800,color:C.primary,marginBottom:2}}>{x.fmt(x.cur)}</div>
                 <div style={{fontSize:11,color:C.textMuted}}>vs {x.fmt(x.prev)}</div>
-                {p!==null&&<div style={{fontSize:13,fontWeight:700,color:p>=0?"#3B8C5A":C.danger,marginTop:4}}>{p>=0?"▲":"▼"} {Math.abs(p).toFixed(1)}%</div>}
+                {p!==null&&<div style={{fontSize:13,fontWeight:700,color:p>=0?"#059669":C.danger,marginTop:4}}>{p>=0?"▲":"▼"} {Math.abs(p).toFixed(1)}%</div>}
               </div>);})}</div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
             <div><h4 style={{fontSize:12,fontWeight:700,marginBottom:8}}>Top produits — Période actuelle</h4>
@@ -2256,10 +2261,10 @@ function StockScreen(){
             <th key={h} style={{padding:6,textAlign:"left",fontSize:9,fontWeight:700,color:C.textMuted}}>{h}</th>))}</tr></thead>
         <tbody>{stockMoves.slice(0,50).map(m=>(<tr key={m.id} style={{borderBottom:`1px solid ${C.border}`}}>
           <td style={{padding:6,fontSize:10}}>{new Date(m.date).toLocaleString("fr-FR",{day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit"})}</td>
-          <td style={{padding:6}}><Badge color={m.qty>0?"#3B8C5A":C.danger}>{m.type}</Badge></td>
+          <td style={{padding:6}}><Badge color={m.qty>0?"#059669":C.danger}>{m.type}</Badge></td>
           <td style={{padding:6,fontWeight:600}}>{m.productName}</td>
           <td style={{padding:6,color:C.textMuted}}>{m.variantColor}/{m.variantSize}</td>
-          <td style={{padding:6,fontWeight:700,color:m.qty>0?"#3B8C5A":C.danger}}>{m.qty>0?"+":""}{m.qty}</td>
+          <td style={{padding:6,fontWeight:700,color:m.qty>0?"#059669":C.danger}}>{m.qty>0?"+":""}{m.qty}</td>
           <td style={{padding:6,color:C.textMuted,fontSize:9}}>{m.ref}</td>
           <td style={{padding:6,color:C.textMuted}}>{m.user}</td></tr>))}</tbody></table>
       {stockMoves.length===0&&<div style={{textAlign:"center",padding:20,color:C.textLight}}>Aucun mouvement</div>}
@@ -2276,7 +2281,7 @@ function StockScreen(){
           <td style={{padding:8}}>{p.totalStock}</td>
           <td style={{padding:8,color:C.primary,fontWeight:600}}>{p.totalValue.toFixed(2)}€</td>
           <td style={{padding:8,fontWeight:700,color:p.daysSinceLastSale>30?C.danger:p.daysSinceLastSale>14?C.warn:C.primary}}>{p.daysSinceLastSale===999?"Jamais vendu":p.daysSinceLastSale+"j"}</td>
-          <td style={{padding:8}}><Badge color={p.daysSinceLastSale>60?C.danger:p.daysSinceLastSale>30?C.warn:"#3B8C5A"}>{p.daysSinceLastSale>60?"Critique":p.daysSinceLastSale>30?"À surveiller":"OK"}</Badge></td>
+          <td style={{padding:8}}><Badge color={p.daysSinceLastSale>60?C.danger:p.daysSinceLastSale>30?C.warn:"#059669"}>{p.daysSinceLastSale>60?"Critique":p.daysSinceLastSale>30?"À surveiller":"OK"}</Badge></td>
         </tr>))}</tbody></table></div>}
 
     {tab==="reorder"&&<div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`}}>
@@ -2313,7 +2318,7 @@ function StockScreen(){
           color:diff>0?C.primary:C.danger}}>{diff>0?`+${diff}`:diff} unité(s) — Stock actuel: {v.stock} → Nouveau: {adjQty}</div>:
           <div style={{padding:8,borderRadius:8,background:C.surfaceAlt,marginBottom:10,fontSize:11,color:C.textMuted}}>Aucun changement</div>;})()}
       <Btn onClick={()=>{if(adjProd&&adjVar&&adjQty!==""){adjustStock(adjProd,adjVar,parseInt(adjQty),adjReason);setAdjProd("");setAdjVar("");setAdjQty("");}}}
-        disabled={!adjProd||!adjVar||adjQty===""} style={{width:"100%",height:40,background:`linear-gradient(135deg,${C.primary},${C.gradientB})`}}>
+        disabled={!adjProd||!adjVar||adjQty===""} style={{width:"100%",height:40,background:C.primary}}>
         <Save size={14}/> Enregistrer l'ajustement</Btn>
     </div>}
 
@@ -2335,7 +2340,7 @@ function StockScreen(){
                 <td style={{padding:6}}><input type="number" min="0" value={invCounts[key]??""}
                   onChange={e=>setInvCounts(prev=>({...prev,[key]:e.target.value}))}
                   style={{width:60,padding:"3px 6px",borderRadius:6,border:`1.5px solid ${C.border}`,fontSize:11,textAlign:"center",fontFamily:"inherit"}}/></td>
-                <td style={{padding:6,fontWeight:700,color:diff===null||diff===0?C.textMuted:diff>0?"#3B8C5A":C.danger}}>
+                <td style={{padding:6,fontWeight:700,color:diff===null||diff===0?C.textMuted:diff>0?"#059669":C.danger}}>
                   {diff!==null?(diff>0?`+${diff}`:diff):"—"}</td></tr>);})
           )}</tbody></table></div>
       <Btn onClick={()=>{let count=0;Object.entries(invCounts).forEach(([key,val])=>{if(val===""||val===undefined)return;
@@ -2343,7 +2348,7 @@ function StockScreen(){
         if(pr&&vr&&parseInt(val)!==vr.stock){adjustStock(pid,vid,parseInt(val),"INVENTAIRE");count++;}});
         setInvCounts({});notify(`${count} ajustement(s) validé(s)`,"success");}}
         disabled={!Object.values(invCounts).some(v=>v!==""&&v!==undefined)}
-        style={{width:"100%",height:40,background:`linear-gradient(135deg,${C.primary},${C.gradientB})`}}><Save size={14}/> Valider l'inventaire</Btn>
+        style={{width:"100%",height:40,background:C.primary}}><Save size={14}/> Valider l'inventaire</Btn>
     </div>}
 
     {/* Stock receipt modal */}
@@ -2358,7 +2363,7 @@ function StockScreen(){
         <Input type="number" value={rcQty} onChange={e=>setRcQty(e.target.value)} placeholder="Quantité reçue"/>
         <Input value={rcSup} onChange={e=>setRcSup(e.target.value)} placeholder="Fournisseur"/></div>
       <Btn onClick={()=>{if(rcProd&&rcVar&&rcQty){receiveStock(rcProd,rcVar,parseInt(rcQty),rcSup||"Non spécifié");setRcModal(false);setRcQty("");setRcSup("");}}}
-        style={{width:"100%",height:40,background:`linear-gradient(135deg,${C.primary},${C.gradientB})`}}><Upload size={14}/> Enregistrer la réception</Btn></Modal>
+        style={{width:"100%",height:40,background:C.primary}}><Upload size={14}/> Enregistrer la réception</Btn></Modal>
 
     {/* CSV Stock Import Modal */}
     <Modal open={csvStockModal} onClose={()=>setCsvStockModal(false)} title="Import CSV - Réception stock" wide>
@@ -2399,11 +2404,11 @@ function StockScreen(){
               <td style={{padding:4,fontWeight:600}}>{r.match?.product.name||"—"}</td>
               <td style={{padding:4}}>{r.match?`${r.match.variant.color}/${r.match.variant.size}`:"—"}</td>
               <td style={{padding:4,fontWeight:700}}>{r.qty}</td><td style={{padding:4}}>{r.supplier}</td>
-              <td style={{padding:4}}>{r.status==="found"?<Badge color="#3B8C5A">Trouvé</Badge>:<Badge color={C.danger}>Non trouvé</Badge>}</td></tr>))}</tbody></table></div>
+              <td style={{padding:4}}>{r.status==="found"?<Badge color="#059669">Trouvé</Badge>:<Badge color={C.danger}>Non trouvé</Badge>}</td></tr>))}</tbody></table></div>
         <Btn onClick={()=>{csvStPreview.filter(r=>r.status==="found"&&r.qty>0).forEach(r=>{
           receiveStock(r.match.product.id,r.match.variant.id,r.qty,r.supplier||"Import CSV");});
           setCsvStockModal(false);setCsvStStep(0);}}
-          style={{width:"100%",height:40,background:`linear-gradient(135deg,${C.primary},${C.gradientB})`}}><Upload size={14}/> Réceptionner {csvStPreview.filter(r=>r.status==="found"&&r.qty>0).length} ligne(s)</Btn></div>}
+          style={{width:"100%",height:40,background:C.primary}}><Upload size={14}/> Réceptionner {csvStPreview.filter(r=>r.status==="found"&&r.qty>0).length} ligne(s)</Btn></div>}
     </Modal>
 
     {tab==="tenues"&&<div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`}}>
@@ -2435,7 +2440,7 @@ function StockScreen(){
         addAudit("TENUE",`${prod.name} ${vari.color}/${vari.size} x${q} — ${tenUser}`);
         notify(`${prod.name} ${vari.color}/${vari.size} x${q} sorti en tenue pour ${tenUser}`,"success");
         setTenProd("");setTenVar("");setTenUser("");setTenQty("1");}}
-        style={{width:"100%",height:44,background:`linear-gradient(135deg,${C.accent},#D4A574)`}}>Sortir en tenue employé</Btn>
+        style={{width:"100%",height:44,background:C.accent}}>Sortir en tenue employé</Btn>
       <div style={{marginTop:16,fontSize:12,fontWeight:700,marginBottom:8}}>Historique tenues</div>
       {stockMoves.filter(m=>m.type==="TENUE").length===0&&<div style={{color:C.textLight,fontSize:11}}>Aucune sortie tenue</div>}
       {stockMoves.filter(m=>m.type==="TENUE").slice(0,20).map((m,i)=>(<div key={i} style={{display:"flex",alignItems:"center",gap:8,padding:6,borderBottom:`1px solid ${C.border}`,fontSize:11}}>
@@ -2479,7 +2484,7 @@ function StockScreen(){
         const a=document.createElement("a");a.href=url;a.download=`transfert-${transferNum}.txt`;a.click();URL.revokeObjectURL(url);
         notify(`Transfert ${transferNum} — ${prod.name} x${q} → ${trDest} — Justificatif téléchargé`,"success");
         setTrProd("");setTrVar("");setTrQty("1");setTrDest("");setTrRef("");}}
-        style={{width:"100%",height:44,background:`linear-gradient(135deg,${C.info},#5A92E8)`}}>Transférer et générer justificatif</Btn>
+        style={{width:"100%",height:44,background:C.info}}>Transférer et générer justificatif</Btn>
       <div style={{marginTop:16,fontSize:12,fontWeight:700,marginBottom:8}}>Historique transferts</div>
       {stockMoves.filter(m=>m.type==="TRANSFERT").length===0&&<div style={{color:C.textLight,fontSize:11}}>Aucun transfert</div>}
       {stockMoves.filter(m=>m.type==="TRANSFERT").slice(0,20).map((m,i)=>(<div key={i} style={{display:"flex",alignItems:"center",gap:8,padding:6,borderBottom:`1px solid ${C.border}`,fontSize:11}}>
@@ -2579,7 +2584,7 @@ function HistoryScreen(){
           {(sku||ean)&&<div style={{fontSize:8,color:"#999"}}>{sku?`Réf: ${sku}`:""}{sku&&ean?" — ":""}{ean?`EAN: ${ean}`:""}</div>}
         </div>);})}
         <div style={{borderTop:"1px dashed #999",margin:"4px 0"}}/>
-        {reprintTk.globalDiscount>0&&<div style={{display:"flex",justifyContent:"space-between",color:"#3B8C5A"}}><span>Remise</span><span>-{(reprintTk.globalDiscount||0).toFixed(2)}€</span></div>}
+        {reprintTk.globalDiscount>0&&<div style={{display:"flex",justifyContent:"space-between",color:"#059669"}}><span>Remise</span><span>-{(reprintTk.globalDiscount||0).toFixed(2)}€</span></div>}
         <div style={{display:"flex",justifyContent:"space-between"}}><span>Total HT</span><span>{(reprintTk.totalHT||0).toFixed(2)}€</span></div>
         <div style={{display:"flex",justifyContent:"space-between"}}><span>TVA</span><span>{(reprintTk.totalTVA||0).toFixed(2)}€</span></div>
         <div style={{display:"flex",justifyContent:"space-between",fontSize:13,fontWeight:700,marginTop:3}}><span>TOTAL TTC</span><span>{(reprintTk.totalTTC||0).toFixed(2)}€</span></div>
@@ -2649,26 +2654,26 @@ function HistoryScreen(){
 
     {/* Avoir detail modal */}
     <Modal open={!!avoirDetail} onClose={()=>setAvoirDetail(null)} title={`Avoir ${avoirDetail?.avoirNumber}`} wide>
-      {avoirDetail&&<div data-print-receipt style={{fontFamily:"'Courier New',monospace",fontSize:10,background:"#FFF5F5",borderRadius:10,padding:16,border:`1px solid ${C.danger}33`}}>
+      {avoirDetail&&<div data-print-receipt style={{fontFamily:"'Courier New',monospace",fontSize:10,background:C.dangerLight,borderRadius:10,padding:16,border:`1px solid ${C.danger}33`}}>
         <div style={{textAlign:"center",marginBottom:6,color:C.danger,fontWeight:700,fontSize:12}}>AVOIR / NOTE DE CRÉDIT</div>
         <div style={{textAlign:"center",marginBottom:6}}><div style={{fontSize:12,fontWeight:700}}>{settings.name||CO.name}</div>
           <div>SIRET: {settings.siret||CO.siret}</div></div>
-        <div style={{borderTop:"1px dashed #C44B4B",margin:"4px 0"}}/>
+        <div style={{borderTop:`1px dashed ${C.danger}`,margin:"4px 0"}}/>
         <div>N° {avoirDetail.avoirNumber}</div>
         <div>Ticket original: {avoirDetail.originalTicket} du {new Date(avoirDetail.originalDate).toLocaleDateString("fr-FR")}</div>
         <div>Date: {new Date(avoirDetail.date).toLocaleString("fr-FR")} — {avoirDetail.userName}</div>
         {avoirDetail.customerName&&<div>Client: {avoirDetail.customerName}</div>}
         <div>Motif: {avoirDetail.reason}</div>
-        <div style={{borderTop:"1px dashed #C44B4B",margin:"4px 0"}}/>
+        <div style={{borderTop:`1px dashed ${C.danger}`,margin:"4px 0"}}/>
         {avoirDetail.items.map((i,k)=>{const sku=i.product?.sku||"";const ean=i.variant?.ean||"";return(<div key={k}>
           <div style={{display:"flex",justifyContent:"space-between"}}><span>{i.product.name}{i.variant?` (${i.variant.color}/${i.variant.size})`:""} x{i.quantity}</span>
           <span>-{i.lineTTC.toFixed(2)}€</span></div>
-          {(sku||ean)&&<div style={{fontSize:8,color:"#C44B4B99"}}>{sku?`Réf: ${sku}`:""}{sku&&ean?" — ":""}{ean?`EAN: ${ean}`:""}</div>}
+          {(sku||ean)&&<div style={{fontSize:8,color:`${C.danger}99`}}>{sku?`Réf: ${sku}`:""}{sku&&ean?" — ":""}{ean?`EAN: ${ean}`:""}</div>}
         </div>);})}
-        <div style={{borderTop:"1px dashed #C44B4B",margin:"4px 0"}}/>
+        <div style={{borderTop:`1px dashed ${C.danger}`,margin:"4px 0"}}/>
         <div style={{display:"flex",justifyContent:"space-between",fontWeight:700,color:C.danger}}><span>TOTAL AVOIR</span><span>-{(avoirDetail.totalTTC||0).toFixed(2)}€</span></div>
         <div>Remboursement: {({cash:"Espèces",card:"Carte bancaire",avoir:"Avoir client"})[avoirDetail.refundMethod]||avoirDetail.refundMethod}</div>
-        <div style={{textAlign:"center",background:"#F0E0E0",padding:6,borderRadius:6,margin:"6px 0"}}>
+        <div style={{textAlign:"center",background:C.dangerLight,padding:6,borderRadius:6,margin:"6px 0"}}>
           <div style={{fontSize:8,color:C.danger,fontWeight:700}}>EMPREINTE NF525</div>
           <div style={{fontSize:11,fontWeight:700,color:C.danger,letterSpacing:2}}>{avoirDetail.fingerprint}</div></div>
       </div>}
@@ -2692,7 +2697,7 @@ function HistoryScreen(){
             notify(`Client ${custName||"retiré"} attribué au ticket ${reassignModal.ticketNumber}`,"success");
             setReassignModal(null);
           }catch(e){notify("Erreur: "+e.message,"error");}
-        }} style={{width:"100%",height:40,marginTop:10,background:`linear-gradient(135deg,${C.primary},${C.gradientB})`}}>Attribuer</Btn>
+        }} style={{width:"100%",height:40,marginTop:10,background:C.primary}}>Attribuer</Btn>
       </div>}
     </Modal>
   </div>);
@@ -2897,7 +2902,7 @@ function ReturnScreen(){
             style={{width:16,height:16,accentColor:C.danger}}/> Produit défectueux (stock défectueux)</label>}
         {!restock&&<div style={{marginBottom:12}}/>}
 
-        <Btn onClick={doReturn} style={{width:"100%",height:44,background:`linear-gradient(135deg,${C.fiscal},#8B6FC0)`,fontSize:13}}>
+        <Btn onClick={doReturn} style={{width:"100%",height:44,background:C.fiscal,fontSize:13}}>
           <RotateCcw size={16}/> Valider le retour — {returnTotal.toFixed(2)}€</Btn>
       </div>}
     </div>
@@ -2905,7 +2910,7 @@ function ReturnScreen(){
     {/* Avoir confirmation */}
     <Modal open={!!lastAvoir} onClose={()=>setLastAvoir(null)} title="Avoir émis">
       {lastAvoir&&<div style={{textAlign:"center"}}>
-        <div style={{width:64,height:64,borderRadius:32,background:`linear-gradient(135deg,${C.fiscal},#8B6FC0)`,display:"inline-flex",alignItems:"center",justifyContent:"center",marginBottom:10,
+        <div style={{width:64,height:64,borderRadius:32,background:C.fiscal,display:"inline-flex",alignItems:"center",justifyContent:"center",marginBottom:10,
           boxShadow:`0 8px 24px ${C.fiscal}35`}}><CheckCircle2 size={32} color="#fff"/></div>
         <div style={{fontSize:20,fontWeight:900,color:C.fiscal,marginBottom:4}}>{lastAvoir.avoirNumber}</div>
         <div style={{fontSize:14,color:C.text,marginBottom:4}}>Montant: <strong>{lastAvoir.totalTTC.toFixed(2)}€</strong></div>
@@ -2949,7 +2954,7 @@ function ClosureScreen(){
       <SC icon={Receipt} label="Tickets" value={pt.length} color={C.info}/>
       <SC icon={Banknote} label="Espèces" value={`${cash.toFixed(2)}€`} color={C.primary}/>
       <SC icon={CreditCard} label="Carte" value={`${card.toFixed(2)}€`} color={C.info}/>
-      <SC icon={TrendingUp} label="Marge" value={`${totalMargin.toFixed(0)}€`} color="#3B8C5A"/>
+      <SC icon={TrendingUp} label="Marge" value={`${totalMargin.toFixed(0)}€`} color="#059669"/>
       <SC icon={RotateCcw} label="Retours" value={`-${totalReturns.toFixed(2)}€`} color={C.danger}/></div>
 
     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>
@@ -2990,23 +2995,23 @@ function ClosureScreen(){
                 style={{width:40,padding:"3px 4px",borderRadius:6,border:`1px solid ${C.border}`,fontSize:12,fontWeight:700,textAlign:"center",fontFamily:"inherit"}}/>
               <span style={{fontSize:9,color:C.textMuted,marginLeft:"auto"}}>{(d*(denomCounts[d]||0)).toFixed(2)}€</span>
             </div>))}</div></div>
-        <div style={{background:`linear-gradient(135deg,${C.accentLight},#F5E6D8)`,borderRadius:14,padding:14,marginBottom:10,display:"flex",justifyContent:"space-between",alignItems:"center",border:`1px solid ${C.accent}22`}}>
+        <div style={{background:C.accentLight,borderRadius:14,padding:14,marginBottom:10,display:"flex",justifyContent:"space-between",alignItems:"center",border:`1px solid ${C.accent}22`}}>
           <span style={{fontSize:14,fontWeight:700,color:C.accent}}>Total coupures</span>
           <span style={{fontSize:22,fontWeight:900,color:C.accent}}>{denomTotal.toFixed(2)}€</span></div>
         <div style={{fontSize:11,fontWeight:600,marginBottom:10,padding:"6px 10px",borderRadius:8,
           background:Math.abs(denomTotal-expected)<0.01?C.primaryLight:C.dangerLight,
-          color:Math.abs(denomTotal-expected)<0.01?"#3B8C5A":C.danger}}>
+          color:Math.abs(denomTotal-expected)<0.01?"#059669":C.danger}}>
           Écart vs attendu ({expected.toFixed(2)}€): {(denomTotal-expected)>=0?"+":""}{(denomTotal-expected).toFixed(2)}€ {Math.abs(denomTotal-expected)<0.01?"✓ OK":"⚠ Attention"}</div>
       </>:<>
         <div style={{marginBottom:10}}><label style={{fontSize:9,fontWeight:600,color:C.textMuted}}>ESPÈCES COMPTÉES (attendu: {expected.toFixed(2)}€)</label>
           <Input type="number" step="0.01" value={aCash} onChange={e=>setACash(e.target.value)} placeholder={expected.toFixed(2)}/>
-          {cashDiff!==null&&<div style={{fontSize:10,fontWeight:600,marginTop:3,color:Math.abs(cashDiff)<0.01?"#3B8C5A":C.danger}}>
+          {cashDiff!==null&&<div style={{fontSize:10,fontWeight:600,marginTop:3,color:Math.abs(cashDiff)<0.01?"#059669":C.danger}}>
             Écart: {cashDiff>=0?"+":""}{cashDiff.toFixed(2)}€ {Math.abs(cashDiff)<0.01?"(OK)":"(attention)"}</div>}</div>
       </>}
       <div style={{marginBottom:12}}>
         <label style={{fontSize:9,fontWeight:600,color:C.textMuted}}>CARTE COMPTÉE (attendu: {card.toFixed(2)}€)</label>
         <Input type="number" step="0.01" value={aCard} onChange={e=>setACard(e.target.value)} placeholder={card.toFixed(2)}/>
-        {cardDiff!==null&&<div style={{fontSize:10,fontWeight:600,marginTop:3,color:Math.abs(cardDiff)<0.01?"#3B8C5A":C.danger}}>
+        {cardDiff!==null&&<div style={{fontSize:10,fontWeight:600,marginTop:3,color:Math.abs(cardDiff)<0.01?"#059669":C.danger}}>
           Écart: {cardDiff>=0?"+":""}{cardDiff.toFixed(2)}€ {Math.abs(cardDiff)<0.01?"(OK)":"(attention)"}</div>}</div>
       <Btn variant="danger" onClick={async()=>{
         // Guard: empêcher double clôture journalière
@@ -3047,7 +3052,7 @@ function ClosureScreen(){
         <div style={{display:"flex",justifyContent:"space-between"}}><span>Total HT</span><span>{(reportModal.totalHT||0).toFixed(2)}€</span></div>
         <div style={{display:"flex",justifyContent:"space-between"}}><span>Total TVA</span><span>{(reportModal.totalTVA||0).toFixed(2)}€</span></div>
         <div style={{display:"flex",justifyContent:"space-between",fontWeight:700,fontSize:12}}><span>Total TTC</span><span>{(reportModal.totalTTC||0).toFixed(2)}€</span></div>
-        <div style={{display:"flex",justifyContent:"space-between",color:"#3B8C5A"}}><span>Marge brute</span><span>{(reportModal.totalMargin||0).toFixed(2)}€</span></div>
+        <div style={{display:"flex",justifyContent:"space-between",color:"#059669"}}><span>Marge brute</span><span>{(reportModal.totalMargin||0).toFixed(2)}€</span></div>
         <div style={{borderTop:"1px dashed #999",margin:"6px 0"}}/>
         <div style={{fontWeight:700,marginBottom:4}}>VENTILATION PAIEMENTS</div>
         {reportModal.bySeller&&Object.entries(reportModal.bySeller).map(([name,amount])=>(
@@ -3056,7 +3061,7 @@ function ClosureScreen(){
         <div style={{fontWeight:700,marginBottom:4}}>CONTRÔLE CAISSE</div>
         {reportModal.expectedCash!=null&&<div style={{display:"flex",justifyContent:"space-between"}}><span>Espèces attendues</span><span>{reportModal.expectedCash.toFixed(2)}€</span></div>}
         {reportModal.actualCash!=null&&<div style={{display:"flex",justifyContent:"space-between"}}><span>Espèces comptées</span><span>{reportModal.actualCash.toFixed(2)}€</span></div>}
-        {reportModal.actualCash!=null&&reportModal.expectedCash!=null&&<div style={{display:"flex",justifyContent:"space-between",color:Math.abs(reportModal.actualCash-reportModal.expectedCash)<0.01?"#3B8C5A":C.danger,fontWeight:700}}>
+        {reportModal.actualCash!=null&&reportModal.expectedCash!=null&&<div style={{display:"flex",justifyContent:"space-between",color:Math.abs(reportModal.actualCash-reportModal.expectedCash)<0.01?"#059669":C.danger,fontWeight:700}}>
           <span>Écart espèces</span><span>{(reportModal.actualCash-reportModal.expectedCash).toFixed(2)}€</span></div>}
         <div style={{borderTop:"2px solid #333",margin:"6px 0"}}/>
         <div style={{display:"flex",justifyContent:"space-between",fontWeight:700,fontSize:12}}><span>GRAND TOTAL PERPÉTUEL</span><span>{reportModal.grandTotal.toFixed(2)}€</span></div>
@@ -3112,7 +3117,7 @@ function CustomersScreen(){
       <h2 style={{fontSize:22,fontWeight:800,margin:0}}>Clients & Fidélité ({customers.length})</h2>
       <div style={{display:"flex",gap:6}}>
         <Btn variant="outline" onClick={()=>{setCsvModal(true);setCsvStep(0);setCsvData([]);}} style={{fontSize:11}}><Upload size={12}/> Import CSV</Btn>
-        <Btn onClick={()=>setNewCustModal(true)} style={{fontSize:11,background:`linear-gradient(135deg,${C.primary},${C.gradientB})`}}><Plus size={12}/> Nouveau client</Btn></div></div>
+        <Btn onClick={()=>setNewCustModal(true)} style={{fontSize:11,background:C.primary}}><Plus size={12}/> Nouveau client</Btn></div></div>
     <div style={{display:"flex",gap:10}}>
       <div style={{flex:sel?`0 0 280px`:"1",transition:"flex 0.3s ease",maxHeight:"calc(100vh - 140px)",overflowY:"auto"}}>
         <Input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Rechercher nom, email, téléphone…" style={{marginBottom:10,height:36}}/>
@@ -3121,7 +3126,7 @@ function CustomersScreen(){
           <div key={c.id} onClick={()=>{setSel(c);setEditMode(false);}} style={{display:"flex",alignItems:"center",gap:8,padding:sel?8:12,borderRadius:sel?8:12,
             background:sel?.id===c.id?C.primaryLight:C.surface,border:`1.5px solid ${sel?.id===c.id?C.primary:C.border}`,cursor:"pointer",transition:"all 0.15s"}}
             onMouseEnter={e=>{if(sel?.id!==c.id)e.currentTarget.style.borderColor=C.primary+"66";}} onMouseLeave={e=>{if(sel?.id!==c.id)e.currentTarget.style.borderColor=C.border;}}>
-            <div style={{width:sel?30:36,height:sel?30:36,borderRadius:sel?15:18,background:`linear-gradient(135deg,${C.primary},${C.gradientB})`,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:700,fontSize:sel?10:12}}>{c.firstName?.[0]}{c.lastName?.[0]}</div>
+            <div style={{width:sel?30:36,height:sel?30:36,borderRadius:sel?15:18,background:C.primary,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:700,fontSize:sel?10:12}}>{c.firstName?.[0]}{c.lastName?.[0]}</div>
             <div style={{flex:1,minWidth:0}}><div style={{fontSize:sel?11:13,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.firstName} {c.lastName}</div>
               <div style={{fontSize:sel?9:10,color:C.textMuted}}>{tier.name} — {c.points}pts — {c.totalSpent.toFixed(0)}€</div>
               {!sel&&c.phone&&<div style={{fontSize:9,color:C.textLight,marginTop:1}}>{c.phone}{c.email?` — ${c.email}`:""}</div>}</div>
@@ -3184,7 +3189,7 @@ function CustomersScreen(){
         <textarea value={nc.notes} onChange={e=>setNc(p=>({...p,notes:e.target.value}))} style={{width:"100%",height:50,padding:8,borderRadius:8,border:`1.5px solid ${C.border}`,fontSize:11,fontFamily:"inherit",resize:"vertical"}} placeholder="Notes…"/></div>
       <Btn onClick={async()=>{if(nc.firstName&&nc.lastName){const c=await addCustomer(nc);if(c){setSel(c);setNewCustModal(false);
         setNc({firstName:"",lastName:"",email:"",phone:"",city:"",notes:""});}}}}
-        style={{width:"100%",height:40,background:`linear-gradient(135deg,${C.primary},${C.gradientB})`}}>Créer le client</Btn></Modal>
+        style={{width:"100%",height:40,background:C.primary}}>Créer le client</Btn></Modal>
 
     {/* CSV Import Modal */}
     <Modal open={csvModal} onClose={()=>setCsvModal(false)} title="Import CSV clients" wide>
@@ -3210,8 +3215,8 @@ function CustomersScreen(){
             <tbody>{csvPreview.slice(0,50).map((c,i)=>(<tr key={i} style={{borderBottom:`1px solid ${C.border}`,background:c._dup?C.warnLight:"transparent"}}>
               <td style={{padding:4}}>{c.firstName}</td><td style={{padding:4}}>{c.lastName}</td><td style={{padding:4}}>{c.email}</td>
               <td style={{padding:4}}>{c.phone}</td><td style={{padding:4}}>{c.city}</td>
-              <td style={{padding:4}}>{c._dup?<Badge color={C.warn}>Doublon</Badge>:<Badge color="#3B8C5A">Nouveau</Badge>}</td></tr>))}</tbody></table></div>
-        <Btn onClick={importCustCSV} style={{width:"100%",height:40,background:`linear-gradient(135deg,${C.primary},${C.gradientB})`}}><Upload size={14}/> Importer {csvPreview.filter(c=>!c._dup&&(c.firstName||c.lastName)).length} client(s)</Btn></div>}
+              <td style={{padding:4}}>{c._dup?<Badge color={C.warn}>Doublon</Badge>:<Badge color="#059669">Nouveau</Badge>}</td></tr>))}</tbody></table></div>
+        <Btn onClick={importCustCSV} style={{width:"100%",height:40,background:C.primary}}><Upload size={14}/> Importer {csvPreview.filter(c=>!c._dup&&(c.firstName||c.lastName)).length} client(s)</Btn></div>}
     </Modal>
 
     {/* Delete confirmation */}
@@ -3282,7 +3287,7 @@ function AuditScreen(){
   },[]);
   // Utiliser les données backend si dispo, sinon local
   const audit=apiAudit||localAudit;const jet=apiJet||localJet;
-  const ac={VENTE:C.primary,VOID_LINE:C.warn,VOID_SALE:C.danger,CLOTURE:C.fiscal,CAISSE:C.accent,IMPORT:C.warn,PARK:"#888",PRODUCT:C.info,RECEPTION:"#3B8C5A",RGPD:C.fiscal,FEC:C.info,CLOCK_IN:"#3B8C5A",CLOCK_OUT:C.accent,PRICE_CHANGE:C.warn,EXPORT:C.info,AVOIR:C.fiscal};
+  const ac={VENTE:C.primary,VOID_LINE:C.warn,VOID_SALE:C.danger,CLOTURE:C.fiscal,CAISSE:C.accent,IMPORT:C.warn,PARK:"#888",PRODUCT:C.info,RECEPTION:"#059669",RGPD:C.fiscal,FEC:C.info,CLOCK_IN:"#059669",CLOCK_OUT:C.accent,PRICE_CHANGE:C.warn,EXPORT:C.info,AVOIR:C.fiscal};
   const jc={LOGIN:C.primary,LOGIN_OFFLINE:C.warn,LOGOUT:C.accent,AVOIR:C.fiscal,SYS_START:C.info,PARAM_CHANGE:C.warn,EXPORT:C.info,ERROR:C.danger,VOID_LINE:C.warn,VOID_SALE:C.danger};
   const users=[...new Set(audit.map(e=>e.user))];
   const filtered=filterUser?(tab==="audit"?audit:jet).filter(e=>e.user===filterUser):(tab==="audit"?audit:jet);
@@ -3545,9 +3550,9 @@ function CSVImportWizard({open,onClose,existingProducts,onImportComplete}){
         <div key={i} style={{flex:1,display:"flex",alignItems:"center",gap:6,padding:"6px 10px",borderRadius:10,
           background:active?C.primaryLight:done?`${C.primary}08`:"transparent",transition:"all 0.15s"}}>
           <div style={{width:26,height:26,borderRadius:13,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,
-            background:active?C.primary:done?"#3B8C5A":C.surfaceAlt,color:active||done?"#fff":C.textMuted,fontSize:10,fontWeight:700}}>
+            background:active?C.primary:done?"#059669":C.surfaceAlt,color:active||done?"#fff":C.textMuted,fontSize:10,fontWeight:700}}>
             {done?<CheckCircle2 size={13}/>:<Ic size={12}/>}</div>
-          <span style={{fontSize:10,fontWeight:active?700:500,color:active?C.primary:done?"#3B8C5A":C.textMuted,whiteSpace:"nowrap"}}>{s.l}</span>
+          <span style={{fontSize:10,fontWeight:active?700:500,color:active?C.primary:done?"#059669":C.textMuted,whiteSpace:"nowrap"}}>{s.l}</span>
         </div>);})}</div>
 
     {/* Step 0: File upload */}
@@ -3648,7 +3653,7 @@ function CSVImportWizard({open,onClose,existingProducts,onImportComplete}){
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
           {[{id:"skip",l:"Ignorer la ligne",d:"Les doublons ne seront pas importés",i:XCircle,c:C.warn},
             {id:"update",l:"Mettre à jour",d:"Mettre à jour prix, stock, variantes du produit existant",i:Upload,c:C.primary},
-            {id:"addStock",l:"Ajouter quantité",d:"Ajouter la quantité CSV au stock existant (réception)",i:Plus,c:"#3B8C5A"}].map(o=>(
+            {id:"addStock",l:"Ajouter quantité",d:"Ajouter la quantité CSV au stock existant (réception)",i:Plus,c:"#059669"}].map(o=>(
             <button key={o.id} onClick={()=>setDuplicateAction(o.id)} style={{padding:12,borderRadius:12,
               border:`2px solid ${duplicateAction===o.id?o.c:C.border}`,background:duplicateAction===o.id?`${o.c}08`:"transparent",
               cursor:"pointer",textAlign:"left",transition:"all 0.15s"}}>
@@ -3673,8 +3678,8 @@ function CSVImportWizard({open,onClose,existingProducts,onImportComplete}){
           <div style={{fontSize:18,fontWeight:800,color:C.warn}}>{processed.updates.length+processed.skipped.length}</div>
           <div style={{fontSize:9,color:C.warn,fontWeight:600}}>Doublons</div></div>
         <div style={{padding:10,borderRadius:10,background:processed.errors.length?C.dangerLight:C.primaryLight,textAlign:"center"}}>
-          <div style={{fontSize:18,fontWeight:800,color:processed.errors.length?C.danger:"#3B8C5A"}}>{processed.errors.length}</div>
-          <div style={{fontSize:9,color:processed.errors.length?C.danger:"#3B8C5A",fontWeight:600}}>Erreurs</div></div>
+          <div style={{fontSize:18,fontWeight:800,color:processed.errors.length?C.danger:"#059669"}}>{processed.errors.length}</div>
+          <div style={{fontSize:9,color:processed.errors.length?C.danger:"#059669",fontWeight:600}}>Erreurs</div></div>
       </div>
 
       {processed.errors.length>0&&<div style={{background:C.dangerLight,borderRadius:10,padding:10,marginBottom:12,maxHeight:100,overflowY:"auto",
@@ -3719,7 +3724,7 @@ function CSVImportWizard({open,onClose,existingProducts,onImportComplete}){
 
     {/* Step 4: Result */}
     {step===4&&importResult&&<div style={{textAlign:"center",padding:"20px 0"}}>
-      <div style={{width:64,height:64,borderRadius:32,background:"linear-gradient(135deg,#2F9E55,#4DA768)",display:"inline-flex",alignItems:"center",justifyContent:"center",
+      <div style={{width:64,height:64,borderRadius:32,background:"#059669",display:"inline-flex",alignItems:"center",justifyContent:"center",
         marginBottom:12,boxShadow:"0 8px 24px rgba(47,158,85,0.3)"}}><CheckCircle2 size={32} color="#fff"/></div>
       <div style={{fontSize:18,fontWeight:800,marginBottom:16}}>Import terminé !</div>
       <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10,marginBottom:16}}>
@@ -3743,12 +3748,12 @@ function CSVImportWizard({open,onClose,existingProducts,onImportComplete}){
     <div style={{display:"flex",gap:8,marginTop:16,justifyContent:"space-between"}}>
       {step>0&&step<4?<Btn variant="outline" onClick={()=>setStep(s=>s-1)} style={{borderRadius:12}}>Retour</Btn>:<div/>}
       {step===1&&<Btn onClick={()=>setStep(2)} disabled={!CSV_TARGET_FIELDS.filter(f=>f.required).every(f=>mapping[f.key])}
-        style={{borderRadius:12,background:`linear-gradient(135deg,${C.primary},${C.gradientB})`}}>Suivant — Regroupement</Btn>}
-      {step===2&&<Btn onClick={processData} style={{borderRadius:12,background:`linear-gradient(135deg,${C.primary},${C.gradientB})`}}>Suivant — Aperçu</Btn>}
+        style={{borderRadius:12,background:C.primary}}>Suivant — Regroupement</Btn>}
+      {step===2&&<Btn onClick={processData} style={{borderRadius:12,background:C.primary}}>Suivant — Aperçu</Btn>}
       {step===3&&processed&&<Btn onClick={executeImport} disabled={importing||processed.newProducts.length+processed.updates.length===0}
-        style={{borderRadius:12,background:`linear-gradient(135deg,${C.primary},${C.gradientB})`}}>
+        style={{borderRadius:12,background:C.primary}}>
         {importing?<><span className="spin-loader"/> Import en cours…</>:<><Upload size={14}/> Importer {processed.newProducts.length+processed.updates.length} produit(s)</>}</Btn>}
-      {step===4&&<Btn onClick={handleClose} style={{borderRadius:12,background:`linear-gradient(135deg,${C.primary},${C.gradientB})`}}>
+      {step===4&&<Btn onClick={handleClose} style={{borderRadius:12,background:C.primary}}>
         <CheckCircle2 size={14}/> Fermer</Btn>}
     </div>
   </Modal>);
@@ -3779,7 +3784,7 @@ function ProductsScreen(){
       <div style={{display:"flex",gap:6}}>
         <Btn variant="outline" onClick={()=>setImportWizardOpen(true)} style={{fontSize:11}}><Upload size={12}/> CSV</Btn>
         <Btn variant="outline" onClick={exportCatalog} style={{fontSize:11}}><Download size={12}/> Export</Btn>
-        {p().canCreateProduct&&<Btn onClick={()=>setCreateModal(true)} style={{fontSize:11,background:`linear-gradient(135deg,${C.primary},${C.gradientB})`}}><Plus size={12}/> Nouveau</Btn>}</div></div>
+        {p().canCreateProduct&&<Btn onClick={()=>setCreateModal(true)} style={{fontSize:11,background:C.primary}}><Plus size={12}/> Nouveau</Btn>}</div></div>
     <Input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Rechercher par nom ou SKU…" style={{marginBottom:12,height:36,maxWidth:300}}/>
     <div style={{background:C.surface,borderRadius:14,border:`1.5px solid ${C.border}`,overflow:"hidden"}}>
       <table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
@@ -3793,7 +3798,7 @@ function ProductsScreen(){
             <td style={{padding:"6px 10px"}}><Badge color={C.info}>{q.collection||"—"}</Badge></td>
             <td style={{padding:"6px 10px",fontWeight:700,color:C.primary}}>{q.price.toFixed(2)}€</td>
             <td style={{padding:"6px 10px",color:C.textMuted}}>{q.costPrice?.toFixed(2)||"—"}€</td>
-            <td style={{padding:"6px 10px"}}><Badge color={mg>50?"#3B8C5A":mg>30?C.accent:C.danger}>{mg.toFixed(0)}%</Badge></td>
+            <td style={{padding:"6px 10px"}}><Badge color={mg>50?"#059669":mg>30?C.accent:C.danger}>{mg.toFixed(0)}%</Badge></td>
             <td style={{padding:"6px 10px"}}>{(q.taxRate*100).toFixed(0)}%</td>
             <td style={{padding:"6px 10px",fontWeight:700,color:ts<=5?C.danger:C.text}}>{ts}</td>
             <td style={{padding:"6px 10px"}}>{q.variants.length}</td>
@@ -3860,7 +3865,7 @@ function ProductsScreen(){
         <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>SEUIL ALERTE</label><Input type="number" value={newVar.stockAlert} onChange={e=>setNewVar(v=>({...v,stockAlert:e.target.value}))}/></div></div>
       <Btn onClick={()=>{if(newVar.color&&newVar.size){
         addVariantToProduct(addVarModal,{color:newVar.color,size:newVar.size,ean:newVar.ean||"",stock:parseInt(newVar.stock)||0,stockAlert:parseInt(newVar.stockAlert)||5});
-        setAddVarModal(null);}}} style={{width:"100%",height:40,background:`linear-gradient(135deg,${C.primary},${C.gradientB})`}}>Ajouter la variante</Btn></Modal>
+        setAddVarModal(null);}}} style={{width:"100%",height:40,background:C.primary}}>Ajouter la variante</Btn></Modal>
 
     {/* Delete confirmation */}
     <ConfirmDialog open={!!confirmDel} onClose={()=>setConfirmDel(null)} onConfirm={()=>{if(confirmDel)deleteProduct(confirmDel.id);}}
@@ -3894,7 +3899,7 @@ function ProductsScreen(){
             stock:parseInt(nv.stock)||0,defective:0,stockAlert:parseInt(nv.stockAlert)||5}]});
         setCreateModal(false);setNp({name:"",sku:"",price:"",costPrice:"",taxRate:"0.20",category:"T-shirts",collection:"PE-2026"});
         setNv({color:"",size:"",ean:"",stock:"",stockAlert:"5"});}}}
-        style={{width:"100%",height:44,background:`linear-gradient(135deg,${C.primary},${C.gradientB})`}}>Créer le produit</Btn></Modal>
+        style={{width:"100%",height:44,background:C.primary}}>Créer le produit</Btn></Modal>
 
     {/* CSV Import Wizard */}
     <CSVImportWizard open={importWizardOpen} onClose={()=>setImportWizardOpen(false)} existingProducts={products}
@@ -3945,7 +3950,7 @@ function ReturnsHistoryScreen(){
     </div>
 
     {tab==="settings"&&<div style={{maxWidth:600}}>
-      <div style={{background:`linear-gradient(135deg,${C.primaryLight},#DCF0E2)`,borderRadius:16,padding:20,border:`1.5px solid ${C.primary}22`,marginBottom:16}}>
+      <div style={{background:C.primaryLight,borderRadius:16,padding:20,border:`1.5px solid ${C.primary}22`,marginBottom:16}}>
         <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}>
           <RotateCcw size={20} color={C.primary}/>
           <div><h3 style={{fontSize:16,fontWeight:800,margin:0}}>Politique de retour</h3>
@@ -3987,7 +3992,7 @@ function ReturnsHistoryScreen(){
               <div style={{width:16,height:16,borderRadius:8,background:"#fff",position:"absolute",top:3,left:val?21:3,transition:"all 0.2s",boxShadow:"0 1px 3px rgba(0,0,0,0.15)"}}/></button>
           </div>);})}
       </div>
-      <Btn onClick={()=>{saveSettingsToAPI(settings);addAudit("CONFIG","Politique de retour mise à jour");notify("Paramètres sauvegardés","success");}} style={{width:"100%",height:44,background:`linear-gradient(135deg,${C.primary},${C.gradientB})`}}><Save size={14}/> Enregistrer</Btn>
+      <Btn onClick={()=>{saveSettingsToAPI(settings);addAudit("CONFIG","Politique de retour mise à jour");notify("Paramètres sauvegardés","success");}} style={{width:"100%",height:44,background:C.primary}}><Save size={14}/> Enregistrer</Btn>
     </div>}
 
     {tab==="history"&&<>
@@ -4082,10 +4087,10 @@ function SettingsScreen(){
       {[{l:"Nom boutique",k:"name"},{l:"Adresse",k:"address"},{l:"Code postal",k:"postalCode"},{l:"Ville",k:"city"},{l:"SIRET",k:"siret"},{l:"N° TVA Intra",k:"tvaIntra"},{l:"Téléphone",k:"phone"},{l:"Message ticket",k:"footerMsg"}].map(f=>(
         <div key={f.k} style={{marginBottom:10}}><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>{f.l}</label>
           <Input value={settings[f.k]||""} onChange={e=>setSettings(s=>({...s,[f.k]:e.target.value}))}/></div>))}
-      <Btn onClick={()=>{saveSettingsToAPI(settings);addAudit("CONFIG","Paramètres mis à jour");notify("Paramètres sauvegardés","success");}} style={{width:"100%",height:40,marginTop:8,background:`linear-gradient(135deg,${C.primary},${C.gradientB})`}}><Save size={14}/> Enregistrer</Btn></div>}
+      <Btn onClick={()=>{saveSettingsToAPI(settings);addAudit("CONFIG","Paramètres mis à jour");notify("Paramètres sauvegardés","success");}} style={{width:"100%",height:40,marginTop:8,background:C.primary}}><Save size={14}/> Enregistrer</Btn></div>}
 
     {tab==="retouche"&&<div style={{maxWidth:650}}>
-      <div style={{background:`linear-gradient(135deg,${C.primaryLight},#DCF0E2)`,borderRadius:16,padding:20,border:`1.5px solid ${C.primary}22`,marginBottom:16}}>
+      <div style={{background:C.primaryLight,borderRadius:16,padding:20,border:`1.5px solid ${C.primary}22`,marginBottom:16}}>
         <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:6}}>
           <Scissors size={20} color={C.primary}/>
           <div><h3 style={{fontSize:16,fontWeight:800,margin:0}}>Types de retouches</h3>
@@ -4130,11 +4135,11 @@ function SettingsScreen(){
           <strong>Utilisation :</strong> En caisse, cliquez sur le bouton <strong>Retouche</strong> pour créer un bon. Les prestations configurées ici apparaissent comme boutons rapides. Le bon de retouche s'imprime au format ticket de caisse et les articles sont ajoutés au panier.</div></div>
 
       <Btn onClick={()=>{saveSettingsToAPI(settings);addAudit("CONFIG","Types de retouches mis à jour");notify("Paramètres retouches sauvegardés","success");}}
-        style={{width:"100%",height:44,background:`linear-gradient(135deg,${C.primary},${C.gradientB})`}}><Save size={14}/> Enregistrer</Btn>
+        style={{width:"100%",height:44,background:C.primary}}><Save size={14}/> Enregistrer</Btn>
     </div>}
 
     {tab==="pricing"&&<div style={{maxWidth:550}}>
-      <div style={{background:`linear-gradient(135deg,${C.primaryLight},#DCF0E2)`,borderRadius:16,padding:20,border:`1.5px solid ${C.primary}22`,marginBottom:16}}>
+      <div style={{background:C.primaryLight,borderRadius:16,padding:20,border:`1.5px solid ${C.primary}22`,marginBottom:16}}>
         <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}>
           <DollarSign size={20} color={C.primary}/>
           <div><h3 style={{fontSize:16,fontWeight:800,margin:0}}>Mode de tarification</h3>
@@ -4164,7 +4169,7 @@ function SettingsScreen(){
     </div>}
 
     {tab==="commission"&&<div style={{maxWidth:550}}>
-      <div style={{background:`linear-gradient(135deg,${C.primaryLight},#DCF0E2)`,borderRadius:16,padding:20,border:`1.5px solid ${C.primary}22`,marginBottom:16}}>
+      <div style={{background:C.primaryLight,borderRadius:16,padding:20,border:`1.5px solid ${C.primary}22`,marginBottom:16}}>
         <h3 style={{fontSize:16,fontWeight:800,margin:"0 0 4px"}}>Taux de commission</h3>
         <p style={{fontSize:11,color:C.textMuted,margin:0}}>Configurez le taux de commission sur la marge pour chaque vendeur. Par défaut : {((settings.defaultCommissionRate||0.05)*100).toFixed(1)}%</p></div>
       <div style={{marginBottom:14}}>
@@ -4182,11 +4187,11 @@ function SettingsScreen(){
             placeholder={((settings.defaultCommissionRate||0.05)*100).toFixed(1)}
             style={{width:80,textAlign:"right"}}/><span style={{fontSize:11,color:C.textMuted}}>%</span></div>))}
       </div>
-      <Btn onClick={()=>{saveSettingsToAPI(settings);addAudit("CONFIG","Taux de commission mis à jour");notify("Taux de commission sauvegardés","success");}} style={{width:"100%",height:40,background:`linear-gradient(135deg,${C.primary},${C.gradientB})`}}><Save size={14}/> Enregistrer</Btn>
+      <Btn onClick={()=>{saveSettingsToAPI(settings);addAudit("CONFIG","Taux de commission mis à jour");notify("Taux de commission sauvegardés","success");}} style={{width:"100%",height:40,background:C.primary}}><Save size={14}/> Enregistrer</Btn>
     </div>}
 
     {tab==="stores"&&<div style={{maxWidth:600}}>
-      <div style={{background:`linear-gradient(135deg,${C.primaryLight},#DCF0E2)`,borderRadius:16,padding:20,border:`1.5px solid ${C.primary}22`,marginBottom:16}}>
+      <div style={{background:C.primaryLight,borderRadius:16,padding:20,border:`1.5px solid ${C.primary}22`,marginBottom:16}}>
         <h3 style={{fontSize:16,fontWeight:800,margin:"0 0 4px"}}>Configuration multi-magasins</h3>
         <p style={{fontSize:11,color:C.textMuted,margin:0}}>Définissez les magasins de votre réseau. Utilisé pour les transferts de stock et les rapports consolidés.</p></div>
       <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:14}}>
@@ -4205,14 +4210,14 @@ function SettingsScreen(){
       <Btn variant="outline" onClick={()=>{const stores=[...(settings.stores||[]),{name:"",address:"",id:`store-${Date.now()}`}];setSettings(s=>({...s,stores}));}}
         style={{width:"100%",height:36,marginBottom:12,borderRadius:10,fontSize:11}}><Plus size={12}/> Ajouter un magasin</Btn>
       <Btn onClick={()=>{saveSettingsToAPI(settings);addAudit("CONFIG","Configuration magasins mise à jour");notify("Magasins sauvegardés","success");}}
-        style={{width:"100%",height:40,background:`linear-gradient(135deg,${C.primary},${C.gradientB})`}}><Save size={14}/> Enregistrer</Btn>
+        style={{width:"100%",height:40,background:C.primary}}><Save size={14}/> Enregistrer</Btn>
     </div>}
 
     {tab==="printer"&&<div style={{maxWidth:600}}>
       {/* Printer status */}
       <div style={{background:printerConnected?C.primaryLight:C.surfaceAlt,borderRadius:14,padding:16,border:`1.5px solid ${printerConnected?C.primary+"44":C.border}`,marginBottom:14}}>
         <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}>
-          <div style={{width:12,height:12,borderRadius:6,background:printerConnected?"#3B8C5A":"#CCC",boxShadow:printerConnected?"0 0 8px #3B8C5A55":"none"}}/>
+          <div style={{width:12,height:12,borderRadius:6,background:printerConnected?"#059669":"#CCC",boxShadow:printerConnected?"0 0 8px #05966955":"none"}}/>
           <span style={{fontSize:14,fontWeight:700}}>{printerConnected?"Imprimante connectée":"Aucune imprimante"}</span>
           {printerConnected&&<Badge color={C.primary}>{printerType==="serial"?"Web Serial":"WebUSB"}</Badge>}</div>
         {printerConnected&&<div style={{fontSize:11,color:C.textMuted}}>L'impression ESC/POS est active. Les tickets seront envoyés directement à l'imprimante thermique.</div>}</div>
@@ -4236,10 +4241,10 @@ function SettingsScreen(){
 
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
           {!!navigator.serial&&<Btn onClick={async()=>{setConnecting(true);await connectPrinter("serial",{baudRate:parseInt(printerBaud),paperWidth:parseInt(printerWidth)});setConnecting(false);}}
-            disabled={connecting} style={{height:44,background:`linear-gradient(135deg,${C.primary},${C.gradientB})`}}>
+            disabled={connecting} style={{height:44,background:C.primary}}>
             <Printer size={14}/> {connecting?"Connexion…":"Connecter (Port série)"}</Btn>}
           {!!navigator.usb&&<Btn onClick={async()=>{setConnecting(true);await connectPrinter("usb");setConnecting(false);}}
-            disabled={connecting} style={{height:44,background:`linear-gradient(135deg,${C.info},#6BA3D6)`}}>
+            disabled={connecting} style={{height:44,background:C.info}}>
             <Printer size={14}/> {connecting?"Connexion…":"Connecter (USB)"}</Btn>}
         </div>
 
@@ -4271,7 +4276,7 @@ function SettingsScreen(){
         <p style={{fontSize:10,color:C.textMuted,marginBottom:10,lineHeight:1.5}}>
           Pour imprimer des étiquettes, allez dans <strong>Produits</strong>, cliquez sur un produit puis sur <strong>🏷️ Imprimer étiquettes</strong>. Vous pouvez imprimer par variante (taille/couleur) avec le nombre d'exemplaires souhaité.</p>
         <Btn onClick={()=>{saveSettingsToAPI(settings);notify("Paramètres étiquettes sauvegardés","success");}}
-          style={{width:"100%",height:40,background:`linear-gradient(135deg,${C.accent},#D4A574)`}}><Save size={14}/> Enregistrer les paramètres étiquettes</Btn>
+          style={{width:"100%",height:40,background:C.accent}}><Save size={14}/> Enregistrer les paramètres étiquettes</Btn>
       </div>
 
       {/* Info box */}
@@ -4286,7 +4291,7 @@ function SettingsScreen(){
     </div>}
 
     {tab==="return"&&<div style={{maxWidth:600}}>
-      <div style={{background:`linear-gradient(135deg,${C.primaryLight},#DCF0E2)`,borderRadius:16,padding:20,border:`1.5px solid ${C.primary}22`,marginBottom:16}}>
+      <div style={{background:C.primaryLight,borderRadius:16,padding:20,border:`1.5px solid ${C.primary}22`,marginBottom:16}}>
         <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}>
           <RotateCcw size={20} color={C.primary}/>
           <div><h3 style={{fontSize:16,fontWeight:800,margin:0}}>Politique de retour</h3>
@@ -4355,7 +4360,7 @@ function SettingsScreen(){
         </div>
       </div>
 
-      <Btn onClick={()=>{saveSettingsToAPI(settings);addAudit("CONFIG","Politique de retour mise à jour");notify("Paramètres de retour sauvegardés","success");}} style={{width:"100%",height:44,background:`linear-gradient(135deg,${C.primary},${C.gradientB})`}}><Save size={14}/> Enregistrer les paramètres de retour</Btn>
+      <Btn onClick={()=>{saveSettingsToAPI(settings);addAudit("CONFIG","Politique de retour mise à jour");notify("Paramètres de retour sauvegardés","success");}} style={{width:"100%",height:44,background:C.primary}}><Save size={14}/> Enregistrer les paramètres de retour</Btn>
     </div>}
 
     {tab==="sizes"&&(()=>{
@@ -4374,7 +4379,7 @@ function SettingsScreen(){
 
       return(<div style={{maxWidth:650}}>
         {/* Section 1: Global size ranking */}
-        <div style={{background:`linear-gradient(135deg,${C.primaryLight},#DCF0E2)`,borderRadius:16,padding:20,border:`1.5px solid ${C.primary}22`,marginBottom:16}}>
+        <div style={{background:C.primaryLight,borderRadius:16,padding:20,border:`1.5px solid ${C.primary}22`,marginBottom:16}}>
           <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:6}}>
             <Grid size={20} color={C.primary}/>
             <div><h3 style={{fontSize:16,fontWeight:800,margin:0}}>Ranking des tailles</h3>
@@ -4436,7 +4441,7 @@ function SettingsScreen(){
       <h3 style={{fontSize:14,fontWeight:700,marginBottom:10}}>Pointages récents</h3>
       {clockEntries.length===0&&<div style={{textAlign:"center",padding:20,color:C.textLight}}>Aucun pointage</div>}
       {clockEntries.slice(0,30).map(e=>(<div key={e.id} style={{display:"flex",alignItems:"center",gap:8,padding:6,borderBottom:`1px solid ${C.border}`,fontSize:11}}>
-        <Badge color={e.type==="IN"?"#3B8C5A":C.danger}>{e.type}</Badge>
+        <Badge color={e.type==="IN"?"#059669":C.danger}>{e.type}</Badge>
         <span style={{flex:1,fontWeight:600}}>{e.userName}</span>
         <span style={{color:C.textMuted}}>{new Date(e.date).toLocaleString("fr-FR")}</span></div>))}</div>}
 
@@ -4447,11 +4452,11 @@ function SettingsScreen(){
         <span style={{flex:1,fontWeight:600}}>{e.productName}</span>
         <span style={{color:C.danger,textDecoration:"line-through"}}>{e.oldPrice.toFixed(2)}€</span>
         <span>→</span>
-        <span style={{color:"#3B8C5A",fontWeight:700}}>{e.newPrice.toFixed(2)}€</span>
+        <span style={{color:"#059669",fontWeight:700}}>{e.newPrice.toFixed(2)}€</span>
         <span style={{color:C.textMuted,fontSize:9}}>{e.user} — {new Date(e.date).toLocaleDateString("fr-FR")}</span></div>))}</div>}
 
     {tab==="receipt"&&<div style={{maxWidth:550}}>
-      <div style={{background:`linear-gradient(135deg,${C.primaryLight},#DCF0E2)`,borderRadius:16,padding:20,border:`1.5px solid ${C.primary}22`,marginBottom:16}}>
+      <div style={{background:C.primaryLight,borderRadius:16,padding:20,border:`1.5px solid ${C.primary}22`,marginBottom:16}}>
         <h3 style={{fontSize:16,fontWeight:800,margin:"0 0 4px"}}>Personnalisation du ticket</h3>
         <p style={{fontSize:11,color:C.textMuted,margin:0}}>Configurez l'apparence et les informations affichées sur vos tickets de caisse.</p></div>
       <div style={{marginBottom:10}}><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>URL du logo</label>
@@ -4470,11 +4475,11 @@ function SettingsScreen(){
             <div style={{width:18,height:18,borderRadius:4,border:`2px solid ${checked?C.primary:C.border}`,background:checked?C.primary:"transparent",display:"flex",alignItems:"center",justifyContent:"center"}}>
               {checked&&<Check size={12} color="#fff"/>}</div>
             <span style={{fontSize:12,fontWeight:500}}>{f.l}</span></div>);})}</div>
-      <Btn onClick={()=>{saveSettingsToAPI(settings);addAudit("CONFIG","Paramètres ticket mis à jour");notify("Paramètres ticket sauvegardés","success");}} style={{width:"100%",height:40,background:`linear-gradient(135deg,${C.primary},${C.gradientB})`}}><Save size={14}/> Enregistrer</Btn>
+      <Btn onClick={()=>{saveSettingsToAPI(settings);addAudit("CONFIG","Paramètres ticket mis à jour");notify("Paramètres ticket sauvegardés","success");}} style={{width:"100%",height:40,background:C.primary}}><Save size={14}/> Enregistrer</Btn>
     </div>}
 
     {tab==="screen2"&&<div style={{maxWidth:600}}>
-      <div style={{background:`linear-gradient(135deg,${C.primaryLight},#DCF0E2)`,borderRadius:16,padding:20,border:`1.5px solid ${C.primary}22`,marginBottom:16}}>
+      <div style={{background:C.primaryLight,borderRadius:16,padding:20,border:`1.5px solid ${C.primary}22`,marginBottom:16}}>
         <h3 style={{fontSize:16,fontWeight:800,margin:"0 0 4px"}}>Personnalisation Écran 2</h3>
         <p style={{fontSize:11,color:C.textMuted,margin:0}}>Configurez l'apparence de l'écran client (affichage secondaire).</p></div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
@@ -4494,12 +4499,12 @@ function SettingsScreen(){
           {settings.screen2Logo&&<img src={settings.screen2Logo} alt="logo" style={{maxHeight:40,maxWidth:120,objectFit:"contain"}}/>}
           <div style={{fontSize:20,fontWeight:800,color:settings.screen2AccentColor||C.primary}}>{settings.screen2WelcomeMsg||"Bienvenue"}</div>
           <div style={{fontSize:10,color:"rgba(255,255,255,0.5)"}}>Aperçu de l'écran client</div></div></div>
-      <Btn onClick={()=>{saveSettingsToAPI(settings);addAudit("CONFIG","Paramètres Écran 2 mis à jour");notify("Paramètres Écran 2 sauvegardés","success");}} style={{width:"100%",height:40,background:`linear-gradient(135deg,${C.primary},${C.gradientB})`}}><Save size={14}/> Enregistrer</Btn>
+      <Btn onClick={()=>{saveSettingsToAPI(settings);addAudit("CONFIG","Paramètres Écran 2 mis à jour");notify("Paramètres Écran 2 sauvegardés","success");}} style={{width:"100%",height:40,background:C.primary}}><Save size={14}/> Enregistrer</Btn>
     </div>}
 
     {tab==="caticons"&&(()=>{const cats=Object.keys({...DEFAULT_CAT_ICONS,...(settings.categoryIcons||{})});
       return(<div style={{maxWidth:550}}>
-        <div style={{background:`linear-gradient(135deg,${C.primaryLight},#DCF0E2)`,borderRadius:16,padding:20,border:`1.5px solid ${C.primary}22`,marginBottom:16}}>
+        <div style={{background:C.primaryLight,borderRadius:16,padding:20,border:`1.5px solid ${C.primary}22`,marginBottom:16}}>
           <h3 style={{fontSize:16,fontWeight:800,margin:"0 0 4px"}}>Icônes par catégorie</h3>
           <p style={{fontSize:11,color:C.textMuted,margin:0}}>Associez un emoji à chaque catégorie de produits. L'emoji s'affiche sur les cartes produit en caisse.</p></div>
         <div style={{display:"flex",flexDirection:"column",gap:6,marginBottom:14}}>
@@ -4508,7 +4513,7 @@ function SettingsScreen(){
               <span style={{fontSize:20}}>{val}</span>
               <span style={{flex:1,fontSize:12,fontWeight:600}}>{c}</span>
               <Input value={val} onChange={e=>setSettings(s=>({...s,categoryIcons:{...(s.categoryIcons||{}),[c]:e.target.value}}))} style={{width:60,textAlign:"center",fontSize:16}}/></div>);})}</div>
-        <Btn onClick={()=>{saveSettingsToAPI(settings);addAudit("CONFIG","Icônes catégories mis à jour");notify("Icônes sauvegardées","success");}} style={{width:"100%",height:40,background:`linear-gradient(135deg,${C.primary},${C.gradientB})`}}><Save size={14}/> Enregistrer</Btn>
+        <Btn onClick={()=>{saveSettingsToAPI(settings);addAudit("CONFIG","Icônes catégories mis à jour");notify("Icônes sauvegardées","success");}} style={{width:"100%",height:40,background:C.primary}}><Save size={14}/> Enregistrer</Btn>
       </div>);})()}
 
   </div>);
@@ -4532,7 +4537,7 @@ function GiftCardScreen(){
             <Input value={custName} onChange={e=>setCustName(e.target.value)} placeholder="Nom…"/></div>
           <div style={{display:"flex",gap:6}}>{[25,50,75,100].map(v=>(<Btn key={v} variant="outline" onClick={()=>setAmount(String(v))} style={{flex:1,fontSize:11}}>{v}€</Btn>))}</div></div>
         <Btn onClick={()=>{if(amount){createGiftCard(parseFloat(amount),custName);setAmount("");setCustName("");}}}
-          disabled={!amount} style={{width:"100%",height:40,background:`linear-gradient(135deg,${C.accent},#D4A574)`}}><Gift size={14}/> Créer la carte</Btn>
+          disabled={!amount} style={{width:"100%",height:40,background:C.accent}}><Gift size={14}/> Créer la carte</Btn>
       </div>
       <div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`}}>
         <h3 style={{fontSize:14,fontWeight:700,marginBottom:10}}><Search size={16} style={{verticalAlign:"middle"}}/> Vérifier le solde</h3>
@@ -4577,11 +4582,11 @@ function PromosScreen(){
   return(<div style={{height:"100%",overflowY:"auto",padding:20,background:C.bg}}>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
       <h2 style={{fontSize:22,fontWeight:800,margin:0}}>Promotions</h2>
-      <Btn onClick={()=>setCreateModal(true)} style={{fontSize:11,background:`linear-gradient(135deg,${C.warn},#E8B930)`}}><Plus size={12}/> Nouvelle promo</Btn></div>
+      <Btn onClick={()=>setCreateModal(true)} style={{fontSize:11,background:C.warn}}><Plus size={12}/> Nouvelle promo</Btn></div>
     <div style={{display:"flex",flexDirection:"column",gap:6}}>
       {promos.map(pm=>(<div key={pm.id} style={{display:"flex",alignItems:"center",gap:10,padding:12,borderRadius:12,background:C.surface,
         border:`1.5px solid ${pm.active?C.warn+"44":C.border}`,opacity:pm.active?1:0.6}}>
-        <div style={{width:8,height:8,borderRadius:4,background:pm.active?"#3B8C5A":C.textLight}}/>
+        <div style={{width:8,height:8,borderRadius:4,background:pm.active?"#059669":C.textLight}}/>
         <div style={{flex:1}}>
           <div style={{fontSize:13,fontWeight:700}}>{pm.name} <Badge color={C.warn}>-{pm.value}%</Badge></div>
           <div style={{fontSize:10,color:C.textMuted}}>
@@ -4624,7 +4629,7 @@ function PromosScreen(){
           active:true,startDate:np.startDate,endDate:np.endDate}]);
         addAudit("PROMO",`Nouvelle promo: ${np.name}`);notify(`Promo "${np.name}" créée`,"success");
         setCreateModal(false);setNp({name:"",type:"collection_discount",value:"",collection:"",minQty:"3",code:"",startDate:"",endDate:""});}}}
-        style={{width:"100%",height:44,background:`linear-gradient(135deg,${C.warn},#E8B930)`}}>Créer la promotion</Btn></Modal>
+        style={{width:"100%",height:44,background:C.warn}}>Créer la promotion</Btn></Modal>
   </div>);
 }
 
@@ -4659,7 +4664,7 @@ function FootfallScreen(){
         <div style={{fontSize:32,fontWeight:900,color:C.info}}>{todayTickets}</div></div>
       <div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`,textAlign:"center"}}>
         <div style={{fontSize:10,fontWeight:600,color:C.textMuted,marginBottom:4}}>TAUX DE CONVERSION</div>
-        <div style={{fontSize:32,fontWeight:900,color:conversionRate>=20?"#2F9E55":conversionRate>=10?C.warn:C.danger}}>{conversionRate.toFixed(1)}%</div></div>
+        <div style={{fontSize:32,fontWeight:900,color:conversionRate>=20?"#059669":conversionRate>=10?C.warn:C.danger}}>{conversionRate.toFixed(1)}%</div></div>
     </div>
 
     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
@@ -4671,7 +4676,7 @@ function FootfallScreen(){
           <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>NB ENTRÉES</label>
             <Input type="number" value={manualCount} onChange={e=>setManualCount(e.target.value)} placeholder="0" style={{height:36}}/></div></div>
         <Btn onClick={()=>{const c=parseInt(manualCount);if(c>0&&manualDate){addFootfall(c,manualDate);notify(`${c} entrées enregistrées pour le ${manualDate}`,"success");setManualCount("");}}}
-          style={{width:"100%",height:40,background:`linear-gradient(135deg,${C.primary},${C.gradientB})`}}>Enregistrer</Btn>
+          style={{width:"100%",height:40,background:C.primary}}>Enregistrer</Btn>
       </div>
 
       <div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`}}>
@@ -4696,7 +4701,7 @@ function FootfallScreen(){
             <td style={{padding:8,fontWeight:600}}>{new Date(f.date).toLocaleDateString("fr-FR",{weekday:"short",day:"numeric",month:"short"})}</td>
             <td style={{padding:8,fontWeight:700,color:C.primary}}>{f.count}</td>
             <td style={{padding:8}}>{dayTickets}</td>
-            <td style={{padding:8,fontWeight:700,color:conv>=20?"#2F9E55":conv>=10?C.warn:C.danger}}>{conv.toFixed(1)}%</td>
+            <td style={{padding:8,fontWeight:700,color:conv>=20?"#059669":conv>=10?C.warn:C.danger}}>{conv.toFixed(1)}%</td>
           </tr>);})}</tbody></table>
     </div>
   </div>);
@@ -5010,7 +5015,7 @@ function HelpCashierScreen(){
   ];
   return(<div style={{height:"100%",overflowY:"auto",padding:20,background:C.bg}}>
     <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:20}}>
-      <div style={{width:44,height:44,borderRadius:14,background:`linear-gradient(135deg,${C.primary},${C.gradientB})`,display:"flex",alignItems:"center",justifyContent:"center"}}>
+      <div style={{width:44,height:44,borderRadius:14,background:C.primary,display:"flex",alignItems:"center",justifyContent:"center"}}>
         <HelpCircle size={22} color="#fff"/></div>
       <div><h2 style={{fontSize:22,fontWeight:800,margin:0}}>Aide Caissier</h2>
         <p style={{fontSize:12,color:C.textMuted,margin:0}}>Guide complet — cliquez sur une section pour voir les instructions détaillées</p></div></div>
@@ -5204,7 +5209,7 @@ function HelpDashboardScreen(){
   ];
   return(<div style={{height:"100%",overflowY:"auto",padding:20,background:C.bg}}>
     <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:20}}>
-      <div style={{width:44,height:44,borderRadius:14,background:`linear-gradient(135deg,${C.primary},${C.gradientB})`,display:"flex",alignItems:"center",justifyContent:"center"}}>
+      <div style={{width:44,height:44,borderRadius:14,background:C.primary,display:"flex",alignItems:"center",justifyContent:"center"}}>
         <HelpCircle size={22} color="#fff"/></div>
       <div><h2 style={{fontSize:22,fontWeight:800,margin:0}}>Aide Dashboard</h2>
         <p style={{fontSize:12,color:C.textMuted,margin:0}}>Guide complet — cliquez sur une section pour voir les instructions détaillées</p></div></div>
@@ -5228,43 +5233,42 @@ function CashierNav({active,onNav}){
   const{currentUser,logout,isOnline,stockAlerts,clockIn,clockOut,pendingSync,clearPendingSync,openCustomerDisplay}=useApp();
   const items=[{id:"sales",l:"Vente",i:ShoppingCart},{id:"returns",l:"Retours",i:RotateCcw},{id:"stats",l:"Stats",i:BarChart3},{id:"stock",l:"Stock",i:Grid},
     {id:"products",l:"Produits",i:Package},{id:"history",l:"Tickets",i:Receipt},{id:"customers",l:"Clients",i:Users},{id:"giftcards",l:"Cadeaux",i:Gift},
-    {id:"promos",l:"Promos",i:Zap},{id:"closure",l:"Clôture",i:Lock},{id:"footfall",l:"Entrées",i:Activity},
-    {id:"audit",l:"Audit",i:Activity},{id:"fiscal",l:"NF525",i:Shield},{id:"settings",l:"Réglages",i:Settings},{id:"help",l:"Aide",i:HelpCircle}];
-  return(<div style={{width:76,background:C.surface,borderRight:`1px solid ${C.border}`,display:"flex",flexDirection:"column",alignItems:"center",padding:"12px 0",gap:2,boxShadow:`2px 0 12px ${C.shadow}`}}>
-    <div style={{width:42,height:42,borderRadius:13,background:`linear-gradient(135deg,${C.primary},${C.gradientB})`,display:"flex",alignItems:"center",justifyContent:"center",
-      color:"#fff",fontWeight:800,fontSize:15,marginBottom:4,boxShadow:`0 4px 14px ${C.primary}25`,letterSpacing:"-0.5px"}}>{currentUser?.name?.[0]}</div>
-    <div style={{display:"flex",alignItems:"center",gap:3,marginBottom:3}}>
-      <div style={{width:7,height:7,borderRadius:4,background:isOnline?"#2F9E55":C.danger,boxShadow:isOnline?"0 0 6px #2F9E5555":"0 0 6px #D1453B55"}}/>
-      <span style={{fontSize:8,color:C.textMuted,fontWeight:600}}>{isOnline?"Online":"Offline"}</span></div>
-    {pendingSync.length>0&&<div onClick={()=>{if(confirm(`${pendingSync.length} synchro(s) en échec.\n\nVoulez-vous vider la file d'attente ?`))clearPendingSync();}}
-      style={{fontSize:7,color:C.warn,fontWeight:700,marginBottom:2,cursor:"pointer"}} title="Cliquer pour vider la file de synchro">⏳ {pendingSync.length} sync</div>}
-    <div style={{display:"flex",gap:3,marginBottom:8}}>
-      <button onClick={clockIn} title="Pointer entrée" style={{width:28,height:24,borderRadius:8,border:"none",cursor:"pointer",background:C.primaryLight,color:C.primary,fontSize:8,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",transition:"all 0.15s"}}>IN</button>
-      <button onClick={clockOut} title="Pointer sortie" style={{width:28,height:24,borderRadius:8,border:"none",cursor:"pointer",background:C.dangerLight,color:C.danger,fontSize:8,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",transition:"all 0.15s"}}>OUT</button></div>
-    <div style={{flex:1,display:"flex",flexDirection:"column",gap:2,overflowY:"auto",width:"100%",padding:"0 6px"}}>
-      {items.map(({id,l,i:I})=>(<button key={id} onClick={()=>onNav(id)} title={l} style={{width:"100%",height:48,borderRadius:12,border:"none",cursor:"pointer",
+    {id:"promos",l:"Promos",i:Zap},{id:"closure",l:"Cloture",i:Lock},{id:"footfall",l:"Entrees",i:Activity},
+    {id:"audit",l:"Audit",i:Activity},{id:"fiscal",l:"NF525",i:Shield},{id:"settings",l:"Reglages",i:Settings},{id:"help",l:"Aide",i:HelpCircle}];
+  return(<div style={{width:72,background:"#0F172A",display:"flex",flexDirection:"column",alignItems:"center",padding:"14px 0",gap:2}}>
+    <div style={{width:38,height:38,borderRadius:10,background:C.primary,display:"flex",alignItems:"center",justifyContent:"center",
+      color:"#fff",fontWeight:700,fontSize:14,marginBottom:6}}>{currentUser?.name?.[0]}</div>
+    <div style={{display:"flex",alignItems:"center",gap:3,marginBottom:4}}>
+      <div style={{width:6,height:6,borderRadius:3,background:isOnline?"#34D399":"#F87171"}}/>
+      <span style={{fontSize:8,color:"rgba(255,255,255,0.5)",fontWeight:500}}>{isOnline?"En ligne":"Offline"}</span></div>
+    {pendingSync.length>0&&<div onClick={()=>{if(confirm(`${pendingSync.length} synchro(s) en echec.\n\nVoulez-vous vider la file d'attente ?`))clearPendingSync();}}
+      style={{fontSize:8,color:"#FBBF24",fontWeight:600,marginBottom:2,cursor:"pointer"}} title="Cliquer pour vider la file de synchro">{pendingSync.length} sync</div>}
+    <div style={{display:"flex",gap:3,marginBottom:10}}>
+      <button onClick={clockIn} title="Pointer entree" style={{width:26,height:22,borderRadius:6,border:"none",cursor:"pointer",background:"rgba(52,211,153,0.15)",color:"#34D399",fontSize:8,fontWeight:600,display:"flex",alignItems:"center",justifyContent:"center",transition:"all 0.15s"}}>IN</button>
+      <button onClick={clockOut} title="Pointer sortie" style={{width:26,height:22,borderRadius:6,border:"none",cursor:"pointer",background:"rgba(248,113,113,0.15)",color:"#F87171",fontSize:8,fontWeight:600,display:"flex",alignItems:"center",justifyContent:"center",transition:"all 0.15s"}}>OUT</button></div>
+    <div style={{flex:1,display:"flex",flexDirection:"column",gap:1,overflowY:"auto",width:"100%",padding:"0 8px"}}>
+      {items.map(({id,l,i:I})=>(<button key={id} onClick={()=>onNav(id)} title={l} style={{width:"100%",height:46,borderRadius:10,border:"none",cursor:"pointer",
         display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:3,
-        background:active===id?`linear-gradient(135deg,${C.primary},${C.gradientB})`:"transparent",
-        color:active===id?"#fff":C.textMuted,position:"relative",
-        transition:"all 0.15s",fontFamily:"inherit",boxShadow:active===id?`0 3px 10px ${C.primary}25`:"none"}}
-        onMouseEnter={e=>{if(active!==id)e.currentTarget.style.background=C.surfaceAlt;}}
-        onMouseLeave={e=>{if(active!==id)e.currentTarget.style.background="transparent";}}>
-        <I size={16}/><span style={{fontSize:8,fontWeight:active===id?700:600,lineHeight:1,letterSpacing:"0.02em"}}>{l}</span>
-        {id==="stock"&&stockAlerts.length>0&&<span style={{position:"absolute",top:3,right:5,width:15,height:15,borderRadius:8,
-          background:C.danger,color:"#fff",fontSize:8,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",
-          boxShadow:`0 2px 6px ${C.danger}40`}}>{stockAlerts.length}</span>}
+        background:active===id?"rgba(255,255,255,0.1)":"transparent",
+        color:active===id?"#fff":"rgba(255,255,255,0.45)",position:"relative",
+        transition:"all 0.2s cubic-bezier(0.16,1,0.3,1)",fontFamily:"inherit"}}
+        onMouseEnter={e=>{if(active!==id)e.currentTarget.style.background="rgba(255,255,255,0.06)";e.currentTarget.style.color="rgba(255,255,255,0.8)";}}
+        onMouseLeave={e=>{if(active!==id)e.currentTarget.style.background="transparent";e.currentTarget.style.color=active===id?"#fff":"rgba(255,255,255,0.45)";}}>
+        <I size={16}/><span style={{fontSize:8,fontWeight:active===id?600:500,lineHeight:1,letterSpacing:"-0.01em"}}>{l}</span>
+        {id==="stock"&&stockAlerts.length>0&&<span style={{position:"absolute",top:4,right:6,width:14,height:14,borderRadius:7,
+          background:C.danger,color:"#fff",fontSize:8,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center"}}>{stockAlerts.length}</span>}
       </button>))}</div>
-    <div style={{borderTop:`1px solid ${C.border}`,paddingTop:8,width:"100%",display:"flex",flexDirection:"column",alignItems:"center",gap:4}}>
-      <button onClick={openCustomerDisplay} title="Écran client" style={{width:"calc(100% - 12px)",height:36,borderRadius:10,border:"none",cursor:"pointer",
+    <div style={{borderTop:"1px solid rgba(255,255,255,0.06)",paddingTop:8,width:"100%",display:"flex",flexDirection:"column",alignItems:"center",gap:4}}>
+      <button onClick={openCustomerDisplay} title="Ecran client" style={{width:"calc(100% - 16px)",height:34,borderRadius:8,border:"none",cursor:"pointer",
         display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:2,
-        background:`${C.info}08`,color:C.info,fontFamily:"inherit",transition:"all 0.15s",fontSize:8,fontWeight:600}}
-        onMouseEnter={e=>e.currentTarget.style.background=`${C.info}15`} onMouseLeave={e=>e.currentTarget.style.background=`${C.info}08`}>
-        <LayoutDashboard size={13}/><span>Écran 2</span></button>
-      <button onClick={logout} title="Déconnexion" style={{width:"calc(100% - 12px)",height:44,borderRadius:12,border:"none",cursor:"pointer",
+        background:"rgba(56,189,248,0.08)",color:"#38BDF8",fontFamily:"inherit",transition:"all 0.15s",fontSize:8,fontWeight:500}}
+        onMouseEnter={e=>e.currentTarget.style.background="rgba(56,189,248,0.15)"} onMouseLeave={e=>e.currentTarget.style.background="rgba(56,189,248,0.08)"}>
+        <LayoutDashboard size={13}/><span>Ecran 2</span></button>
+      <button onClick={logout} title="Deconnexion" style={{width:"calc(100% - 16px)",height:40,borderRadius:8,border:"none",cursor:"pointer",
         display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:3,
-        background:`${C.danger}08`,color:C.danger,fontFamily:"inherit",transition:"all 0.15s"}}
-        onMouseEnter={e=>e.currentTarget.style.background=C.dangerLight} onMouseLeave={e=>e.currentTarget.style.background=`${C.danger}08`}>
-        <LogOut size={15}/><span style={{fontSize:8,fontWeight:600}}>Sortir</span></button></div></div>);
+        background:"rgba(248,113,113,0.08)",color:"#F87171",fontFamily:"inherit",transition:"all 0.15s"}}
+        onMouseEnter={e=>e.currentTarget.style.background="rgba(248,113,113,0.15)"} onMouseLeave={e=>e.currentTarget.style.background="rgba(248,113,113,0.08)"}>
+        <LogOut size={14}/><span style={{fontSize:8,fontWeight:500}}>Sortir</span></button></div></div>);
 }
 
 function CashierInterface(){
@@ -5325,10 +5329,10 @@ function UsersScreen(){
   return(<div style={{height:"100%",overflowY:"auto",padding:20,background:C.bg}}>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
       <h2 style={{fontSize:22,fontWeight:800,margin:0}}>Utilisateurs ({users.length})</h2>
-      <Btn onClick={()=>{setForm({name:"",role:"cashier",pin:""});setNewModal(true);}} style={{fontSize:11,background:`linear-gradient(135deg,${C.primary},${C.gradientB})`}}><Plus size={12}/> Nouvel utilisateur</Btn></div>
+      <Btn onClick={()=>{setForm({name:"",role:"cashier",pin:""});setNewModal(true);}} style={{fontSize:11,background:C.primary}}><Plus size={12}/> Nouvel utilisateur</Btn></div>
     <div style={{display:"flex",flexDirection:"column",gap:6}}>
       {users.map(u=>(<div key={u.id} style={{display:"flex",alignItems:"center",gap:10,padding:12,borderRadius:12,background:C.surface,border:`1.5px solid ${C.border}`}}>
-        <div style={{width:36,height:36,borderRadius:18,background:`linear-gradient(135deg,${u.role==="admin"?C.accent:C.primary},${u.role==="admin"?"#D4A574":C.gradientB})`,
+        <div style={{width:36,height:36,borderRadius:18,background:u.role==="admin"?C.accent:C.primary,
           display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:700,fontSize:13}}>{u.name[0]}</div>
         <div style={{flex:1}}><div style={{fontSize:13,fontWeight:600}}>{u.name}</div>
           <div style={{fontSize:10,color:C.textMuted}}>{u.role==="admin"?"Administrateur":"Caissier(e)"} — PIN: ****</div></div>
@@ -5344,7 +5348,7 @@ function UsersScreen(){
           <select value={form.role} onChange={e=>setForm(p=>({...p,role:e.target.value}))} style={{width:"100%",padding:10,borderRadius:10,border:`2px solid ${C.border}`,fontSize:12,fontFamily:"inherit"}}>
             <option value="admin">Administrateur</option><option value="cashier">Caissier(e)</option></select></div>
         <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>CODE PIN {editUser?"(laisser vide pour ne pas changer)":""}</label><Input type="password" value={form.pin} onChange={e=>setForm(p=>({...p,pin:e.target.value}))} placeholder={editUser?"Nouveau PIN (optionnel)":"1234"}/></div></div>
-      <Btn onClick={saveUser} style={{width:"100%",height:40,background:`linear-gradient(135deg,${C.primary},${C.gradientB})`}}><Save size={14}/> {editUser?"Enregistrer":"Créer"}</Btn></Modal>
+      <Btn onClick={saveUser} style={{width:"100%",height:40,background:C.primary}}><Save size={14}/> {editUser?"Enregistrer":"Créer"}</Btn></Modal>
     <ConfirmDialog open={!!confirmDel} onClose={()=>setConfirmDel(null)} onConfirm={async()=>{
       setUsers(p=>p.filter(u=>u.id!==confirmDel.id));
       try{await API.auth.deleteUser(confirmDel.id);notify("Utilisateur supprimé et synchronisé","warn");
@@ -5355,30 +5359,34 @@ function UsersScreen(){
 
 function DashboardNav({active,onNav}){
   const{logout,currentUser}=useApp();
-  const items=[{id:"overview",l:"Dashboard",i:LayoutDashboard},{id:"products",l:"Produits",i:Package},{id:"stock",l:"Stock",i:Grid},
-    {id:"stats",l:"Statistiques",i:BarChart3},{id:"returns",l:"Retours & Avoirs",i:RotateCcw},{id:"customers",l:"Clients",i:Users},{id:"users",l:"Utilisateurs",i:UserIcon},
-    {id:"tva",l:"Taux de TVA",i:Percent},{id:"giftcards",l:"Cartes cadeaux",i:Gift},{id:"promos",l:"Promotions",i:Zap},{id:"footfall",l:"Entrées",i:Activity},{id:"settings",l:"Paramètres",i:Settings},{id:"fiscal",l:"Fiscal NF525",i:Shield},{id:"audit",l:"Journal d'audit",i:Activity},{id:"help",l:"Aide",i:HelpCircle}];
-  return(<div style={{width:230,background:"linear-gradient(180deg,#1A2830,#1E3035)",height:"100vh",display:"flex",flexDirection:"column"}}>
-    <div style={{padding:"20px 18px",borderBottom:"1px solid rgba(255,255,255,0.06)"}}>
-      <div style={{display:"flex",alignItems:"center",gap:10}}>
-        <div style={{width:36,height:36,borderRadius:10,background:`linear-gradient(135deg,${C.primary},${C.gradientB})`,display:"flex",alignItems:"center",justifyContent:"center",boxShadow:`0 4px 12px ${C.primary}30`}}><Store size={18} color="#fff"/></div>
-        <div><div style={{color:"#fff",fontSize:14,fontWeight:800,letterSpacing:"-0.3px"}}>CaissePro</div>
-          <div style={{color:"rgba(255,255,255,0.45)",fontSize:9,fontWeight:500}}>v{CO.ver} — NF525</div></div></div>
-      <div style={{marginTop:14,padding:"8px 10px",borderRadius:10,background:"rgba(255,255,255,0.05)",display:"flex",alignItems:"center",gap:8}}>
-        <div style={{width:28,height:28,borderRadius:9,background:`linear-gradient(135deg,${C.accent},#D4A574)`,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontSize:11,fontWeight:700}}>{currentUser?.name?.[0]}</div>
-        <div><div style={{color:"#fff",fontSize:11,fontWeight:600}}>{currentUser?.name}</div>
-          <div style={{color:"rgba(255,255,255,0.4)",fontSize:9}}>Admin</div></div></div></div>
-    <nav style={{flex:1,padding:"8px 10px",overflowY:"auto"}}>{items.map(({id,l,i:I})=>(<button key={id} onClick={()=>onNav(id)} style={{width:"100%",display:"flex",alignItems:"center",gap:10,padding:"9px 14px",borderRadius:10,border:"none",cursor:"pointer",marginBottom:2,
-      background:active===id?"rgba(255,255,255,0.1)":"transparent",color:active===id?"#fff":"rgba(255,255,255,0.55)",fontSize:12,fontWeight:active===id?600:400,textAlign:"left",
-      transition:"all 0.15s",fontFamily:"inherit",boxShadow:active===id?"0 2px 8px rgba(0,0,0,0.2)":"none"}}
-      onMouseEnter={e=>{if(active!==id)e.currentTarget.style.background="rgba(255,255,255,0.05)";}}
-      onMouseLeave={e=>{if(active!==id)e.currentTarget.style.background="transparent";}}>
-      <I size={15}/>{l}</button>))}</nav>
-    <div style={{padding:"10px 10px",borderTop:"1px solid rgba(255,255,255,0.06)"}}>
-      <button onClick={logout} style={{width:"100%",display:"flex",alignItems:"center",gap:10,padding:"9px 14px",borderRadius:10,border:"none",cursor:"pointer",
-        background:"rgba(209,69,59,0.08)",color:"#E57373",fontSize:12,textAlign:"left",fontFamily:"inherit",transition:"all 0.15s"}}
-        onMouseEnter={e=>e.currentTarget.style.background="rgba(209,69,59,0.15)"} onMouseLeave={e=>e.currentTarget.style.background="rgba(209,69,59,0.08)"}>
-        <LogOut size={14}/> Déconnexion</button></div></div>);
+  const sections=[
+    {title:"",items:[{id:"overview",l:"Dashboard",i:LayoutDashboard}]},
+    {title:"Commerce",items:[{id:"products",l:"Produits",i:Package},{id:"stock",l:"Stock",i:Grid},{id:"stats",l:"Statistiques",i:BarChart3},{id:"returns",l:"Retours & Avoirs",i:RotateCcw}]},
+    {title:"Relations",items:[{id:"customers",l:"Clients",i:Users},{id:"users",l:"Utilisateurs",i:UserIcon},{id:"giftcards",l:"Cartes cadeaux",i:Gift},{id:"promos",l:"Promotions",i:Zap},{id:"footfall",l:"Entrees",i:Activity}]},
+    {title:"Systeme",items:[{id:"tva",l:"Taux de TVA",i:Percent},{id:"settings",l:"Parametres",i:Settings},{id:"fiscal",l:"Fiscal NF525",i:Shield},{id:"audit",l:"Journal d'audit",i:Activity},{id:"help",l:"Aide",i:HelpCircle}]}];
+  return(<div style={{width:240,background:"#0F172A",height:"100vh",display:"flex",flexDirection:"column"}}>
+    <div style={{padding:"20px 20px 16px",borderBottom:"1px solid rgba(255,255,255,0.06)"}}>
+      <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:16}}>
+        <div style={{width:34,height:34,borderRadius:9,background:C.primary,display:"flex",alignItems:"center",justifyContent:"center"}}><Store size={17} color="#fff"/></div>
+        <div><div style={{color:"#fff",fontSize:14,fontWeight:700,letterSpacing:"-0.3px"}}>CaissePro</div>
+          <div style={{color:"rgba(255,255,255,0.4)",fontSize:10}}>v{CO.ver}</div></div></div>
+      <div style={{padding:"10px 12px",borderRadius:10,background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.06)",display:"flex",alignItems:"center",gap:10}}>
+        <div style={{width:30,height:30,borderRadius:8,background:"rgba(255,255,255,0.1)",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontSize:12,fontWeight:600}}>{currentUser?.name?.[0]}</div>
+        <div><div style={{color:"#fff",fontSize:12,fontWeight:500}}>{currentUser?.name}</div>
+          <div style={{color:"rgba(255,255,255,0.35)",fontSize:10}}>{currentUser?.role==="admin"?"Administrateur":"Caissier"}</div></div></div></div>
+    <nav style={{flex:1,padding:"12px 12px",overflowY:"auto"}}>
+      {sections.map((sec,si)=>(<div key={si} style={{marginBottom:sec.title?16:8}}>
+        {sec.title&&<div style={{fontSize:10,fontWeight:500,color:"rgba(255,255,255,0.3)",padding:"0 10px",marginBottom:6,letterSpacing:"0.02em"}}>{sec.title}</div>}
+        {sec.items.map(({id,l,i:I})=>(<button key={id} onClick={()=>onNav(id)} style={{width:"100%",display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderRadius:8,border:"none",cursor:"pointer",marginBottom:1,
+      background:active===id?"rgba(255,255,255,0.08)":"transparent",color:active===id?"#fff":"rgba(255,255,255,0.5)",fontSize:12,fontWeight:active===id?500:400,textAlign:"left",
+      transition:"all 0.15s",fontFamily:"inherit"}}
+      onMouseEnter={e=>{if(active!==id){e.currentTarget.style.background="rgba(255,255,255,0.04)";e.currentTarget.style.color="rgba(255,255,255,0.8)";}}}
+      onMouseLeave={e=>{if(active!==id){e.currentTarget.style.background="transparent";e.currentTarget.style.color="rgba(255,255,255,0.5)";}}}><I size={15}/>{l}</button>))}</div>))}</nav>
+    <div style={{padding:"12px 12px",borderTop:"1px solid rgba(255,255,255,0.06)"}}>
+      <button onClick={logout} style={{width:"100%",display:"flex",alignItems:"center",gap:10,padding:"9px 12px",borderRadius:8,border:"none",cursor:"pointer",
+        background:"rgba(248,113,113,0.06)",color:"#F87171",fontSize:12,fontWeight:500,textAlign:"left",fontFamily:"inherit",transition:"all 0.15s"}}
+        onMouseEnter={e=>e.currentTarget.style.background="rgba(248,113,113,0.12)"} onMouseLeave={e=>e.currentTarget.style.background="rgba(248,113,113,0.06)"}>
+        <LogOut size={14}/> Deconnexion</button></div></div>);
 }
 
 function DashOverview(){
@@ -5398,40 +5406,39 @@ function DashOverview(){
   const totalTickets=apiStats?parseInt(apiStats.ticket_count)||tickets.length:tickets.length;
   const totalCA=apiStats?parseFloat(apiStats.grand_total)||parseFloat(gt)||0:parseFloat(gt)||0;
   const displayBest=apiBest&&apiBest.length?apiBest:bestSellers;
-  return(<div style={{height:"100%",overflowY:"auto",padding:20,background:C.bg}}>
-    <h2 style={{fontSize:22,fontWeight:800,marginBottom:16}}>Dashboard</h2>
+  return(<div style={{height:"100%",overflowY:"auto",padding:24,background:C.bg}}>
+    <div style={{marginBottom:24}}>
+      <h2 style={{fontSize:20,fontWeight:700,margin:"0 0 4px",letterSpacing:"-0.4px",color:C.text}}>Dashboard</h2>
+      <p style={{fontSize:13,color:C.textMuted}}>{new Date().toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long",year:"numeric"})}</p></div>
 
     {/* Today's summary */}
-    <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:16,padding:"14px 18px",
-      background:`linear-gradient(135deg,${C.primaryLight},#D4F0DE)`,borderRadius:16,border:`1px solid ${C.primary}15`,
-      boxShadow:`0 2px 12px ${C.primary}08`}}>
-      <div style={{width:40,height:40,borderRadius:12,background:`${C.primary}18`,display:"flex",alignItems:"center",justifyContent:"center"}}>
-        <Activity size={20} color={C.primary}/></div>
-      <div>
-        <div style={{fontSize:13,fontWeight:700,color:C.primaryDark}}>Aujourd'hui</div>
-        <div style={{fontSize:10,color:C.primary}}>{new Date().toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long"})}</div></div>
-      <div style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:16}}>
-        <div style={{textAlign:"center"}}><div style={{fontSize:10,color:C.primary,fontWeight:600}}>Ventes</div>
-          <div style={{fontSize:20,fontWeight:900,color:C.primaryDark}}>{todayCount}</div></div>
-        <div style={{textAlign:"center"}}><div style={{fontSize:10,color:C.primary,fontWeight:600}}>CA</div>
-          <div style={{fontSize:20,fontWeight:900,color:C.primaryDark}}>{todayCA.toFixed(0)}€</div></div>
-        <div style={{textAlign:"center"}}><div style={{fontSize:10,color:C.primary,fontWeight:600}}>Panier moy.</div>
-          <div style={{fontSize:20,fontWeight:900,color:C.primaryDark}}>{todayAvg.toFixed(1)}€</div></div></div></div>
+    <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:2,marginBottom:20,background:C.surface,borderRadius:14,overflow:"hidden",
+      boxShadow:`0 1px 3px ${C.shadow}, 0 0 0 1px ${C.border}`}}>
+      <div style={{padding:"18px 20px",borderRight:`1px solid ${C.border}`}}>
+        <div style={{fontSize:11,color:C.textMuted,marginBottom:4,fontWeight:500}}>Ventes aujourd'hui</div>
+        <div style={{fontSize:26,fontWeight:700,letterSpacing:"-0.5px",color:C.text}}>{todayCount}</div></div>
+      <div style={{padding:"18px 20px",borderRight:`1px solid ${C.border}`}}>
+        <div style={{fontSize:11,color:C.textMuted,marginBottom:4,fontWeight:500}}>CA du jour</div>
+        <div style={{fontSize:26,fontWeight:700,letterSpacing:"-0.5px",color:C.primary}}>{todayCA.toFixed(0)}€</div></div>
+      <div style={{padding:"18px 20px"}}>
+        <div style={{fontSize:11,color:C.textMuted,marginBottom:4,fontWeight:500}}>Panier moyen</div>
+        <div style={{fontSize:26,fontWeight:700,letterSpacing:"-0.5px",color:C.text}}>{todayAvg.toFixed(1)}€</div></div></div>
 
-    <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:16}}>
-      <SC icon={DollarSign} label="CA (GT)" value={`${totalCA.toFixed(0)}€`} color={C.primary}/>
-      {p().canViewMargin&&<SC icon={TrendingUp} label="Marge" value={`${margin.toFixed(0)}€`} color="#3B8C5A"/>}
+    <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12,marginBottom:20}}>
+      <SC icon={DollarSign} label="CA total (GT)" value={`${totalCA.toFixed(0)}€`} color={C.primary}/>
+      {p().canViewMargin&&<SC icon={TrendingUp} label="Marge" value={`${margin.toFixed(0)}€`} color="#059669"/>}
       <SC icon={Receipt} label="Tickets" value={totalTickets} color={C.info}/>
-      <SC icon={AlertTriangle} label="Alertes stock" value={stockAlerts.length} color={C.warn}/></div>
-    {stockAlerts.length>0&&<div style={{background:C.warnLight,borderRadius:10,padding:12,marginBottom:12}}>
-      <div style={{fontSize:12,fontWeight:700,color:C.warn,marginBottom:6}}><Bell size={14} style={{verticalAlign:"middle"}}/> Alertes de stock</div>
+      <SC icon={AlertTriangle} label="Alertes stock" value={stockAlerts.length} color={stockAlerts.length>0?C.danger:C.textLight}/></div>
+    {stockAlerts.length>0&&<div style={{background:C.surface,borderRadius:12,padding:14,marginBottom:16,border:`1px solid ${C.border}`,borderLeft:`3px solid ${C.warn}`}}>
+      <div style={{fontSize:12,fontWeight:600,color:C.text,marginBottom:8,display:"flex",alignItems:"center",gap:6}}><Bell size={14} color={C.warn}/> Alertes de stock</div>
       <div style={{display:"flex",flexWrap:"wrap",gap:4}}>{stockAlerts.slice(0,8).map((a,i)=>(<Badge key={i} color={a.level==="rupture"?C.danger:C.warn}>{a.product.name} {a.variant.color}/{a.variant.size}: {a.variant.stock}</Badge>))}</div></div>}
-    {displayBest.length>0&&<div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`}}>
-      <div style={{fontSize:14,fontWeight:700,marginBottom:8}}>Top 5 produits</div>
-      {displayBest.slice(0,5).map((b,i)=>(<div key={b.sku||b.product_name||i} style={{display:"flex",alignItems:"center",gap:8,padding:6,borderBottom:`1px solid ${C.border}`}}>
-        <span style={{fontSize:14,fontWeight:800,color:i<3?C.primary:C.textMuted,width:20}}>{i+1}</span>
-        <span style={{flex:1,fontSize:12,fontWeight:600}}>{b.name||b.product_name}</span>
-        <span style={{fontSize:12,fontWeight:700,color:C.primary}}>{b.qty||b.total_qty} vendus — {(parseFloat(b.revenue)||0).toFixed(0)}€</span></div>))}</div>}
+    {displayBest.length>0&&<div style={{background:C.surface,borderRadius:14,padding:20,boxShadow:`0 1px 3px ${C.shadow}, 0 0 0 1px ${C.border}`}}>
+      <div style={{fontSize:14,fontWeight:600,marginBottom:12,color:C.text}}>Meilleures ventes</div>
+      {displayBest.slice(0,5).map((b,i)=>(<div key={b.sku||b.product_name||i} style={{display:"flex",alignItems:"center",gap:12,padding:"10px 0",borderBottom:i<4?`1px solid ${C.surfaceAlt}`:"none"}}>
+        <span style={{fontSize:12,fontWeight:700,color:i<3?C.primary:C.textLight,width:22,height:22,borderRadius:6,background:i<3?C.primaryLight:C.surfaceAlt,display:"flex",alignItems:"center",justifyContent:"center"}}>{i+1}</span>
+        <span style={{flex:1,fontSize:13,fontWeight:500,color:C.text}}>{b.name||b.product_name}</span>
+        <span style={{fontSize:12,color:C.textMuted}}>{b.qty||b.total_qty} vendus</span>
+        <span style={{fontSize:13,fontWeight:600,color:C.primary}}>{(parseFloat(b.revenue)||0).toFixed(0)}€</span></div>))}</div>}
   </div>);
 }
 
@@ -5478,7 +5485,7 @@ function TVAScreen(){
             <Input value={newLabel} onChange={e=>setNewLabel(e.target.value)} placeholder="Ex: Super réduit 2,1%"/></div>
           <div style={{width:100}}><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>TAUX (%)</label>
             <Input type="number" step="0.01" value={newRate} onChange={e=>setNewRate(e.target.value)} placeholder="2.1"/></div>
-          <Btn onClick={addRate} disabled={!newLabel||!newRate} style={{height:42,background:`linear-gradient(135deg,${C.primary},${C.gradientB})`}}><Plus size={14}/> Ajouter</Btn>
+          <Btn onClick={addRate} disabled={!newLabel||!newRate} style={{height:42,background:C.primary}}><Plus size={14}/> Ajouter</Btn>
         </div></div>
 
       <div style={{background:C.surfaceAlt,borderRadius:12,padding:14,border:`1px solid ${C.border}`}}>
@@ -5508,20 +5515,20 @@ export default function App(){
     <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;0,9..40,800;0,9..40,900&display=swap');
       *{margin:0;padding:0;box-sizing:border-box}
       html,body,#root{height:100%;min-height:100vh;background:${C.bg}}
-      body{font-family:'DM Sans',system-ui,-apple-system,sans-serif;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}
-      ::-webkit-scrollbar{width:6px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:${C.borderDark};border-radius:3px}::-webkit-scrollbar-thumb:hover{background:${C.textLight}}
-      @keyframes slideIn{from{transform:translateX(80px);opacity:0}to{transform:translateX(0);opacity:1}}
+      body{font-family:'DM Sans',system-ui,-apple-system,sans-serif;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;color:${C.text};font-size:14px;letter-spacing:-0.01em}
+      ::-webkit-scrollbar{width:5px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:${C.borderDark};border-radius:4px}::-webkit-scrollbar-thumb:hover{background:${C.textLight}}
+      @keyframes slideIn{from{transform:translateX(40px);opacity:0}to{transform:translateX(0);opacity:1}}
       @keyframes slideDown{from{transform:translateY(-100%);opacity:0}to{transform:translateY(0);opacity:1}}
       @keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
-      @keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
-      @keyframes modalPop{from{opacity:0;transform:scale(0.92) translateY(10px)}to{opacity:1;transform:scale(1) translateY(0)}}
-      @keyframes successPulse{0%{transform:scale(0.8);opacity:0}50%{transform:scale(1.1)}100%{transform:scale(1);opacity:1}}
+      @keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
+      @keyframes modalPop{from{opacity:0;transform:scale(0.95) translateY(8px)}to{opacity:1;transform:scale(1) translateY(0)}}
+      @keyframes successPulse{0%{transform:scale(0.8);opacity:0}50%{transform:scale(1.05)}100%{transform:scale(1);opacity:1}}
       @keyframes checkDraw{from{stroke-dashoffset:20}to{stroke-dashoffset:0}}
       .spin-loader{display:inline-block;width:15px;height:15px;border:2px solid rgba(255,255,255,0.25);border-top-color:#fff;border-radius:50%;animation:spin 0.6s linear infinite}
-      button:active{transform:scale(0.96)!important}button{transition:all 0.15s ease}
-      input:focus,select:focus,textarea:focus{outline:none;border-color:${C.primary}!important;box-shadow:0 0 0 3px ${C.primary}12!important}
-      ::selection{background:${C.primary}20;color:${C.primaryDark}}
-      select{cursor:pointer}
+      button:active{transform:scale(0.97)!important}button{transition:all 0.2s cubic-bezier(0.16,1,0.3,1)}
+      input:focus,select:focus,textarea:focus{outline:none;border-color:${C.primary}!important;box-shadow:0 0 0 3px ${C.primary}10!important}
+      ::selection{background:${C.primary}15;color:${C.primaryDark}}
+      select{cursor:pointer;font-family:inherit}
       @media print{body *{visibility:hidden!important}[data-print-receipt],[data-print-receipt] *{visibility:visible!important}
         [data-print-receipt]{position:absolute!important;left:0!important;top:0!important;width:72mm!important;padding:4mm!important;background:#fff!important;border:none!important;box-shadow:none!important;border-radius:0!important}
         @page{size:72mm auto;margin:2mm}}
