@@ -12,9 +12,17 @@ if (typeof window !== 'undefined' && API_URL.startsWith('http://') && window.loc
 let token = null;
 try { token = sessionStorage.getItem('caissepro_token'); } catch(e) {}
 
+// ══ Multi-store: current store ID sent with every request ══
+let storeId = null;
+try { storeId = sessionStorage.getItem('caissepro_store_id'); } catch(e) {}
+
+export function setStoreId(id) { storeId = id; try { if(id) sessionStorage.setItem('caissepro_store_id', id); else sessionStorage.removeItem('caissepro_store_id'); } catch(e) {} }
+export function getStoreId() { return storeId; }
+export function clearStoreId() { storeId = null; try { sessionStorage.removeItem('caissepro_store_id'); } catch(e) {} }
+
 export function setToken(t) { token = t; try { if(t) sessionStorage.setItem('caissepro_token', t); else sessionStorage.removeItem('caissepro_token'); } catch(e) {} }
 export function getToken() { return token; }
-export function clearToken() { token = null; try { sessionStorage.removeItem('caissepro_token'); } catch(e) {} }
+export function clearToken() { token = null; try { sessionStorage.removeItem('caissepro_token'); sessionStorage.removeItem('caissepro_store_id'); } catch(e) {} storeId = null; }
 
 // H1/H2 fix: 401 detection + automatic token invalidation
 let onAuthExpired = null;
@@ -23,6 +31,7 @@ export function setOnAuthExpired(fn) { onAuthExpired = fn; }
 async function api(path, options = {}) {
   const headers = { 'Content-Type': 'application/json', ...options.headers };
   if (token) headers['Authorization'] = `Bearer ${token}`;
+  if (storeId) headers['X-Store-Id'] = storeId;
 
   const res = await fetch(`${API_URL}${path}`, { ...options, headers });
 
@@ -154,6 +163,18 @@ export const settings = {
   taxRates: () => api('/api/settings/tax-rates'),
   openRegister: (amount) => api('/api/settings/register/open', { method: 'POST', body: JSON.stringify({ openingAmount: amount }) }),
   closeRegister: (id, data) => api(`/api/settings/register/${id}/close`, { method: 'PUT', body: JSON.stringify(data) }),
+};
+
+// ══ Stores (multi-magasin) ══
+export const stores = {
+  list: () => api('/api/stores'),
+  get: (id) => api(`/api/stores/${id}`),
+  create: (data) => api('/api/stores', { method: 'POST', body: JSON.stringify(data) }),
+  update: (id, data) => api(`/api/stores/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  remove: (id) => api(`/api/stores/${id}`, { method: 'DELETE' }),
+  users: (id) => api(`/api/stores/${id}/users`),
+  assignUser: (id, data) => api(`/api/stores/${id}/users`, { method: 'POST', body: JSON.stringify(data) }),
+  removeUser: (id, userId) => api(`/api/stores/${id}/users/${userId}`, { method: 'DELETE' }),
 };
 
 // ══ Health ══

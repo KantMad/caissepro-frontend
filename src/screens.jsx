@@ -30,7 +30,7 @@ function LoginScreen(){
   },[]);
   const allUsers=users&&users.length?users:initUsers;
   const go=async()=>{if(!su){setErr("Selectionnez un profil");return;}const u=allUsers.find(u=>u.id===su);if(!u){setErr("Profil introuvable");return;}
-    setLoading(true);setErr("");try{const ok=await login(u.name,pw||u.pin);if(ok)setIM(m);else setErr("Code incorrect ou serveur indisponible");}catch(e){setErr("Erreur de connexion: "+e.message);}finally{setLoading(false);}};
+    setLoading(true);setErr("");try{const res=await login(u.name,pw||u.pin);if(res?.ok||res===true)setIM(m);else setErr("Code incorrect ou serveur indisponible");}catch(e){setErr("Erreur de connexion: "+e.message);}finally{setLoading(false);}};
   return(<div style={{minHeight:"100vh",background:C.bg,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
     <div style={{width:420,background:C.surface,borderRadius:20,padding:40,
       boxShadow:"0 20px 60px rgba(15,23,42,0.08), 0 0 0 1px rgba(15,23,42,0.04)",animation:"fadeIn 0.4s ease"}}>

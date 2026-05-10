@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef, createContext, useContext, useCallback } from "react";
 import * as API from "./api.js";
-import { setOnAuthExpired } from "./api.js";
+import { setOnAuthExpired, setStoreId, clearStoreId } from "./api.js";
 import printer from "./printer.js";
 import { CO, DEFAULT_TVA_RATES, PERMS, initProducts, initUsers, initCustomers, LOYALTY_TIERS, initPromos, C } from "./constants.jsx";
 import { hashPin, verifyPin, sha256, norm, loadVariantOrderFromSettings, autoImportSizesFromProducts } from "./utils.jsx";
@@ -16,8 +16,19 @@ let TVA_RATES = [...DEFAULT_TVA_RATES];
 function AppProvider({children}){
   const[currentUser,setCurrentUserRaw]=useState(()=>{try{const s=sessionStorage.getItem("caissepro_user");return s?JSON.parse(s):null;}catch(e){return null;}});
   const setCurrentUser=useCallback((u)=>{setCurrentUserRaw(u);try{if(u)sessionStorage.setItem("caissepro_user",JSON.stringify(u));else sessionStorage.removeItem("caissepro_user");}catch(e){}},[]);
+  // ══ Multi-store ══
+  const[stores,setStores]=useState([]);
+  const[currentStore,setCurrentStoreRaw]=useState(()=>{try{const s=sessionStorage.getItem("caissepro_store");return s?JSON.parse(s):null;}catch(e){return null;}});
+  const setCurrentStore=useCallback((s)=>{setCurrentStoreRaw(s);try{if(s){sessionStorage.setItem("caissepro_store",JSON.stringify(s));setStoreId(s.id);}else{sessionStorage.removeItem("caissepro_store");clearStoreId();}}catch(e){}},[]);
+  // Dashboard: which store the admin is viewing (can differ from currentStore)
+  const[viewingStoreId,setViewingStoreId]=useState(()=>{try{return sessionStorage.getItem("caissepro_viewing_store")||null;}catch(e){return null;}});
+  useEffect(()=>{try{if(viewingStoreId)sessionStorage.setItem("caissepro_viewing_store",viewingStoreId);else sessionStorage.removeItem("caissepro_viewing_store");}catch(e){}},[viewingStoreId]);
   const[mode,setMode]=useState(()=>{try{return sessionStorage.getItem("caissepro_mode")||"cashier";}catch(e){return"cashier";}});
   useEffect(()=>{try{sessionStorage.setItem("caissepro_mode",mode);}catch(e){}},[mode]);
+  // The effective store_id for API calls: in cashier mode, always currentStore; in dashboard, viewingStoreId or currentStore
+  const effectiveStoreId=useMemo(()=>{if(mode==="cashier")return currentStore?.id||null;return viewingStoreId||currentStore?.id||null;},[mode,currentStore,viewingStoreId]);
+  // Update API header when effective store changes
+  useEffect(()=>{if(effectiveStoreId)setStoreId(effectiveStoreId);else clearStoreId();},[effectiveStoreId]);
   const[products,setProducts]=useState([]);
   const[customers,setCustomers]=useState([]);
   const[cart,setCart]=useState([]);
@@ -123,6 +134,8 @@ function AppProvider({children}){
   },[]);
   useEffect(()=>{
     const token=API.getToken();if(!token||!currentUser)return;
+    // Multi-store: reload stores list on reconnect
+    API.stores.list().then(s=>{if(s?.length)setStores(s);}).catch(()=>{});
     loadAllData();
   },[currentUser]);
 
@@ -178,37 +191,79 @@ function AppProvider({children}){
   },[addJET,saveSettingsToAPI_base]);
 
   const[offlineMode,setOfflineMode]=useState(false);
-  const login=async(n,pw)=>{
-    // Essai API d'abord
-    try{const res=await API.auth.login(n,pw);API.setToken(res.token);setCurrentUser(res.user);
+
+  // ══ Load store data after selecting a store ══
+  const loadStoreData=useCallback(async()=>{
+    try{
       const[prods,custs,prms,setts,apiUsers,apiSales,apiCounter]=await Promise.all([API.products.list(),API.customers.list(),API.settings.promos(),API.settings.get(),API.auth.users().catch(()=>null),API.sales.list({limit:200}).catch(()=>null),API.fiscal.counter().catch(()=>null)]);
-      // Load settings + variant order BEFORE normalizing products (so sort order is correct)
       loadVariantOrderFromSettings(setts);
       if(setts?.csvColumnMapping){try{localStorage.setItem("caissepro_csv_column_mapping",JSON.stringify(setts.csvColumnMapping));}catch(e){}}
       autoImportSizesFromProducts(prods);
       setProducts(norm.products(prods));setCustomers(norm.customers(custs));setPromos(prms);setSettings(s=>({...s,...setts}));
-      // Sync tickets from API
       if(apiSales&&Array.isArray(apiSales)){const merged=[...apiSales];const localOnly=tickets.filter(lt=>lt.hash==="LOCAL"||!apiSales.find(as=>as.ticketNumber===lt.ticketNumber));
         setTickets([...localOnly,...merged].sort((a,b)=>new Date(b.date||b.createdAt||0)-new Date(a.date||a.createdAt||0)).slice(0,500));}
-      // Sync fiscal counters from API
       if(apiCounter){if(apiCounter.seq)setTSeq(apiCounter.seq);if(apiCounter.lastHash)setLastHash(apiCounter.lastHash);if(apiCounter.grandTotal!=null)setGt(parseFloat(apiCounter.grandTotal));}
-      // Synchroniser la liste utilisateurs depuis l'API
       if(apiUsers&&apiUsers.length){const merged=[...apiUsers.map(u=>({id:u.id,name:u.name,role:u.role,pin:"****",apiSynced:true}))];
         const localOnly=users.filter(lu=>!apiUsers.find(au=>au.name===lu.name));
         setUsers([...merged,...localOnly]);}
-      setOfflineMode(false);setFiscalWarning(false);addJET("LOGIN",n);notify("Connecté au serveur","success");return true;
+    }catch(e){console.warn("Chargement données magasin échoué:",e.message);}
+  },[]);
+
+  // ══ Select a store (called after login or from dashboard store switcher) ══
+  const selectStore=useCallback(async(store)=>{
+    setCurrentStore(store);
+    setViewingStoreId(store.id);
+    await loadStoreData();
+    notify(`Magasin: ${store.name}`,"success");
+  },[setCurrentStore,loadStoreData,notify]);
+
+  // ══ Dashboard: switch viewed store (reloads data for that store) ══
+  const switchViewingStore=useCallback(async(storeId)=>{
+    setViewingStoreId(storeId);
+    setStoreId(storeId==="all"?null:storeId);
+    // Reload data for the new store context
+    try{
+      const[prods,apiSales,setts]=await Promise.all([API.products.list(),API.sales.list({limit:200}).catch(()=>null),API.settings.get().catch(()=>null)]);
+      if(prods)setProducts(norm.products(prods));
+      if(apiSales&&Array.isArray(apiSales))setTickets(apiSales.sort((a,b)=>new Date(b.date||b.createdAt||0)-new Date(a.date||a.createdAt||0)).slice(0,500));
+      if(setts)setSettings(s=>({...s,...setts}));
+    }catch(e){console.warn("Erreur chargement magasin:",e.message);}
+    const storeName=storeId==="all"?"Tous les magasins":stores.find(s=>s.id===storeId)?.name||"";
+    notify(`Vue: ${storeName}`,"info");
+  },[stores,notify]);
+
+  const login=async(n,pw)=>{
+    // Essai API d'abord
+    try{const res=await API.auth.login(n,pw);API.setToken(res.token);setCurrentUser(res.user);
+      // Multi-store: récupérer les magasins de l'utilisateur
+      const userStores=res.stores||[];
+      setStores(userStores);
+      // Si un seul magasin, le sélectionner automatiquement
+      if(userStores.length===1){
+        setCurrentStore(userStores[0]);setViewingStoreId(userStores[0].id);
+        setStoreId(userStores[0].id);
+        await loadStoreData();
+      } else if(userStores.length>1){
+        // Sélectionner le magasin principal par défaut
+        const primary=userStores.find(s=>s.isPrimary)||userStores[0];
+        setCurrentStore(primary);setViewingStoreId(primary.id);
+        setStoreId(primary.id);
+        await loadStoreData();
+      } else {
+        // Pas de magasins assignés — charger les données sans filtre (rétrocompatibilité)
+        await loadStoreData();
+      }
+      setOfflineMode(false);setFiscalWarning(false);addJET("LOGIN",n);notify("Connecté au serveur","success");return{ok:true,stores:userStores};
     }catch(e){
       console.warn("API indisponible, tentative login hors-ligne:",e.message);
-      // Fallback local — vérifier les identifiants locaux
-      // Offline login — verify PIN with hash comparison
       let localUser=initUsers.find(u=>u.name===n&&u.password===pw);
       if(!localUser){for(const u of users){if(u.name===n&&u.pin!=="****"&&await verifyPin(pw,u.pin)){localUser=u;break;}}}
       if(localUser){setCurrentUser({id:localUser.id,name:localUser.name,role:localUser.role});
         setProducts(initProducts);setCustomers(initCustomers);setPromos(initPromos);
         setOfflineMode(true);setFiscalWarning(true);addJET("LOGIN_OFFLINE",n);
-        notify("Mode hors-ligne — chaîne fiscale non sécurisée, synchronisez dès que possible","warn");return true;}
-      return false;}};
-  const logout=()=>{API.clearToken();addJET("LOGOUT",currentUser?.name);setCurrentUser(null);setCart([]);setGDisc(0);setSelCust(null);setOfflineMode(false);};
+        notify("Mode hors-ligne — chaîne fiscale non sécurisée, synchronisez dès que possible","warn");return{ok:true,stores:[]};}
+      return{ok:false};}};
+  const logout=()=>{API.clearToken();addJET("LOGOUT",currentUser?.name);setCurrentUser(null);setCurrentStore(null);setStores([]);setViewingStoreId(null);setCart([]);setGDisc(0);setSelCust(null);setOfflineMode(false);};
 
   // H1/H2 fix: Auto-logout on token expiration
   useEffect(()=>{setOnAuthExpired(()=>{notify("Session expirée — veuillez vous reconnecter","error");logout();});return()=>setOnAuthExpired(null);},[]);
@@ -852,7 +907,9 @@ function AppProvider({children}){
     });}catch(e){}
   },[cart,settings.name]);
 
-  return<AppCtx.Provider value={{currentUser,login,logout,mode,setMode,offlineMode,products,setProducts,addProduct,customers,setCustomers,addCustomer,openCustomerDisplay,footfall,addFootfall,
+  return<AppCtx.Provider value={{currentUser,login,logout,mode,setMode,offlineMode,
+    stores,setStores,currentStore,setCurrentStore,selectStore,viewingStoreId,switchViewingStore,effectiveStoreId,
+    products,setProducts,addProduct,customers,setCustomers,addCustomer,openCustomerDisplay,footfall,addFootfall,
     cart,addToCart,addCustomItem,removeFromCart,voidSale,updateQty,updateItemDisc,clearCart,gDisc,gDiscType,setCartGD,
     promoCode,setPromoCode,calcPromoDiscount,
     cashReg,openReg,closeReg,isOnline,tickets,tSeq,lastHash,gt,audit,jet,closures,avoirs,consumeAvoir,

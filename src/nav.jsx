@@ -19,14 +19,17 @@ import {
 } from "./screens.jsx";
 
 function CashierNav({active,onNav}){
-  const{currentUser,logout,isOnline,stockAlerts,clockIn,clockOut,pendingSync,clearPendingSync,openCustomerDisplay}=useApp();
+  const{currentUser,logout,isOnline,stockAlerts,clockIn,clockOut,pendingSync,clearPendingSync,openCustomerDisplay,currentStore}=useApp();
   const items=[{id:"sales",l:"Vente",i:ShoppingCart},{id:"returns",l:"Retours",i:RotateCcw},{id:"stats",l:"Stats",i:BarChart3},{id:"stock",l:"Stock",i:Grid},
     {id:"products",l:"Produits",i:Package},{id:"history",l:"Tickets",i:Receipt},{id:"customers",l:"Clients",i:Users},{id:"giftcards",l:"Cadeaux",i:Gift},
     {id:"promos",l:"Promos",i:Zap},{id:"closure",l:"Cloture",i:Lock},{id:"footfall",l:"Entrees",i:Activity},
     {id:"audit",l:"Audit",i:Activity},{id:"fiscal",l:"NF525",i:Shield},{id:"settings",l:"Reglages",i:Settings},{id:"help",l:"Aide",i:HelpCircle}];
   return(<div style={{width:72,background:"#0F172A",display:"flex",flexDirection:"column",alignItems:"center",padding:"14px 0",gap:2}}>
     <div style={{width:38,height:38,borderRadius:10,background:C.primary,display:"flex",alignItems:"center",justifyContent:"center",
-      color:"#fff",fontWeight:700,fontSize:14,marginBottom:6}}>{currentUser?.name?.[0]}</div>
+      color:"#fff",fontWeight:700,fontSize:14,marginBottom:4}}>{currentUser?.name?.[0]}</div>
+    {currentStore&&<div style={{fontSize:7,color:"rgba(255,255,255,0.6)",fontWeight:600,textAlign:"center",marginBottom:2,
+      maxWidth:60,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",lineHeight:1.2}} title={currentStore.name}>
+      <Store size={8} style={{marginRight:2,verticalAlign:"middle"}}/>{currentStore.name}</div>}
     <div style={{display:"flex",alignItems:"center",gap:3,marginBottom:4}}>
       <div style={{width:6,height:6,borderRadius:3,background:isOnline?"#34D399":"#F87171"}}/>
       <span style={{fontSize:8,color:"rgba(255,255,255,0.5)",fontWeight:500}}>{isOnline?"En ligne":"Offline"}</span></div>
@@ -149,12 +152,12 @@ function UsersScreen(){
 }
 
 function DashboardNav({active,onNav}){
-  const{logout,currentUser}=useApp();
+  const{logout,currentUser,stores,viewingStoreId,switchViewingStore,currentStore}=useApp();
   const sections=[
     {title:"",items:[{id:"overview",l:"Dashboard",i:LayoutDashboard}]},
     {title:"Commerce",items:[{id:"products",l:"Produits",i:Package},{id:"stock",l:"Stock",i:Grid},{id:"stats",l:"Statistiques",i:BarChart3},{id:"returns",l:"Retours & Avoirs",i:RotateCcw}]},
     {title:"Relations",items:[{id:"customers",l:"Clients",i:Users},{id:"users",l:"Utilisateurs",i:UserIcon},{id:"giftcards",l:"Cartes cadeaux",i:Gift},{id:"promos",l:"Promotions",i:Zap},{id:"footfall",l:"Entrees",i:Activity}]},
-    {title:"Systeme",items:[{id:"tva",l:"Taux de TVA",i:Percent},{id:"settings",l:"Parametres",i:Settings},{id:"fiscal",l:"Fiscal NF525",i:Shield},{id:"audit",l:"Journal d'audit",i:Activity},{id:"help",l:"Aide",i:HelpCircle}]}];
+    {title:"Systeme",items:[{id:"storesMgmt",l:"Magasins",i:Store},{id:"tva",l:"Taux de TVA",i:Percent},{id:"settings",l:"Parametres",i:Settings},{id:"fiscal",l:"Fiscal NF525",i:Shield},{id:"audit",l:"Journal d'audit",i:Activity},{id:"help",l:"Aide",i:HelpCircle}]}];
   return(<div style={{width:240,background:"#0F172A",height:"100vh",display:"flex",flexDirection:"column"}}>
     <div style={{padding:"20px 20px 16px",borderBottom:"1px solid rgba(255,255,255,0.06)"}}>
       <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:16}}>
@@ -164,7 +167,20 @@ function DashboardNav({active,onNav}){
       <div style={{padding:"10px 12px",borderRadius:10,background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.06)",display:"flex",alignItems:"center",gap:10}}>
         <div style={{width:30,height:30,borderRadius:8,background:"rgba(255,255,255,0.1)",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontSize:12,fontWeight:600}}>{currentUser?.name?.[0]}</div>
         <div><div style={{color:"#fff",fontSize:12,fontWeight:500}}>{currentUser?.name}</div>
-          <div style={{color:"rgba(255,255,255,0.35)",fontSize:10}}>{currentUser?.role==="admin"?"Administrateur":"Caissier"}</div></div></div></div>
+          <div style={{color:"rgba(255,255,255,0.35)",fontSize:10}}>{currentUser?.role==="admin"?"Administrateur":"Caissier"}</div></div></div>
+      {/* ══ Store selector ══ */}
+      {stores.length>1&&<div style={{marginTop:10}}>
+        <div style={{fontSize:9,fontWeight:500,color:"rgba(255,255,255,0.35)",marginBottom:4,letterSpacing:"0.03em"}}>MAGASIN</div>
+        <select value={viewingStoreId||currentStore?.id||""} onChange={e=>switchViewingStore(e.target.value)}
+          style={{width:"100%",padding:"7px 10px",borderRadius:8,border:"1px solid rgba(255,255,255,0.1)",background:"rgba(255,255,255,0.06)",color:"#fff",fontSize:11,fontWeight:500,fontFamily:"inherit",cursor:"pointer",appearance:"none",
+            backgroundImage:`url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='rgba(255,255,255,0.4)'/%3E%3C/svg%3E")`,backgroundRepeat:"no-repeat",backgroundPosition:"right 10px center"}}>
+          {currentUser?.role==="admin"&&<option value="all">Tous les magasins</option>}
+          {stores.map(s=>(<option key={s.id} value={s.id}>{s.name}</option>))}
+        </select></div>}
+      {stores.length<=1&&currentStore&&<div style={{marginTop:8,padding:"6px 10px",borderRadius:8,background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.06)"}}>
+        <div style={{fontSize:9,fontWeight:500,color:"rgba(255,255,255,0.35)",marginBottom:2}}>MAGASIN</div>
+        <div style={{color:"#fff",fontSize:11,fontWeight:500}}>{currentStore.name}</div></div>}
+    </div>
     <nav style={{flex:1,padding:"12px 12px",overflowY:"auto"}}>
       {sections.map((sec,si)=>(<div key={si} style={{marginBottom:sec.title?16:8}}>
         {sec.title&&<div style={{fontSize:10,fontWeight:500,color:"rgba(255,255,255,0.3)",padding:"0 10px",marginBottom:6,letterSpacing:"0.02em"}}>{sec.title}</div>}
@@ -290,11 +306,139 @@ function TVAScreen(){
     </div></div>);
 }
 
+/* ══════════ STORES MANAGEMENT ══════════ */
+function StoresManagementScreen(){
+  const{stores,setStores,users,notify,currentUser}=useApp();
+  const[editStore,setEditStore]=useState(null);const[newModal,setNewModal]=useState(false);
+  const[form,setForm]=useState({name:"",address:"",postalCode:"",city:"",phone:"",siret:""});
+  const[storeUsers,setStoreUsers]=useState([]);const[viewUsersId,setViewUsersId]=useState(null);
+  const[assignModal,setAssignModal]=useState(null);const[assignUserId,setAssignUserId]=useState("");const[assignRole,setAssignRole]=useState("cashier");
+  const[loading,setLoading]=useState(false);
+
+  const loadStoreUsers=async(storeId)=>{
+    try{const data=await API.stores.users(storeId);setStoreUsers(data);setViewUsersId(storeId);}catch(e){notify(e.message,"error");}};
+
+  const saveStore=async()=>{
+    if(!form.name){notify("Nom requis","error");return;}
+    setLoading(true);
+    try{
+      if(editStore){
+        const updated=await API.stores.update(editStore.id,form);
+        setStores(p=>p.map(s=>s.id===editStore.id?updated:s));
+        setEditStore(null);notify("Magasin modifié","success");
+      }else{
+        const created=await API.stores.create(form);
+        setStores(p=>[...p,created]);
+        setNewModal(false);notify("Magasin créé","success");
+      }
+    }catch(e){notify(e.message,"error");}
+    setLoading(false);};
+
+  const deleteStore=async(id)=>{
+    if(!confirm("Supprimer ce magasin ? Cette action est irréversible pour un magasin sans ventes."))return;
+    try{await API.stores.remove(id);setStores(p=>p.filter(s=>s.id!==id));notify("Magasin supprimé","warn");}catch(e){notify(e.message,"error");}};
+
+  const assignUser=async()=>{
+    if(!assignUserId){notify("Sélectionnez un utilisateur","error");return;}
+    try{
+      await API.stores.assignUser(assignModal,{userId:assignUserId,role:assignRole,isPrimary:false});
+      notify("Utilisateur assigné","success");setAssignModal(null);loadStoreUsers(assignModal);
+    }catch(e){notify(e.message,"error");}};
+
+  const removeUserFromStore=async(storeId,userId)=>{
+    try{await API.stores.removeUser(storeId,userId);setStoreUsers(p=>p.filter(u=>u.id!==userId));notify("Utilisateur retiré","warn");}catch(e){notify(e.message,"error");}};
+
+  const openEdit=(s)=>{setForm({name:s.name||"",address:s.address||"",postalCode:s.postal_code||"",city:s.city||"",phone:s.phone||"",siret:s.siret||""});setEditStore(s);};
+  const openNew=()=>{setForm({name:"",address:"",postalCode:"",city:"",phone:"",siret:""});setNewModal(true);};
+
+  if(currentUser?.role!=="admin")return(<div style={{padding:40,textAlign:"center",color:C.textMuted}}>
+    <Shield size={40} style={{marginBottom:12,opacity:0.4}}/><p style={{fontSize:14}}>Accès réservé aux administrateurs</p></div>);
+
+  const formUI=(<div style={{display:"flex",flexDirection:"column",gap:10}}>
+    <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>NOM DU MAGASIN *</label>
+      <Input value={form.name} onChange={e=>setForm(p=>({...p,name:e.target.value}))} placeholder="Ex: Boutique Paris 11"/></div>
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+      <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>ADRESSE</label>
+        <Input value={form.address} onChange={e=>setForm(p=>({...p,address:e.target.value}))} placeholder="12 rue..."/></div>
+      <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>CODE POSTAL</label>
+        <Input value={form.postalCode} onChange={e=>setForm(p=>({...p,postalCode:e.target.value}))} placeholder="75011"/></div>
+    </div>
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+      <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>VILLE</label>
+        <Input value={form.city} onChange={e=>setForm(p=>({...p,city:e.target.value}))} placeholder="Paris"/></div>
+      <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>TÉLÉPHONE</label>
+        <Input value={form.phone} onChange={e=>setForm(p=>({...p,phone:e.target.value}))} placeholder="01 23 45 67 89"/></div>
+    </div>
+    <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>SIRET</label>
+      <Input value={form.siret} onChange={e=>setForm(p=>({...p,siret:e.target.value}))} placeholder="123 456 789 00012"/></div>
+    <Btn onClick={saveStore} disabled={loading} style={{marginTop:6,background:C.primary}}>{loading?<span className="spin-loader"/>:editStore?"Enregistrer":"Créer le magasin"}</Btn>
+  </div>);
+
+  return(<div style={{height:"100%",overflowY:"auto",padding:24,background:C.bg}}>
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:20}}>
+      <div><h2 style={{fontSize:20,fontWeight:700,letterSpacing:"-0.4px",color:C.text,margin:0}}>Gestion des magasins</h2>
+        <p style={{fontSize:12,color:C.textMuted,marginTop:2}}>{stores.length} magasin{stores.length>1?"s":""} configuré{stores.length>1?"s":""}</p></div>
+      <Btn onClick={openNew} style={{background:C.primary}}><Plus size={14}/> Nouveau magasin</Btn></div>
+
+    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill, minmax(320px,1fr))",gap:16}}>
+      {stores.map(s=>(<div key={s.id} style={{background:C.surface,borderRadius:14,border:`1.5px solid ${C.border}`,overflow:"hidden",transition:"all 0.2s",boxShadow:`0 1px 3px ${C.shadow}`}}>
+        <div style={{padding:"16px 18px",borderBottom:`1px solid ${C.border}`}}>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+            <div style={{display:"flex",alignItems:"center",gap:10}}>
+              <div style={{width:34,height:34,borderRadius:9,background:C.primaryLight,display:"flex",alignItems:"center",justifyContent:"center"}}><Store size={16} color={C.primary}/></div>
+              <div><div style={{fontSize:14,fontWeight:600,color:C.text}}>{s.name}</div>
+                {s.city&&<div style={{fontSize:11,color:C.textMuted}}>{s.address?`${s.address}, `:""}{s.city}</div>}</div></div>
+            <div style={{display:"flex",gap:4}}>
+              <button onClick={()=>openEdit(s)} title="Modifier" style={{width:28,height:28,borderRadius:7,border:"none",cursor:"pointer",background:C.surfaceAlt,color:C.primary,display:"flex",alignItems:"center",justifyContent:"center",transition:"all 0.15s"}}
+                onMouseEnter={e=>e.currentTarget.style.background=C.primaryLight} onMouseLeave={e=>e.currentTarget.style.background=C.surfaceAlt}><Settings size={13}/></button>
+              <button onClick={()=>deleteStore(s.id)} title="Supprimer" style={{width:28,height:28,borderRadius:7,border:"none",cursor:"pointer",background:C.surfaceAlt,color:C.danger,display:"flex",alignItems:"center",justifyContent:"center",transition:"all 0.15s"}}
+                onMouseEnter={e=>e.currentTarget.style.background="rgba(239,68,68,0.1)"} onMouseLeave={e=>e.currentTarget.style.background=C.surfaceAlt}><Trash2 size={13}/></button></div></div></div>
+        <div style={{padding:"12px 18px",display:"flex",gap:8,flexWrap:"wrap"}}>
+          {s.phone&&<span style={{fontSize:10,color:C.textMuted,background:C.surfaceAlt,padding:"3px 8px",borderRadius:6}}>{s.phone}</span>}
+          {s.siret&&<span style={{fontSize:10,color:C.textMuted,background:C.surfaceAlt,padding:"3px 8px",borderRadius:6}}>SIRET: {s.siret}</span>}
+          <button onClick={()=>{viewUsersId===s.id?setViewUsersId(null):loadStoreUsers(s.id);}} style={{fontSize:10,color:C.primary,background:C.primaryLight,padding:"3px 8px",borderRadius:6,border:"none",cursor:"pointer",fontWeight:600,fontFamily:"inherit"}}>
+            <Users size={10} style={{marginRight:3,verticalAlign:"middle"}}/>{viewUsersId===s.id?"Masquer":"Voir"} utilisateurs</button>
+          <button onClick={()=>{setAssignModal(s.id);setAssignUserId("");setAssignRole("cashier");}} style={{fontSize:10,color:"#059669",background:"rgba(5,150,105,0.08)",padding:"3px 8px",borderRadius:6,border:"none",cursor:"pointer",fontWeight:600,fontFamily:"inherit"}}>
+            <Plus size={10} style={{marginRight:2,verticalAlign:"middle"}}/>Assigner</button></div>
+        {viewUsersId===s.id&&<div style={{padding:"0 18px 14px"}}>
+          {storeUsers.length===0?<div style={{fontSize:11,color:C.textMuted,padding:"8px 0"}}>Aucun utilisateur assigné</div>:
+          <div style={{display:"flex",flexDirection:"column",gap:4}}>
+            {storeUsers.map(u=>(<div key={u.id} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 10px",borderRadius:8,background:C.surfaceAlt}}>
+              <div style={{width:24,height:24,borderRadius:6,background:C.primaryLight,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:700,color:C.primary}}>{u.name?.[0]}</div>
+              <span style={{flex:1,fontSize:12,fontWeight:500}}>{u.name}</span>
+              <Badge color={u.store_role==="admin"?C.primary:C.info}>{u.store_role||u.global_role}</Badge>
+              {u.is_primary&&<Badge color="#059669">Principal</Badge>}
+              <button onClick={()=>removeUserFromStore(s.id,u.id)} title="Retirer" style={{background:"none",border:"none",cursor:"pointer",color:C.danger,padding:2}}><Trash2 size={11}/></button>
+            </div>))}</div>}</div>}
+      </div>))}</div>
+
+    {/* Edit modal */}
+    {editStore&&<Modal title={`Modifier — ${editStore.name}`} onClose={()=>setEditStore(null)}>{formUI}</Modal>}
+    {/* New modal */}
+    {newModal&&<Modal title="Nouveau magasin" onClose={()=>setNewModal(false)}>{formUI}</Modal>}
+    {/* Assign user modal */}
+    {assignModal&&<Modal title="Assigner un utilisateur" onClose={()=>setAssignModal(null)}>
+      <div style={{display:"flex",flexDirection:"column",gap:12}}>
+        <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>UTILISATEUR</label>
+          <select value={assignUserId} onChange={e=>setAssignUserId(e.target.value)} style={{width:"100%",padding:"10px 12px",borderRadius:10,border:`1.5px solid ${C.border}`,fontSize:13,fontFamily:"inherit",background:C.surface}}>
+            <option value="">Choisir...</option>
+            {users.map(u=>(<option key={u.id} value={u.id}>{u.name} ({u.role})</option>))}
+          </select></div>
+        <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>RÔLE DANS CE MAGASIN</label>
+          <select value={assignRole} onChange={e=>setAssignRole(e.target.value)} style={{width:"100%",padding:"10px 12px",borderRadius:10,border:`1.5px solid ${C.border}`,fontSize:13,fontFamily:"inherit",background:C.surface}}>
+            <option value="cashier">Caissier</option>
+            <option value="admin">Admin magasin</option>
+          </select></div>
+        <Btn onClick={assignUser} style={{background:C.primary}}>Assigner</Btn>
+      </div></Modal>}
+  </div>);
+}
+
 function DashboardInterface(){
   const[sc,setScRaw]=useState(()=>{try{return sessionStorage.getItem("caissepro_dash_screen")||"overview";}catch(e){return"overview";}});
   const setSc=useCallback((v)=>{setScRaw(v);try{sessionStorage.setItem("caissepro_dash_screen",v);}catch(e){}},[]);
   const S={overview:DashOverview,products:ProductsScreen,stock:StockScreen,stats:StatsScreen,returns:ReturnsHistoryScreen,customers:CustomersScreen,
-    users:UsersScreen,tva:TVAScreen,giftcards:GiftCardScreen,promos:PromosScreen,footfall:FootfallScreen,settings:SettingsScreen,fiscal:FiscalScreen,audit:AuditScreen,help:HelpDashboardScreen};
+    users:UsersScreen,storesMgmt:StoresManagementScreen,tva:TVAScreen,giftcards:GiftCardScreen,promos:PromosScreen,footfall:FootfallScreen,settings:SettingsScreen,fiscal:FiscalScreen,audit:AuditScreen,help:HelpDashboardScreen};
   const Sc=S[sc]||DashOverview;
   return(<div style={{display:"flex",height:"100vh",fontFamily:"'DM Sans',system-ui,sans-serif"}}><DashboardNav active={sc} onNav={setSc}/><div style={{flex:1,overflow:"hidden"}}><ErrorBoundary><Sc/></ErrorBoundary></div></div>);
 }
