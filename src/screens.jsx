@@ -3467,7 +3467,7 @@ function GiftCardScreen(){
 function PromosScreen(){
   const{promos,setPromos,products,perm:p,addAudit,notify}=useApp();
   const[createModal,setCreateModal]=useState(false);
-  const defaultNp={name:"",type:"category_discount",value:"",discountType:"percent",collection:"",minQty:"3",code:"",startDate:"",endDate:"",targetType:"category",targetValue:"",description:"",stockThreshold:"5"};
+  const defaultNp={name:"",type:"category_discount",value:"",discountType:"percent",collection:"",minQty:"",code:"",startDate:"",endDate:"",targetType:"category",targetValue:"",description:"",stockThreshold:"5"};
   const[np,setNp]=useState(defaultNp);
 
   if(!p().canManagePromos)return<div style={{padding:40,textAlign:"center",color:C.textMuted}}>Accès réservé aux administrateurs</div>;
@@ -3495,12 +3495,13 @@ function PromosScreen(){
   const getTypeLabel=(t)=>TYPES.find(x=>x.id===t)?.label||t;
   const getTargetLabel=(pm)=>{
     const tt=pm.target_type||pm.targetType;const tv=pm.target_value||pm.targetValue;
-    if(tt==="category")return`Catégorie: ${tv||pm.collection||"—"}`;
-    if(tt==="sku")return`Réf: ${tv||"—"}`;
-    if(tt==="color")return`Couleur: ${tv||"—"}`;
-    if(tt==="collection")return`Collection: ${tv||pm.collection||"—"}`;
+    const mq=pm.min_qty||pm.minQty;const qtyStr=mq&&parseInt(mq)>0?` (dès ${mq} articles)`:"";
+    if(tt==="category")return`Catégorie: ${tv||pm.collection||"—"}${qtyStr}`;
+    if(tt==="sku")return`Réf: ${tv||"—"}${qtyStr}`;
+    if(tt==="color")return`Couleur: ${tv||"—"}${qtyStr}`;
+    if(tt==="collection")return`Collection: ${tv||pm.collection||"—"}${qtyStr}`;
     if(tt==="low_stock")return`Stock < ${tv||"5"} pièces`;
-    if(pm.type==="qty_discount"||pm.promo_type==="qty_discount")return`Min. ${pm.min_qty||pm.minQty||3} articles`;
+    if(pm.type==="qty_discount"||pm.promo_type==="qty_discount")return`Min. ${mq||3} articles au panier`;
     if(pm.type==="code"||pm.promo_type==="code")return`Code: ${pm.code||"—"}`;
     return"";};
 
@@ -3607,6 +3608,18 @@ function PromosScreen(){
         {/* Code promo */}
         {np.type==="code"&&<div><label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>CODE PROMO</label>
           <Input value={np.code} onChange={e=>setNp(p=>({...p,code:e.target.value.toUpperCase()}))} placeholder="Ex: WELCOME10"/></div>}
+
+        {/* Cross-rule: optional qty condition for target-based types */}
+        {["category_discount","sku_discount","color_discount","collection_discount"].includes(np.type)&&
+        <div style={{gridColumn:"span 2",background:C.surfaceAlt,borderRadius:10,padding:12,border:`1px dashed ${C.border}`}}>
+          <label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"flex",alignItems:"center",gap:4}}>
+            CONDITION QUANTITÉ (optionnel — laisser vide = pas de minimum)</label>
+          <div style={{display:"flex",alignItems:"center",gap:8,marginTop:6}}>
+            <span style={{fontSize:12,color:C.text}}>Appliquer la remise à partir de</span>
+            <Input type="number" min="1" value={np.minQty} onChange={e=>setNp(p=>({...p,minQty:e.target.value}))} placeholder="—" style={{width:70,textAlign:"center"}}/>
+            <span style={{fontSize:12,color:C.text}}>article(s) correspondant(s) dans le panier</span></div>
+          <div style={{fontSize:9,color:C.textMuted,marginTop:4}}>Ex: "2" = la remise ne s'applique que si le client achète au moins 2 articles de cette cible</div>
+        </div>}
 
         <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>DATE DÉBUT (optionnel)</label>
           <Input type="date" value={np.startDate} onChange={e=>setNp(p=>({...p,startDate:e.target.value}))}/></div>
