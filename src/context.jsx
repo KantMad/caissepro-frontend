@@ -905,8 +905,15 @@ function AppProvider({children}){
       #root{height:100vh;display:flex;flex-direction:column}
       .header{background:linear-gradient(135deg,#047857,#059669);color:#fff;padding:20px 30px;text-align:center}
       .header h1{font-size:24px;font-weight:800}.header .sub{font-size:13px;opacity:0.8;margin-top:4px}
+      .customer-bar{background:#065F46;color:#fff;padding:10px 30px;display:flex;align-items:center;gap:12px}
+      .customer-bar .avatar{width:32px;height:32px;border-radius:50%;background:rgba(255,255,255,0.2);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px}
+      .customer-bar .info{flex:1}.customer-bar .name{font-weight:600;font-size:14px}.customer-bar .loyalty{font-size:11px;opacity:0.8}
+      .promos-bar{background:#FFFBEB;border-bottom:1px solid #FDE68A;padding:10px 30px;display:flex;flex-wrap:wrap;gap:8px}
+      .promo-tag{background:#FEF3C7;border:1px solid #F59E0B;border-radius:20px;padding:4px 12px;font-size:12px;font-weight:600;color:#92400E}
       .items{flex:1;overflow-y:auto;padding:20px 30px}.item{display:flex;justify-content:space-between;padding:14px 0;border-bottom:1px solid #E8ECE5;font-size:16px}
       .item .name{font-weight:600;flex:1}.item .qty{color:#666;margin:0 20px}.item .price{font-weight:800;color:#047857;min-width:80px;text-align:right}
+      .discount-line{display:flex;justify-content:space-between;padding:8px 0;font-size:14px;color:#059669;font-style:italic}
+      .discount-line .label{flex:1}.discount-line .amount{font-weight:700}
       .total-bar{background:#fff;border-top:3px solid #047857;padding:24px 30px;display:flex;justify-content:space-between;align-items:center}
       .total-bar .label{font-size:20px;font-weight:700;color:#333}.total-bar .amount{font-size:36px;font-weight:900;color:#047857}
       .screensaver{height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;background:linear-gradient(135deg,#F8FAF7,#E8F0E3)}
@@ -920,13 +927,21 @@ function AppProvider({children}){
       window.updateCart=function(data){
         const root=document.getElementById('root');
         if(!data||!data.items||data.items.length===0){
-          root.innerHTML='<div class="screensaver"><div class="logo">CP</div><h2></h2><p>Bienvenue</p><div class="time"></div></div>';
-          root.querySelector('h2').textContent=data.storeName||'';
+          root.innerHTML='<div class="screensaver"><div class="logo">CP</div><h2></h2><p>'+(data&&data.customer?esc(data.customer.name)+', bienvenue !':'Bienvenue')+'</p><div class="time"></div></div>';
+          var h2=root.querySelector('h2');if(h2)h2.textContent=data&&data.storeName||'';
           updateTime();return;}
         var esc=function(s){if(!s)return'';return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');};
         var html='<div class="header"><h1>'+esc(data.storeName)+'</h1><div class="sub">Votre panier</div></div>';
+        if(data.customer){html+='<div class="customer-bar"><div class="avatar">'+esc(data.customer.name.charAt(0))+'</div><div class="info"><div class="name">'+esc(data.customer.name)+'</div>';
+          if(data.customer.loyalty){html+='<div class="loyalty">'+esc(data.customer.loyalty)+'</div>';}
+          html+='</div></div>';}
+        if(data.promos&&data.promos.length>0){html+='<div class="promos-bar">';
+          data.promos.forEach(function(p){html+='<span class="promo-tag">'+esc(p)+'</span>';});
+          html+='</div>';}
         html+='<div class="items">';
         data.items.forEach(function(i){html+='<div class="item"><span class="name">'+esc(i.name)+'</span><span class="qty">x'+esc(i.qty)+'</span><span class="price">'+esc(i.price)+'</span></div>';});
+        if(data.appliedPromos&&data.appliedPromos.length>0){
+          data.appliedPromos.forEach(function(a){html+='<div class="discount-line"><span class="label">'+esc(a)+'</span></div>';});}
         html+='</div>';
         html+='<div class="total-bar"><span class="label">Total TTC</span><span class="amount">'+esc(data.total)+'</span></div>';
         root.innerHTML=html;};
@@ -938,13 +953,21 @@ function AppProvider({children}){
   // Sync cart to customer display
   useEffect(()=>{
     if(!customerDisplayRef.current||customerDisplayRef.current.closed)return;
-    try{customerDisplayRef.current.updateCart({
-      storeName:settings.name||CO.name,
-      items:cart.map(i=>({name:i.product.name+(i.variant?` (${i.variant.color}/${i.variant.size})`:""),qty:i.quantity,
-        price:(i.product.price*i.quantity).toFixed(2)+"€"})),
-      total:cart.length>0?cart.reduce((s,i)=>s+i.product.price*i.quantity,0).toFixed(2)+"€":"0.00€"
-    });}catch(e){}
-  },[cart,settings.name]);
+    try{
+      const promoResult=calcPromoDiscount(cart);
+      const rawTotal=cart.reduce((s,i)=>s+i.product.price*i.quantity,0);
+      const totalAfterPromo=Math.max(0,rawTotal-promoResult.promoDisc).toFixed(2)+"€";
+      customerDisplayRef.current.updateCart({
+        storeName:settings.name||CO.name,
+        customer:selCust?{name:`${selCust.firstName||""} ${selCust.lastName||selCust.name||""}`.trim(),loyalty:getLoyaltyTier(selCust.points||0)?.name||""}:null,
+        promos:activePromos.map(p=>p.name).filter(Boolean),
+        appliedPromos:promoResult.applied,
+        items:cart.map(i=>({name:i.product.name+(i.variant?` (${i.variant.color}/${i.variant.size})`:""),qty:i.quantity,
+          price:(i.product.price*i.quantity).toFixed(2)+"€"})),
+        total:cart.length>0?totalAfterPromo:"0.00€"
+      });
+    }catch(e){}
+  },[cart,settings.name,selCust,activePromos,calcPromoDiscount,getLoyaltyTier]);
 
   return<AppCtx.Provider value={{currentUser,login,logout,mode,setMode,offlineMode,
     stores,setStores,currentStore,setCurrentStore,selectStore,viewingStoreId,switchViewingStore,effectiveStoreId,
