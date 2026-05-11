@@ -304,18 +304,45 @@ function AppProvider({children}){
 
   const calcPromoDiscount=useCallback((cartItems)=>{
     const pm=settings.pricingMode||"TTC";
-    // Calculer les montants HT pour les promos (cohérent avec le checkout)
     const getHT=(ci)=>{const raw=ci.discountType==="amount"?ci.product.price*ci.quantity-((ci.discount||0)*ci.quantity):ci.product.price*ci.quantity*(1-(ci.discount||0)/100);
       return pm==="TTC"?raw/(1+(ci.product.taxRate||0.20)):raw;};
+    const applyDisc=(ht,p)=>{const dt=p.discount_type||p.discountType||"percent";return dt==="amount"?Math.min(parseFloat(p.value),ht):ht*(parseFloat(p.value)/100);};
     let promoDisc=0;const applied=[];
     activePromos.forEach(p=>{
-      if(p.type==="collection_discount"){
-        cartItems.forEach(ci=>{if(ci.product.collection===p.collection){
-          const d=getHT(ci)*(p.value/100);promoDisc+=d;applied.push(`${p.name}: -${d.toFixed(2)}€ HT sur ${ci.product.name}`);}});}
-      else if(p.type==="qty_discount"&&cartItems.reduce((s,i)=>s+i.quantity,0)>=p.minQty){
-        const d=cartItems.reduce((s,i)=>s+getHT(i),0)*(p.value/100);promoDisc+=d;applied.push(`${p.name}: -${d.toFixed(2)}€ HT`);}
-      else if(p.type==="code"&&promoCode.toUpperCase()===p.code.toUpperCase()){
-        const d=cartItems.reduce((s,i)=>s+getHT(i),0)*(p.value/100);promoDisc+=d;applied.push(`Code ${p.code}: -${d.toFixed(2)}€ HT`);}
+      const t=p.promo_type||p.type;const tt=p.target_type||p.targetType;const tv=(p.target_value||p.targetValue||"").toLowerCase();
+
+      if(t==="category_discount"||tt==="category"){
+        cartItems.forEach(ci=>{if((ci.product.category||"").toLowerCase()===tv){
+          const d=applyDisc(getHT(ci),p);promoDisc+=d;applied.push(`${p.name}: -${d.toFixed(2)}€ HT sur ${ci.product.name}`);}});}
+
+      else if(t==="sku_discount"||tt==="sku"){
+        cartItems.forEach(ci=>{if((ci.product.sku||"").toLowerCase()===tv){
+          const d=applyDisc(getHT(ci),p);promoDisc+=d;applied.push(`${p.name}: -${d.toFixed(2)}€ HT sur ${ci.product.name}`);}});}
+
+      else if(t==="color_discount"||tt==="color"){
+        cartItems.forEach(ci=>{if((ci.variant?.color||"").toLowerCase()===tv){
+          const d=applyDisc(getHT(ci),p);promoDisc+=d;applied.push(`${p.name}: -${d.toFixed(2)}€ HT sur ${ci.product.name} (${ci.variant?.color})`);}});}
+
+      else if(t==="collection_discount"||tt==="collection"){
+        const col=(tv||p.collection||"").toLowerCase();
+        cartItems.forEach(ci=>{if((ci.product.collection||"").toLowerCase()===col){
+          const d=applyDisc(getHT(ci),p);promoDisc+=d;applied.push(`${p.name}: -${d.toFixed(2)}€ HT sur ${ci.product.name}`);}});}
+
+      else if(t==="low_stock_discount"||tt==="low_stock"){
+        const threshold=parseInt(tv)||5;
+        cartItems.forEach(ci=>{const stock=ci.variant?.stock??ci.product.stock??999;
+          if(stock<=threshold&&stock>0){
+            const d=applyDisc(getHT(ci),p);promoDisc+=d;applied.push(`${p.name}: -${d.toFixed(2)}€ HT sur ${ci.product.name} (stock: ${stock})`);}});}
+
+      else if(t==="qty_discount"){
+        const minQ=p.min_qty||p.minQty||3;
+        if(cartItems.reduce((s,i)=>s+i.quantity,0)>=minQ){
+          const totalHT=cartItems.reduce((s,i)=>s+getHT(i),0);
+          const d=applyDisc(totalHT,p);promoDisc+=d;applied.push(`${p.name}: -${d.toFixed(2)}€ HT`);}}
+
+      else if(t==="code"&&promoCode&&p.code&&promoCode.toUpperCase()===p.code.toUpperCase()){
+        const totalHT=cartItems.reduce((s,i)=>s+getHT(i),0);
+        const d=applyDisc(totalHT,p);promoDisc+=d;applied.push(`Code ${p.code}: -${d.toFixed(2)}€ HT`);}
     });
     return{promoDisc:Math.min(promoDisc,cartItems.reduce((s,i)=>s+getHT(i),0)),applied};
   },[activePromos,promoCode,settings.pricingMode]);
