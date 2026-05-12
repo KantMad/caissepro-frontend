@@ -119,9 +119,13 @@ function AppProvider({children}){
     return unsub;
   },[]);
 
-  useEffect(()=>{const on=()=>setIsOnline(true);const off=()=>setIsOnline(false);
+  useEffect(()=>{
+    const on=()=>setIsOnline(true);const off=()=>setIsOnline(false);
     window.addEventListener("online",on);window.addEventListener("offline",off);
-    return()=>{window.removeEventListener("online",on);window.removeEventListener("offline",off);};},[]);
+    // Capacitor WebView may report navigator.onLine incorrectly — verify with real fetch
+    const checkReal=async()=>{try{const r=await fetch((import.meta.env.VITE_API_URL||'https://api.techincash.app')+'/api/health',{method:'HEAD',mode:'no-cors',cache:'no-store'});setIsOnline(true);}catch(e){if(navigator.onLine)setIsOnline(true);else setIsOnline(false);}};
+    checkReal();const iv=setInterval(checkReal,30000);
+    return()=>{window.removeEventListener("online",on);window.removeEventListener("offline",off);clearInterval(iv);};},[]);
 
   // ══ Auto-reconnect on page refresh if token exists ══
   const loadAllData=useCallback(async()=>{
