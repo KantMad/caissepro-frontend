@@ -3037,6 +3037,189 @@ function SizeSettingsTab({notify}){
   </div>);
 }
 
+/* ══════════ DEBUG PANEL — On-screen logging for Sunmi T2s ══════════ */
+function DebugPanel(){
+  const{tickets,printerConnected,hwId,paymentId,paymentConfig,settings}=useApp();
+  const[logs,setLogs]=useState([]);
+  const[running,setRunning]=useState(false);
+  const logRef=React.useRef(null);
+
+  const addLog=(msg,type="info")=>{
+    const ts=new Date().toLocaleTimeString("fr-FR");
+    setLogs(prev=>[...prev,{ts,msg,type}].slice(-100));
+    setTimeout(()=>{if(logRef.current)logRef.current.scrollTop=logRef.current.scrollHeight;},50);
+  };
+
+  const runDiag=async()=>{
+    setRunning(true);setLogs([]);
+    addLog("=== DIAGNOSTIC COMPLET ===","title");
+
+    // 1. Environment
+    addLog(`Hardware ID: ${hwId}`);
+    addLog(`User Agent: ${navigator.userAgent.substring(0,80)}`);
+    addLog(`Capacitor: ${!!window.Capacitor}`);
+    addLog(`Capacitor Plugins: ${Object.keys(window.Capacitor?.Plugins||{}).join(", ")||"AUCUN"}`);
+
+    // 2. Printer plugin
+    addLog("--- IMPRIMANTE ---","title");
+    const sp=window.Capacitor?.Plugins?.SunmiPrinter;
+    addLog(`SunmiPrinter plugin: ${sp?"OUI":"NON"}`);
+    if(sp){
+      addLog(`Methods: ${Object.keys(sp).filter(k=>typeof sp[k]==="function").join(", ")}`);
+      try{
+        const status=await sp.getStatus();
+        addLog(`getStatus OK: ${JSON.stringify(status)}`,"success");
+      }catch(e){addLog(`getStatus ERREUR: ${e.message}`,"error");}
+
+      // Test printBatch
+      addLog(`printBatch method: ${typeof sp.printBatch}`);
+      addLog(`testPrint method: ${typeof sp.testPrint}`);
+    }else{
+      addLog("AUCUN plugin SunmiPrinter detecte!","error");
+    }
+
+    // 3. Concert plugin
+    addLog("--- TPE / CONCERT ---","title");
+    const cp=window.Capacitor?.Plugins?.ConcertProtocol;
+    addLog(`ConcertProtocol plugin: ${cp?"OUI":"NON"}`);
+    if(cp){
+      addLog(`Methods: ${Object.keys(cp).filter(k=>typeof cp[k]==="function").join(", ")}`);
+      if(paymentConfig?.tpeHost){
+        try{
+          const ping=await cp.ping({host:paymentConfig.tpeHost,port:parseInt(paymentConfig.tpePort)||8888});
+          addLog(`Ping ${paymentConfig.tpeHost}: ${JSON.stringify(ping)}`,ping.success?"success":"error");
+        }catch(e){addLog(`Ping ERREUR: ${e.message}`,"error");}
+      }else{addLog("Pas d'IP TPE configuree");}
+    }
+
+    // 4. Tickets state
+    addLog("--- TICKETS ---","title");
+    addLog(`Nombre tickets en memoire: ${tickets?.length||0}`);
+    if(tickets?.length>0){
+      const t0=tickets[0];
+      addLog(`Dernier ticket: ${JSON.stringify({ticketNumber:t0.ticketNumber,ticket_number:t0.ticket_number,totalTTC:t0.totalTTC,total_ttc:t0.total_ttc,hasItems:!!(t0.items?.length),itemCount:t0.items?.length})}`);
+    }
+
+    // 5. HardwareManager state
+    addLog("--- HARDWARE MANAGER ---","title");
+    try{
+      const hm=(await import("./hardware.js")).default;
+      addLog(`HM currentId: ${hm.currentId}`);
+      addLog(`HM printer: ${hm.printer?.constructor?.name||"null"}`);
+      addLog(`HM printer connected: ${hm.printer?.connected}`);
+      addLog(`HM printer isCapacitor: ${hm.printer?._isCapacitor}`);
+      addLog(`HM printer bridge: ${hm.printer?._bridge?"OUI":"NON"}`);
+      addLog(`HM payment: ${hm.payment?.constructor?.name||"null"}`);
+    }catch(e){addLog(`HM import error: ${e.message}`,"error");}
+
+    addLog("=== FIN DIAGNOSTIC ===","title");
+    setRunning(false);
+  };
+
+  const testPrint=async()=>{
+    setRunning(true);
+    addLog("--- TEST IMPRESSION ---","title");
+    const sp=window.Capacitor?.Plugins?.SunmiPrinter;
+    if(!sp){addLog("Plugin SunmiPrinter absent!","error");setRunning(false);return;}
+
+    // Test 1: Native testPrint
+    addLog("Test 1: appel natif testPrint()...");
+    try{
+      const r=await sp.testPrint({});
+      addLog(`testPrint resultat: ${JSON.stringify(r)}`,"success");
+    }catch(e){addLog(`testPrint ERREUR: ${e.message}`,"error");}
+
+    // Test 2: printBatch simple
+    addLog("Test 2: appel printBatch() avec 3 commandes...");
+    try{
+      const r=await sp.printBatch({commands:[
+        {cmd:"text",text:"=== DEBUG PRINT TEST ===\n"},
+        {cmd:"text",text:"Si vous lisez ceci, printBatch fonctionne!\n"},
+        {cmd:"text",text:new Date().toLocaleString("fr-FR")+"\n"},
+        {cmd:"feed",lines:4},
+        {cmd:"cut"}
+      ]});
+      addLog(`printBatch resultat: ${JSON.stringify(r)}`,"success");
+    }catch(e){addLog(`printBatch ERREUR: ${e.message}`,"error");}
+
+    // Test 3: Single printText
+    addLog("Test 3: appel printText() unique...");
+    try{
+      const r=await sp.printText({text:"Test ligne unique\n"});
+      addLog(`printText resultat: ${JSON.stringify(r)}`,"success");
+    }catch(e){addLog(`printText ERREUR: ${e.message}`,"error");}
+
+    // Test 4: lineWrap to force paper feed
+    addLog("Test 4: lineWrap(6) pour forcer sortie papier...");
+    try{
+      const r=await sp.lineWrap({lines:6});
+      addLog(`lineWrap resultat: ${JSON.stringify(r)}`,"success");
+    }catch(e){addLog(`lineWrap ERREUR: ${e.message}`,"error");}
+
+    setRunning(false);
+  };
+
+  const testTicketModal=async()=>{
+    setRunning(true);
+    addLog("--- TEST TICKET MODAL ---","title");
+    addLog(`Nombre tickets: ${tickets?.length||0}`);
+    if(!tickets?.length){addLog("Aucun ticket en memoire — impossible de tester","error");setRunning(false);return;}
+    const t=tickets[0];
+    addLog("Premier ticket brut:");
+    try{
+      addLog(JSON.stringify(t,null,1).substring(0,1500));
+    }catch(e){addLog(`Erreur serialisation: ${e.message}`,"error");}
+    addLog("--- Verification des champs ---","title");
+    addLog(`ticketNumber: ${t.ticketNumber} (type: ${typeof t.ticketNumber})`);
+    addLog(`ticket_number: ${t.ticket_number} (type: ${typeof t.ticket_number})`);
+    addLog(`totalTTC: ${t.totalTTC} (type: ${typeof t.totalTTC})`);
+    addLog(`total_ttc: ${t.total_ttc} (type: ${typeof t.total_ttc})`);
+    addLog(`userName: ${t.userName} (type: ${typeof t.userName})`);
+    addLog(`user_name: ${t.user_name} (type: ${typeof t.user_name})`);
+    addLog(`items: ${Array.isArray(t.items)?t.items.length+" items":"UNDEFINED"}`);
+    addLog(`payments: ${Array.isArray(t.payments)?t.payments.length+" payments":"UNDEFINED"}`);
+    addLog(`fingerprint: ${t.fingerprint}`);
+    addLog(`date: ${t.date} | createdAt: ${t.createdAt} | created_at: ${t.created_at}`);
+    if(t.items?.length>0){
+      addLog("--- Premier item ---","title");
+      const i=t.items[0];
+      addLog(JSON.stringify(i,null,1).substring(0,500));
+    }
+    if(t.payments?.length>0){
+      addLog("--- Premier payment ---","title");
+      const p=t.payments[0];
+      addLog(JSON.stringify(p,null,1).substring(0,300));
+    }
+    setRunning(false);
+  };
+
+  const colorMap={info:"#94A3B8",success:"#4ADE80",error:"#F87171",title:"#60A5FA"};
+
+  return(<div style={{maxWidth:700}}>
+    <div style={{background:"#DC2626",borderRadius:16,padding:20,border:"2px solid #991B1B",marginBottom:16}}>
+      <h3 style={{fontSize:16,fontWeight:800,margin:"0 0 4px",color:"#fff"}}>Panneau Debug</h3>
+      <p style={{fontSize:11,color:"#FCA5A5",margin:0}}>Diagnostic en temps reel — les logs s'affichent ci-dessous. Faites un screenshot pour partager.</p></div>
+
+    <div style={{display:"flex",gap:8,marginBottom:12,flexWrap:"wrap"}}>
+      <Btn onClick={runDiag} disabled={running} style={{height:44,background:"#2563EB",fontSize:12,fontWeight:700}}>
+        <Activity size={14}/> Diagnostic complet</Btn>
+      <Btn onClick={testPrint} disabled={running} style={{height:44,background:"#059669",fontSize:12,fontWeight:700}}>
+        <Printer size={14}/> Test impression</Btn>
+      <Btn onClick={testTicketModal} disabled={running} style={{height:44,background:"#D97706",fontSize:12,fontWeight:700}}>
+        <Receipt size={14}/> Inspecter tickets</Btn>
+      <Btn onClick={()=>setLogs([])} style={{height:44,background:"#64748B",fontSize:12}}>Effacer</Btn>
+    </div>
+
+    <div ref={logRef} style={{background:"#0F172A",borderRadius:12,padding:14,fontFamily:"'Courier New',monospace",fontSize:10,
+      color:"#E2E8F0",minHeight:200,maxHeight:500,overflow:"auto",whiteSpace:"pre-wrap",border:"2px solid #1E293B"}}>
+      {logs.length===0&&<span style={{color:"#475569"}}>Appuyez sur un bouton pour lancer un diagnostic...</span>}
+      {logs.map((l,i)=><div key={i} style={{color:colorMap[l.type]||"#94A3B8",marginBottom:2}}>
+        <span style={{color:"#475569"}}>[{l.ts}]</span> {l.msg}
+      </div>)}
+    </div>
+  </div>);
+}
+
 function SettingsScreen(){
   const{settings,setSettings,saveSettingsToAPI,addAudit,theme,setTheme,clockEntries,priceHistory,printerConnected,printerType,connectPrinter,disconnectPrinter,thermalPrint,notify,users,hwId,hwProfile,switchHardware,hardwareProfiles,paymentId,paymentConfig,switchPayment,updatePaymentConfig,paymentProfiles}=useApp();
   const[tab,setTab]=useState("general");
@@ -3048,7 +3231,7 @@ function SettingsScreen(){
   return(<div style={{height:"100%",overflowY:"auto",padding:20,background:C.bg}}>
     <h2 style={{fontSize:22,fontWeight:800,marginBottom:14}}>Paramètres</h2>
     <div style={{display:"flex",gap:6,marginBottom:14,flexWrap:"wrap"}}>
-      {[{id:"general",l:"Général"},{id:"retouche",l:"✂️ Retouches"},{id:"pricing",l:"💰 Prix HT/TTC"},{id:"commission",l:"Commission"},{id:"stores",l:"Magasins"},{id:"printer",l:"Imprimante"},{id:"tpe",l:"Terminal paiement"},{id:"receipt",l:"Ticket"},{id:"screen2",l:"📺 Écran 2"},{id:"caticons",l:"🏷️ Icônes catégories"},{id:"return",l:"Retours"},{id:"sizes",l:"📏 Ordre tailles"},{id:"theme",l:"Thème"},{id:"clock",l:"Pointages"},{id:"prices",l:"Historique prix"}].map(t=>(
+      {[{id:"general",l:"Général"},{id:"retouche",l:"✂️ Retouches"},{id:"pricing",l:"💰 Prix HT/TTC"},{id:"commission",l:"Commission"},{id:"stores",l:"Magasins"},{id:"printer",l:"Imprimante"},{id:"tpe",l:"Terminal paiement"},{id:"receipt",l:"Ticket"},{id:"screen2",l:"📺 Écran 2"},{id:"caticons",l:"🏷️ Icônes catégories"},{id:"return",l:"Retours"},{id:"sizes",l:"📏 Ordre tailles"},{id:"theme",l:"Thème"},{id:"clock",l:"Pointages"},{id:"prices",l:"Historique prix"},{id:"debug",l:"DEBUG"}].map(t=>(
         <button key={t.id} onClick={()=>setTab(t.id)} style={{padding:"5px 12px",borderRadius:8,border:`1.5px solid ${tab===t.id?C.primary:C.border}`,
           background:tab===t.id?C.primary:"transparent",color:tab===t.id?"#fff":C.text,fontSize:11,fontWeight:600,cursor:"pointer"}}>{t.l}</button>))}</div>
 
@@ -3619,6 +3802,8 @@ function SettingsScreen(){
               <Input value={val} onChange={e=>setSettings(s=>({...s,categoryIcons:{...(s.categoryIcons||{}),[c]:e.target.value}}))} style={{width:60,textAlign:"center",fontSize:16}}/></div>);})}</div>
         <Btn onClick={()=>{saveSettingsToAPI(settings);addAudit("CONFIG","Icônes catégories mis à jour");notify("Icônes sauvegardées","success");}} style={{width:"100%",height:40,background:C.primary}}><Save size={14}/> Enregistrer</Btn>
       </div>);})()}
+
+    {tab==="debug"&&<DebugPanel/>}
 
   </div>);
 }
