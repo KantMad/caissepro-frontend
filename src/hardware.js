@@ -1319,7 +1319,9 @@ class HardwareManager {
     // Load payment config
     const savedPayment = localStorage.getItem('caissepro_payment_type');
     const savedPaymentConfig = localStorage.getItem('caissepro_payment_config');
-    this._paymentId = savedPayment || 'auto';
+    // Default to 'manual' — safest for standalone TPE (Ingenico Desk, etc.)
+    // User can switch to 'auto', 'concert', 'sumup' etc. in settings
+    this._paymentId = savedPayment || 'manual';
     try { this._paymentConfig = savedPaymentConfig ? JSON.parse(savedPaymentConfig) : {}; } catch (e) { this._paymentConfig = {}; }
 
     this._initAdapters();
