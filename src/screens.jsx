@@ -3482,6 +3482,42 @@ function SettingsScreen(){
           <Save size={14}/> Sauvegarder la configuration</Btn>
       </div>}
 
+      {/* TPE Diagnostic */}
+      <div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`,marginBottom:14}}>
+        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}>
+          <Activity size={18} color={C.info}/>
+          <div><h3 style={{fontSize:14,fontWeight:700,margin:0}}>Diagnostic TPE</h3>
+            <p style={{fontSize:10,color:C.textMuted,margin:0}}>Verifiez la detection du terminal de paiement</p></div></div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:10}}>
+          <Btn onClick={async()=>{
+            setDiagLoading(true);
+            try{
+              const cap=!!window.Capacitor?.isNativePlatform?.();
+              const plugins=Object.keys(window.Capacitor?.Plugins||{});
+              const bridge=window.Capacitor?.Plugins?.PaymentTerminal;
+              let hwInfo=null;
+              if(bridge){try{hwInfo=await bridge.detectHardware();}catch(e){hwInfo={error:e.message};}}
+              setPrinterDiag({tpe:true,capacitor:cap,plugins,hasPaymentPlugin:!!bridge,hwInfo,paymentId,timestamp:new Date().toLocaleTimeString('fr-FR')});
+            }catch(e){setPrinterDiag({tpe:true,error:e.message});}
+            setDiagLoading(false);
+          }} disabled={diagLoading} style={{height:40,background:C.info,fontSize:11}}>
+            <Activity size={13}/> {diagLoading?"Analyse...":"Diagnostic TPE"}</Btn>
+          <Btn onClick={async()=>{
+            setDiagLoading(true);
+            try{
+              const result=await hardwareManager.charge(0.01,{currency:'EUR',reference:'TEST-'+Date.now(),method:'card'});
+              setPrinterDiag(prev=>({...prev,testCharge:result,timestamp:new Date().toLocaleTimeString('fr-FR')}));
+              notify("Test TPE: "+(result?.success?"OK":"echec - "+(result?.error||result?.status)),"info");
+            }catch(e){setPrinterDiag(prev=>({...prev,testChargeError:e.message}));notify("Erreur test: "+e.message,"error");}
+            setDiagLoading(false);
+          }} disabled={diagLoading} style={{height:40,background:C.primary,fontSize:11}}>
+            <CreditCard size={13}/> Test paiement (0.01 EUR)</Btn>
+        </div>
+        {printerDiag?.tpe&&<div style={{background:"#0F172A",borderRadius:10,padding:12,fontFamily:"monospace",fontSize:10,color:"#E2E8F0",maxHeight:300,overflow:"auto",whiteSpace:"pre-wrap"}}>
+          {JSON.stringify(printerDiag,null,2)}
+        </div>}
+      </div>
+
       {/* Payment status info */}
       <div style={{background:C.surfaceAlt,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`}}>
         <h4 style={{fontSize:13,fontWeight:700,marginBottom:8}}>Fonctionnement</h4>

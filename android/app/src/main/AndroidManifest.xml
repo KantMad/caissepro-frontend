@@ -44,4 +44,29 @@
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
+
+    <!-- Queries: allow detection of payment apps on Android 11+ -->
+    <queries>
+        <!-- Sunmi Pay -->
+        <intent><action android:name="com.sunmi.pay.action.DO_PAY" /></intent>
+        <intent><action android:name="com.sunmi.pay.hardware.aidl.PAY" /></intent>
+        <!-- PAX BroadPOS -->
+        <intent><action android:name="com.pax.us.pay.action.SALE" /></intent>
+        <intent><action android:name="com.pax.pay.action.SALE" /></intent>
+        <!-- SumUp -->
+        <package android:name="com.sumup.merchant" />
+        <intent><action android:name="com.sumup.merchant.PAYMENT" /></intent>
+        <!-- Zettle -->
+        <package android:name="com.izettle.android" />
+        <intent><action android:name="com.izettle.android.payment.CHARGE" /></intent>
+        <!-- NEXGO -->
+        <intent><action android:name="com.nexgo.payment.action.SALE" /></intent>
+        <!-- Ingenico/Concert -->
+        <package android:name="fr.concert.caisse" />
+        <package android:name="com.ingenico.pclservice" />
+        <!-- Sunmi Payment app -->
+        <package android:name="com.sunmi.payment" />
+        <!-- Generic -->
+        <intent><action android:name="android.intent.action.VIEW" /></intent>
+    </queries>
 </manifest>
