@@ -726,8 +726,13 @@ function AppProvider({children}){
   // Find by EAN
   const findByEAN=useCallback((ean)=>{for(const p of products)for(const v of p.variants)if(v.ean===ean)return{product:p,variant:v};return null;},[products]);
 
-  // Barcode scanner auto-start
-  useEffect(()=>{const s=hardwareManager.scanner;if(!s)return;s.start();const off=s.onScan(code=>{const found=findByEAN(code);if(found)addToCart(found.product,found.variant);else notify("Code-barres inconnu: "+code,"warn");});return()=>{s.stop();off();};},[findByEAN,addToCart,notify]);
+  // Barcode scanner auto-start — use refs to avoid re-subscribing on every cart change
+  const addToCartRef=useRef(addToCart);addToCartRef.current=addToCart;
+  const findByEANRef=useRef(findByEAN);findByEANRef.current=findByEAN;
+  const notifyRef=useRef(notify);notifyRef.current=notify;
+  useEffect(()=>{const s=hardwareManager.scanner;if(!s)return;s.start();
+    const off=s.onScan(code=>{const found=findByEANRef.current(code);if(found)addToCartRef.current(found.product,found.variant);else notifyRef.current("Code-barres inconnu: "+code,"warn");});
+    return()=>{s.stop();off();};},[]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ══ THERMAL PRINTER ══
   // Detect Sunmi device

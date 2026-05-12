@@ -13,6 +13,15 @@ import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, BarChart, Bar
 } from "recharts";
 import Papa from "papaparse";
+
+// ── Size sorting for textile (XS→5XL, then numeric 24→56) ──
+const SIZE_ORDER=['XXS','XS','S','M','L','XL','XXL','2XL','3XL','4XL','5XL',
+  'TU','UNIQUE','STD',
+  '24','25','26','27','28','29','30','31','32','33','34','35','36','37','38','39',
+  '40','41','42','43','44','45','46','47','48','50','52','54','56','58','60'];
+function sizeRank(s){const idx=SIZE_ORDER.indexOf((s||'').toUpperCase().trim());return idx>=0?idx:999;}
+function sortSizes(a,b){return sizeRank(a)-sizeRank(b);}
+function sortVariantsBySize(variants){return[...variants].sort((a,b)=>sizeRank(a.size)-sizeRank(b.size));}
 import * as API from "./api.js";
 import printer, { PAPER_48, PAPER_32 } from "./printer.js";
 import { CO, DEFAULT_TVA_RATES, PERMS, initProducts, initUsers, initCustomers, LOYALTY_TIERS, initPromos, categories, C, CAT_COLORS } from "./constants.jsx";
@@ -423,7 +432,7 @@ function SalesScreen(){
             {vm.sku&&<div style={{fontSize:10,fontFamily:"monospace",color:C.textMuted,marginTop:1}}>Réf: {vm.sku}</div>}</div>
           <div style={{marginLeft:"auto",fontSize:18,fontWeight:800,color:CAT_COLORS[vm.category]||C.primary}}>{vm.price.toFixed(2)}€</div></div>
         <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(130px,1fr))",gap:8}}>
-          {vm.variants.map(v=>{const cc=CAT_COLORS[vm.category]||C.primary;return(
+          {sortVariantsBySize(vm.variants).map(v=>{const cc=CAT_COLORS[vm.category]||C.primary;return(
             <button key={v.id} onClick={()=>{addToCart(vm,v);setVm(null);}}
               style={{padding:12,borderRadius:14,border:`1.5px solid ${v.stock<=0?C.danger+"30":C.border}`,background:v.stock<=0?C.dangerLight+"15":"transparent",
                 cursor:"pointer",textAlign:"left",transition:"all 0.15s"}}
@@ -1068,7 +1077,7 @@ function StockScreen(){
   const[tenProd,setTenProd]=useState("");const[tenVar,setTenVar]=useState("");const[tenUser,setTenUser]=useState("");const[tenQty,setTenQty]=useState("1");
   const[trProd,setTrProd]=useState("");const[trVar,setTrVar]=useState("");const[trQty,setTrQty]=useState("1");const[trDest,setTrDest]=useState("");const[trRef,setTrRef]=useState("");
   const p=products.find(x=>x.id===sel);
-  const sizes=[...new Set(p?.variants.map(v=>v.size)||[])];const colors=[...new Set(p?.variants.map(v=>v.color)||[])];
+  const sizes=[...new Set(p?.variants.map(v=>v.size)||[])].sort(sortSizes);const colors=[...new Set(p?.variants.map(v=>v.color)||[])].sort();
   return(<div style={{height:"100%",overflowY:"auto",padding:20,background:C.bg}}>
     <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:14}}>
       <h2 style={{fontSize:22,fontWeight:800,margin:0}}>Stock</h2>
@@ -1446,7 +1455,7 @@ function HistoryScreen(){
         <div style={{display:"flex",justifyContent:"space-between"}}><span>TVA</span><span>{(reprintTk.totalTVA||0).toFixed(2)}€</span></div>
         <div style={{display:"flex",justifyContent:"space-between",fontSize:13,fontWeight:700,marginTop:3}}><span>TOTAL TTC</span><span>{(reprintTk.totalTTC||0).toFixed(2)}€</span></div>
         <div style={{borderTop:"1px dashed #999",margin:"4px 0"}}/>
-        <div>Paiement: {reprintTk.payments?.map(pm=>`${({cash:"ESP",card:"CB",amex:"AMEX",giftcard:"CAD",cheque:"CHQ",avoir:"AVOIR"})[pm.method]||pm.method} ${pm.amount.toFixed(2)}€`).join(" + ")}</div>
+        <div>Paiement: {(reprintTk.payments||[]).map(pm=>`${({cash:"ESP",card:"CB",amex:"AMEX",giftcard:"CAD",cheque:"CHQ",avoir:"AVOIR"})[pm.method]||pm.method} ${(pm.amount||0).toFixed(2)}€`).join(" + ")||(reprintTk.paymentMethod||"?")}</div>
         <div style={{textAlign:"center",background:C.fiscalLight,padding:6,borderRadius:6,margin:"6px 0"}}>
           <div style={{fontSize:8,color:C.fiscal,fontWeight:700}}>EMPREINTE NF525</div>
           <div style={{fontSize:11,fontWeight:700,color:C.fiscal,letterSpacing:2}}>{reprintTk.fingerprint}</div></div>
