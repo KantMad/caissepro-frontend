@@ -6,7 +6,7 @@ import {
   Shield, Download, FileText, Settings, CheckCircle2, AlertTriangle, Save,
   Archive, Activity, Database, WifiOff, Pause, Play, Upload, Printer, Bell,
   Heart, Grid, Box, Star, Calendar, Zap, ScanLine, Split,
-  Mail, XOctagon, Edit, BarChart2, Check, X, HelpCircle, ChevronDown, Scissors, Monitor
+  Mail, XOctagon, Edit, BarChart2, Check, X, HelpCircle, ChevronDown, Scissors, Monitor, Wifi, Code
 } from "lucide-react";
 import {
   PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer,
@@ -3037,270 +3037,541 @@ function SizeSettingsTab({notify}){
   </div>);
 }
 
-/* ══════════ DEBUG PANEL — On-screen logging for Sunmi T2s ══════════ */
+/* ══════════ DEBUG PANEL — Full diagnostic suite for Sunmi T2s ══════════ */
 function DebugPanel(){
-  const{tickets,printerConnected,hwId,paymentId,paymentConfig,settings}=useApp();
+  const{tickets,printerConnected,hwId,paymentId,paymentConfig,settings,avoirs,closures}=useApp();
   const[logs,setLogs]=useState([]);
   const[running,setRunning]=useState(false);
+  const[debugTab,setDebugTab]=useState("general");
+  const[tpeIp,setTpeIp]=useState(paymentConfig?.tpeHost||"");
+  const[tpePort,setTpePort]=useState(paymentConfig?.tpePort||"8888");
+  const[tpeAmount,setTpeAmount]=useState("1.00");
   const logRef=React.useRef(null);
 
   const addLog=(msg,type="info")=>{
     const ts=new Date().toLocaleTimeString("fr-FR");
-    setLogs(prev=>[...prev,{ts,msg,type}].slice(-100));
+    setLogs(prev=>[...prev,{ts,msg,type}].slice(-200));
     setTimeout(()=>{if(logRef.current)logRef.current.scrollTop=logRef.current.scrollHeight;},50);
   };
+  const clearLogs=()=>setLogs([]);
 
+  // ══════════════════════════════════════════════
+  // GENERAL DIAGNOSTIC
+  // ══════════════════════════════════════════════
   const runDiag=async()=>{
-    setRunning(true);setLogs([]);
+    setRunning(true);clearLogs();
     addLog("=== DIAGNOSTIC COMPLET ===","title");
-
-    // 1. Environment
     addLog(`Hardware ID: ${hwId}`);
-    addLog(`User Agent: ${navigator.userAgent.substring(0,80)}`);
-    addLog(`Capacitor: ${!!window.Capacitor}`);
-    addLog(`Capacitor Plugins: ${Object.keys(window.Capacitor?.Plugins||{}).join(", ")||"AUCUN"}`);
+    addLog(`User Agent: ${navigator.userAgent.substring(0,100)}`);
+    addLog(`Capacitor: ${!!window.Capacitor} | Native: ${!!window.Capacitor?.isNativePlatform?.()}`);
+    addLog(`Plugins: ${Object.keys(window.Capacitor?.Plugins||{}).join(", ")||"AUCUN"}`);
+    addLog(`Mode paiement: ${paymentId} | Config: ${JSON.stringify(paymentConfig||{})}`);
+    addLog(`Tickets: ${tickets?.length||0} | Avoirs: ${avoirs?.length||0} | Clotures: ${closures?.length||0}`);
 
-    // 2. Printer plugin
-    addLog("--- IMPRIMANTE ---","title");
-    const sp=window.Capacitor?.Plugins?.SunmiPrinter;
-    addLog(`SunmiPrinter plugin: ${sp?"OUI":"NON"}`);
-    if(sp){
-      addLog(`Methods: ${Object.keys(sp).filter(k=>typeof sp[k]==="function").join(", ")}`);
-      try{
-        const status=await sp.getStatus();
-        addLog(`getStatus OK: ${JSON.stringify(status)}`,"success");
-      }catch(e){addLog(`getStatus ERREUR: ${e.message}`,"error");}
-
-      // Test printBatch
-      addLog(`printBatch method: ${typeof sp.printBatch}`);
-      addLog(`testPrint method: ${typeof sp.testPrint}`);
-    }else{
-      addLog("AUCUN plugin SunmiPrinter detecte!","error");
-    }
-
-    // 3. Concert plugin
-    addLog("--- TPE / CONCERT ---","title");
-    const cp=window.Capacitor?.Plugins?.ConcertProtocol;
-    addLog(`ConcertProtocol plugin: ${cp?"OUI":"NON"}`);
-    if(cp){
-      addLog(`Methods: ${Object.keys(cp).filter(k=>typeof cp[k]==="function").join(", ")}`);
-      if(paymentConfig?.tpeHost){
-        try{
-          const ping=await cp.ping({host:paymentConfig.tpeHost,port:parseInt(paymentConfig.tpePort)||8888});
-          addLog(`Ping ${paymentConfig.tpeHost}: ${JSON.stringify(ping)}`,ping.success?"success":"error");
-        }catch(e){addLog(`Ping ERREUR: ${e.message}`,"error");}
-      }else{addLog("Pas d'IP TPE configuree");}
-    }
-
-    // 4. Tickets state
-    addLog("--- TICKETS ---","title");
-    addLog(`Nombre tickets en memoire: ${tickets?.length||0}`);
-    if(tickets?.length>0){
-      const t0=tickets[0];
-      addLog(`Dernier ticket: ${JSON.stringify({ticketNumber:t0.ticketNumber,ticket_number:t0.ticket_number,totalTTC:t0.totalTTC,total_ttc:t0.total_ttc,hasItems:!!(t0.items?.length),itemCount:t0.items?.length})}`);
-    }
-
-    // 5. HardwareManager state
-    addLog("--- HARDWARE MANAGER ---","title");
     try{
       const hm=(await import("./hardware.js")).default;
-      addLog(`HM currentId: ${hm.currentId}`);
-      addLog(`HM printer: ${hm.printer?.constructor?.name||"null"}`);
-      addLog(`HM printer connected: ${hm.printer?.connected}`);
-      addLog(`HM printer isCapacitor: ${hm.printer?._isCapacitor}`);
-      addLog(`HM printer bridge: ${hm.printer?._bridge?"OUI":"NON"}`);
-      addLog(`HM payment: ${hm.payment?.constructor?.name||"null"}`);
-    }catch(e){addLog(`HM import error: ${e.message}`,"error");}
+      addLog("--- Hardware Manager ---","title");
+      addLog(`Printer: ${hm.printer?.constructor?.name} | connected: ${hm.printer?.connected} | isCapacitor: ${hm.printer?._isCapacitor}`);
+      addLog(`Payment: ${hm.payment?.constructor?.name} | paymentId: ${hm.paymentId}`);
+      addLog(`Scanner: ${hm.scanner?"OUI":"NON"} | Drawer: ${hm.cashDrawer?"OUI":"NON"}`);
+    }catch(e){addLog(`HM error: ${e.message}`,"error");}
 
-    addLog("=== FIN DIAGNOSTIC ===","title");
+    addLog("--- Erreurs JS en memoire ---","title");
+    const errs=window.__CAISSEPRO_ERRORS||[];
+    addLog(`${errs.length} erreur(s) capturee(s)`,errs.length>0?"error":"success");
+    errs.slice(-5).forEach(e=>addLog(`  ${e.msg}`,"error"));
+
+    addLog("=== FIN ===","title");
     setRunning(false);
   };
 
-  const testPrint=async()=>{
-    setRunning(true);
-    addLog("--- TEST IMPRESSION AVANCE ---","title");
+  // ══════════════════════════════════════════════
+  // PRINTER TESTS
+  // ══════════════════════════════════════════════
+  const testPrinterStatus=async()=>{
+    setRunning(true);clearLogs();
+    addLog("=== DIAGNOSTIC IMPRIMANTE ===","title");
     const sp=window.Capacitor?.Plugins?.SunmiPrinter;
-    if(!sp){addLog("Plugin SunmiPrinter absent!","error");setRunning(false);return;}
-
-    // Step 0: Check state
-    addLog("Etape 0: Verification etat imprimante...");
+    if(!sp){addLog("Plugin SunmiPrinter ABSENT","error");setRunning(false);return;}
+    addLog(`Methods: ${Object.keys(sp).filter(k=>typeof sp[k]==="function").join(", ")}`);
     try{
       const st=await sp.getStatus();
-      addLog(`Etat: ${st.printerState} (${st.printerStateLabel})`);
-      if(st.printerState===2){
-        addLog("ETAT 2 = PREPARING — l'imprimante n'est pas prete!","error");
-        addLog("VERIFIEZ: le papier est-il charge cote thermique vers le haut?","error");
-        addLog("VERIFIEZ: le couvercle est-il bien ferme?","error");
-        addLog("TENTATIVE: reinit du service...","info");
-        try{await sp.printerInit({});addLog("printerInit OK");}catch(e){addLog(`printerInit erreur: ${e.message}`,"error");}
-        // Wait 2s and recheck
-        await new Promise(r=>setTimeout(r,2000));
-        const st2=await sp.getStatus();
-        addLog(`Etat apres reinit: ${st2.printerState} (${st2.printerStateLabel})`);
-      }
-      if(st.printerState===5){addLog("PAS DE PAPIER! Inserez un rouleau.","error");setRunning(false);return;}
-    }catch(e){addLog(`getStatus erreur: ${e.message}`,"error");}
+      addLog(`Status complet: ${JSON.stringify(st,null,1)}`);
+      const stateColors={1:"success",2:"error",3:"error",4:"error",5:"error"};
+      addLog(`Etat: ${st.printerState} = ${st.printerStateLabel}`,stateColors[st.printerState]||"info");
+      if(st.printerState===2)addLog("PREPARING = imprimante pas prete. Verifiez papier et couvercle.","error");
+      if(st.printerState===1)addLog("NORMAL = imprimante prete!","success");
+    }catch(e){addLog(`Erreur: ${e.message}`,"error");}
+    setRunning(false);
+  };
 
-    // Step 1: Try reconnect
-    addLog("Etape 1: Reconnexion service imprimante...");
+  const testPrinterPrint=async()=>{
+    setRunning(true);clearLogs();
+    addLog("=== TEST IMPRESSION (5 methodes) ===","title");
+    const sp=window.Capacitor?.Plugins?.SunmiPrinter;
+    if(!sp){addLog("Plugin absent","error");setRunning(false);return;}
+
+    // Check state first
+    try{const st=await sp.getStatus();addLog(`Etat: ${st.printerState} (${st.printerStateLabel})`);}catch(e){}
+
+    // Method 1: testPrint natif
+    addLog("--- Methode 1: testPrint() natif ---","title");
+    try{const r=await sp.testPrint({});addLog(`Resultat: ${JSON.stringify(r)}`,"success");}
+    catch(e){addLog(`ERREUR: ${e.message}`,"error");}
+
+    // Method 2: printBatch
+    addLog("--- Methode 2: printBatch() ---","title");
+    try{const r=await sp.printBatch({commands:[
+      {cmd:"text",text:"=== PRINTBATCH TEST ===\n"},{cmd:"text",text:`Date: ${new Date().toLocaleString("fr-FR")}\n`},
+      {cmd:"text",text:"Si ce texte sort, printBatch marche!\n"},{cmd:"feed",lines:4},{cmd:"cut"}
+    ]});addLog(`Resultat: ${JSON.stringify(r)}`,"success");}
+    catch(e){addLog(`ERREUR: ${e.message}`,"error");}
+
+    // Method 3: printText simple
+    addLog("--- Methode 3: printText() simple ---","title");
+    try{await sp.printerInit({});await sp.printText({text:"TEST PRINTTEXT SIMPLE\n"});await sp.lineWrap({lines:4});addLog("OK (pas d'erreur)","success");}
+    catch(e){addLog(`ERREUR: ${e.message}`,"error");}
+
+    // Method 4: sendRAWData ESC/POS brut
+    addLog("--- Methode 4: sendRAWData() ESC/POS brut ---","title");
     try{
-      const r=await sp.reconnect();
-      addLog(`Reconnect: ${JSON.stringify(r)}`);
-      // Wait for service to rebind
+      // Build raw ESC/POS: init + text + feed
+      const text="TEST ESC/POS RAW - Texte brut!\n";
+      const bytes=[];
+      bytes.push(0x1B,0x40); // ESC @ init
+      for(let i=0;i<text.length;i++)bytes.push(text.charCodeAt(i));
+      bytes.push(0x1B,0x64,0x04); // ESC d 4 = feed 4 lines
+      const b64=btoa(String.fromCharCode(...bytes));
+      await sp.sendRAWData({data:b64});
+      addLog("OK (pas d'erreur)","success");
+    }catch(e){addLog(`ERREUR: ${e.message}`,"error");}
+
+    // Method 5: reconnect then print
+    addLog("--- Methode 5: reconnect + printBatch ---","title");
+    try{
+      addLog("Reconnexion...");
+      await sp.reconnect();
       await new Promise(r=>setTimeout(r,3000));
       const st=await sp.getStatus();
       addLog(`Etat apres reconnect: ${st.printerState} (${st.printerStateLabel})`);
-    }catch(e){addLog(`Reconnect erreur: ${e.message}`,"error");}
-
-    // Step 2: Raw ESC/POS test — bypass printText entirely
-    addLog("Etape 2: Envoi ESC/POS brut via sendRAWData...");
-    try{
-      // ESC @ (init) + "TEST RAW\n" + feed 4 lines
-      const initCmd="G0A="; // ESC @ in base64 = 0x1B 0x40
-      await sp.sendRAWData({data:initCmd});
-      // Send raw text as base64
-      const textBytes="VEVTVCBFU0MvUE9TIEJSVVQgLSBTaSB2b3VzIGxpc2V6IGNlY2ksIGNhIG1hcmNoZSEK"; // "TEST ESC/POS BRUT - Si vous lisez ceci, ca marche!\n"
-      await sp.sendRAWData({data:textBytes});
-      // Feed 4 lines: ESC d 04 = base64 "G2QE"
-      await sp.sendRAWData({data:"G2QE"});
-      addLog("sendRAWData OK (pas d'erreur)","success");
-    }catch(e){addLog(`sendRAWData ERREUR: ${e.message}`,"error");}
-
-    // Step 3: Native testPrint (proven method)
-    addLog("Etape 3: testPrint natif Java...");
-    try{
-      const r=await sp.testPrint({});
-      addLog(`testPrint: ${JSON.stringify(r)}`,"success");
-    }catch(e){addLog(`testPrint ERREUR: ${e.message}`,"error");}
-
-    // Step 4: printBatch
-    addLog("Etape 4: printBatch...");
-    try{
       const r=await sp.printBatch({commands:[
-        {cmd:"text",text:"=== BATCH TEST ===\n"},
-        {cmd:"text",text:"Ligne 1 printBatch\n"},
-        {cmd:"text",text:"Ligne 2 printBatch\n"},
-        {cmd:"feed",lines:4}
-      ]});
-      addLog(`printBatch: ${JSON.stringify(r)}`,"success");
-    }catch(e){addLog(`printBatch ERREUR: ${e.message}`,"error");}
+        {cmd:"text",text:"=== APRES RECONNECT ===\n"},{cmd:"text",text:"Impression post-reconnexion\n"},{cmd:"feed",lines:4}
+      ]});addLog(`Resultat: ${JSON.stringify(r)}`,"success");
+    }catch(e){addLog(`ERREUR: ${e.message}`,"error");}
 
-    addLog("--- RESULTAT ---","title");
-    addLog("Si RIEN n'est sorti du papier malgre les success:","error");
-    addLog("1. Retournez le papier (face thermique vers la tete)","error");
-    addLog("2. Ouvrez/fermez le couvercle imprimante","error");
-    addLog("3. Redemarrez la Sunmi T2s","error");
-    addLog("Si du texte est sorti: l'imprimante fonctionne!","success");
+    addLog("--- VERDICT ---","title");
+    addLog("Si AUCUN texte n'est sorti malgre tous les 'success':","error");
+    addLog("1. RETOURNEZ LE PAPIER dans l'imprimante","error");
+    addLog("2. Grattez le papier avec l'ongle: le cote qui noircit = face vers le haut","error");
+    addLog("3. Ouvrez/fermez le couvercle","error");
+    addLog("4. Redemarrez completement la Sunmi T2s","error");
     setRunning(false);
   };
 
-  const testTicketModal=async()=>{
-    setRunning(true);
-    addLog("--- TEST TICKET MODAL ---","title");
-    addLog(`Nombre tickets: ${tickets?.length||0}`);
-    if(!tickets?.length){addLog("Aucun ticket en memoire — impossible de tester","error");setRunning(false);return;}
-    const t=tickets[0];
+  // ══════════════════════════════════════════════
+  // TPE / CONCERT PROTOCOL TESTS
+  // ══════════════════════════════════════════════
+  const testTpePlugin=async()=>{
+    setRunning(true);clearLogs();
+    addLog("=== DIAGNOSTIC TPE ===","title");
 
-    // Test rendering of each field that the modal uses
-    addLog("--- Simulation rendu modal ticket ---","title");
+    // 1. Check plugins
+    addLog("--- Plugins disponibles ---","title");
+    const cp=window.Capacitor?.Plugins?.ConcertProtocol;
+    const pt=window.Capacitor?.Plugins?.PaymentTerminal;
+    addLog(`ConcertProtocol: ${cp?"OUI":"NON"}`);
+    addLog(`PaymentTerminal: ${pt?"OUI":"NON"}`);
+    if(cp)addLog(`Concert methods: ${Object.keys(cp).filter(k=>typeof cp[k]==="function").join(", ")}`);
+    if(pt)addLog(`Payment methods: ${Object.keys(pt).filter(k=>typeof pt[k]==="function").join(", ")}`);
+
+    // 2. Payment config
+    addLog("--- Configuration paiement ---","title");
+    addLog(`Mode actif: ${paymentId}`);
+    addLog(`Config: ${JSON.stringify(paymentConfig||{})}`);
+    addLog(`IP TPE: ${paymentConfig?.tpeHost||"NON CONFIGURE"}`);
+    addLog(`Port TPE: ${paymentConfig?.tpePort||"8888 (defaut)"}`);
+
+    // 3. Hardware detection
+    if(pt){
+      addLog("--- Detection hardware paiement ---","title");
+      try{
+        const hw=await pt.detectHardware();
+        addLog(`Hardware: ${JSON.stringify(hw,null,1)}`,"success");
+      }catch(e){addLog(`detectHardware erreur: ${e.message}`,"error");}
+    }
+
+    // 4. HardwareManager payment state
+    addLog("--- Hardware Manager state ---","title");
     try{
-      // These are the exact expressions used in the ticket detail modal
-      const renderTests=[
-        {name:"ticketNumber",expr:()=>t.ticketNumber||t.ticket_number},
-        {name:"date",expr:()=>new Date(t.date||t.createdAt||t.created_at).toLocaleString("fr-FR")},
-        {name:"userName",expr:()=>t.userName||t.user_name||"?"},
-        {name:"totalHT.toFixed(2)",expr:()=>(t.totalHT||0).toFixed(2)},
-        {name:"totalTVA.toFixed(2)",expr:()=>(t.totalTVA||0).toFixed(2)},
-        {name:"totalTTC.toFixed(2)",expr:()=>(t.totalTTC||0).toFixed(2)},
-        {name:"fingerprint",expr:()=>t.fingerprint||"-"},
-        {name:"payments map",expr:()=>(t.payments||[]).map(pm=>`${pm.method} ${(pm.amount||0).toFixed(2)}`).join(" + ")},
-        {name:"items count",expr:()=>(t.items||[]).length},
-      ];
-      for(const test of renderTests){
-        try{
-          const val=test.expr();
-          addLog(`  ${test.name} = ${val}`,"success");
-        }catch(e){
-          addLog(`  ${test.name} CRASH: ${e.message}`,"error");
-        }
+      const hm=(await import("./hardware.js")).default;
+      addLog(`Payment adapter: ${hm.payment?.constructor?.name}`);
+      addLog(`Payment connected: ${hm.payment?.connected}`);
+      addLog(`Payment config: ${JSON.stringify(hm.paymentConfig)}`);
+    }catch(e){addLog(`HM error: ${e.message}`,"error");}
+
+    setRunning(false);
+  };
+
+  const testTpePing=async()=>{
+    setRunning(true);clearLogs();
+    const host=tpeIp.trim();
+    const port=parseInt(tpePort)||8888;
+    if(!host){addLog("Entrez l'adresse IP du TPE ci-dessus!","error");setRunning(false);return;}
+
+    addLog(`=== PING TPE ${host}:${port} ===`,"title");
+    const cp=window.Capacitor?.Plugins?.ConcertProtocol;
+    if(!cp){addLog("Plugin ConcertProtocol ABSENT!","error");setRunning(false);return;}
+
+    // Test 1: Ping TCP
+    addLog("Test 1: Connexion TCP...");
+    try{
+      const r=await cp.ping({host,port});
+      addLog(`Resultat: ${JSON.stringify(r)}`,r.success?"success":"error");
+      if(r.success)addLog("Le TPE repond sur le reseau!","success");
+      else addLog(`Echec: ${r.error}`,"error");
+    }catch(e){addLog(`ERREUR: ${e.message}`,"error");}
+
+    // Test 2: Try different ports
+    addLog("Test 2: Scan des ports courants...","title");
+    const ports=[8888,9100,20000,23,4000,5000,6000,7000,9000,10000];
+    for(const p of ports){
+      try{
+        const r=await cp.ping({host,port:p});
+        addLog(`  Port ${p}: ${r.success?"OUVERT":"ferme"}`,r.success?"success":"info");
+      }catch(e){addLog(`  Port ${p}: erreur (${e.message})`,"info");}
+    }
+
+    // Test 3: Try alternate IPs on same subnet
+    addLog("Test 3: Scan reseau local...","title");
+    const subnet=host.split(".").slice(0,3).join(".");
+    const lastOctet=parseInt(host.split(".")[3])||100;
+    const ipsToTry=[lastOctet-1,lastOctet+1,lastOctet-2,lastOctet+2,1,254].filter(x=>x>0&&x<255&&x!==lastOctet);
+    for(const oct of ipsToTry.slice(0,4)){
+      const ip=`${subnet}.${oct}`;
+      try{
+        const r=await cp.ping({host:ip,port});
+        addLog(`  ${ip}:${port} = ${r.success?"REPOND":"pas de reponse"}`,r.success?"success":"info");
+      }catch(e){addLog(`  ${ip}:${port} = timeout`,"info");}
+    }
+
+    setRunning(false);
+  };
+
+  const testTpeSale=async()=>{
+    setRunning(true);clearLogs();
+    const host=tpeIp.trim();
+    const port=parseInt(tpePort)||8888;
+    const amount=Math.round(parseFloat(tpeAmount)*100)||100;
+    if(!host){addLog("Entrez l'adresse IP du TPE!","error");setRunning(false);return;}
+
+    addLog(`=== TEST TRANSACTION ${(amount/100).toFixed(2)} EUR ===`,"title");
+    addLog(`TPE: ${host}:${port}`);
+    addLog(`Montant: ${amount} centimes`);
+
+    const cp=window.Capacitor?.Plugins?.ConcertProtocol;
+    if(!cp){addLog("Plugin ConcertProtocol ABSENT!","error");setRunning(false);return;}
+
+    // Step 1: Ping first
+    addLog("Etape 1: Verification connexion...");
+    try{
+      const ping=await cp.ping({host,port});
+      if(!ping.success){addLog(`TPE non joignable: ${ping.error}`,"error");setRunning(false);return;}
+      addLog("Connexion OK","success");
+    }catch(e){addLog(`Ping erreur: ${e.message}`,"error");setRunning(false);return;}
+
+    // Step 2: Send sale
+    addLog("Etape 2: Envoi transaction sale()...","title");
+    addLog("En attente de reponse du TPE (jusqu'a 2 min)...");
+    addLog("Presentez la carte sur le terminal...");
+    try{
+      const r=await cp.sale({host,port,amount,currency:"EUR",reference:`DBG-${Date.now()}`});
+      addLog(`REPONSE TPE: ${JSON.stringify(r,null,1)}`);
+      if(r.success){
+        addLog("TRANSACTION ACCEPTEE!","success");
+        if(r.authCode)addLog(`Code autorisation: ${r.authCode}`,"success");
+        if(r.amount)addLog(`Montant confirme: ${r.amount} centimes`,"success");
+      }else{
+        addLog(`TRANSACTION REFUSEE: ${r.error||r.status}`,"error");
+        addLog(`Status: ${r.status} | Code: ${r.statusCode}`);
       }
-      // Test each item rendering
-      addLog("--- Test rendu de chaque item ---","title");
-      (t.items||[]).forEach((i,idx)=>{
-        try{
-          const name=i.product?.name||i.product_name||"?";
-          const color=i.variant?.color||i.variant_color||"";
-          const size=i.variant?.size||i.variant_size||"";
-          const isCustom=i.isCustom||i.is_custom;
-          const lineTTC=i.lineTTC||i.line_ttc||(i.unit_price*i.quantity);
-          const rendered=`${name}${!isCustom?` (${color}/${size})`:""} x${i.quantity} = ${(lineTTC||0).toFixed(2)}`;
-          addLog(`  Item ${idx}: ${rendered}`,"success");
-        }catch(e){
-          addLog(`  Item ${idx} CRASH: ${e.message}`,"error");
-        }
-      });
+      if(r.rawResponse)addLog(`Reponse brute: ${r.rawResponse}`);
+      if(r.privateData)addLog(`Donnees privees: ${r.privateData}`);
+      if(r.lrcValid!==undefined)addLog(`LRC valide: ${r.lrcValid}`,r.lrcValid?"success":"error");
     }catch(e){
-      addLog(`ERREUR GLOBALE: ${e.message}\n${e.stack}`,"error");
-    }
-
-    addLog("Premier ticket brut:");
-    try{
-      addLog(JSON.stringify(t,null,1).substring(0,1500));
-    }catch(e){addLog(`Erreur serialisation: ${e.message}`,"error");}
-    addLog("--- Verification des champs ---","title");
-    addLog(`ticketNumber: ${t.ticketNumber} (type: ${typeof t.ticketNumber})`);
-    addLog(`ticket_number: ${t.ticket_number} (type: ${typeof t.ticket_number})`);
-    addLog(`totalTTC: ${t.totalTTC} (type: ${typeof t.totalTTC})`);
-    addLog(`total_ttc: ${t.total_ttc} (type: ${typeof t.total_ttc})`);
-    addLog(`userName: ${t.userName} (type: ${typeof t.userName})`);
-    addLog(`user_name: ${t.user_name} (type: ${typeof t.user_name})`);
-    addLog(`items: ${Array.isArray(t.items)?t.items.length+" items":"UNDEFINED"}`);
-    addLog(`payments: ${Array.isArray(t.payments)?t.payments.length+" payments":"UNDEFINED"}`);
-    addLog(`fingerprint: ${t.fingerprint}`);
-    addLog(`date: ${t.date} | createdAt: ${t.createdAt} | created_at: ${t.created_at}`);
-    if(t.items?.length>0){
-      addLog("--- Premier item ---","title");
-      const i=t.items[0];
-      addLog(JSON.stringify(i,null,1).substring(0,500));
-    }
-    if(t.payments?.length>0){
-      addLog("--- Premier payment ---","title");
-      const p=t.payments[0];
-      addLog(JSON.stringify(p,null,1).substring(0,300));
+      addLog(`ERREUR TRANSACTION: ${e.message}`,"error");
+      addLog("Verifiez que le TPE est en mode attente de paiement","info");
+      addLog("Verifiez le protocole Concert V2 sur le TPE","info");
     }
     setRunning(false);
   };
 
-  const colorMap={info:"#94A3B8",success:"#4ADE80",error:"#F87171",title:"#60A5FA"};
+  const testTpeRefund=async()=>{
+    setRunning(true);clearLogs();
+    const host=tpeIp.trim();
+    const port=parseInt(tpePort)||8888;
+    const amount=Math.round(parseFloat(tpeAmount)*100)||100;
+    if(!host){addLog("Entrez l'adresse IP du TPE!","error");setRunning(false);return;}
 
-  return(<div style={{maxWidth:700}}>
-    <div style={{background:"#DC2626",borderRadius:16,padding:20,border:"2px solid #991B1B",marginBottom:16}}>
-      <h3 style={{fontSize:16,fontWeight:800,margin:"0 0 4px",color:"#fff"}}>Panneau Debug</h3>
-      <p style={{fontSize:11,color:"#FCA5A5",margin:0}}>Diagnostic en temps reel — les logs s'affichent ci-dessous. Faites un screenshot pour partager.</p></div>
+    addLog(`=== TEST REMBOURSEMENT ${(amount/100).toFixed(2)} EUR ===`,"title");
+    const cp=window.Capacitor?.Plugins?.ConcertProtocol;
+    if(!cp){addLog("Plugin absent","error");setRunning(false);return;}
 
-    <div style={{display:"flex",gap:8,marginBottom:12,flexWrap:"wrap"}}>
-      <Btn onClick={runDiag} disabled={running} style={{height:44,background:"#2563EB",fontSize:12,fontWeight:700}}>
-        <Activity size={14}/> Diagnostic complet</Btn>
-      <Btn onClick={testPrint} disabled={running} style={{height:44,background:"#059669",fontSize:12,fontWeight:700}}>
-        <Printer size={14}/> Test impression</Btn>
-      <Btn onClick={testTicketModal} disabled={running} style={{height:44,background:"#D97706",fontSize:12,fontWeight:700}}>
-        <Receipt size={14}/> Inspecter tickets</Btn>
-      <Btn onClick={()=>{
-        addLog("--- ERREURS JS CAPTUREES ---","title");
-        const errs=window.__CAISSEPRO_ERRORS||[];
-        if(errs.length===0){addLog("Aucune erreur JS capturee","success");}
-        else{errs.forEach(e=>{addLog(`[${e.ts}] ${e.msg}`,"error");if(e.stack)addLog(e.stack.substring(0,300),"error");});}
-      }} style={{height:44,background:"#DC2626",fontSize:12,fontWeight:700}}>
-        Erreurs JS ({(window.__CAISSEPRO_ERRORS||[]).length})</Btn>
-      <Btn onClick={()=>setLogs([])} style={{height:44,background:"#64748B",fontSize:12}}>Effacer</Btn>
+    try{
+      const r=await cp.refund({host,port,amount,currency:"EUR"});
+      addLog(`REPONSE: ${JSON.stringify(r,null,1)}`);
+      addLog(r.success?"REMBOURSEMENT ACCEPTE":"REMBOURSEMENT REFUSE",r.success?"success":"error");
+    }catch(e){addLog(`ERREUR: ${e.message}`,"error");}
+    setRunning(false);
+  };
+
+  const testTpeCancel=async()=>{
+    setRunning(true);clearLogs();
+    const host=tpeIp.trim();
+    const port=parseInt(tpePort)||8888;
+    addLog(`=== ANNULATION TPE ===`,"title");
+    const cp=window.Capacitor?.Plugins?.ConcertProtocol;
+    if(!cp){addLog("Plugin absent","error");setRunning(false);return;}
+    try{
+      const r=await cp.cancel({host,port});
+      addLog(`REPONSE: ${JSON.stringify(r,null,1)}`);
+    }catch(e){addLog(`ERREUR: ${e.message}`,"error");}
+    setRunning(false);
+  };
+
+  const testTpeRawTcp=async()=>{
+    setRunning(true);clearLogs();
+    const host=tpeIp.trim();
+    const port=parseInt(tpePort)||8888;
+    if(!host){addLog("Entrez l'IP du TPE!","error");setRunning(false);return;}
+
+    addLog(`=== TEST TCP BRUT ${host}:${port} ===`,"title");
+    addLog("Ce test envoie un message Concert V2 brut et affiche la reponse...");
+
+    const cp=window.Capacitor?.Plugins?.ConcertProtocol;
+    if(!cp){addLog("Plugin absent","error");setRunning(false);return;}
+
+    // Build the Concert message manually and show it
+    const amount=Math.round(parseFloat(tpeAmount)*100)||100;
+    const msg=`01${String(amount).padStart(8,"0")}110978          A010B010`;
+    addLog(`Message Concert (34 chars): [${msg}]`);
+    addLog(`Longueur: ${msg.length} (attendu: 34)`);
+    addLog(`Decodage:`);
+    addLog(`  posNumber: ${msg.substring(0,2)}`);
+    addLog(`  amount:    ${msg.substring(2,10)} (${parseInt(msg.substring(2,10))/100} EUR)`);
+    addLog(`  answer:    ${msg.substring(10,11)} (1=attente reponse)`);
+    addLog(`  payMode:   ${msg.substring(11,12)} (1=carte)`);
+    addLog(`  transType: ${msg.substring(12,13)} (0=debit)`);
+    addLog(`  currency:  ${msg.substring(13,16)} (978=EUR)`);
+    addLog(`  private:   [${msg.substring(16,26)}]`);
+    addLog(`  delay:     ${msg.substring(26,30)}`);
+    addLog(`  auth:      ${msg.substring(30,34)}`);
+
+    addLog("Envoi via sale()...","title");
+    try{
+      const r=await cp.sale({host,port,amount,currency:"EUR",reference:"RAWTEST"});
+      addLog(`Reponse complete:`,r.success?"success":"error");
+      Object.entries(r).forEach(([k,v])=>addLog(`  ${k}: ${v}`));
+    }catch(e){
+      addLog(`ERREUR: ${e.message}`,"error");
+      addLog(`Stack: ${e.stack?.substring(0,200)}`,"error");
+    }
+    setRunning(false);
+  };
+
+  // ══════════════════════════════════════════════
+  // TICKET MODAL TESTS
+  // ══════════════════════════════════════════════
+  const testTicketData=async()=>{
+    setRunning(true);clearLogs();
+    addLog("=== DIAGNOSTIC TICKETS ===","title");
+    addLog(`Total tickets: ${tickets?.length||0}`);
+    addLog(`Total avoirs: ${avoirs?.length||0}`);
+
+    if(!tickets?.length){addLog("Aucun ticket!","error");setRunning(false);return;}
+
+    // Test first 3 tickets
+    const count=Math.min(3,tickets.length);
+    for(let idx=0;idx<count;idx++){
+      const t=tickets[idx];
+      addLog(`--- Ticket ${idx+1}/${count} ---`,"title");
+      const fields=[
+        ["ticketNumber",t.ticketNumber],["ticket_number",t.ticket_number],
+        ["totalTTC",t.totalTTC,"(type:"+typeof t.totalTTC+")"],["total_ttc",t.total_ttc,"(type:"+typeof t.total_ttc+")"],
+        ["totalHT",t.totalHT],["totalTVA",t.totalTVA],
+        ["userName",t.userName],["user_name",t.user_name],
+        ["date",t.date],["created_at",t.created_at],
+        ["items",Array.isArray(t.items)?t.items.length+" items":"MANQUANT"],
+        ["payments",Array.isArray(t.payments)?t.payments.length+" paiements":"MANQUANT"],
+        ["fingerprint",t.fingerprint],["paymentMethod",t.paymentMethod||t.payment_method],
+      ];
+      fields.forEach(([k,v,extra])=>addLog(`  ${k}: ${v===undefined?"UNDEFINED":v===null?"NULL":v} ${extra||""}`,
+        v===undefined||v===null?"error":"success"));
+
+      // Test modal rendering
+      addLog("  -- Rendu modal --");
+      try{
+        const num=t.ticketNumber||t.ticket_number||"?";
+        const date=new Date(t.date||t.createdAt||t.created_at).toLocaleString("fr-FR");
+        const ttc=(t.totalTTC||parseFloat(t.total_ttc)||0).toFixed(2);
+        const ht=(t.totalHT||parseFloat(t.total_ht)||0).toFixed(2);
+        const pay=(t.payments||[]).map(p=>`${p.method} ${(p.amount||0).toFixed(2)}`).join(" + ")||t.paymentMethod||"?";
+        addLog(`  Rendu OK: #${num} | ${date} | ${ttc}EUR | Paiement: ${pay}`,"success");
+      }catch(e){addLog(`  CRASH RENDU: ${e.message}`,"error");}
+
+      // Test items rendering
+      if(t.items?.length>0){
+        t.items.slice(0,2).forEach((item,i)=>{
+          try{
+            const name=item.product?.name||item.product_name||"?";
+            const ltc=(item.lineTTC||item.line_ttc||(item.unit_price*item.quantity)||0);
+            addLog(`  Item ${i}: ${name} x${item.quantity} = ${Number(ltc).toFixed(2)}`,"success");
+          }catch(e){addLog(`  Item ${i} CRASH: ${e.message}`,"error");}
+        });
+      }
+    }
+
+    // Test avoirs too
+    if(avoirs?.length>0){
+      addLog("--- Premier avoir ---","title");
+      const a=avoirs[0];
+      addLog(`  avoirNumber: ${a.avoirNumber||a.avoir_number}`);
+      addLog(`  totalTTC: ${a.totalTTC} (type: ${typeof a.totalTTC})`);
+      addLog(`  items: ${Array.isArray(a.items)?a.items.length:"MANQUANT"}`,Array.isArray(a.items)?"success":"error");
+      if(a.items?.length>0){
+        try{
+          const i=a.items[0];
+          addLog(`  Item 0: ${i.product?.name||i.product_name||"?"} | lineTTC: ${i.lineTTC||i.line_ttc}`,"success");
+        }catch(e){addLog(`  Item 0 CRASH: ${e.message}`,"error");}
+      }
+    }
+    setRunning(false);
+  };
+
+  const testJsErrors=()=>{
+    clearLogs();
+    addLog("=== ERREURS JS CAPTUREES ===","title");
+    const errs=window.__CAISSEPRO_ERRORS||[];
+    addLog(`Total: ${errs.length} erreur(s)`);
+    if(errs.length===0)addLog("Aucune erreur!","success");
+    else errs.forEach(e=>{
+      addLog(`[${e.ts}] ${e.msg}`,"error");
+      if(e.stack)addLog(`  ${e.stack.substring(0,400)}`,"error");
+    });
+    addLog("--- INSTRUCTIONS ---","title");
+    addLog("1. Allez dans l'historique des tickets","info");
+    addLog("2. Cliquez sur un ticket pour ouvrir le detail","info");
+    addLog("3. Revenez ici et cliquez 'Erreurs JS' a nouveau","info");
+    addLog("L'erreur qui empeche l'ouverture sera capturee.","info");
+  };
+
+  // ══════════════════════════════════════════════
+  // RENDER
+  // ══════════════════════════════════════════════
+  const colorMap={info:"#94A3B8",success:"#4ADE80",error:"#F87171",title:"#60A5FA",warn:"#FBBF24"};
+  const tabStyle=(id)=>({padding:"6px 14px",borderRadius:8,border:`2px solid ${debugTab===id?"#fff":"#334155"}`,
+    background:debugTab===id?"#1E293B":"transparent",color:debugTab===id?"#fff":"#94A3B8",
+    fontSize:12,fontWeight:700,cursor:"pointer"});
+
+  return(<div style={{maxWidth:750}}>
+    <div style={{background:"linear-gradient(135deg,#DC2626,#991B1B)",borderRadius:16,padding:20,marginBottom:16}}>
+      <h3 style={{fontSize:18,fontWeight:800,margin:"0 0 4px",color:"#fff"}}>Centre de Debug CaissePro</h3>
+      <p style={{fontSize:11,color:"#FCA5A5",margin:0}}>Diagnostic complet — imprimante, TPE, tickets. Faites des screenshots des resultats.</p></div>
+
+    {/* Debug sub-tabs */}
+    <div style={{display:"flex",gap:6,marginBottom:14,flexWrap:"wrap"}}>
+      {[{id:"general",l:"General"},{id:"printer",l:"Imprimante"},{id:"tpe",l:"TPE / Concert"},{id:"tickets",l:"Tickets"},{id:"errors",l:`Erreurs (${(window.__CAISSEPRO_ERRORS||[]).length})`}].map(t=>
+        <button key={t.id} onClick={()=>{setDebugTab(t.id);clearLogs();}} style={tabStyle(t.id)}>{t.l}</button>)}
     </div>
 
+    {/* === GENERAL TAB === */}
+    {debugTab==="general"&&<div style={{display:"flex",gap:8,marginBottom:12,flexWrap:"wrap"}}>
+      <Btn onClick={runDiag} disabled={running} style={{height:44,background:"#2563EB",fontSize:12,fontWeight:700}}>
+        <Activity size={14}/> Diagnostic complet</Btn>
+    </div>}
+
+    {/* === PRINTER TAB === */}
+    {debugTab==="printer"&&<div style={{display:"flex",gap:8,marginBottom:12,flexWrap:"wrap"}}>
+      <Btn onClick={testPrinterStatus} disabled={running} style={{height:44,background:"#2563EB",fontSize:12,fontWeight:700}}>
+        <Activity size={14}/> Etat imprimante</Btn>
+      <Btn onClick={testPrinterPrint} disabled={running} style={{height:44,background:"#059669",fontSize:12,fontWeight:700}}>
+        <Printer size={14}/> Tester 5 methodes</Btn>
+    </div>}
+
+    {/* === TPE TAB === */}
+    {debugTab==="tpe"&&<>
+      <div style={{background:"#1E293B",borderRadius:12,padding:16,marginBottom:12,display:"flex",flexDirection:"column",gap:10}}>
+        <div style={{fontSize:12,fontWeight:700,color:"#fff"}}>Configuration TPE Concert</div>
+        <div style={{display:"flex",gap:8,alignItems:"center"}}>
+          <span style={{fontSize:11,color:"#94A3B8",minWidth:60}}>IP TPE:</span>
+          <Input value={tpeIp} onChange={e=>setTpeIp(e.target.value)} placeholder="192.168.1.100"
+            style={{flex:1,background:"#0F172A",color:"#fff",border:"1px solid #334155",fontSize:13,fontFamily:"monospace"}}/>
+        </div>
+        <div style={{display:"flex",gap:8,alignItems:"center"}}>
+          <span style={{fontSize:11,color:"#94A3B8",minWidth:60}}>Port:</span>
+          <Input value={tpePort} onChange={e=>setTpePort(e.target.value)} placeholder="8888"
+            style={{width:100,background:"#0F172A",color:"#fff",border:"1px solid #334155",fontSize:13,fontFamily:"monospace"}}/>
+          <span style={{fontSize:11,color:"#94A3B8",minWidth:60}}>Montant:</span>
+          <Input value={tpeAmount} onChange={e=>setTpeAmount(e.target.value)} placeholder="1.00"
+            style={{width:100,background:"#0F172A",color:"#fff",border:"1px solid #334155",fontSize:13,fontFamily:"monospace"}}/>
+          <span style={{fontSize:11,color:"#94A3B8"}}>EUR</span>
+        </div>
+      </div>
+      <div style={{display:"flex",gap:8,marginBottom:12,flexWrap:"wrap"}}>
+        <Btn onClick={testTpePlugin} disabled={running} style={{height:44,background:"#2563EB",fontSize:12,fontWeight:700}}>
+          <Activity size={14}/> Diagnostic TPE</Btn>
+        <Btn onClick={testTpePing} disabled={running} style={{height:44,background:"#7C3AED",fontSize:12,fontWeight:700}}>
+          <Wifi size={14}/> Ping + Scan ports</Btn>
+        <Btn onClick={testTpeSale} disabled={running} style={{height:44,background:"#059669",fontSize:12,fontWeight:700}}>
+          <CreditCard size={14}/> Test paiement</Btn>
+        <Btn onClick={testTpeRefund} disabled={running} style={{height:44,background:"#D97706",fontSize:12,fontWeight:700}}>
+          <RotateCcw size={14}/> Test remboursement</Btn>
+        <Btn onClick={testTpeCancel} disabled={running} style={{height:44,background:"#DC2626",fontSize:12,fontWeight:700}}>
+          <XCircle size={14}/> Annuler transaction</Btn>
+        <Btn onClick={testTpeRawTcp} disabled={running} style={{height:44,background:"#0F172A",border:"2px solid #7C3AED",fontSize:12,fontWeight:700}}>
+          <Code size={14}/> Message Concert brut</Btn>
+      </div>
+      <div style={{background:"#1E293B",borderRadius:10,padding:12,marginBottom:12,fontSize:10,color:"#94A3B8",lineHeight:1.6}}>
+        <strong style={{color:"#fff"}}>Guide rapide Ingenico Desk/5000:</strong><br/>
+        1. Sur le TPE: Menu &gt; Configuration &gt; Communication &gt; Ethernet &gt; Notez l'IP<br/>
+        2. Le port par defaut Concert est generalement <strong>8888</strong> ou <strong>9100</strong><br/>
+        3. Le TPE doit etre sur le meme reseau WiFi/LAN que la Sunmi T2s<br/>
+        4. Activez le protocole Concert V2 (ou C-TAP) sur le TPE<br/>
+        5. Le TPE doit etre en ecran d'attente (pas dans un menu)<br/>
+        <strong style={{color:"#FBBF24"}}>Le scan de ports va tester les 10 ports les plus courants automatiquement.</strong>
+      </div>
+    </>}
+
+    {/* === TICKETS TAB === */}
+    {debugTab==="tickets"&&<div style={{display:"flex",gap:8,marginBottom:12,flexWrap:"wrap"}}>
+      <Btn onClick={testTicketData} disabled={running} style={{height:44,background:"#D97706",fontSize:12,fontWeight:700}}>
+        <Receipt size={14}/> Inspecter tickets</Btn>
+      <Btn onClick={testJsErrors} disabled={running} style={{height:44,background:"#DC2626",fontSize:12,fontWeight:700}}>
+        <AlertTriangle size={14}/> Erreurs JS</Btn>
+    </div>}
+
+    {/* === ERRORS TAB === */}
+    {debugTab==="errors"&&<div style={{display:"flex",gap:8,marginBottom:12,flexWrap:"wrap"}}>
+      <Btn onClick={testJsErrors} style={{height:44,background:"#DC2626",fontSize:12,fontWeight:700}}>
+        <AlertTriangle size={14}/> Voir erreurs capturees</Btn>
+      <Btn onClick={()=>{window.__CAISSEPRO_ERRORS=[];clearLogs();addLog("Erreurs effacees","success");}}
+        style={{height:44,background:"#64748B",fontSize:12}}>Effacer erreurs</Btn>
+    </div>}
+
+    {/* === LOG OUTPUT === */}
     <div ref={logRef} style={{background:"#0F172A",borderRadius:12,padding:14,fontFamily:"'Courier New',monospace",fontSize:10,
-      color:"#E2E8F0",minHeight:200,maxHeight:500,overflow:"auto",whiteSpace:"pre-wrap",border:"2px solid #1E293B"}}>
-      {logs.length===0&&<span style={{color:"#475569"}}>Appuyez sur un bouton pour lancer un diagnostic...</span>}
-      {logs.map((l,i)=><div key={i} style={{color:colorMap[l.type]||"#94A3B8",marginBottom:2}}>
+      color:"#E2E8F0",minHeight:250,maxHeight:600,overflow:"auto",whiteSpace:"pre-wrap",border:"2px solid #1E293B"}}>
+      {logs.length===0&&<span style={{color:"#475569"}}>Selectionnez un onglet et lancez un test...</span>}
+      {logs.map((l,i)=><div key={i} style={{color:colorMap[l.type]||"#94A3B8",marginBottom:2,borderBottom:l.type==="title"?"1px solid #1E293B":"none",paddingBottom:l.type==="title"?3:0}}>
         <span style={{color:"#475569"}}>[{l.ts}]</span> {l.msg}
       </div>)}
+    </div>
+    <div style={{display:"flex",gap:8,marginTop:8}}>
+      <Btn onClick={clearLogs} style={{height:36,background:"#334155",fontSize:11}}>Effacer logs</Btn>
+      <Btn onClick={()=>{
+        const text=logs.map(l=>`[${l.ts}] ${l.msg}`).join("\n");
+        if(navigator.clipboard)navigator.clipboard.writeText(text).then(()=>addLog("Logs copies!","success"));
+        else addLog("Clipboard non disponible","error");
+      }} style={{height:36,background:"#334155",fontSize:11}}>Copier logs</Btn>
     </div>
   </div>);
 }
