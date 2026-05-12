@@ -6,7 +6,7 @@ import {
   Shield, Download, FileText, Settings, CheckCircle2, AlertTriangle, Save,
   Archive, Activity, Database, WifiOff, Pause, Play, Upload, Printer, Bell,
   Heart, Grid, Box, Star, Calendar, Zap, ScanLine, Split,
-  Mail, XOctagon, Edit, BarChart2, Check, X, HelpCircle, ChevronDown, Scissors
+  Mail, XOctagon, Edit, BarChart2, Check, X, HelpCircle, ChevronDown, Scissors, Monitor
 } from "lucide-react";
 import {
   PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer,
@@ -3027,7 +3027,7 @@ function SizeSettingsTab({notify}){
 }
 
 function SettingsScreen(){
-  const{settings,setSettings,saveSettingsToAPI,addAudit,theme,setTheme,clockEntries,priceHistory,printerConnected,printerType,connectPrinter,disconnectPrinter,thermalPrint,notify,users}=useApp();
+  const{settings,setSettings,saveSettingsToAPI,addAudit,theme,setTheme,clockEntries,priceHistory,printerConnected,printerType,connectPrinter,disconnectPrinter,thermalPrint,notify,users,hwId,hwProfile,switchHardware,hardwareProfiles}=useApp();
   const[tab,setTab]=useState("general");
   const[printerBaud,setPrinterBaud]=useState("9600");
   const[printerWidth,setPrinterWidth]=useState("48");
@@ -3170,6 +3170,31 @@ function SettingsScreen(){
     </div>}
 
     {tab==="printer"&&<div style={{maxWidth:600}}>
+      {/* Hardware selection */}
+      <div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.primary}22`,marginBottom:14}}>
+        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}>
+          <Monitor size={18} color={C.primary}/>
+          <div><h3 style={{fontSize:14,fontWeight:700,margin:0}}>Type de caisse</h3>
+            <p style={{fontSize:10,color:C.textMuted,margin:0}}>Selectionnez votre materiel pour activer les bons drivers (imprimante, ecran client, tiroir-caisse)</p></div></div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+          {Object.entries(hardwareProfiles||{}).map(([id,p])=>(
+            <button key={id} onClick={()=>switchHardware(id)} style={{padding:"12px 14px",borderRadius:12,textAlign:"left",cursor:"pointer",
+              border:`2px solid ${hwId===id?C.primary:C.border}`,background:hwId===id?C.primaryLight:"transparent",transition:"all 0.15s"}}>
+              <div style={{fontSize:12,fontWeight:700,color:hwId===id?C.primary:C.text,marginBottom:2}}>{p.name}</div>
+              <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                {p.hasPrinter&&<span style={{fontSize:9,background:C.primaryLight,color:C.primary,padding:"1px 6px",borderRadius:6,fontWeight:600}}>Imprimante</span>}
+                {p.hasDualScreen&&<span style={{fontSize:9,background:"#DBEAFE",color:"#1D4ED8",padding:"1px 6px",borderRadius:6,fontWeight:600}}>Double ecran</span>}
+                {p.hasCashDrawer&&<span style={{fontSize:9,background:"#FEF3C7",color:"#92400E",padding:"1px 6px",borderRadius:6,fontWeight:600}}>Tiroir</span>}
+              </div>
+            </button>))}
+        </div>
+        {hwProfile&&<div style={{marginTop:10,fontSize:11,color:C.textMuted,background:C.surfaceAlt,borderRadius:8,padding:10}}>
+          Materiel actif: <strong style={{color:C.primary}}>{hwProfile.name}</strong>
+          {hwProfile.hasPrinter?" — Imprimante integree ("+hwProfile.printerWidth+" car.)":""}
+          {hwProfile.hasDualScreen?" — Ecran client integre":""}
+        </div>}
+      </div>
+
       {/* Printer status */}
       <div style={{background:printerConnected?C.primaryLight:C.surfaceAlt,borderRadius:14,padding:16,border:`1.5px solid ${printerConnected?C.primary+"44":C.border}`,marginBottom:14}}>
         <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}>
@@ -3204,8 +3229,16 @@ function SettingsScreen(){
             <Printer size={14}/> {connecting?"Connexion…":"Connecter (USB)"}</Btn>}
         </div>
 
-        {!navigator.serial&&!navigator.usb&&<div style={{background:C.warnLight,borderRadius:10,padding:12,marginTop:10,fontSize:11,color:"#92400E",border:`1px solid ${C.warn}33`}}>
-          ⚠️ Votre navigateur ne supporte ni Web Serial ni WebUSB. Utilisez <strong>Google Chrome</strong>, <strong>Microsoft Edge</strong> ou <strong>Opera</strong> pour connecter une imprimante thermique.</div>}
+        {/* Native POS printer (Sunmi/PAX/iMin) */}
+        {(hwId==="sunmi"||hwId==="pax"||hwId==="imin")&&<div style={{marginTop:10}}>
+          <Btn onClick={async()=>{setConnecting(true);await connectPrinter(hwId);setConnecting(false);}}
+            disabled={connecting} style={{width:"100%",height:44,background:"#059669"}}>
+            <Printer size={14}/> {connecting?"Connexion...":"Connecter imprimante "+hwProfile?.name}</Btn>
+          <p style={{fontSize:10,color:C.textMuted,marginTop:6}}>Connexion directe a l'imprimante integree via le bridge natif. Necessite l'app Capacitor.</p>
+        </div>}
+
+        {!navigator.serial&&!navigator.usb&&hwId==="desktop"&&<div style={{background:C.warnLight,borderRadius:10,padding:12,marginTop:10,fontSize:11,color:"#92400E",border:`1px solid ${C.warn}33`}}>
+          Votre navigateur ne supporte ni Web Serial ni WebUSB. Utilisez <strong>Google Chrome</strong>, <strong>Microsoft Edge</strong> ou <strong>Opera</strong> pour connecter une imprimante thermique.</div>}
       </>:<>
         {/* Connected actions */}
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:14}}>

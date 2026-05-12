@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">CaissePro</string>
+    <string name="title_activity_main">CaissePro</string>
+    <string name="package_name">com.caissepro.app</string>
+    <string name="custom_url_scheme">com.caissepro.app</string>
+</resources>

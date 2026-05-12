@@ -2,6 +2,7 @@ import React, { useState, useMemo, useEffect, useRef, createContext, useContext,
 import * as API from "./api.js";
 import { setOnAuthExpired, setStoreId, clearStoreId } from "./api.js";
 import printer from "./printer.js";
+import hardwareManager from "./hardware.js";
 import { CO, DEFAULT_TVA_RATES, PERMS, initProducts, initUsers, initCustomers, LOYALTY_TIERS, initPromos, C } from "./constants.jsx";
 import { hashPin, verifyPin, sha256, norm, loadVariantOrderFromSettings, autoImportSizesFromProducts } from "./utils.jsx";
 import Papa from "papaparse";
@@ -82,6 +83,10 @@ function AppProvider({children}){
   const[notifications,setNotifications]=useState([]);
   const[printerConnected,setPrinterConnected]=useState(false);
   const[printerType,setPrinterType]=useState(null);
+  // Hardware Abstraction Layer
+  const[hwId,setHwId]=useState(()=>hardwareManager.init());
+  const hwProfile=useMemo(()=>hardwareManager.currentProfile,[hwId]);
+  const switchHardware=useCallback((id)=>{hardwareManager.setHardware(id);setHwId(id);},[]);
   // Default PINs are hashed on first load (SHA-256 + salt)
   const DEFAULT_PIN_HASH="3a24a2105c7a06376ff41e7e06a6cd2a3941c980d99e169c8fbb60d29b741395"; // hash of "1234"
   const defaultUsers=[{id:"u1",name:"Admin",role:"admin",pin:DEFAULT_PIN_HASH},{id:"u2",name:"Sophie",role:"cashier",pin:DEFAULT_PIN_HASH},{id:"u3",name:"Marc",role:"cashier",pin:DEFAULT_PIN_HASH}];
@@ -678,23 +683,45 @@ function AppProvider({children}){
   },[]);
 
   const thermalPrint=useCallback(async(type,data)=>{
-    if(!printer.connected){printReceiptOnly();return false;}
-    try{
-      if(type==="receipt")await printer.printReceipt(data,settings,CO);
-      else if(type==="avoir")await printer.printAvoir(data,settings,CO);
-      else if(type==="closure")await printer.printClosure(data,settings,CO);
-      else if(type==="test")await printer.testPrint();
-      else if(type==="drawer")await printer.openDrawer();
-      notify("🖨️ Impression envoyée");return true;
-    }catch(e){notify("❌ "+e.message,"danger");printReceiptOnly();return false;}
+    const halPrinter=hardwareManager.printer;
+    // Try HAL native printer first (Sunmi/PAX/iMin)
+    if(halPrinter&&halPrinter.connected){
+      try{
+        if(type==="receipt")await halPrinter.printReceipt(data,settings,CO);
+        else if(type==="avoir")await halPrinter.printAvoir(data,settings,CO);
+        else if(type==="closure")await halPrinter.printClosure(data,settings,CO);
+        else if(type==="test")await halPrinter.testPrint();
+        else if(type==="drawer")await halPrinter.openDrawer();
+        notify("Impression envoyee","success");return true;
+      }catch(e){console.warn("[HAL] print failed, falling back:",e);}
+    }
+    // Try ESC/POS Web Serial/USB printer
+    if(printer.connected){
+      try{
+        if(type==="receipt")await printer.printReceipt(data,settings,CO);
+        else if(type==="avoir")await printer.printAvoir(data,settings,CO);
+        else if(type==="closure")await printer.printClosure(data,settings,CO);
+        else if(type==="test")await printer.testPrint();
+        else if(type==="drawer")await printer.openDrawer();
+        notify("Impression envoyee","success");return true;
+      }catch(e){notify(e.message,"danger");}
+    }
+    // Fallback: browser iframe print
+    printReceiptOnly();return false;
   },[settings,notify,printReceiptOnly]);
 
   const connectPrinter=useCallback(async(method,options={})=>{
     try{
+      // Try HAL native first
+      if(method==="sunmi"||method==="pax"||method==="imin"){
+        const ok=await hardwareManager.connectPrinter();
+        if(ok){setPrinterConnected(true);setPrinterType(method);notify("Imprimante "+method+" connectee","success");return true;}
+      }
       if(method==="serial")await printer.connectSerial(options);
       else if(method==="usb")await printer.connectUSB();
-      notify("🖨️ Imprimante connectée ("+method+")");return true;
-    }catch(e){notify("❌ "+e.message,"danger");return false;}
+      setPrinterConnected(true);setPrinterType(method);
+      notify("Imprimante connectee ("+method+")","success");return true;
+    }catch(e){notify(e.message,"danger");return false;}
   },[notify]);
 
   const disconnectPrinter=useCallback(async()=>{
@@ -1001,6 +1028,7 @@ function AppProvider({children}){
     updateProduct,deleteProduct,addVariantToProduct,deleteVariant,
     updateCustomer,deleteCustomer,adjustStock,
     printerConnected,printerType,thermalPrint,connectPrinter,disconnectPrinter,isSunmi,isAndroid,
+    hwId,hwProfile,switchHardware,hardwareProfiles:hardwareManager.profiles,
     users,setUsers,tvaRates,setTvaRates,addPendingSync,pendingSync,clearPendingSync,
   }}>{children}</AppCtx.Provider>;
 }
