@@ -120,11 +120,39 @@ function AppProvider({children}){
   },[]);
 
   useEffect(()=>{
-    const on=()=>setIsOnline(true);const off=()=>setIsOnline(false);
+    const API_BASE=import.meta.env.VITE_API_URL||'https://api.techincash.app';
+    // Robust online check — try multiple methods for Capacitor WebView compatibility
+    const checkReal=async()=>{
+      const ctrl=new AbortController();const t=setTimeout(()=>ctrl.abort(),10000);
+      try{
+        // Method 1: normal cors fetch to our health endpoint
+        const r=await fetch(API_BASE+'/api/health',{method:'GET',cache:'no-store',signal:ctrl.signal});
+        clearTimeout(t);
+        if(r.ok||r.status===0){setIsOnline(true);console.log('[Online] API reachable (status '+r.status+')');return;}
+      }catch(e){clearTimeout(t);console.warn('[Online] Method 1 failed:',e.message);}
+      const ctrl2=new AbortController();const t2=setTimeout(()=>ctrl2.abort(),8000);
+      try{
+        // Method 2: no-cors (opaque response = status 0, but proves connectivity)
+        await fetch(API_BASE+'/api/health',{method:'HEAD',mode:'no-cors',cache:'no-store',signal:ctrl2.signal});
+        clearTimeout(t2);setIsOnline(true);console.log('[Online] API reachable (no-cors)');return;
+      }catch(e){clearTimeout(t2);console.warn('[Online] Method 2 failed:',e.message);}
+      const ctrl3=new AbortController();const t3=setTimeout(()=>ctrl3.abort(),5000);
+      try{
+        // Method 3: Google connectivity check (like Android captive portal detection)
+        await fetch('https://clients3.google.com/generate_204',{method:'HEAD',mode:'no-cors',cache:'no-store',signal:ctrl3.signal});
+        clearTimeout(t3);
+        // Internet works but our API doesn't — still mark as online so app is usable
+        setIsOnline(true);console.log('[Online] Internet OK (Google), API may have CORS issue');return;
+      }catch(e){clearTimeout(t3);console.warn('[Online] Method 3 failed:',e.message);}
+      console.warn('[Online] All checks failed — marking offline. navigator.onLine=',navigator.onLine);
+      setIsOnline(false);
+    };
+    // Don't rely on browser online/offline events on Capacitor — they're unreliable
+    const on=()=>checkReal();const off=()=>checkReal();
     window.addEventListener("online",on);window.addEventListener("offline",off);
-    // Capacitor WebView may report navigator.onLine incorrectly — verify with real fetch
-    const checkReal=async()=>{try{const r=await fetch((import.meta.env.VITE_API_URL||'https://api.techincash.app')+'/api/health',{method:'HEAD',mode:'no-cors',cache:'no-store'});setIsOnline(true);}catch(e){if(navigator.onLine)setIsOnline(true);else setIsOnline(false);}};
-    checkReal();const iv=setInterval(checkReal,30000);
+    // Check immediately, at 3s, 10s, 20s, then every 30s
+    checkReal();setTimeout(checkReal,3000);setTimeout(checkReal,10000);setTimeout(checkReal,20000);
+    const iv=setInterval(checkReal,30000);
     return()=>{window.removeEventListener("online",on);window.removeEventListener("offline",off);clearInterval(iv);};},[]);
 
   // ══ Auto-reconnect on page refresh if token exists ══
