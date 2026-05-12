@@ -28,6 +28,7 @@ import { CO, DEFAULT_TVA_RATES, PERMS, initProducts, initUsers, initCustomers, L
 import { escapeHtml, hashPin, verifyPin, sha256, getPriceHT, getPriceTTC, catIcon, norm, variantKey, getSizeRank, printBarcodeLabels, getVariantOrderMap, saveVariantOrderMap, setProductVariantOrder, DEFAULT_CAT_ICONS, DEFAULT_SIZE_RANKING, getSizeRanking, saveSizeRanking } from "./utils.jsx";
 import { Modal, Btn, Input, Badge, SC, Numpad, ConfirmDialog } from "./ui.jsx";
 import { useApp } from "./context.jsx";
+import hardwareManager from "./hardware.js";
 
 function LoginScreen(){
   const{login,setMode:setIM,users,setUsers}=useApp();const[su,setSu]=useState("");const[pw,setPw]=useState("");const[err,setErr]=useState("");const[m,setM]=useState("cashier");const[loading,setLoading]=useState(false);
@@ -3042,6 +3043,8 @@ function SettingsScreen(){
   const[printerBaud,setPrinterBaud]=useState("9600");
   const[printerWidth,setPrinterWidth]=useState("48");
   const[connecting,setConnecting]=useState(false);
+  const[printerDiag,setPrinterDiag]=useState(null);
+  const[diagLoading,setDiagLoading]=useState(false);
   return(<div style={{height:"100%",overflowY:"auto",padding:20,background:C.bg}}>
     <h2 style={{fontSize:22,fontWeight:800,marginBottom:14}}>Paramètres</h2>
     <div style={{display:"flex",gap:6,marginBottom:14,flexWrap:"wrap"}}>
@@ -3211,7 +3214,57 @@ function SettingsScreen(){
           <div style={{width:12,height:12,borderRadius:6,background:printerConnected?"#059669":"#CCC",boxShadow:printerConnected?"0 0 8px #05966955":"none"}}/>
           <span style={{fontSize:14,fontWeight:700}}>{printerConnected?"Imprimante connectée":"Aucune imprimante"}</span>
           {printerConnected&&<Badge color={C.primary}>{printerType==="serial"?"Web Serial":"WebUSB"}</Badge>}</div>
-        {printerConnected&&<div style={{fontSize:11,color:C.textMuted}}>L'impression ESC/POS est active. Les tickets seront envoyés directement à l'imprimante thermique.</div>}</div>
+        {printerConnected&&<div style={{fontSize:11,color:C.textMuted}}>L'impression ESC/POS est active. Les tickets seront envoyés directement a l'imprimante thermique.</div>}</div>
+
+      {/* Diagnostic panel */}
+      <div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`,marginBottom:14}}>
+        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}>
+          <Activity size={18} color={C.info}/>
+          <div><h3 style={{fontSize:14,fontWeight:700,margin:0}}>Diagnostic imprimante</h3>
+            <p style={{fontSize:10,color:C.textMuted,margin:0}}>Verifiez la detection, connexion et fonctionnement</p></div></div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:10}}>
+          <Btn onClick={async()=>{
+            setDiagLoading(true);
+            try{
+              const diag=await hardwareManager.printer?.getDiagnostics?.();
+              const cap=!!window.Capacitor?.isNativePlatform?.();
+              const plugins=Object.keys(window.Capacitor?.Plugins||{});
+              setPrinterDiag({...diag,capacitor:cap,plugins,hwId,timestamp:new Date().toLocaleTimeString('fr-FR')});
+            }catch(e){setPrinterDiag({error:e.message});}
+            setDiagLoading(false);
+          }} disabled={diagLoading} style={{height:40,background:C.info,fontSize:11}}>
+            <Activity size={13}/> {diagLoading?"Analyse...":"Diagnostic"}</Btn>
+          <Btn onClick={async()=>{
+            setDiagLoading(true);
+            try{
+              await hardwareManager.connectPrinter();
+              const diag=await hardwareManager.printer?.getDiagnostics?.();
+              setPrinterDiag(prev=>({...prev,...diag,action:"connectPrinter",timestamp:new Date().toLocaleTimeString('fr-FR')}));
+              notify(hardwareManager.printer?.connected?"Imprimante connectee":"Connexion echouee",hardwareManager.printer?.connected?"success":"warn");
+            }catch(e){setPrinterDiag(prev=>({...prev,connectError:e.message}));notify("Erreur: "+e.message,"error");}
+            setDiagLoading(false);
+          }} disabled={diagLoading} style={{height:40,background:C.primary,fontSize:11}}>
+            <Printer size={13}/> Connecter</Btn>
+          <Btn onClick={async()=>{
+            setDiagLoading(true);
+            try{
+              if(window.Capacitor?.Plugins?.SunmiPrinter){
+                const r=await window.Capacitor.Plugins.SunmiPrinter.testPrint();
+                setPrinterDiag(prev=>({...prev,testResult:r,action:"testPrint",timestamp:new Date().toLocaleTimeString('fr-FR')}));
+                notify("Test impression envoye","success");
+              }else{
+                await thermalPrint("test");
+                notify("Test impression envoye","success");
+              }
+            }catch(e){setPrinterDiag(prev=>({...prev,testError:e.message}));notify("Erreur test: "+e.message,"error");}
+            setDiagLoading(false);
+          }} disabled={diagLoading} style={{height:40,background:"#059669",fontSize:11}}>
+            <Printer size={13}/> Test print</Btn>
+        </div>
+        {printerDiag&&<div style={{background:"#0F172A",borderRadius:10,padding:12,fontFamily:"monospace",fontSize:10,color:"#E2E8F0",maxHeight:300,overflow:"auto",whiteSpace:"pre-wrap"}}>
+          {JSON.stringify(printerDiag,null,2)}
+        </div>}
+      </div>
 
       {/* Connect / Disconnect */}
       {!printerConnected?<>

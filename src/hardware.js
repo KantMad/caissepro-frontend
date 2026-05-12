@@ -86,41 +86,94 @@ class SunmiPrinterAdapter {
   constructor() {
     this.connected = false;
     this._bridge = null;
+    this._status = null;
   }
 
   async connect() {
     this._isCapacitor = false;
+
     // Check for Capacitor Sunmi plugin
     if (window.Capacitor?.Plugins?.SunmiPrinter) {
       this._bridge = window.Capacitor.Plugins.SunmiPrinter;
       this._isCapacitor = true;
+      console.log('[Sunmi] Capacitor plugin found, checking status...');
+
+      // Get full diagnostic status
+      try {
+        this._status = await this._bridge.getStatus();
+        console.log('[Sunmi] Status:', JSON.stringify(this._status));
+      } catch (e) {
+        console.warn('[Sunmi] getStatus failed:', e);
+      }
+
+      // Try to init printer
+      try {
+        await this._bridge.printerInit({});
+        this.connected = true;
+        console.log('[Sunmi] Printer connected via Capacitor plugin');
+        return true;
+      } catch (e) {
+        console.warn('[Sunmi] printerInit failed:', e.message || e);
+        // If service wasn't ready, try reconnect then retry
+        try {
+          console.log('[Sunmi] Attempting reconnect...');
+          const reconResult = await this._bridge.reconnect();
+          console.log('[Sunmi] Reconnect result:', JSON.stringify(reconResult));
+          if (reconResult.connected) {
+            await this._bridge.printerInit({});
+            this.connected = true;
+            console.log('[Sunmi] Printer connected after reconnect');
+            return true;
+          }
+        } catch (e2) {
+          console.warn('[Sunmi] Reconnect failed:', e2.message || e2);
+        }
+      }
     } else if (window.SunmiInnerPrinter) {
       this._bridge = window.SunmiInnerPrinter;
     } else if (window.PrintService) {
       this._bridge = window.PrintService;
     }
 
-    if (this._bridge) {
+    if (this._bridge && !this._isCapacitor) {
       try {
-        await this._cap('printerInit', {});
+        const vals = [];
+        if (typeof this._bridge.printerInit === 'function') {
+          await this._bridge.printerInit(...vals);
+        }
         this.connected = true;
-        console.log('[Sunmi] Printer connected via', this._isCapacitor ? 'Capacitor plugin' : 'JS bridge');
+        console.log('[Sunmi] Printer connected via legacy JS bridge');
         return true;
       } catch (e) {
-        console.warn('[Sunmi] Init failed:', e);
+        console.warn('[Sunmi] Legacy init failed:', e);
       }
     }
 
     // Fallback: check if Android bridge is available
     if (window.android?.printText) {
       this._bridge = window.android;
+      this._isCapacitor = false;
       this.connected = true;
       console.log('[Sunmi] Printer connected via Android bridge');
       return true;
     }
 
     this.connected = false;
+    console.warn('[Sunmi] No printer bridge found. Capacitor available:', !!window.Capacitor, 'Plugins:', Object.keys(window.Capacitor?.Plugins || {}));
     return false;
+  }
+
+  // Get full diagnostic info (call from settings/debug UI)
+  async getDiagnostics() {
+    if (!this._bridge || !this._isCapacitor) {
+      return { available: false, bridge: !!this._bridge, isCapacitor: this._isCapacitor, connected: this.connected };
+    }
+    try {
+      const status = await this._bridge.getStatus();
+      return { available: true, ...status, jsConnected: this.connected };
+    } catch (e) {
+      return { available: true, error: e.message, jsConnected: this.connected };
+    }
   }
 
   // Capacitor plugins REQUIRE a single object argument — never positional args

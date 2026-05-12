@@ -4,6 +4,7 @@ import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.ServiceConnection;
+import android.os.Build;
 import android.os.IBinder;
 import android.os.RemoteException;
 import android.util.Log;
@@ -14,58 +15,81 @@ import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
 
+import woyou.aidlservice.jiuiv5.ICallback;
+import woyou.aidlservice.jiuiv5.IWoyouService;
+
 /**
  * CaissePro Sunmi Printer Plugin
  * Bridges the Sunmi AIDL printer service to the Capacitor web layer.
- *
- * This plugin works on all Sunmi devices (T2s, T2, T3, V2, V2 Pro, etc.)
- * It uses reflection to call the Sunmi printer service without requiring
- * the AIDL files at compile time — making the APK compatible with non-Sunmi devices.
+ * Uses proper AIDL binding (not reflection) for reliable operation.
  */
 @CapacitorPlugin(name = "SunmiPrinter")
 public class SunmiPrinterPlugin extends Plugin {
     private static final String TAG = "SunmiPrinter";
-    private Object printerService = null;
+    private IWoyouService printerService = null;
     private boolean isBound = false;
+    private boolean bindAttempted = false;
+    private String bindError = null;
+
+    // Simple callback that logs errors
+    private final ICallback defaultCallback = new ICallback.Stub() {
+        @Override
+        public void onRunResult(boolean isSuccess) {
+            Log.d(TAG, "Print callback: " + (isSuccess ? "OK" : "FAIL"));
+        }
+        @Override
+        public void onReturnString(String result) {
+            Log.d(TAG, "Print result: " + result);
+        }
+        @Override
+        public void onRaiseException(int code, String msg) {
+            Log.e(TAG, "Print exception " + code + ": " + msg);
+        }
+    };
 
     @Override
     public void load() {
         super.load();
+        Log.i(TAG, "Plugin loading, attempting to bind Sunmi printer service...");
+        Log.i(TAG, "Device: " + Build.MANUFACTURER + " " + Build.MODEL);
         bindPrinterService();
     }
 
     private void bindPrinterService() {
+        bindAttempted = true;
         try {
             Intent intent = new Intent();
             intent.setPackage("woyou.aidlservice.jiuiv5");
             intent.setAction("woyou.aidlservice.jiuiv5.IWoyouService");
-            getContext().bindService(intent, serviceConnection, Context.BIND_AUTO_CREATE);
+
+            boolean bound = getContext().bindService(intent, serviceConnection, Context.BIND_AUTO_CREATE);
+            Log.i(TAG, "bindService returned: " + bound);
+            if (!bound) {
+                bindError = "bindService returned false — Sunmi printer service not found on this device";
+                Log.w(TAG, bindError);
+            }
         } catch (Exception e) {
-            Log.w(TAG, "Failed to bind Sunmi printer service: " + e.getMessage());
+            bindError = "bindService exception: " + e.getMessage();
+            Log.e(TAG, bindError);
         }
     }
 
     private final ServiceConnection serviceConnection = new ServiceConnection() {
         @Override
         public void onServiceConnected(ComponentName name, IBinder service) {
+            printerService = IWoyouService.Stub.asInterface(service);
+            isBound = true;
+            bindError = null;
+            Log.i(TAG, "=== SUNMI PRINTER SERVICE CONNECTED ===");
+
+            // Log printer info for diagnostics
             try {
-                // Use reflection to get the Stub.asInterface method
-                Class<?> stubClass = Class.forName("woyou.aidlservice.jiuiv5.IWoyouService$Stub");
-                java.lang.reflect.Method asInterface = stubClass.getMethod("asInterface", IBinder.class);
-                printerService = asInterface.invoke(null, service);
-                isBound = true;
-                Log.i(TAG, "Sunmi printer service connected");
-            } catch (Exception e) {
-                Log.w(TAG, "Reflection failed, trying direct AIDL: " + e.getMessage());
-                // If reflection fails, try the newer Sunmi SDK
-                try {
-                    Class<?> stubClass = Class.forName("com.sunmi.peripheral.printer.InnerPrinterManager");
-                    java.lang.reflect.Method getInstance = stubClass.getMethod("getInstance");
-                    printerService = getInstance.invoke(null);
-                    isBound = printerService != null;
-                } catch (Exception e2) {
-                    Log.e(TAG, "All binding methods failed: " + e2.getMessage());
-                }
+                String serial = printerService.getPrinterSerialNo();
+                String version = printerService.getPrinterVersion();
+                int state = printerService.updatePrinterState();
+                Log.i(TAG, "Serial: " + serial + ", Version: " + version + ", State: " + state);
+            } catch (RemoteException e) {
+                Log.w(TAG, "Could not read printer info: " + e.getMessage());
             }
         }
 
@@ -73,49 +97,69 @@ public class SunmiPrinterPlugin extends Plugin {
         public void onServiceDisconnected(ComponentName name) {
             printerService = null;
             isBound = false;
-            Log.i(TAG, "Sunmi printer service disconnected");
+            Log.w(TAG, "Sunmi printer service DISCONNECTED");
         }
     };
 
-    private void callPrinter(String methodName, Object... args) throws Exception {
-        if (printerService == null) throw new Exception("Printer service not available");
+    // ── Diagnostic method — call from JS to check everything ──
+    @PluginMethod
+    public void getStatus(PluginCall call) {
+        JSObject ret = new JSObject();
+        ret.put("connected", isBound && printerService != null);
+        ret.put("bindAttempted", bindAttempted);
+        ret.put("isBound", isBound);
+        ret.put("serviceAvailable", printerService != null);
+        ret.put("manufacturer", Build.MANUFACTURER);
+        ret.put("model", Build.MODEL);
+        ret.put("device", Build.DEVICE);
+        ret.put("isSunmi", Build.MANUFACTURER.toLowerCase().contains("sunmi"));
 
-        Class<?>[] paramTypes = new Class[args.length];
-        for (int i = 0; i < args.length; i++) {
-            if (args[i] instanceof String) paramTypes[i] = String.class;
-            else if (args[i] instanceof Integer) paramTypes[i] = int.class;
-            else if (args[i] instanceof Float) paramTypes[i] = float.class;
-            else if (args[i] instanceof Boolean) paramTypes[i] = boolean.class;
-            else if (args[i] instanceof byte[]) paramTypes[i] = byte[].class;
-            else paramTypes[i] = args[i].getClass();
+        if (bindError != null) {
+            ret.put("error", bindError);
         }
 
-        // Most Sunmi AIDL methods have a callback as last param (can be null)
-        try {
-            // Try with callback parameter (ICallback)
-            Class<?>[] withCallback = new Class[paramTypes.length + 1];
-            System.arraycopy(paramTypes, 0, withCallback, 0, paramTypes.length);
-            withCallback[paramTypes.length] = Class.forName("woyou.aidlservice.jiuiv5.ICallback");
-
-            Object[] withNullCallback = new Object[args.length + 1];
-            System.arraycopy(args, 0, withNullCallback, 0, args.length);
-            withNullCallback[args.length] = null;
-
-            java.lang.reflect.Method method = printerService.getClass().getMethod(methodName, withCallback);
-            method.invoke(printerService, withNullCallback);
-        } catch (NoSuchMethodException e) {
-            // Try without callback
-            java.lang.reflect.Method method = printerService.getClass().getMethod(methodName, paramTypes);
-            method.invoke(printerService, args);
+        if (printerService != null) {
+            try {
+                ret.put("serial", printerService.getPrinterSerialNo());
+                ret.put("printerVersion", printerService.getPrinterVersion());
+                ret.put("serviceVersion", printerService.getServiceVersion());
+                int state = printerService.updatePrinterState();
+                ret.put("printerState", state);
+                // State codes: 1=normal, 2=preparing, 3=abnormal, 4=overheated,
+                // 5=no paper, 6=paper jam, 7=cover open, 505=no printer, 507=updating
+                String stateLabel;
+                switch (state) {
+                    case 1: stateLabel = "NORMAL"; break;
+                    case 2: stateLabel = "PREPARING"; break;
+                    case 3: stateLabel = "ABNORMAL"; break;
+                    case 4: stateLabel = "OVERHEATED"; break;
+                    case 5: stateLabel = "NO_PAPER"; break;
+                    case 6: stateLabel = "PAPER_JAM"; break;
+                    case 7: stateLabel = "COVER_OPEN"; break;
+                    case 505: stateLabel = "NO_PRINTER"; break;
+                    case 507: stateLabel = "UPDATING_FIRMWARE"; break;
+                    default: stateLabel = "UNKNOWN_" + state; break;
+                }
+                ret.put("printerStateLabel", stateLabel);
+                ret.put("printerPaper", printerService.getPrinterPaper());
+            } catch (RemoteException e) {
+                ret.put("infoError", e.getMessage());
+            }
         }
+
+        call.resolve(ret);
     }
 
     @PluginMethod
     public void printerInit(PluginCall call) {
+        if (printerService == null) {
+            call.reject("Printer not connected (service is null). bindAttempted=" + bindAttempted + ", error=" + bindError);
+            return;
+        }
         try {
-            callPrinter("printerInit");
+            printerService.printerInit(defaultCallback);
             call.resolve();
-        } catch (Exception e) {
+        } catch (RemoteException e) {
             call.reject("printerInit failed: " + e.getMessage());
         }
     }
@@ -123,10 +167,14 @@ public class SunmiPrinterPlugin extends Plugin {
     @PluginMethod
     public void printText(PluginCall call) {
         String text = call.getString("text", "");
+        if (printerService == null) {
+            call.reject("Printer not connected");
+            return;
+        }
         try {
-            callPrinter("printText", text);
+            printerService.printText(text, defaultCallback);
             call.resolve();
-        } catch (Exception e) {
+        } catch (RemoteException e) {
             call.reject("printText failed: " + e.getMessage());
         }
     }
@@ -134,15 +182,19 @@ public class SunmiPrinterPlugin extends Plugin {
     @PluginMethod
     public void printOriginalText(PluginCall call) {
         String text = call.getString("text", "");
+        if (printerService == null) {
+            call.reject("Printer not connected");
+            return;
+        }
         try {
-            callPrinter("printOriginalText", text);
+            printerService.printOriginalText(text, defaultCallback);
             call.resolve();
-        } catch (Exception e) {
-            // Fallback to printText
+        } catch (RemoteException e) {
+            // Fallback
             try {
-                callPrinter("printText", text);
+                printerService.printText(text, defaultCallback);
                 call.resolve();
-            } catch (Exception e2) {
+            } catch (RemoteException e2) {
                 call.reject("printOriginalText failed: " + e2.getMessage());
             }
         }
@@ -151,10 +203,11 @@ public class SunmiPrinterPlugin extends Plugin {
     @PluginMethod
     public void setAlignment(PluginCall call) {
         int alignment = call.getInt("alignment", 0);
+        if (printerService == null) { call.reject("Printer not connected"); return; }
         try {
-            callPrinter("setAlignment", alignment);
+            printerService.setAlignment(alignment, defaultCallback);
             call.resolve();
-        } catch (Exception e) {
+        } catch (RemoteException e) {
             call.reject("setAlignment failed: " + e.getMessage());
         }
     }
@@ -162,10 +215,11 @@ public class SunmiPrinterPlugin extends Plugin {
     @PluginMethod
     public void setFontSize(PluginCall call) {
         float size = call.getFloat("size", 20f);
+        if (printerService == null) { call.reject("Printer not connected"); return; }
         try {
-            callPrinter("setFontSize", size);
+            printerService.setFontSize(size, defaultCallback);
             call.resolve();
-        } catch (Exception e) {
+        } catch (RemoteException e) {
             call.reject("setFontSize failed: " + e.getMessage());
         }
     }
@@ -173,12 +227,13 @@ public class SunmiPrinterPlugin extends Plugin {
     @PluginMethod
     public void setBold(PluginCall call) {
         boolean bold = call.getBoolean("bold", false);
+        if (printerService == null) { call.reject("Printer not connected"); return; }
         try {
-            // Sunmi uses sendRAWData for bold
+            // ESC E n — bold on/off
             byte[] cmd = bold ? new byte[]{0x1B, 0x45, 0x01} : new byte[]{0x1B, 0x45, 0x00};
-            callPrinter("sendRAWData", cmd);
+            printerService.sendRAWData(cmd, defaultCallback);
             call.resolve();
-        } catch (Exception e) {
+        } catch (RemoteException e) {
             call.reject("setBold failed: " + e.getMessage());
         }
     }
@@ -186,37 +241,52 @@ public class SunmiPrinterPlugin extends Plugin {
     @PluginMethod
     public void lineWrap(PluginCall call) {
         int lines = call.getInt("lines", 3);
+        if (printerService == null) { call.reject("Printer not connected"); return; }
         try {
-            callPrinter("lineWrap", lines);
+            printerService.lineWrap(lines, defaultCallback);
             call.resolve();
-        } catch (Exception e) {
+        } catch (RemoteException e) {
             call.reject("lineWrap failed: " + e.getMessage());
         }
     }
 
     @PluginMethod
     public void cutPaper(PluginCall call) {
+        if (printerService == null) { call.resolve(); return; }
         try {
-            callPrinter("cutPaper");
+            printerService.cutPaper(defaultCallback);
             call.resolve();
-        } catch (Exception e) {
-            // Not all Sunmi models support cut — ignore silently
+        } catch (RemoteException e) {
+            // Not all models support cut — silent resolve
             call.resolve();
         }
     }
 
     @PluginMethod
-    public void openDrawer(PluginCall call) {
+    public void feedPaper(PluginCall call) {
+        int mm = call.getInt("mm", 10);
+        if (printerService == null) { call.reject("Printer not connected"); return; }
         try {
-            callPrinter("openDrawer");
+            printerService.feedPaper(mm, defaultCallback);
             call.resolve();
-        } catch (Exception e) {
-            // Try ESC/POS command for drawer
+        } catch (RemoteException e) {
+            call.reject("feedPaper failed: " + e.getMessage());
+        }
+    }
+
+    @PluginMethod
+    public void openDrawer(PluginCall call) {
+        if (printerService == null) { call.reject("Printer not connected"); return; }
+        try {
+            printerService.openDrawer(defaultCallback);
+            call.resolve();
+        } catch (RemoteException e) {
+            // Fallback: ESC/POS drawer kick command
             try {
                 byte[] cmd = new byte[]{0x1B, 0x70, 0x00, 0x19, (byte) 0xFA};
-                callPrinter("sendRAWData", cmd);
+                printerService.sendRAWData(cmd, defaultCallback);
                 call.resolve();
-            } catch (Exception e2) {
+            } catch (RemoteException e2) {
                 call.reject("openDrawer failed: " + e2.getMessage());
             }
         }
@@ -227,10 +297,11 @@ public class SunmiPrinterPlugin extends Plugin {
         String content = call.getString("content", "");
         int size = call.getInt("size", 6);
         int errorLevel = call.getInt("errorLevel", 3);
+        if (printerService == null) { call.reject("Printer not connected"); return; }
         try {
-            callPrinter("printQRCode", content, size, errorLevel);
+            printerService.printQRCode(content, size, errorLevel, defaultCallback);
             call.resolve();
-        } catch (Exception e) {
+        } catch (RemoteException e) {
             call.reject("printQRCode failed: " + e.getMessage());
         }
     }
@@ -238,14 +309,15 @@ public class SunmiPrinterPlugin extends Plugin {
     @PluginMethod
     public void printBarCode(PluginCall call) {
         String content = call.getString("content", "");
-        int symbology = call.getInt("symbology", 8); // CODE128
+        int symbology = call.getInt("symbology", 8);
         int height = call.getInt("height", 80);
         int width = call.getInt("width", 2);
-        int textPosition = call.getInt("textPosition", 2); // Below
+        int textPosition = call.getInt("textPosition", 2);
+        if (printerService == null) { call.reject("Printer not connected"); return; }
         try {
-            callPrinter("printBarCode", content, symbology, height, width, textPosition);
+            printerService.printBarCode(content, symbology, height, width, textPosition, defaultCallback);
             call.resolve();
-        } catch (Exception e) {
+        } catch (RemoteException e) {
             call.reject("printBarCode failed: " + e.getMessage());
         }
     }
@@ -253,9 +325,10 @@ public class SunmiPrinterPlugin extends Plugin {
     @PluginMethod
     public void sendRAWData(PluginCall call) {
         String base64Data = call.getString("data", "");
+        if (printerService == null) { call.reject("Printer not connected"); return; }
         try {
             byte[] data = android.util.Base64.decode(base64Data, android.util.Base64.DEFAULT);
-            callPrinter("sendRAWData", data);
+            printerService.sendRAWData(data, defaultCallback);
             call.resolve();
         } catch (Exception e) {
             call.reject("sendRAWData failed: " + e.getMessage());
@@ -267,6 +340,56 @@ public class SunmiPrinterPlugin extends Plugin {
         JSObject ret = new JSObject();
         ret.put("connected", isBound && printerService != null);
         call.resolve(ret);
+    }
+
+    // ── Force reconnect (useful if service was slow to start) ──
+    @PluginMethod
+    public void reconnect(PluginCall call) {
+        Log.i(TAG, "Manual reconnect requested");
+        if (isBound) {
+            try { getContext().unbindService(serviceConnection); } catch (Exception e) {}
+            printerService = null;
+            isBound = false;
+        }
+        bindError = null;
+        bindPrinterService();
+        // Give it a moment then return status
+        getActivity().getWindow().getDecorView().postDelayed(() -> {
+            JSObject ret = new JSObject();
+            ret.put("connected", isBound && printerService != null);
+            ret.put("error", bindError);
+            call.resolve(ret);
+        }, 2000);
+    }
+
+    // ── Quick test print ──
+    @PluginMethod
+    public void testPrint(PluginCall call) {
+        if (printerService == null) {
+            call.reject("Printer not connected. Status: bindAttempted=" + bindAttempted
+                + ", manufacturer=" + Build.MANUFACTURER + ", error=" + bindError);
+            return;
+        }
+        try {
+            printerService.printerInit(null);
+            printerService.setAlignment(1, null);
+            printerService.setFontSize(28f, null);
+            printerService.printText("=== TEST CaissePro ===\n", null);
+            printerService.setFontSize(20f, null);
+            printerService.printText("Imprimante OK\n", null);
+            printerService.printText(Build.MANUFACTURER + " " + Build.MODEL + "\n", null);
+            printerService.printText(new java.text.SimpleDateFormat("dd/MM/yyyy HH:mm:ss", java.util.Locale.FRANCE)
+                .format(new java.util.Date()) + "\n", null);
+            printerService.printText("================================\n", null);
+            printerService.lineWrap(4, null);
+            try { printerService.cutPaper(null); } catch (Exception e) {}
+
+            JSObject ret = new JSObject();
+            ret.put("success", true);
+            call.resolve(ret);
+        } catch (RemoteException e) {
+            call.reject("testPrint failed: " + e.getMessage());
+        }
     }
 
     @Override
