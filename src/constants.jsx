@@ -1,6 +1,6 @@
 /* ══════════ COMPANY ══════════ */
 export const CO={name:"Ma Boutique Textile",address:"12 rue de la Mode",postalCode:"75001",city:"Paris",
-  siret:"123 456 789 00012",tvaIntra:"FR 12 345678900",phone:"01 23 45 67 89",sw:"CaissePro",ver:"5.0.0",
+  siret:"123 456 789 00012",tvaIntra:"FR 12 345678900",phone:"01 23 45 67 89",sw:"CaissePro",ver:typeof __APP_VERSION__!=='undefined'?__APP_VERSION__:"6.1.0",
   logo:"",footerMsg:"Merci de votre visite !",legalForm:"SARL",capital:"10 000 €"};
 
 /* ══════════ TVA RATES ══════════ */
