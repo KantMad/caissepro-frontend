@@ -29,8 +29,6 @@ interface IWoyouService {
     void printBarCode(String data, int symbology, int height, int width, int textposition, ICallback callback);
     void printQRCode(String data, int modulesize, int errorlevel, ICallback callback);
 
-    void printBitmap(in android.graphics.Bitmap bitmap, ICallback callback);
-
     void lineWrap(int n, ICallback callback);
 
     void cutPaper(ICallback callback);
@@ -44,9 +42,5 @@ interface IWoyouService {
     void enterPrinterBuffer(boolean isClean);
     void exitPrinterBuffer(boolean isCommit);
 
-    void commitPrint(in android.graphics.Bitmap[] bitmaps, ICallback callback);
-
     void feedPaper(int mm, ICallback callback);
-
-    void printBitmapCustom(in android.graphics.Bitmap bitmap, int type, ICallback callback);
 }
