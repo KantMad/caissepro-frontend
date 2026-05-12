@@ -72,21 +72,46 @@ export function markAsUpdated(buildId) {
 }
 
 export async function downloadAndInstall(downloadUrl) {
-  // On Android (Capacitor), trigger APK download + install
+  // On Android (Capacitor), use native AppInstaller plugin
   if (window.Capacitor?.isNativePlatform?.()) {
-    // Use the Capacitor browser or file download
-    try {
-      // Method 1: Open in system browser (triggers download + install prompt)
-      window.open(downloadUrl, '_system');
-      return true;
-    } catch (e) {
-      console.error('[Updater] Download failed:', e);
-      return false;
+    const installer = window.Capacitor?.Plugins?.AppInstaller;
+    if (installer) {
+      try {
+        console.log('[Updater] Using native AppInstaller plugin...');
+        const result = await installer.downloadAndInstall({
+          url: downloadUrl,
+          filename: 'CaissePro.apk',
+        });
+        console.log('[Updater] Download result:', result);
+        return true;
+      } catch (e) {
+        console.error('[Updater] Native download failed:', e);
+        // Fallback: open in system browser via Intent
+        try {
+          await installer.openUrl({ url: downloadUrl });
+          return true;
+        } catch (e2) {
+          console.error('[Updater] openUrl fallback failed:', e2);
+        }
+      }
     }
+    // Last resort fallback: try Android Intent via Capacitor core
+    try {
+      const { Browser } = window.Capacitor?.Plugins || {};
+      if (Browser?.open) {
+        await Browser.open({ url: downloadUrl });
+        return true;
+      }
+    } catch (e) {}
+    // Final fallback: system browser
+    try {
+      const intent = new Intent('android.intent.action.VIEW');
+      window.location.href = downloadUrl;
+    } catch (e) {}
+    return false;
   }
 
-  // On desktop/PWA, the service worker handles updates via the prompt
-  // Just reload to get the latest version
+  // On desktop/PWA, just reload
   window.location.reload();
   return true;
 }
