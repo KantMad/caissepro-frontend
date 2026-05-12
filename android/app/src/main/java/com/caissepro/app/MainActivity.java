@@ -8,6 +8,7 @@ public class MainActivity extends BridgeActivity {
     public void onCreate(Bundle savedInstanceState) {
         // Register custom Capacitor plugins
         registerPlugin(SunmiPrinterPlugin.class);
+        registerPlugin(PaymentTerminalPlugin.class);
         super.onCreate(savedInstanceState);
     }
 }

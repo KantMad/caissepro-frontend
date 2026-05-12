@@ -608,6 +608,13 @@ class DualScreenAdapter {
 // ═══════════════════════════════════════════════════════
 
 const PAYMENT_PROFILES = {
+  auto: {
+    id: 'auto',
+    name: 'Auto-detection',
+    description: 'Detecte automatiquement le TPE disponible (Sunmi, PAX, SumUp...)',
+    methods: ['card', 'amex', 'contactless'],
+    requiresConfig: false,
+  },
   manual: {
     id: 'manual',
     name: 'Manuel (TPE independant)',
@@ -692,215 +699,133 @@ const PAYMENT_PROFILES = {
   },
 };
 
-// ── Concert Protocol (French POS-TPE standard) ──
-class ConcertPaymentAdapter {
+// ═══════════════════════════════════════════════════════
+// UNIFIED PAYMENT TERMINAL — Native Capacitor Plugin Bridge
+// All payment adapters now route through PaymentTerminal plugin
+// which auto-detects hardware and uses the correct Intent/SDK
+// ═══════════════════════════════════════════════════════
+
+/** Get the native PaymentTerminal plugin (if available) */
+function _getPayBridge() {
+  return window.Capacitor?.Plugins?.PaymentTerminal || null;
+}
+
+/** Shared manual fallback — dispatches UI event for cashier confirmation */
+function _manualPayment(amount, type = 'Encaissement', provider = '') {
+  const msg = provider
+    ? `${type}: ${amount.toFixed(2)} EUR sur ${provider} — confirmez une fois effectue`
+    : `${type}: ${amount.toFixed(2)} EUR sur le TPE — confirmez une fois effectue`;
+  return new Promise((resolve) => {
+    window.dispatchEvent(new CustomEvent('caissepro:payment-manual', {
+      detail: { amount, type, message: msg, provider, resolve }
+    }));
+  });
+}
+
+// ── Native Payment Adapter (Sunmi, PAX, NEXGO — auto-detected) ──
+class NativePaymentAdapter {
   constructor(config = {}) {
     this.config = config;
     this.connected = false;
-    this._socket = null;
+    this._bridge = null;
+    this._hwInfo = null;
   }
 
   async connect() {
-    // Concert protocol uses TCP socket to TPE
-    // In a browser context, we need a WebSocket proxy or Capacitor TCP plugin
-    const host = this.config.tpeHost;
-    const port = this.config.tpePort || 8888;
-
-    if (!host) throw new Error('Adresse IP du TPE non configuree');
-
-    // Try Capacitor TCP plugin
-    if (window.Capacitor?.Plugins?.TCPSocket) {
-      try {
-        await window.Capacitor.Plugins.TCPSocket.connect({ host, port: parseInt(port) });
-        this.connected = true;
-        return true;
-      } catch (e) {
-        throw new Error(`Connexion TPE echouee: ${e.message}`);
-      }
+    this._bridge = _getPayBridge();
+    if (!this._bridge) {
+      console.warn('[Payment] PaymentTerminal plugin not available');
+      return false;
     }
-
-    // Try WebSocket proxy (for browser/desktop)
     try {
-      const wsUrl = `ws://${host}:${parseInt(port) + 1}`;
-      this._socket = new WebSocket(wsUrl);
-      await new Promise((resolve, reject) => {
-        this._socket.onopen = () => { this.connected = true; resolve(); };
-        this._socket.onerror = () => reject(new Error('WebSocket connexion echouee'));
-        setTimeout(() => reject(new Error('Timeout connexion TPE')), 5000);
-      });
-      return true;
+      this._hwInfo = await this._bridge.detectHardware();
+      console.log('[Payment] Hardware detected:', this._hwInfo);
+      this.connected = this._hwInfo.hasBuiltInPayment || false;
+      return this.connected;
     } catch (e) {
-      // Fallback: assume manual mode if can't connect
-      console.warn('[Concert] Connection failed, falling back to manual mode:', e.message);
-      this.connected = false;
+      console.warn('[Payment] Detection failed:', e);
       return false;
     }
   }
 
-  // Concert V2 message format: STX + Data + ETX + LRC
-  _buildConcertMessage(type, amount, currency = 'EUR') {
-    const STX = 0x02, ETX = 0x03;
-    // Transaction types: 00=Debit, 01=Credit, 09=Annulation
-    const typeCode = type === 'refund' ? '01' : '00';
-    const amountStr = Math.round(amount * 100).toString().padStart(8, '0');
-    const currencyCode = currency === 'EUR' ? '978' : '840';
-    const deviceId = (this.config.tpeDeviceId || '01').padStart(2, '0');
-
-    // Concert V2 frame: TypeTransaction + Montant + DeviseNumérique + ModeEncaissement + Données privées
-    const data = `${typeCode}${amountStr}${currencyCode}1${deviceId}`;
-    const bytes = [];
-    bytes.push(STX);
-    for (let i = 0; i < data.length; i++) bytes.push(data.charCodeAt(i));
-    bytes.push(ETX);
-    // LRC = XOR of all bytes from after STX to ETX inclusive
-    let lrc = 0;
-    for (let i = 1; i < bytes.length; i++) lrc ^= bytes[i];
-    bytes.push(lrc);
-    return new Uint8Array(bytes);
-  }
-
-  _parseConcertResponse(data) {
-    // Concert response: STX + StatusCode(1) + Data + ETX + LRC
-    if (!data || data.length < 4) return { success: false, error: 'Reponse invalide' };
-    const status = String.fromCharCode(data[1]);
-    // 0 = Accepted, 1-7 = various refusals
-    const accepted = status === '0';
-    let authCode = '';
-    if (data.length > 5) {
-      authCode = Array.from(data.slice(2, data.length - 2)).map(b => String.fromCharCode(b)).join('');
-    }
-    return {
-      success: accepted,
-      status: accepted ? 'approved' : 'declined',
-      authCode,
-      error: accepted ? null : `Transaction refusee (code: ${status})`,
-    };
-  }
-
   async charge(amount, options = {}) {
-    if (!this.connected) {
-      // Manual fallback
-      return this._manualCharge(amount, options);
-    }
-
-    const msg = this._buildConcertMessage('debit', amount, options.currency);
-
+    if (!this._bridge) return _manualPayment(amount, 'Encaissement');
     try {
-      let response;
-      if (window.Capacitor?.Plugins?.TCPSocket) {
-        // Native TCP
-        const result = await window.Capacitor.Plugins.TCPSocket.sendAndReceive({
-          data: Array.from(msg), timeout: 120000
-        });
-        response = new Uint8Array(result.data);
-      } else if (this._socket) {
-        // WebSocket
-        this._socket.send(msg);
-        response = await new Promise((resolve, reject) => {
-          this._socket.onmessage = (e) => resolve(new Uint8Array(e.data));
-          setTimeout(() => reject(new Error('Timeout reponse TPE (2min)')), 120000);
-        });
-      }
-
-      return this._parseConcertResponse(response);
+      const result = await this._bridge.sale({
+        amount: Math.round(amount * 100),
+        currency: options.currency || 'EUR',
+        reference: options.reference || `CP-${Date.now()}`,
+        provider: this.config.provider || 'auto',
+      });
+      // If native plugin says manual fallback needed
+      if (result.requiresManual) return _manualPayment(amount, 'Encaissement', result.message);
+      return result;
     } catch (e) {
-      return { success: false, error: e.message, status: 'error' };
+      console.error('[Payment] Native charge failed:', e);
+      return _manualPayment(amount, 'Encaissement');
     }
   }
 
   async refund(amount, options = {}) {
-    if (!this.connected) return this._manualCharge(amount, { ...options, type: 'refund' });
-    const msg = this._buildConcertMessage('refund', amount, options.currency);
+    if (!this._bridge) return _manualPayment(amount, 'Remboursement');
     try {
-      // Same send logic as charge
-      if (window.Capacitor?.Plugins?.TCPSocket) {
-        const result = await window.Capacitor.Plugins.TCPSocket.sendAndReceive({ data: Array.from(msg), timeout: 120000 });
-        return this._parseConcertResponse(new Uint8Array(result.data));
-      }
-      return { success: false, error: 'Remboursement: connexion non disponible' };
+      const result = await this._bridge.refund({
+        amount: Math.round(amount * 100),
+        currency: options.currency || 'EUR',
+        reference: options.reference || '',
+        provider: this.config.provider || 'auto',
+      });
+      if (result.requiresManual) return _manualPayment(amount, 'Remboursement', result.message);
+      return result;
     } catch (e) {
-      return { success: false, error: e.message };
+      return _manualPayment(amount, 'Remboursement');
     }
   }
 
-  _manualCharge(amount, options = {}) {
-    return new Promise((resolve) => {
-      const type = options.type === 'refund' ? 'Remboursement' : 'Encaissement';
-      // Dispatch event so UI can show confirmation dialog
-      const event = new CustomEvent('caissepro:payment-manual', {
-        detail: { amount, type, resolve }
-      });
-      window.dispatchEvent(event);
-    });
-  }
-
-  disconnect() {
-    if (this._socket) this._socket.close();
-    this.connected = false;
-  }
+  disconnect() { this.connected = false; }
 }
 
-// ── SumUp Payment Adapter ──
+// ── SumUp Payment Adapter (via native Intent) ──
 class SumUpPaymentAdapter {
-  constructor(config = {}) {
-    this.config = config;
-    this.connected = false;
-  }
+  constructor(config = {}) { this.config = config; this.connected = false; }
 
   async connect() {
-    // SumUp works via deep link (app-to-app) on Android or via API
-    if (window.Capacitor?.isNativePlatform?.()) {
-      this.connected = true;
-      return true;
+    const bridge = _getPayBridge();
+    if (bridge) {
+      const hw = await bridge.detectHardware();
+      this.connected = hw.hasSumUp || false;
+      return this.connected;
     }
-    // Browser: SumUp API requires backend proxy
-    if (this.config.sumupAffiliateKey) {
-      this.connected = true;
-      return true;
-    }
-    return false;
+    // Browser: mark as connected for manual mode
+    this.connected = true;
+    return true;
   }
 
   async charge(amount, options = {}) {
-    const currency = options.currency || 'EUR';
-    const reference = options.reference || `CP-${Date.now()}`;
-
-    // Android: deep link to SumUp app
-    if (window.Capacitor?.isNativePlatform?.()) {
-      const url = `sumupmerchant://pay/1.0?affiliate-key=${this.config.sumupAffiliateKey || ''}&amount=${amount}&currency=${currency}&title=CaissePro&receipt-email=&foreign-tx-id=${reference}&callback=caissepro://payment-callback`;
-      window.location.href = url;
-      // Wait for callback
-      return new Promise((resolve) => {
-        const handler = (e) => {
-          window.removeEventListener('caissepro:sumup-callback', handler);
-          resolve(e.detail);
-        };
-        window.addEventListener('caissepro:sumup-callback', handler);
-        // Timeout after 3 min
-        setTimeout(() => resolve({ success: false, error: 'Timeout SumUp' }), 180000);
-      });
+    const bridge = _getPayBridge();
+    if (bridge) {
+      try {
+        const result = await bridge.sale({
+          amount: Math.round(amount * 100),
+          currency: options.currency || 'EUR',
+          reference: options.reference || `CP-${Date.now()}`,
+          provider: 'sumup',
+        });
+        if (result.requiresManual) return _manualPayment(amount, 'Encaissement', 'SumUp');
+        return result;
+      } catch (e) { return _manualPayment(amount, 'Encaissement', 'SumUp'); }
     }
-
-    // Browser: use SumUp Card widget or manual
-    return this._manualFallback(amount, 'SumUp');
+    return _manualPayment(amount, 'Encaissement', 'SumUp');
   }
 
   async refund(amount, options = {}) {
     return { success: false, error: 'Remboursement SumUp: utilisez le dashboard SumUp' };
   }
 
-  _manualFallback(amount, provider) {
-    return new Promise((resolve) => {
-      window.dispatchEvent(new CustomEvent('caissepro:payment-manual', {
-        detail: { amount, type: `Encaisser ${amount.toFixed(2)}EUR sur ${provider}`, resolve }
-      }));
-    });
-  }
-
   disconnect() { this.connected = false; }
 }
 
-// ── Stripe Terminal Adapter ──
+// ── Stripe Terminal Adapter (JS SDK for browser, native for Android) ──
 class StripePaymentAdapter {
   constructor(config = {}) {
     this.config = config;
@@ -909,9 +834,8 @@ class StripePaymentAdapter {
   }
 
   async connect() {
-    // Stripe Terminal JS SDK
+    // Stripe Terminal JS SDK (works in both browser and Capacitor WebView)
     if (!window.StripeTerminal && this.config.stripePublishableKey) {
-      // Load Stripe Terminal SDK dynamically
       await new Promise((resolve, reject) => {
         const script = document.createElement('script');
         script.src = 'https://js.stripe.com/terminal/v1/';
@@ -922,25 +846,20 @@ class StripePaymentAdapter {
     }
 
     if (window.StripeTerminal) {
+      const apiBase = import.meta.env.VITE_API_URL || 'https://api.techincash.app';
       this._terminal = window.StripeTerminal.create({
         onFetchConnectionToken: async () => {
-          // This should call your backend to create a connection token
-          const resp = await fetch('/api/stripe/terminal/connection-token', {
+          const resp = await fetch(`${apiBase}/api/stripe/terminal/connection-token`, {
             method: 'POST', headers: { 'Content-Type': 'application/json' }
           });
           const data = await resp.json();
           return data.secret;
         },
-        onUnexpectedReaderDisconnect: () => {
-          this.connected = false;
-          console.warn('[Stripe] Reader disconnected');
-        },
+        onUnexpectedReaderDisconnect: () => { this.connected = false; },
       });
 
-      // Discover and connect to reader
       const result = await this._terminal.discoverReaders({
-        simulated: false,
-        location: this.config.stripeLocationId,
+        simulated: false, location: this.config.stripeLocationId,
       });
 
       if (result.discoveredReaders?.length > 0) {
@@ -949,98 +868,68 @@ class StripePaymentAdapter {
         return true;
       }
     }
-
     return false;
   }
 
   async charge(amount, options = {}) {
-    if (!this._terminal || !this.connected) {
-      return this._manualFallback(amount, 'Stripe');
-    }
-
+    if (!this._terminal || !this.connected) return _manualPayment(amount, 'Encaissement', 'Stripe Terminal');
     try {
-      // Create payment intent via backend
-      const resp = await fetch('/api/stripe/terminal/create-payment-intent', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          amount: Math.round(amount * 100),
-          currency: options.currency || 'eur',
-          description: options.reference || 'CaissePro',
-        }),
+      const apiBase = import.meta.env.VITE_API_URL || 'https://api.techincash.app';
+      const resp = await fetch(`${apiBase}/api/stripe/terminal/create-payment-intent`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ amount: Math.round(amount * 100), currency: options.currency || 'eur', description: options.reference || 'CaissePro' }),
       });
       const { clientSecret } = await resp.json();
-
       const result = await this._terminal.collectPaymentMethod(clientSecret);
       if (result.error) return { success: false, error: result.error.message };
-
       const processResult = await this._terminal.processPayment(result.paymentIntent);
       if (processResult.error) return { success: false, error: processResult.error.message };
-
-      return {
-        success: true,
-        status: 'approved',
-        authCode: processResult.paymentIntent.id,
-        transactionId: processResult.paymentIntent.id,
-      };
-    } catch (e) {
-      return { success: false, error: e.message };
-    }
+      return { success: true, status: 'approved', authCode: processResult.paymentIntent.id, transactionId: processResult.paymentIntent.id };
+    } catch (e) { return { success: false, error: e.message }; }
   }
 
   async refund(amount, options = {}) {
-    // Stripe refunds go through the API, not the terminal
     try {
-      const resp = await fetch('/api/stripe/terminal/refund', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          amount: Math.round(amount * 100),
-          paymentIntentId: options.originalTransactionId,
-        }),
+      const apiBase = import.meta.env.VITE_API_URL || 'https://api.techincash.app';
+      const resp = await fetch(`${apiBase}/api/stripe/terminal/refund`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ amount: Math.round(amount * 100), paymentIntentId: options.originalTransactionId }),
       });
       const data = await resp.json();
       return { success: data.success, status: data.success ? 'refunded' : 'error', error: data.error };
-    } catch (e) {
-      return { success: false, error: e.message };
-    }
+    } catch (e) { return { success: false, error: e.message }; }
   }
 
-  _manualFallback(amount, provider) {
-    return new Promise((resolve) => {
-      window.dispatchEvent(new CustomEvent('caissepro:payment-manual', {
-        detail: { amount, type: `Encaisser ${amount.toFixed(2)}EUR sur ${provider}`, resolve }
-      }));
-    });
-  }
-
-  disconnect() {
-    if (this._terminal) this._terminal.disconnectReader();
-    this.connected = false;
-  }
+  disconnect() { if (this._terminal) this._terminal.disconnectReader(); this.connected = false; }
 }
 
-// ── Zettle (iZettle) Adapter ──
+// ── Zettle Adapter (via native Intent) ──
 class ZettlePaymentAdapter {
   constructor(config = {}) { this.config = config; this.connected = false; }
 
   async connect() {
-    // Zettle works via deep link on Android/iOS
-    if (window.Capacitor?.isNativePlatform?.()) { this.connected = true; return true; }
+    const bridge = _getPayBridge();
+    if (bridge) {
+      const hw = await bridge.detectHardware();
+      this.connected = hw.hasZettle || false;
+      return this.connected;
+    }
     return false;
   }
 
   async charge(amount, options = {}) {
-    const reference = options.reference || `CP-${Date.now()}`;
-    if (window.Capacitor?.isNativePlatform?.()) {
-      // iZettle deep link
-      const url = `izettle://x-callback-url/payment?amount=${Math.round(amount * 100)}&currency=EUR&reference=${reference}`;
-      window.location.href = url;
-      return new Promise((resolve) => {
-        setTimeout(() => resolve({ success: false, error: 'Timeout Zettle' }), 180000);
-      });
+    const bridge = _getPayBridge();
+    if (bridge) {
+      try {
+        const result = await bridge.sale({
+          amount: Math.round(amount * 100), currency: 'EUR',
+          reference: options.reference || `CP-${Date.now()}`, provider: 'zettle',
+        });
+        if (result.requiresManual) return _manualPayment(amount, 'Encaissement', 'Zettle');
+        return result;
+      } catch (e) { return _manualPayment(amount, 'Encaissement', 'Zettle'); }
     }
-    return { success: false, error: 'Zettle necessite l\'app mobile' };
+    return _manualPayment(amount, 'Encaissement', 'Zettle');
   }
 
   async refund(amount, options = {}) {
@@ -1050,132 +939,178 @@ class ZettlePaymentAdapter {
   disconnect() { this.connected = false; }
 }
 
-// ── Worldline Adapter ──
+// ── Worldline Adapter (NEXO REST or manual) ──
 class WorldlinePaymentAdapter {
   constructor(config = {}) { this.config = config; this.connected = false; }
 
   async connect() {
-    // Similar to Concert but uses Worldline-specific protocol (NEXO/ep2)
-    const host = this.config.wlHost;
-    if (!host) return false;
-    // Same TCP/WebSocket approach as Concert
-    this.connected = true;
+    if (this.config.wlHost) { this.connected = true; return true; }
+    return false;
+  }
+
+  async charge(amount, options = {}) {
+    if (this.config.wlHost) {
+      try {
+        const resp = await fetch(`http://${this.config.wlHost}:${this.config.wlPort || 20000}/api/payment`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type: 'PURCHASE', amount: Math.round(amount * 100), currency: 'EUR', merchantId: this.config.wlMerchantId }),
+        });
+        const data = await resp.json();
+        return { success: data.approved, status: data.approved ? 'approved' : 'declined', authCode: data.authCode, error: data.error };
+      } catch (e) { return _manualPayment(amount, 'Encaissement', 'Worldline'); }
+    }
+    return _manualPayment(amount, 'Encaissement', 'Worldline');
+  }
+
+  async refund(amount, options = {}) { return _manualPayment(amount, 'Remboursement', 'Worldline'); }
+  disconnect() { this.connected = false; }
+}
+
+// ── Concert Protocol (French pinpad via USB Serial) ──
+class ConcertPaymentAdapter {
+  constructor(config = {}) { this.config = config; this.connected = false; }
+
+  async connect() {
+    // Concert pinpads connected via USB — use native plugin for Intent-based access
+    const bridge = _getPayBridge();
+    if (bridge) {
+      const hw = await bridge.detectHardware();
+      this.connected = hw.hasConcertApp || false;
+      if (this.connected) { console.log('[Concert] Found Concert/PCL app'); return true; }
+    }
+    // Manual fallback — Concert protocol requires a companion app or USB serial driver
+    this.connected = true; // Always "connected" for manual mode
     return true;
   }
 
   async charge(amount, options = {}) {
-    // Worldline NEXO protocol or REST API
-    if (this.config.wlHost) {
+    // Try native Intent first (Concert companion app or Ingenico PCL service)
+    const bridge = _getPayBridge();
+    if (bridge) {
       try {
-        const resp = await fetch(`http://${this.config.wlHost}:${this.config.wlPort || 20000}/api/payment`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            type: 'PURCHASE', amount: Math.round(amount * 100), currency: 'EUR',
-            merchantId: this.config.wlMerchantId,
-          }),
+        const result = await bridge.sale({
+          amount: Math.round(amount * 100), currency: options.currency || 'EUR',
+          reference: options.reference || `CP-${Date.now()}`, provider: 'auto',
         });
-        const data = await resp.json();
-        return { success: data.approved, status: data.approved ? 'approved' : 'declined', authCode: data.authCode, error: data.error };
-      } catch (e) {
-        return this._manualFallback(amount, 'Worldline');
-      }
+        if (!result.requiresManual) return result;
+      } catch (e) { console.warn('[Concert] Native failed:', e); }
     }
-    return this._manualFallback(amount, 'Worldline');
+    return _manualPayment(amount, 'Encaissement', 'TPE Concert');
   }
 
   async refund(amount, options = {}) {
-    return this._manualFallback(amount, 'Worldline (remboursement)');
-  }
-
-  _manualFallback(amount, provider) {
-    return new Promise((resolve) => {
-      window.dispatchEvent(new CustomEvent('caissepro:payment-manual', {
-        detail: { amount, type: `Encaisser ${amount.toFixed(2)}EUR sur ${provider}`, resolve }
-      }));
-    });
+    const bridge = _getPayBridge();
+    if (bridge) {
+      try {
+        const result = await bridge.refund({
+          amount: Math.round(amount * 100), currency: options.currency || 'EUR',
+          reference: options.reference || '', provider: 'auto',
+        });
+        if (!result.requiresManual) return result;
+      } catch (e) {}
+    }
+    return _manualPayment(amount, 'Remboursement', 'TPE Concert');
   }
 
   disconnect() { this.connected = false; }
 }
 
-// ── PAX Integrated Payment ──
+// ── PAX Payment (via native Intent) ──
 class PAXPaymentAdapter {
   constructor(config = {}) { this.config = config; this.connected = false; }
+
   async connect() {
-    if (window.Capacitor?.Plugins?.PAXPayment) { this.connected = true; return true; }
-    if (window.pax?.payment) { this.connected = true; return true; }
+    const bridge = _getPayBridge();
+    if (bridge) {
+      const hw = await bridge.detectHardware();
+      if (hw.type === 'pax' && hw.hasBuiltInPayment) { this.connected = true; return true; }
+    }
     return false;
   }
+
   async charge(amount, options = {}) {
-    try {
-      const bridge = window.Capacitor?.Plugins?.PAXPayment || window.pax?.payment;
-      if (!bridge) return { success: false, error: 'PAX Payment bridge non disponible' };
-      const result = await bridge.sale({ amount: Math.round(amount * 100), currency: 'EUR' });
-      return { success: result.approved, status: result.approved ? 'approved' : 'declined', authCode: result.authCode, transactionId: result.transactionId };
-    } catch (e) { return { success: false, error: e.message }; }
+    const bridge = _getPayBridge();
+    if (bridge) {
+      try {
+        const result = await bridge.sale({
+          amount: Math.round(amount * 100), currency: options.currency || 'EUR',
+          reference: options.reference || `CP-${Date.now()}`, provider: 'pax',
+        });
+        if (result.requiresManual) return _manualPayment(amount, 'Encaissement', 'PAX');
+        return result;
+      } catch (e) { return _manualPayment(amount, 'Encaissement', 'PAX'); }
+    }
+    return _manualPayment(amount, 'Encaissement', 'PAX');
   }
+
   async refund(amount, options = {}) {
-    try {
-      const bridge = window.Capacitor?.Plugins?.PAXPayment || window.pax?.payment;
-      if (!bridge) return { success: false, error: 'PAX bridge non disponible' };
-      const result = await bridge.refund({ amount: Math.round(amount * 100), originalTxId: options.originalTransactionId });
-      return { success: result.approved, status: 'refunded' };
-    } catch (e) { return { success: false, error: e.message }; }
+    const bridge = _getPayBridge();
+    if (bridge) {
+      try {
+        const result = await bridge.refund({
+          amount: Math.round(amount * 100), reference: options.reference || '', provider: 'pax',
+        });
+        if (result.requiresManual) return _manualPayment(amount, 'Remboursement', 'PAX');
+        return result;
+      } catch (e) { return _manualPayment(amount, 'Remboursement', 'PAX'); }
+    }
+    return _manualPayment(amount, 'Remboursement', 'PAX');
   }
+
   disconnect() { this.connected = false; }
 }
 
-// ── Sunmi Integrated Payment ──
+// ── Sunmi Payment (via native Intent) ──
 class SunmiPaymentAdapter {
   constructor(config = {}) { this.config = config; this.connected = false; }
+
   async connect() {
-    if (window.Capacitor?.Plugins?.SunmiPayment) { this.connected = true; return true; }
+    const bridge = _getPayBridge();
+    if (bridge) {
+      const hw = await bridge.detectHardware();
+      if (hw.type === 'sunmi' && hw.hasBuiltInPayment) { this.connected = true; return true; }
+    }
     return false;
   }
+
   async charge(amount, options = {}) {
-    try {
-      const bridge = window.Capacitor?.Plugins?.SunmiPayment;
-      if (!bridge) return { success: false, error: 'Sunmi Payment non disponible' };
-      const result = await bridge.sale({ amount: Math.round(amount * 100), currency: 'EUR' });
-      return { success: result.approved, status: result.approved ? 'approved' : 'declined', authCode: result.authCode };
-    } catch (e) { return { success: false, error: e.message }; }
+    const bridge = _getPayBridge();
+    if (bridge) {
+      try {
+        const result = await bridge.sale({
+          amount: Math.round(amount * 100), currency: options.currency || 'EUR',
+          reference: options.reference || `CP-${Date.now()}`, provider: 'sunmi',
+        });
+        if (result.requiresManual) return _manualPayment(amount, 'Encaissement', 'Sunmi TPE');
+        return result;
+      } catch (e) { return _manualPayment(amount, 'Encaissement', 'Sunmi TPE'); }
+    }
+    return _manualPayment(amount, 'Encaissement', 'Sunmi TPE');
   }
-  async refund(amount, options = {}) { return { success: false, error: 'Utilisez le TPE Sunmi pour les remboursements' }; }
+
+  async refund(amount, options = {}) {
+    const bridge = _getPayBridge();
+    if (bridge) {
+      try {
+        const result = await bridge.refund({
+          amount: Math.round(amount * 100), reference: options.reference || '', provider: 'sunmi',
+        });
+        if (result.requiresManual) return _manualPayment(amount, 'Remboursement', 'Sunmi TPE');
+        return result;
+      } catch (e) { return _manualPayment(amount, 'Remboursement', 'Sunmi TPE'); }
+    }
+    return _manualPayment(amount, 'Remboursement', 'Sunmi TPE');
+  }
+
   disconnect() { this.connected = false; }
 }
 
-// ── Manual Payment (no TPE integration) ──
+// ── Manual Payment (universal fallback) ──
 class ManualPaymentAdapter {
   constructor() { this.connected = true; }
   async connect() { this.connected = true; return true; }
-
-  async charge(amount, options = {}) {
-    return new Promise((resolve) => {
-      window.dispatchEvent(new CustomEvent('caissepro:payment-manual', {
-        detail: {
-          amount,
-          type: 'Encaissement',
-          message: `Encaissez ${amount.toFixed(2)}EUR sur le TPE puis confirmez`,
-          resolve,
-        }
-      }));
-    });
-  }
-
-  async refund(amount, options = {}) {
-    return new Promise((resolve) => {
-      window.dispatchEvent(new CustomEvent('caissepro:payment-manual', {
-        detail: {
-          amount,
-          type: 'Remboursement',
-          message: `Remboursez ${amount.toFixed(2)}EUR sur le TPE puis confirmez`,
-          resolve,
-        }
-      }));
-    });
-  }
-
+  async charge(amount, options = {}) { return _manualPayment(amount, 'Encaissement'); }
+  async refund(amount, options = {}) { return _manualPayment(amount, 'Remboursement'); }
   disconnect() {}
 }
 
@@ -1348,6 +1283,7 @@ class HardwareManager {
 
   _initPaymentAdapter() {
     switch (this._paymentId) {
+      case 'auto': this._payment = new NativePaymentAdapter(this._paymentConfig); break;
       case 'concert': this._payment = new ConcertPaymentAdapter(this._paymentConfig); break;
       case 'sumup': this._payment = new SumUpPaymentAdapter(this._paymentConfig); break;
       case 'stripe': this._payment = new StripePaymentAdapter(this._paymentConfig); break;

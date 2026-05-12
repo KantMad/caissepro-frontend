@@ -442,6 +442,33 @@ function AppProvider({children}){
     });
     const tTTC=Math.max(0,tHT+tTVA-avoirPayment);
 
+    // ── TPE: charge card payments via hardware terminal BEFORE finalizing ──
+    const cardMethods=['card','amex','contactless'];
+    for(const p of payments){
+      if(cardMethods.includes(p.method)&&p.amount>0){
+        try{
+          const ref=`CP-${Date.now()}`;
+          const result=await hardwareManager.charge(p.amount,{currency:'EUR',reference:ref,method:p.method});
+          if(result&&result.success){
+            p.authCode=result.authCode||'';p.transactionId=result.transactionId||'';
+            p.cardType=result.cardType||p.method;p.maskedPan=result.maskedPan||'';
+          }else if(result&&result.requiresManual){
+            // Manual mode — wait for cashier confirmation (handled by UI event listener)
+            // The resolve callback in the event will be called by the ManualPaymentModal
+          }else{
+            // Payment failed or was cancelled
+            if(result?.status==='cancelled'){notify("Paiement annule","warn");return null;}
+            // If declined, let the cashier decide
+            const errMsg=result?.error||'Paiement refuse';
+            notify(errMsg,"danger");return null;
+          }
+        }catch(e){
+          console.error('[Payment] TPE charge error:',e);
+          notify("Erreur TPE: "+e.message,"danger");return null;
+        }
+      }
+    }
+
     // Essai API d'abord
     try{
       const ticket=await API.sales.checkout({
