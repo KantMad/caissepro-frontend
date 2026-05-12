@@ -128,7 +128,7 @@ function AppProvider({children}){
         // Method 1: normal cors fetch to our health endpoint
         const r=await fetch(API_BASE+'/api/health',{method:'GET',cache:'no-store',signal:ctrl.signal});
         clearTimeout(t);
-        if(r.ok||r.status===0){setIsOnline(true);console.log('[Online] API reachable (status '+r.status+')');return;}
+        if(r.ok){setIsOnline(true);console.log('[Online] API reachable (status '+r.status+')');return;}
       }catch(e){clearTimeout(t);console.warn('[Online] Method 1 failed:',e.message);}
       const ctrl2=new AbortController();const t2=setTimeout(()=>ctrl2.abort(),8000);
       try{

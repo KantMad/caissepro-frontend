@@ -33,14 +33,14 @@ export default defineConfig({
         globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
         runtimeCaching: [
           {
-            // Cache API calls with network-first strategy
-            urlPattern: /\/api\/.*/i,
+            // Cache API calls — ONLY same-origin (avoid intercepting external API on Capacitor)
+            urlPattern: ({ url }) => url.origin === self.location.origin && url.pathname.startsWith('/api/'),
             handler: 'NetworkFirst',
             options: {
               cacheName: 'api-cache',
               expiration: { maxEntries: 200, maxAgeSeconds: 60 * 60 * 24 },
-              networkTimeoutSeconds: 5,
-              cacheableResponse: { statuses: [0, 200] },
+              networkTimeoutSeconds: 10,
+              cacheableResponse: { statuses: [200] },
             },
           },
           {
