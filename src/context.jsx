@@ -93,8 +93,7 @@ function AppProvider({children}){
   const updatePaymentConfig=useCallback((cfg)=>{hardwareManager.updatePaymentConfig(cfg);setPaymentConfigState(hardwareManager.paymentConfig);},[]);
   const chargePayment=useCallback(async(amount,opts)=>hardwareManager.charge(amount,opts),[]);
   const refundPayment=useCallback(async(amount,opts)=>hardwareManager.refund(amount,opts),[]);
-  // Barcode scanner auto-start
-  useEffect(()=>{const s=hardwareManager.scanner;if(!s)return;s.start();const off=s.onScan(code=>{const found=findByEAN(code);if(found)addToCart(found.product,found.variant);else notify("Code-barres inconnu: "+code,"warn");});return()=>{s.stop();off();};},[findByEAN,addToCart,notify]);
+  // Barcode scanner auto-start (moved after findByEAN/addToCart declarations)
   // Default PINs are hashed on first load (SHA-256 + salt)
   const DEFAULT_PIN_HASH="3a24a2105c7a06376ff41e7e06a6cd2a3941c980d99e169c8fbb60d29b741395"; // hash of "1234"
   const defaultUsers=[{id:"u1",name:"Admin",role:"admin",pin:DEFAULT_PIN_HASH},{id:"u2",name:"Sophie",role:"cashier",pin:DEFAULT_PIN_HASH},{id:"u3",name:"Marc",role:"cashier",pin:DEFAULT_PIN_HASH}];
@@ -660,6 +659,9 @@ function AppProvider({children}){
 
   // Find by EAN
   const findByEAN=useCallback((ean)=>{for(const p of products)for(const v of p.variants)if(v.ean===ean)return{product:p,variant:v};return null;},[products]);
+
+  // Barcode scanner auto-start
+  useEffect(()=>{const s=hardwareManager.scanner;if(!s)return;s.start();const off=s.onScan(code=>{const found=findByEAN(code);if(found)addToCart(found.product,found.variant);else notify("Code-barres inconnu: "+code,"warn");});return()=>{s.stop();off();};},[findByEAN,addToCart,notify]);
 
   // ══ THERMAL PRINTER ══
   // Detect Sunmi device
