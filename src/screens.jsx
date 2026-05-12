@@ -600,7 +600,7 @@ function SalesScreen(){
         <div style={{display:"flex",justifyContent:"space-between"}}><span>TVA</span><span>{(lastTk.totalTVA||0).toFixed(2)}€</span></div>
         <div style={{display:"flex",justifyContent:"space-between",fontSize:13,fontWeight:700,marginTop:3}}><span>TOTAL TTC</span><span>{(lastTk.totalTTC||0).toFixed(2)}€</span></div>
         <div style={{borderTop:"1px dashed #999",margin:"4px 0"}}/>
-        <div>Paiement: {lastTk.payments?.map(p=>`${({cash:"ESP",card:"CB",amex:"AMEX",giftcard:"CAD",cheque:"CHQ",avoir:"AVOIR"})[p.method]||p.method} ${p.amount.toFixed(2)}€`).join(" + ")}</div>
+        <div>Paiement: {lastTk.payments?.map(p=>`${({cash:"ESP",card:"CB",amex:"AMEX",giftcard:"CAD",cheque:"CHQ",avoir:"AVOIR"})[p.method]||p.method} ${(p.amount||0).toFixed(2)}€`).join(" + ")}</div>
         <div style={{textAlign:"center",background:C.fiscalLight,padding:6,borderRadius:6,margin:"4px 0"}}>
           <div style={{fontSize:8,color:C.fiscal,fontWeight:700}}>EMPREINTE NF525</div>
           <div style={{fontSize:11,fontWeight:700,color:C.fiscal,letterSpacing:2}}>{lastTk.fingerprint}</div></div>
@@ -1533,9 +1533,9 @@ function HistoryScreen(){
         {avoirDetail.customerName&&<div>Client: {avoirDetail.customerName}</div>}
         <div>Motif: {avoirDetail.reason}</div>
         <div style={{borderTop:`1px dashed ${C.danger}`,margin:"4px 0"}}/>
-        {avoirDetail.items.map((i,k)=>{const sku=i.product?.sku||"";const ean=i.variant?.ean||"";return(<div key={k}>
-          <div style={{display:"flex",justifyContent:"space-between"}}><span>{i.product.name}{i.variant?` (${i.variant.color}/${i.variant.size})`:""} x{i.quantity}</span>
-          <span>-{i.lineTTC.toFixed(2)}€</span></div>
+        {(avoirDetail.items||[]).map((i,k)=>{const sku=i.product?.sku||"";const ean=i.variant?.ean||"";return(<div key={k}>
+          <div style={{display:"flex",justifyContent:"space-between"}}><span>{i.product?.name||i.product_name||"?"}{i.variant?` (${i.variant.color||""}/${i.variant.size||""})`:""} x{i.quantity||1}</span>
+          <span>-{(i.lineTTC||i.line_ttc||0).toFixed(2)}€</span></div>
           {(sku||ean)&&<div style={{fontSize:8,color:`${C.danger}99`}}>{sku?`Réf: ${sku}`:""}{sku&&ean?" — ":""}{ean?`EAN: ${ean}`:""}</div>}
         </div>);})}
         <div style={{borderTop:`1px dashed ${C.danger}`,margin:"4px 0"}}/>

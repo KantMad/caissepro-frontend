@@ -16,15 +16,42 @@ import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 
 /**
- * CaissePro — Concert Protocol Plugin (CTAP / Protocole Caisse)
+ * CaissePro — Concert Protocol Plugin (Protocole Caisse / CTAP)
  *
- * Implements the French standard protocol for POS ↔ Payment Terminal communication.
+ * Implements the French standard protocol for POS to Payment Terminal communication.
  * Works with Ingenico (Desk/5000, Move/5000, Lane/7000), Verifone (V240m, P400),
  * and Worldline (VALINA, YOMANI, LANE) terminals.
  *
- * Protocol: Concert V2 over TCP/IP
- * - STX (0x02) + Data + ETX (0x03) + LRC
- * - Data: ProtocolId(1) + TransType(2) + Amount(8) + Mode(1) + Currency(3) + Private(variable)
+ * Protocol: Concert V2 over TCP/IP (NOT serial)
+ * ─────────────────────────────────────────────
+ * Over TCP/IP there is NO ENQ/ACK handshake (that's only for serial RS232).
+ *
+ * Message format (POS -> TPE):
+ *   STX (0x02) + Data (34 bytes fixed) + ETX (0x03) + LRC
+ *
+ * Data fields (34 bytes total):
+ *   posNumber     2 chars   POS identifier ("01" default)
+ *   amount        8 chars   Amount in cents, zero-padded ("00001050" = 10.50 EUR)
+ *   answerFlag    1 char    '1' = POS expects response
+ *   paymentMode   1 char    '1' = card, '0' = not specified
+ *   transType     1 char    '0' = debit/sale, '1' = credit/refund, 'A' = cancel
+ *   currency      3 chars   ISO 4217 numeric ("978" = EUR)
+ *   privateData  10 chars   Space-padded, can contain reference
+ *   delay         4 chars   Timeout authorization in seconds ("A010" = 10s)
+ *   authorization 4 chars   Authorization timeout ("B010" = 10s)
+ *
+ * Response format (TPE -> POS):
+ *   STX (0x02) + ResponseData + ETX (0x03) + LRC
+ *
+ * ResponseData:
+ *   posNumber     2 chars
+ *   status        1 char    '0' = accepted, '5' = pending, '7' = refused
+ *   amount        8 chars
+ *   paymentMode   1 char
+ *   currency      3 chars   (only if status != '5')
+ *   privateData  10 chars   (may contain auth code)
+ *
+ * LRC: XOR of all bytes from data[0] to ETX inclusive (NOT including STX)
  */
 @CapacitorPlugin(name = "ConcertProtocol")
 public class ConcertPlugin extends Plugin {
@@ -32,10 +59,6 @@ public class ConcertPlugin extends Plugin {
 
     private static final byte STX = 0x02;
     private static final byte ETX = 0x03;
-    private static final byte ENQ = 0x05;
-    private static final byte ACK = 0x06;
-    private static final byte NAK = 0x15;
-    private static final byte EOT = 0x04;
 
     private static final int DEFAULT_PORT = 8888;
     private static final int CONNECT_TIMEOUT = 5000;   // 5s to connect
@@ -77,7 +100,7 @@ public class ConcertPlugin extends Plugin {
         }).start();
     }
 
-    // ── Send payment request ──
+    // ── Send payment request (debit) ──
     @PluginMethod
     public void sale(PluginCall call) {
         String host = call.getString("host", "");
@@ -85,6 +108,7 @@ public class ConcertPlugin extends Plugin {
         int amount = call.getInt("amount", 0); // cents
         String currency = call.getString("currency", "EUR");
         String reference = call.getString("reference", "");
+        String posNumber = call.getString("posNumber", "01");
 
         if (host.isEmpty()) { call.reject("Adresse IP du TPE requise"); return; }
         if (amount <= 0) { call.reject("Montant invalide"); return; }
@@ -93,7 +117,8 @@ public class ConcertPlugin extends Plugin {
 
         new Thread(() -> {
             try {
-                JSObject result = sendConcertTransaction(host, port, "00", amount, currency, reference);
+                // transType '0' = debit/sale
+                JSObject result = sendConcertTransaction(host, port, posNumber, amount, '0', currency, reference);
                 call.resolve(result);
             } catch (Exception e) {
                 Log.e(TAG, "Sale error: " + e.getMessage());
@@ -102,20 +127,22 @@ public class ConcertPlugin extends Plugin {
         }).start();
     }
 
-    // ── Send refund request ──
+    // ── Send refund request (credit) ──
     @PluginMethod
     public void refund(PluginCall call) {
         String host = call.getString("host", "");
         int port = call.getInt("port", DEFAULT_PORT);
         int amount = call.getInt("amount", 0);
         String currency = call.getString("currency", "EUR");
+        String posNumber = call.getString("posNumber", "01");
 
         if (host.isEmpty()) { call.reject("Adresse IP du TPE requise"); return; }
         if (amount <= 0) { call.reject("Montant invalide"); return; }
 
         new Thread(() -> {
             try {
-                JSObject result = sendConcertTransaction(host, port, "20", amount, currency, "");
+                // transType '1' = credit/refund
+                JSObject result = sendConcertTransaction(host, port, posNumber, amount, '1', currency, "");
                 call.resolve(result);
             } catch (Exception e) {
                 call.reject("Erreur remboursement Concert: " + e.getMessage());
@@ -128,10 +155,12 @@ public class ConcertPlugin extends Plugin {
     public void cancel(PluginCall call) {
         String host = call.getString("host", "");
         int port = call.getInt("port", DEFAULT_PORT);
+        String posNumber = call.getString("posNumber", "01");
 
         new Thread(() -> {
             try {
-                JSObject result = sendConcertTransaction(host, port, "01", 0, "EUR", "");
+                // transType 'A' = cancel
+                JSObject result = sendConcertTransaction(host, port, posNumber, 0, 'A', "EUR", "");
                 call.resolve(result);
             } catch (Exception e) {
                 call.reject("Erreur annulation: " + e.getMessage());
@@ -139,28 +168,17 @@ public class ConcertPlugin extends Plugin {
         }).start();
     }
 
-    // ── Get last transaction status ──
-    @PluginMethod
-    public void lastStatus(PluginCall call) {
-        String host = call.getString("host", "");
-        int port = call.getInt("port", DEFAULT_PORT);
-
-        new Thread(() -> {
-            try {
-                JSObject result = sendConcertTransaction(host, port, "02", 0, "EUR", "");
-                call.resolve(result);
-            } catch (Exception e) {
-                call.reject("Erreur statut: " + e.getMessage());
-            }
-        }).start();
-    }
-
     // ══════════════════════════════════════════════════════════════
-    // Concert V2 Protocol Implementation
+    // Concert V2 Protocol Implementation (TCP/IP mode)
     // ══════════════════════════════════════════════════════════════
 
-    private JSObject sendConcertTransaction(String host, int port, String transType,
-                                             int amountCents, String currency, String reference)
+    /**
+     * Send a Concert V2 transaction over TCP/IP.
+     * Over TCP there is NO ENQ/ACK handshake — just send the framed message directly.
+     */
+    private JSObject sendConcertTransaction(String host, int port, String posNumber,
+                                             int amountCents, char transType,
+                                             String currency, String reference)
             throws IOException {
 
         Socket socket = new Socket();
@@ -171,46 +189,14 @@ public class ConcertPlugin extends Plugin {
         InputStream in = socket.getInputStream();
 
         try {
-            // ── Step 1: Send ENQ (enquiry) to initiate communication ──
-            out.write(ENQ);
-            out.flush();
-            Log.d(TAG, "Sent ENQ");
-
-            // ── Step 2: Wait for ACK from TPE ──
-            int ack = readByteWithTimeout(in, 5000);
-            if (ack != ACK) {
-                throw new IOException("TPE n'a pas repondu ACK (recu: 0x" + Integer.toHexString(ack) + ")");
-            }
-            Log.d(TAG, "Received ACK");
-
-            // ── Step 3: Build and send Concert V2 message ──
-            byte[] message = buildConcertMessage(transType, amountCents, currency, reference);
+            // ── Build and send Concert V2 message directly (no ENQ/ACK over TCP) ──
+            byte[] message = buildConcertMessage(posNumber, amountCents, transType, currency, reference);
             out.write(message);
             out.flush();
-            Log.d(TAG, "Sent Concert message: " + bytesToHex(message));
+            Log.d(TAG, "Sent Concert message (" + message.length + " bytes): " + bytesToHex(message));
 
-            // ── Step 4: Wait for ACK of message receipt ──
-            ack = readByteWithTimeout(in, 5000);
-            if (ack == NAK) {
-                // TPE rejected message, retry once
-                out.write(message);
-                out.flush();
-                ack = readByteWithTimeout(in, 5000);
-                if (ack != ACK) {
-                    throw new IOException("TPE a rejete le message deux fois");
-                }
-            } else if (ack != ACK) {
-                throw new IOException("Pas de ACK apres envoi message (recu: 0x" + Integer.toHexString(ack) + ")");
-            }
-            Log.d(TAG, "Message acknowledged");
-
-            // ── Step 5: Wait for response (up to 2 min — customer is paying) ──
-            JSObject result = readConcertResponse(in, out);
-
-            // ── Step 6: Send EOT to end communication ──
-            out.write(EOT);
-            out.flush();
-            Log.d(TAG, "Sent EOT");
+            // ── Wait for response (up to 2 min — customer is paying) ──
+            JSObject result = readConcertResponse(in);
 
             return result;
 
@@ -219,58 +205,93 @@ public class ConcertPlugin extends Plugin {
         }
     }
 
-    private byte[] buildConcertMessage(String transType, int amountCents, String currency, String reference) {
-        // Concert V2 message format:
-        // Protocol ID: "1" (Concert V2)
-        // Transaction type: 2 chars (00=sale, 01=cancel, 02=last status, 20=refund)
-        // Amount: 8 chars zero-padded (in cents)
-        // Payment mode: "1" (card)
-        // Currency: 3 chars ISO numeric (978=EUR, 840=USD)
-        // Private data: variable length
+    /**
+     * Build Concert V2 message frame.
+     * Format: STX + 34-byte data + ETX + LRC
+     *
+     * Data layout (34 bytes):
+     *   [0-1]   posNumber     2 chars
+     *   [2-9]   amount        8 chars (zero-padded cents)
+     *   [10]    answerFlag    1 char  ('1' = expect response)
+     *   [11]    paymentMode   1 char  ('1' = card)
+     *   [12]    transType     1 char  ('0'=debit, '1'=credit, 'A'=cancel)
+     *   [13-15] currency      3 chars (ISO 4217 numeric)
+     *   [16-25] privateData  10 chars (space-padded)
+     *   [26-29] delay         4 chars ("A010" = 10s auto-authorization delay)
+     *   [30-33] authorization 4 chars ("B010" = 10s authorization timeout)
+     */
+    private byte[] buildConcertMessage(String posNumber, int amountCents, char transType,
+                                        String currency, String reference) {
+        // Ensure posNumber is exactly 2 chars
+        String pos = (posNumber + "  ").substring(0, 2);
 
-        String protocolId = "1";
+        // Amount: 8 chars zero-padded
         String amountStr = String.format("%08d", amountCents);
-        String paymentMode = "1"; // 1=card
+
+        // Answer flag: always '1' (we want a response)
+        char answerFlag = '1';
+
+        // Payment mode: '1' = card
+        char paymentMode = '1';
+
+        // Currency: ISO 4217 numeric code
         String currencyCode = getCurrencyNumeric(currency);
 
-        // Private data (optional): contains reference and terminal config
-        String privateData = "";
-        if (reference != null && !reference.isEmpty()) {
-            // Field separator: FS (0x1C)
-            privateData = reference;
-        }
+        // Private data: 10 chars, space-padded
+        String privData = reference != null ? reference : "";
+        if (privData.length() > 10) privData = privData.substring(0, 10);
+        privData = String.format("%-10s", privData); // left-align, pad with spaces
 
-        String data = protocolId + transType + amountStr + paymentMode + currencyCode + privateData;
+        // Delay and authorization timeouts
+        String delay = "A010";         // 10 second auto-authorization delay
+        String authorization = "B010"; // 10 second authorization timeout
+
+        // Assemble the 34-byte data string
+        String data = pos + amountStr + answerFlag + paymentMode + transType + currencyCode
+                     + privData + delay + authorization;
+
+        Log.d(TAG, "Concert data (" + data.length() + " chars): [" + data + "]");
 
         // Build frame: STX + data + ETX + LRC
         byte[] dataBytes = data.getBytes(StandardCharsets.ISO_8859_1);
-        byte[] frame = new byte[dataBytes.length + 3]; // STX + data + ETX + LRC
+        byte[] frame = new byte[1 + dataBytes.length + 1 + 1]; // STX + data + ETX + LRC
 
         frame[0] = STX;
         System.arraycopy(dataBytes, 0, frame, 1, dataBytes.length);
-        frame[dataBytes.length + 1] = ETX;
+        frame[1 + dataBytes.length] = ETX;
 
-        // Calculate LRC: XOR of all bytes from STX (exclusive) to ETX (inclusive)
+        // Calculate LRC: XOR of all bytes from data[0] to ETX inclusive (NOT STX)
         byte lrc = 0;
-        for (int i = 1; i <= dataBytes.length + 1; i++) {
+        for (int i = 1; i < 1 + dataBytes.length + 1; i++) {
             lrc ^= frame[i];
         }
-        frame[dataBytes.length + 2] = lrc;
+        frame[frame.length - 1] = lrc;
 
         return frame;
     }
 
-    private JSObject readConcertResponse(InputStream in, OutputStream out) throws IOException {
+    /**
+     * Read and parse a Concert V2 response from the TPE.
+     * Response: STX + data + ETX + LRC
+     *
+     * Response data:
+     *   [0-1]  posNumber  2 chars
+     *   [2]    status     1 char: '0'=accepted, '5'=pending, '7'=refused
+     *   [3-10] amount     8 chars
+     *   [11]   paymentMode 1 char
+     *   [12-14] currency  3 chars (if status != '5')
+     *   [15+]  privateData (variable, may contain auth code in first 6 chars)
+     */
+    private JSObject readConcertResponse(InputStream in) throws IOException {
         // Wait for STX
         int b = readByteWithTimeout(in, READ_TIMEOUT);
         if (b != STX) {
-            throw new IOException("Reponse inattendue du TPE (attendu STX, recu: 0x" + Integer.toHexString(b) + ")");
+            throw new IOException("Reponse inattendue du TPE (attendu STX 0x02, recu: 0x" + Integer.toHexString(b) + ")");
         }
 
         // Read until ETX
         byte[] buffer = new byte[1024];
         int pos = 0;
-        byte lrcReceived;
 
         while (true) {
             b = readByteWithTimeout(in, 10000);
@@ -282,10 +303,10 @@ public class ConcertPlugin extends Plugin {
             }
         }
 
-        // Read LRC
-        lrcReceived = (byte) readByteWithTimeout(in, 2000);
+        // Read LRC byte
+        byte lrcReceived = (byte) readByteWithTimeout(in, 2000);
 
-        // Verify LRC
+        // Verify LRC: XOR of data bytes + ETX
         byte lrcCalc = 0;
         for (int i = 0; i < pos; i++) {
             lrcCalc ^= buffer[i];
@@ -293,77 +314,58 @@ public class ConcertPlugin extends Plugin {
         lrcCalc ^= ETX;
 
         if (lrcCalc != lrcReceived) {
-            Log.w(TAG, "LRC mismatch: calculated=" + lrcCalc + " received=" + lrcReceived);
-            // Send NAK and try to re-read
-            out.write(NAK);
-            out.flush();
-        } else {
-            // Send ACK
-            out.write(ACK);
-            out.flush();
+            Log.w(TAG, "LRC mismatch: calculated=0x" + Integer.toHexString(lrcCalc & 0xFF)
+                     + " received=0x" + Integer.toHexString(lrcReceived & 0xFF));
         }
 
         // Parse response
         String response = new String(buffer, 0, pos, StandardCharsets.ISO_8859_1);
-        Log.i(TAG, "Concert response: " + response);
+        Log.i(TAG, "Concert response (" + pos + " chars): [" + response + "]");
 
-        return parseConcertResponse(response);
+        return parseConcertResponse(response, lrcCalc == lrcReceived);
     }
 
-    private JSObject parseConcertResponse(String response) {
+    /**
+     * Parse Concert V2 response data.
+     *
+     * Minimum response: posNumber(2) + status(1) + amount(8) + paymentMode(1) = 12 chars
+     * With currency: + currency(3) = 15 chars
+     * With private data: 15+ chars
+     */
+    private JSObject parseConcertResponse(String response, boolean lrcOk) {
         JSObject ret = new JSObject();
+        ret.put("lrcValid", lrcOk);
+        ret.put("rawResponse", response);
 
-        if (response.length() < 4) {
+        if (response.length() < 3) {
             ret.put("success", false);
             ret.put("status", "error");
-            ret.put("error", "Reponse trop courte: " + response);
+            ret.put("error", "Reponse trop courte du TPE: " + response.length() + " octets");
             return ret;
         }
 
-        // Response format:
-        // Protocol ID: 1 char
-        // Status: 1 char (0=accepted, 1-4=declined/error, 5=pending, 7=cancelled)
-        // Amount: 8 chars
-        // Payment mode: 1 char
-        // Then optional fields depending on terminal
+        // posNumber at [0-1]
+        String posNumber = response.substring(0, 2);
+        ret.put("posNumber", posNumber);
 
-        char status = response.charAt(1);
-        String amountStr = response.length() >= 10 ? response.substring(2, 10) : "0";
+        // Status at [2]
+        char status = response.charAt(2);
+        ret.put("statusCode", String.valueOf(status));
 
         switch (status) {
             case '0':
                 ret.put("success", true);
                 ret.put("status", "approved");
                 break;
-            case '1':
-                ret.put("success", false);
-                ret.put("status", "declined");
-                ret.put("error", "Transaction refusee par la banque");
-                break;
-            case '2':
-                ret.put("success", false);
-                ret.put("status", "error");
-                ret.put("error", "Erreur communication banque");
-                break;
-            case '3':
-                ret.put("success", false);
-                ret.put("status", "error");
-                ret.put("error", "Erreur terminal de paiement");
-                break;
-            case '4':
-                ret.put("success", false);
-                ret.put("status", "declined");
-                ret.put("error", "Transaction refusee — reessayez");
-                break;
             case '5':
                 ret.put("success", false);
                 ret.put("status", "pending");
-                ret.put("error", "Transaction en attente de confirmation");
+                ret.put("error", "Transaction en attente — verifiez le terminal");
                 break;
             case '7':
                 ret.put("success", false);
-                ret.put("status", "cancelled");
-                ret.put("error", "Transaction annulee");
+                ret.put("status", "declined");
+                ret.put("error", "Transaction refusee");
                 break;
             case '9':
                 ret.put("success", false);
@@ -373,36 +375,49 @@ public class ConcertPlugin extends Plugin {
             default:
                 ret.put("success", false);
                 ret.put("status", "unknown");
-                ret.put("error", "Statut inconnu: " + status);
+                ret.put("error", "Statut TPE inconnu: '" + status + "' (0x" + Integer.toHexString(status) + ")");
                 break;
         }
 
-        // Parse amount
-        try {
-            int cents = Integer.parseInt(amountStr.trim());
-            ret.put("amount", cents);
-        } catch (NumberFormatException e) {
-            ret.put("amount", 0);
+        // Amount at [3-10] (8 chars)
+        if (response.length() >= 11) {
+            String amountStr = response.substring(3, 11);
+            try {
+                int cents = Integer.parseInt(amountStr.trim());
+                ret.put("amount", cents);
+            } catch (NumberFormatException e) {
+                ret.put("amount", 0);
+                Log.w(TAG, "Could not parse amount: [" + amountStr + "]");
+            }
         }
 
-        // Extract optional fields if present
-        // After the base fields (13 chars min), remaining is "private data"
-        if (response.length() > 13) {
-            String privateData = response.substring(13);
+        // Payment mode at [11]
+        if (response.length() >= 12) {
+            char payMode = response.charAt(11);
+            ret.put("paymentMode", String.valueOf(payMode));
+        }
+
+        // Currency at [12-14] (only if status != '5')
+        if (response.length() >= 15 && status != '5') {
+            ret.put("currency", response.substring(12, 15));
+        }
+
+        // Private data at [15+] (may contain authorization code)
+        if (response.length() > 15) {
+            String privateData = response.substring(15).trim();
             ret.put("privateData", privateData);
 
-            // Try to extract authorization code (usually first 6 chars of private data)
+            // First 6 chars of private data are typically the authorization code
             if (privateData.length() >= 6) {
                 String authCode = privateData.substring(0, 6).trim();
                 if (!authCode.isEmpty()) ret.put("authCode", authCode);
             }
-            // Try to extract card type and masked PAN from remaining data
+            // Remaining data may contain card type, masked PAN etc.
             if (privateData.length() > 6) {
                 ret.put("terminalData", privateData.substring(6).trim());
             }
         }
 
-        ret.put("rawResponse", response);
         return ret;
     }
 

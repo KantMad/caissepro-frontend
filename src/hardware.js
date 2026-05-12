@@ -193,242 +193,309 @@ class SunmiPrinterAdapter {
 
   async printText(text) {
     try { await this._cap('printText', { text }); } catch (e) {
-      try { await this._cap('printOriginalText', { text }); } catch (e2) {
-        console.error('[Sunmi] printText failed:', e2);
-      }
+      console.error('[Sunmi] printText failed:', e);
     }
   }
 
-  async printReceipt(ticket, settings, companyInfo) {
+  // ═══════════════════════════════════════════════════════════
+  // Build a batch command array for the native printBatch method
+  // This sends ONE Capacitor call that Java executes synchronously
+  // ═══════════════════════════════════════════════════════════
+  _buildReceiptBatch(ticket, settings, companyInfo) {
     const s = settings || {};
     const co = companyInfo || {};
     const t = ticket || {};
     const fmt = (v) => { const n = Number(v); return isNaN(n) ? '0.00' : n.toFixed(2); };
+    const cmds = [];
 
-    try {
-      await this._cap('printerInit', {});
-      await this._cap('setAlignment', { alignment: 1 }); // center
+    // Helper to push commands
+    const text = (txt) => cmds.push({ cmd: 'text', text: txt });
+    const bold = (on) => cmds.push({ cmd: 'bold', enabled: on });
+    const size = (v) => cmds.push({ cmd: 'size', value: v });
+    const align = (v) => cmds.push({ cmd: 'align', value: v });
 
-      // Header - store name
-      await this._cap('setFontSize', { size: 28 });
-      await this._cap('setBold', { bold: true });
-      await this.printText((s.name || co.name || 'Ma Boutique') + '\n');
-      await this._cap('setFontSize', { size: 20 });
-      await this._cap('setBold', { bold: false });
+    // Header
+    align(1);
+    size(28); bold(true);
+    text((s.name || co.name || 'Ma Boutique') + '\n');
+    size(20); bold(false);
+    if (s.address) text(s.address + '\n');
+    if (s.postalCode || s.city) text(`${s.postalCode || ''} ${s.city || ''}\n`);
+    if (s.phone) text(`Tel: ${s.phone}\n`);
+    if (s.siret) text(`SIRET: ${s.siret}\n`);
+    if (s.tvaIntra) text(`TVA: ${s.tvaIntra}\n`);
+    cmds.push({ cmd: 'line', char: '=', len: 32 });
 
-      if (s.address) await this.printText(s.address + '\n');
-      if (s.postalCode || s.city) await this.printText(`${s.postalCode || ''} ${s.city || ''}\n`);
-      if (s.phone) await this.printText(`Tel: ${s.phone}\n`);
-      if (s.siret) await this.printText(`SIRET: ${s.siret}\n`);
-      if (s.tvaIntra) await this.printText(`TVA: ${s.tvaIntra}\n`);
+    // Ticket info
+    align(0); bold(true);
+    let dateStr = '';
+    try { dateStr = new Date(t.date || t.createdAt || Date.now()).toLocaleString('fr-FR'); } catch (e) {}
+    text(`N: ${t.ticketNumber || t.ticket_number || '?'}  ${dateStr}\n`);
+    bold(false);
+    text(`Caissier: ${t.userName || t.user_name || '?'}\n`);
+    if (t.customerName || t.customer_name) text(`Client: ${t.customerName || t.customer_name}\n`);
+    cmds.push({ cmd: 'line', char: '-', len: 32 });
 
-      await this.printText('================================\n');
+    // Items
+    const items = t.items || [];
+    for (const item of items) {
+      if (!item) continue;
+      const name = item.product?.name || item.product_name || item.name || '?';
+      const color = item.variant?.color || item.variant_color || '';
+      const sz = item.variant?.size || item.variant_size || '';
+      const qty = item.quantity || 1;
+      const isCustom = item.isCustom || item.is_custom;
+      const lineTTC = Number(item.lineTTC || item.line_ttc || 0) || (Number(item.unit_price || 0) * qty);
 
-      // Ticket info
-      await this._cap('setAlignment', { alignment: 0 }); // left
-      await this._cap('setBold', { bold: true });
-      let dateStr = '';
-      try { dateStr = new Date(t.date || t.createdAt || Date.now()).toLocaleString('fr-FR'); } catch (e) { dateStr = ''; }
-      await this.printText(`N: ${t.ticketNumber || t.ticket_number || '?'}  ${dateStr}\n`);
-      await this._cap('setBold', { bold: false });
-      await this.printText(`Caissier: ${t.userName || t.user_name || '?'}\n`);
-      if (t.customerName || t.customer_name) await this.printText(`Client: ${t.customerName || t.customer_name}\n`);
-
-      await this.printText('--------------------------------\n');
-
-      // Items
-      const items = t.items || [];
-      for (let i = 0; i < items.length; i++) {
-        const item = items[i];
-        if (!item) continue;
-        const name = item.product?.name || item.product_name || item.name || '?';
-        const color = item.variant?.color || item.variant_color || '';
-        const size = item.variant?.size || item.variant_size || '';
-        const qty = item.quantity || 1;
-        const isCustom = item.isCustom || item.is_custom;
-        const lineTTC = Number(item.lineTTC || item.line_ttc || 0) || (Number(item.unit_price || 0) * qty);
-
-        await this._cap('setBold', { bold: true });
-        await this.printText(`${name}${!isCustom && color ? ` (${color}/${size})` : ''}\n`);
-        await this._cap('setBold', { bold: false });
-        await this.printText(`  x${qty}  ${fmt(lineTTC)} EUR\n`);
-      }
-
-      await this.printText('--------------------------------\n');
-
-      // Promos
-      if (t.promosApplied?.length > 0) {
-        for (const promo of t.promosApplied) {
-          await this._cap('setFontSize', { size: 18 });
-          await this.printText(`  * ${promo}\n`);
-          await this._cap('setFontSize', { size: 20 });
-        }
-        await this.printText('--------------------------------\n');
-      }
-
-      // Discount
-      if (Number(t.globalDiscount || t.global_discount || 0) > 0) {
-        await this.printText(`Remise       -${fmt(t.globalDiscount || t.global_discount)} EUR\n`);
-      }
-
-      // Totals
-      await this.printText(`Total HT     ${fmt(t.totalHT || t.total_ht)} EUR\n`);
-      await this.printText(`TVA          ${fmt(t.totalTVA || t.total_tva)} EUR\n`);
-      await this._cap('setBold', { bold: true });
-      await this._cap('setFontSize', { size: 28 });
-      await this.printText(`TOTAL TTC    ${fmt(t.totalTTC || t.total_ttc)} EUR\n`);
-      await this._cap('setFontSize', { size: 20 });
-      await this._cap('setBold', { bold: false });
-
-      // Payment
-      const ml = { cash: 'ESP', card: 'CB', amex: 'AMEX', giftcard: 'CAD', cheque: 'CHQ', avoir: 'AVOIR' };
-      const payments = t.payments || [];
-      if (payments.length > 0) {
-        const payStr = payments.map(p => `${ml[p.method] || p.method || '?'} ${fmt(p.amount)} EUR`).join(' + ');
-        await this.printText(`Paiement: ${payStr}\n`);
-      }
-
-      await this.printText('================================\n');
-
-      // NF525
-      await this._cap('setAlignment', { alignment: 1 });
-      await this._cap('setFontSize', { size: 18 });
-      await this.printText('EMPREINTE NF525\n');
-      await this._cap('setFontSize', { size: 22 });
-      await this._cap('setBold', { bold: true });
-      await this.printText(`${t.fingerprint || t.hash || '-'}\n`);
-      await this._cap('setBold', { bold: false });
-
-      // Footer
-      await this._cap('setFontSize', { size: 16 });
-      await this.printText(`${co.sw || 'CaissePro'} v${co.ver || '6.1.0'} - Conforme NF525\n`);
-      if (s.footerMsg || co.footerMsg) await this.printText(`${s.footerMsg || co.footerMsg}\n`);
-
-      if (t.customerName || t.customer_name) {
-        await this.printText(`Fidelite: +${Math.floor(Number(t.totalTTC || t.total_ttc) || 0)}pts\n`);
-      }
-
-      // Feed and cut
-      await this._cap('lineWrap', { lines: 4 });
-      try { await this._cap('cutPaper', {}); } catch (e) { /* some models don't support cut */ }
-
-      return true;
-    } catch (e) {
-      console.error('[Sunmi] printReceipt error:', e, 'ticket:', JSON.stringify(t).substring(0, 500));
-      throw e;
+      bold(true);
+      text(`${name}${!isCustom && color ? ` (${color}/${sz})` : ''}\n`);
+      bold(false);
+      text(`  x${qty}  ${fmt(lineTTC)} EUR\n`);
     }
+    cmds.push({ cmd: 'line', char: '-', len: 32 });
+
+    // Promos
+    if (t.promosApplied?.length > 0) {
+      for (const promo of t.promosApplied) {
+        size(18); text(`  * ${promo}\n`); size(20);
+      }
+      cmds.push({ cmd: 'line', char: '-', len: 32 });
+    }
+
+    // Discount
+    if (Number(t.globalDiscount || t.global_discount || 0) > 0) {
+      text(`Remise       -${fmt(t.globalDiscount || t.global_discount)} EUR\n`);
+    }
+
+    // Totals
+    text(`Total HT     ${fmt(t.totalHT || t.total_ht)} EUR\n`);
+    text(`TVA          ${fmt(t.totalTVA || t.total_tva)} EUR\n`);
+    bold(true); size(28);
+    text(`TOTAL TTC    ${fmt(t.totalTTC || t.total_ttc)} EUR\n`);
+    size(20); bold(false);
+
+    // Payment
+    const ml = { cash: 'ESP', card: 'CB', amex: 'AMEX', giftcard: 'CAD', cheque: 'CHQ', avoir: 'AVOIR' };
+    const payments = t.payments || [];
+    if (payments.length > 0) {
+      const payStr = payments.map(p => `${ml[p.method] || p.method || '?'} ${fmt(p.amount)} EUR`).join(' + ');
+      text(`Paiement: ${payStr}\n`);
+    }
+    cmds.push({ cmd: 'line', char: '=', len: 32 });
+
+    // NF525
+    align(1); size(18);
+    text('EMPREINTE NF525\n');
+    size(22); bold(true);
+    text(`${t.fingerprint || t.hash || '-'}\n`);
+    bold(false);
+
+    // Footer
+    size(16);
+    text(`${co.sw || 'CaissePro'} v${co.ver || '6.1.0'} - Conforme NF525\n`);
+    if (s.footerMsg || co.footerMsg) text(`${s.footerMsg || co.footerMsg}\n`);
+    if (t.customerName || t.customer_name) {
+      text(`Fidelite: +${Math.floor(Number(t.totalTTC || t.total_ttc) || 0)}pts\n`);
+    }
+
+    // Feed and cut
+    cmds.push({ cmd: 'feed', lines: 4 });
+    cmds.push({ cmd: 'cut' });
+
+    return cmds;
   }
 
-  async printAvoir(avoir, settings, companyInfo) {
+  _buildAvoirBatch(avoir, settings, companyInfo) {
     const s = settings || {};
     const co = companyInfo || {};
     const a = avoir || {};
     const fmt = (v) => { const n = Number(v); return isNaN(n) ? '0.00' : n.toFixed(2); };
-    try {
-      await this._cap('printerInit', {});
-      await this._cap('setAlignment', { alignment: 1 });
-      await this._cap('setFontSize', { size: 28 });
-      await this._cap('setBold', { bold: true });
-      await this.printText('AVOIR / NOTE DE CREDIT\n');
-      await this._cap('setFontSize', { size: 22 });
-      await this.printText((s.name || co.name || 'Ma Boutique') + '\n');
-      await this._cap('setBold', { bold: false });
-      await this._cap('setFontSize', { size: 20 });
-      await this._cap('setAlignment', { alignment: 0 });
-      await this.printText('================================\n');
-      await this.printText(`N: ${a.avoirNumber || a.avoir_number || '?'}\n`);
-      await this.printText(`Ticket original: ${a.originalTicket || a.original_ticket || '?'}\n`);
-      let dateStr = '';
-      try { dateStr = new Date(a.date || Date.now()).toLocaleString('fr-FR'); } catch (e) { dateStr = ''; }
-      await this.printText(`Date: ${dateStr}\n`);
-      await this.printText(`Motif: ${a.reason || 'Non specifie'}\n`);
-      await this.printText('--------------------------------\n');
-      for (const item of (a.items || [])) {
-        if (!item) continue;
-        const name = item.product?.name || item.product_name || '?';
-        const v = item.variant ? ` (${item.variant.color || ''}/${item.variant.size || ''})` : '';
-        await this.printText(`${name}${v} x${item.quantity || 1}  -${fmt(item.lineTTC || item.line_ttc)} EUR\n`);
-      }
-      await this.printText('--------------------------------\n');
-      await this._cap('setBold', { bold: true });
-      await this._cap('setFontSize', { size: 28 });
-      await this.printText(`TOTAL AVOIR  -${fmt(a.totalTTC || a.total_ttc)} EUR\n`);
-      await this._cap('setFontSize', { size: 20 });
-      await this._cap('setBold', { bold: false });
-      await this.printText('================================\n');
-      await this._cap('setAlignment', { alignment: 1 });
-      await this._cap('setFontSize', { size: 18 });
-      await this.printText(`EMPREINTE NF525\n${a.fingerprint || a.hash || '-'}\n`);
-      await this._cap('lineWrap', { lines: 4 });
-      try { await this._cap('cutPaper', {}); } catch (e) {}
-      return true;
-    } catch (e) {
-      console.error('[Sunmi] printAvoir error:', e);
-      throw e;
+    const cmds = [];
+    const text = (txt) => cmds.push({ cmd: 'text', text: txt });
+    const bold = (on) => cmds.push({ cmd: 'bold', enabled: on });
+    const size = (v) => cmds.push({ cmd: 'size', value: v });
+    const align = (v) => cmds.push({ cmd: 'align', value: v });
+
+    align(1); size(28); bold(true);
+    text('AVOIR / NOTE DE CREDIT\n');
+    size(22); text((s.name || co.name || 'Ma Boutique') + '\n');
+    bold(false); size(20); align(0);
+    cmds.push({ cmd: 'line', char: '=', len: 32 });
+    text(`N: ${a.avoirNumber || a.avoir_number || '?'}\n`);
+    text(`Ticket original: ${a.originalTicket || a.original_ticket || '?'}\n`);
+    let dateStr = '';
+    try { dateStr = new Date(a.date || Date.now()).toLocaleString('fr-FR'); } catch (e) {}
+    text(`Date: ${dateStr}\n`);
+    text(`Motif: ${a.reason || 'Non specifie'}\n`);
+    cmds.push({ cmd: 'line', char: '-', len: 32 });
+    for (const item of (a.items || [])) {
+      if (!item) continue;
+      const name = item.product?.name || item.product_name || '?';
+      const v = item.variant ? ` (${item.variant.color || ''}/${item.variant.size || ''})` : '';
+      text(`${name}${v} x${item.quantity || 1}  -${fmt(item.lineTTC || item.line_ttc)} EUR\n`);
     }
+    cmds.push({ cmd: 'line', char: '-', len: 32 });
+    bold(true); size(28);
+    text(`TOTAL AVOIR  -${fmt(a.totalTTC || a.total_ttc)} EUR\n`);
+    size(20); bold(false);
+    cmds.push({ cmd: 'line', char: '=', len: 32 });
+    align(1); size(18);
+    text(`EMPREINTE NF525\n${a.fingerprint || a.hash || '-'}\n`);
+    cmds.push({ cmd: 'feed', lines: 4 });
+    cmds.push({ cmd: 'cut' });
+    return cmds;
   }
 
-  async printClosure(closure, settings, companyInfo) {
+  _buildClosureBatch(closure, settings, companyInfo) {
     const s = settings || {};
     const co = companyInfo || {};
     const c = closure || {};
+    const fmt = (v) => { const n = Number(v); return isNaN(n) ? '0.00' : n.toFixed(2); };
+    const cmds = [];
+    const text = (txt) => cmds.push({ cmd: 'text', text: txt });
+    const bold = (on) => cmds.push({ cmd: 'bold', enabled: on });
+    const size = (v) => cmds.push({ cmd: 'size', value: v });
+    const align = (v) => cmds.push({ cmd: 'align', value: v });
+
+    align(1); size(28); bold(true);
+    text('CLOTURE DE CAISSE\n');
+    size(22); text((s.name || co.name || 'Ma Boutique') + '\n');
+    bold(false); size(20); align(0);
+    cmds.push({ cmd: 'line', char: '=', len: 32 });
+    let dateStr = '';
+    try { dateStr = new Date(c.date || c.closedAt || Date.now()).toLocaleString('fr-FR'); } catch (e) {}
+    text(`Date: ${dateStr}\n`);
+    text(`Caissier: ${c.userName || c.user_name || '?'}\n`);
+    cmds.push({ cmd: 'line', char: '-', len: 32 });
+    bold(true);
+    text(`CA TTC       ${fmt(c.totalTTC || c.totalCA || c.total_ttc)} EUR\n`);
+    bold(false);
+    text(`Total HT     ${fmt(c.totalHT || c.total_ht)} EUR\n`);
+    text(`Total TVA    ${fmt(c.totalTVA || c.total_tva)} EUR\n`);
+    text(`Nb ventes    ${c.salesCount || c.nbSales || c.sales_count || 0}\n`);
+    text(`Panier moyen ${fmt(c.avgBasket || c.avg_basket)} EUR\n`);
+    cmds.push({ cmd: 'line', char: '=', len: 32 });
+    align(1); size(18);
+    text(`EMPREINTE NF525\n${c.fingerprint || c.hash || '-'}\n`);
+    cmds.push({ cmd: 'feed', lines: 4 });
+    cmds.push({ cmd: 'cut' });
+    return cmds;
+  }
+
+  async printReceipt(ticket, settings, companyInfo) {
+    if (this._isCapacitor && this._bridge?.printBatch) {
+      // Use single batch call — all commands executed synchronously in Java
+      const commands = this._buildReceiptBatch(ticket, settings, companyInfo);
+      console.log('[Sunmi] printBatch receipt:', commands.length, 'commands');
+      const result = await this._bridge.printBatch({ commands });
+      console.log('[Sunmi] printBatch result:', JSON.stringify(result));
+      return true;
+    }
+    // Fallback for non-Capacitor (legacy bridge) — sequential calls
+    return this._legacyPrintReceipt(ticket, settings, companyInfo);
+  }
+
+  async printAvoir(avoir, settings, companyInfo) {
+    if (this._isCapacitor && this._bridge?.printBatch) {
+      const commands = this._buildAvoirBatch(avoir, settings, companyInfo);
+      await this._bridge.printBatch({ commands });
+      return true;
+    }
+    return this._legacyPrintAvoir(avoir, settings, companyInfo);
+  }
+
+  async printClosure(closure, settings, companyInfo) {
+    if (this._isCapacitor && this._bridge?.printBatch) {
+      const commands = this._buildClosureBatch(closure, settings, companyInfo);
+      await this._bridge.printBatch({ commands });
+      return true;
+    }
+    return this._legacyPrintClosure(closure, settings, companyInfo);
+  }
+
+  async testPrint() {
+    if (this._isCapacitor && this._bridge?.testPrint) {
+      // Use the native Java testPrint — proven to work
+      const result = await this._bridge.testPrint({});
+      console.log('[Sunmi] native testPrint result:', JSON.stringify(result));
+      return true;
+    }
+    // Fallback: use printBatch
+    if (this._isCapacitor && this._bridge?.printBatch) {
+      const commands = [
+        { cmd: 'align', value: 1 },
+        { cmd: 'size', value: 28 },
+        { cmd: 'bold', enabled: true },
+        { cmd: 'text', text: 'TEST IMPRESSION\n' },
+        { cmd: 'size', value: 20 },
+        { cmd: 'bold', enabled: false },
+        { cmd: 'line', char: '=', len: 32 },
+        { cmd: 'align', value: 0 },
+        { cmd: 'text', text: 'CaissePro - Imprimante Sunmi\n' },
+        { cmd: 'text', text: `Date: ${new Date().toLocaleString('fr-FR')}\n` },
+        { cmd: 'text', text: 'Caracteres: EUR a e c u o\n' },
+        { cmd: 'line', char: '=', len: 32 },
+        { cmd: 'align', value: 1 },
+        { cmd: 'text', text: 'Test OK !\n' },
+        { cmd: 'feed', lines: 4 },
+        { cmd: 'cut' },
+      ];
+      await this._bridge.printBatch({ commands });
+      return true;
+    }
+    throw new Error('No print method available');
+  }
+
+  // Legacy methods (for non-Capacitor environments)
+  async _legacyPrintReceipt(ticket, settings, companyInfo) {
+    const s = settings || {};
+    const co = companyInfo || {};
+    const t = ticket || {};
     const fmt = (v) => { const n = Number(v); return isNaN(n) ? '0.00' : n.toFixed(2); };
     try {
       await this._cap('printerInit', {});
       await this._cap('setAlignment', { alignment: 1 });
       await this._cap('setFontSize', { size: 28 });
-      await this._cap('setBold', { bold: true });
-      await this.printText('CLOTURE DE CAISSE\n');
-      await this._cap('setFontSize', { size: 22 });
       await this.printText((s.name || co.name || 'Ma Boutique') + '\n');
-      await this._cap('setBold', { bold: false });
       await this._cap('setFontSize', { size: 20 });
-      await this._cap('setAlignment', { alignment: 0 });
-      await this.printText('================================\n');
       let dateStr = '';
-      try { dateStr = new Date(c.date || c.closedAt || Date.now()).toLocaleString('fr-FR'); } catch (e) { dateStr = ''; }
-      await this.printText(`Date: ${dateStr}\n`);
-      await this.printText(`Caissier: ${c.userName || c.user_name || '?'}\n`);
-      await this.printText('--------------------------------\n');
-      await this._cap('setBold', { bold: true });
-      await this.printText(`CA TTC       ${fmt(c.totalTTC || c.totalCA || c.total_ttc)} EUR\n`);
-      await this._cap('setBold', { bold: false });
-      await this.printText(`Total HT     ${fmt(c.totalHT || c.total_ht)} EUR\n`);
-      await this.printText(`Total TVA    ${fmt(c.totalTVA || c.total_tva)} EUR\n`);
-      await this.printText(`Nb ventes    ${c.salesCount || c.nbSales || c.sales_count || 0}\n`);
-      await this.printText(`Panier moyen ${fmt(c.avgBasket || c.avg_basket)} EUR\n`);
-      await this.printText('================================\n');
-      await this._cap('setAlignment', { alignment: 1 });
-      await this._cap('setFontSize', { size: 18 });
-      await this.printText(`EMPREINTE NF525\n${c.fingerprint || c.hash || '-'}\n`);
+      try { dateStr = new Date(t.date || t.createdAt || Date.now()).toLocaleString('fr-FR'); } catch (e) {}
+      await this._cap('setAlignment', { alignment: 0 });
+      await this.printText(`N: ${t.ticketNumber || '?'}  ${dateStr}\n`);
+      await this.printText(`Caissier: ${t.userName || '?'}\n`);
+      for (const item of (t.items || [])) {
+        if (!item) continue;
+        const name = item.product?.name || item.product_name || '?';
+        const qty = item.quantity || 1;
+        const lineTTC = Number(item.lineTTC || item.line_ttc || 0) || (Number(item.unit_price || 0) * qty);
+        await this.printText(`${name} x${qty}  ${fmt(lineTTC)} EUR\n`);
+      }
+      await this.printText(`TOTAL TTC    ${fmt(t.totalTTC || t.total_ttc)} EUR\n`);
       await this._cap('lineWrap', { lines: 4 });
       try { await this._cap('cutPaper', {}); } catch (e) {}
       return true;
-    } catch (e) {
-      console.error('[Sunmi] printClosure error:', e);
-      throw e;
-    }
+    } catch (e) { console.error('[Sunmi] legacy print error:', e); throw e; }
   }
 
-  async testPrint() {
+  async _legacyPrintAvoir(avoir, settings, companyInfo) {
+    const fmt = (v) => { const n = Number(v); return isNaN(n) ? '0.00' : n.toFixed(2); };
     try {
       await this._cap('printerInit', {});
-      await this._cap('setAlignment', { alignment: 1 });
-      await this._cap('setFontSize', { size: 28 });
-      await this._cap('setBold', { bold: true });
-      await this.printText('TEST IMPRESSION\n');
-      await this._cap('setFontSize', { size: 20 });
-      await this._cap('setBold', { bold: false });
-      await this.printText('================================================\n');
-      await this._cap('setAlignment', { alignment: 0 });
-      await this.printText('CaissePro - Imprimante Sunmi\n');
-      await this.printText(`Date: ${new Date().toLocaleString('fr-FR')}\n`);
-      await this.printText('Caracteres: EUR a e c u o\n');
-      await this.printText('================================================\n');
-      await this._cap('setAlignment', { alignment: 1 });
-      await this.printText('Test OK !\n');
+      await this.printText('AVOIR\n');
+      await this.printText(`N: ${avoir?.avoirNumber || '?'}\n`);
+      await this.printText(`TOTAL: -${fmt(avoir?.totalTTC)} EUR\n`);
       await this._cap('lineWrap', { lines: 4 });
-      try { await this._cap('cutPaper', {}); } catch (e) {}
+      return true;
+    } catch (e) { throw e; }
+  }
+
+  async _legacyPrintClosure(closure, settings, companyInfo) {
+    const fmt = (v) => { const n = Number(v); return isNaN(n) ? '0.00' : n.toFixed(2); };
+    try {
+      await this._cap('printerInit', {});
+      await this.printText('CLOTURE DE CAISSE\n');
+      await this.printText(`CA TTC: ${fmt(closure?.totalTTC || closure?.totalCA)} EUR\n`);
+      await this._cap('lineWrap', { lines: 4 });
       return true;
     } catch (e) { throw e; }
   }
@@ -601,7 +668,7 @@ async function _textBasedPrint(adapter, type, data, settings, companyInfo, width
     for (const item of (data.items || [])) {
       const name = item.product?.name || item.product_name || '?';
       const qty = item.quantity || 1;
-      const ttc = item.lineTTC || item.line_ttc || (item.unit_price * qty);
+      const ttc = Number(item.lineTTC || item.line_ttc || (item.unit_price * qty)) || 0;
       lines.push(pad(`${name} x${qty}`, `${ttc.toFixed(2)}E`));
     }
     lines.push(dsep);
@@ -632,7 +699,7 @@ function _generateReceiptHTML(ticket, settings, companyInfo) {
   h += '<div class="sep"></div>';
   for (const item of (ticket.items || [])) {
     const name = item.product?.name || item.product_name || '?';
-    const ttc = item.lineTTC || item.line_ttc || ((item.unit_price || 0) * (item.quantity || 1));
+    const ttc = Number(item.lineTTC || item.line_ttc || ((item.unit_price || 0) * (item.quantity || 1))) || 0;
     h += `<div class="row"><span>${name} x${item.quantity || 1}</span><span>${ttc.toFixed(2)}EUR</span></div>`;
   }
   h += '<div class="sep"></div>';

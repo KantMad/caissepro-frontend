@@ -252,8 +252,8 @@ function AppProvider({children}){
       if(setts?.csvColumnMapping){try{localStorage.setItem("caissepro_csv_column_mapping",JSON.stringify(setts.csvColumnMapping));}catch(e){}}
       autoImportSizesFromProducts(prods);
       setProducts(norm.products(prods));setCustomers(norm.customers(custs));setPromos(prms);setSettings(s=>({...s,...setts}));
-      if(apiSales&&Array.isArray(apiSales)){const merged=[...apiSales];const localOnly=tickets.filter(lt=>lt.hash==="LOCAL"||!apiSales.find(as=>as.ticketNumber===lt.ticketNumber));
-        setTickets([...localOnly,...merged].sort((a,b)=>new Date(b.date||b.createdAt||0)-new Date(a.date||a.createdAt||0)).slice(0,500));}
+      if(apiSales&&Array.isArray(apiSales)){const mapped=apiSales.map(s=>({...s,ticketNumber:s.ticketNumber||s.ticket_number,totalHT:parseFloat(s.total_ht||s.totalHT)||0,totalTVA:parseFloat(s.total_tva||s.totalTVA)||0,totalTTC:parseFloat(s.total_ttc||s.totalTTC)||0,date:s.date||s.created_at,userName:s.userName||s.user_name,paymentMethod:s.paymentMethod||s.payment_method,customerName:s.customerName||s.customer_name,fingerprint:s.fingerprint}));const localOnly=tickets.filter(lt=>lt.hash==="LOCAL"||!mapped.find(as=>as.ticketNumber===lt.ticketNumber));
+        setTickets([...localOnly,...mapped].sort((a,b)=>new Date(b.date||b.createdAt||0)-new Date(a.date||a.createdAt||0)).slice(0,500));}
       if(apiCounter&&!Array.isArray(apiCounter)){const seq=apiCounter.ticket_seq??apiCounter.seq??0;setTSeq(seq);if(apiCounter.last_hash||apiCounter.lastHash)setLastHash(apiCounter.last_hash||apiCounter.lastHash);if(apiCounter.grand_total!=null||apiCounter.grandTotal!=null)setGt(parseFloat(apiCounter.grand_total??apiCounter.grandTotal));}
       if(apiUsers&&apiUsers.length){const merged=[...apiUsers.map(u=>({id:u.id,name:u.name,role:u.role,pin:"****",apiSynced:true}))];
         const localOnly=users.filter(lu=>!apiUsers.find(au=>au.name===lu.name));
@@ -284,7 +284,7 @@ function AppProvider({children}){
         API.stock.alerts().catch(()=>null),
       ]);
       if(prods)setProducts(norm.products(prods));
-      if(apiSales&&Array.isArray(apiSales))setTickets(apiSales.sort((a,b)=>new Date(b.date||b.createdAt||0)-new Date(a.date||a.createdAt||0)).slice(0,500));
+      if(apiSales&&Array.isArray(apiSales))setTickets(apiSales.map(s=>({...s,ticketNumber:s.ticketNumber||s.ticket_number,totalHT:parseFloat(s.total_ht||s.totalHT)||0,totalTVA:parseFloat(s.total_tva||s.totalTVA)||0,totalTTC:parseFloat(s.total_ttc||s.totalTTC)||0,date:s.date||s.created_at,userName:s.userName||s.user_name,paymentMethod:s.paymentMethod||s.payment_method,customerName:s.customerName||s.customer_name,fingerprint:s.fingerprint})).sort((a,b)=>new Date(b.date||b.createdAt||0)-new Date(a.date||a.createdAt||0)).slice(0,500));
       if(setts)setSettings(s=>({...s,...setts}));
       if(closData?.length)setClosures(closData.map(c=>({...c,type:c.closure_type,totalHT:parseFloat(c.total_ht),totalTVA:parseFloat(c.total_tva),totalTTC:parseFloat(c.total_ttc),totalMargin:parseFloat(c.total_margin||0),date:c.created_at,userName:c.user_name})));
       else setClosures([]);
@@ -1099,7 +1099,7 @@ function AppProvider({children}){
     products,setProducts,addProduct,customers,setCustomers,addCustomer,openCustomerDisplay,footfall,addFootfall,
     cart,addToCart,addCustomItem,removeFromCart,voidSale,updateQty,updateItemDisc,clearCart,gDisc,gDiscType,setCartGD,
     promoCode,setPromoCode,calcPromoDiscount,
-    cashReg,openReg,closeReg,isOnline,tickets,tSeq,lastHash,gt,audit,jet,closures,avoirs,consumeAvoir,
+    cashReg,openReg,closeReg,isOnline,tickets,setTickets,tSeq,lastHash,gt,audit,jet,closures,avoirs,consumeAvoir,
     checkout,createClosure,exportArchive,exportFEC,exportCSVReport,exportCustomerRGPD,addAudit,addJET,
     promos,setPromos,activePromos,parked,parkCart,restoreCart,selCust,setSelCust,
     stockAlerts,stockMoves,addStockMove,receiveStock,

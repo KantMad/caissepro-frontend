@@ -9,19 +9,28 @@ import android.os.IBinder;
 import android.os.RemoteException;
 import android.util.Log;
 
+import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
 
+import org.json.JSONException;
+import org.json.JSONObject;
+
 import woyou.aidlservice.jiuiv5.ICallback;
 import woyou.aidlservice.jiuiv5.IWoyouService;
 
 /**
  * CaissePro Sunmi Printer Plugin
- * Bridges the Sunmi AIDL printer service to the Capacitor web layer.
- * Uses proper AIDL binding (not reflection) for reliable operation.
+ *
+ * KEY INSIGHT: Sending many individual Capacitor calls from JS doesn't work reliably.
+ * The async bridge causes commands to be lost or arrive out of order.
+ *
+ * Solution: printBatch() — JS sends ONE call with an array of print commands,
+ * Java executes them ALL synchronously on a background thread.
+ * This mirrors how testPrint() works (which has always been reliable).
  */
 @CapacitorPlugin(name = "SunmiPrinter")
 public class SunmiPrinterPlugin extends Plugin {
@@ -31,18 +40,10 @@ public class SunmiPrinterPlugin extends Plugin {
     private boolean bindAttempted = false;
     private String bindError = null;
 
-    // Simple callback that logs errors
     private final ICallback defaultCallback = new ICallback.Stub() {
-        @Override
-        public void onRunResult(boolean isSuccess) {
-            Log.d(TAG, "Print callback: " + (isSuccess ? "OK" : "FAIL"));
-        }
-        @Override
-        public void onReturnString(String result) {
-            Log.d(TAG, "Print result: " + result);
-        }
-        @Override
-        public void onRaiseException(int code, String msg) {
+        @Override public void onRunResult(boolean isSuccess) {}
+        @Override public void onReturnString(String result) {}
+        @Override public void onRaiseException(int code, String msg) {
             Log.e(TAG, "Print exception " + code + ": " + msg);
         }
     };
@@ -50,8 +51,7 @@ public class SunmiPrinterPlugin extends Plugin {
     @Override
     public void load() {
         super.load();
-        Log.i(TAG, "Plugin loading, attempting to bind Sunmi printer service...");
-        Log.i(TAG, "Device: " + Build.MANUFACTURER + " " + Build.MODEL);
+        Log.i(TAG, "Plugin loading — Device: " + Build.MANUFACTURER + " " + Build.MODEL);
         bindPrinterService();
     }
 
@@ -61,11 +61,10 @@ public class SunmiPrinterPlugin extends Plugin {
             Intent intent = new Intent();
             intent.setPackage("woyou.aidlservice.jiuiv5");
             intent.setAction("woyou.aidlservice.jiuiv5.IWoyouService");
-
             boolean bound = getContext().bindService(intent, serviceConnection, Context.BIND_AUTO_CREATE);
             Log.i(TAG, "bindService returned: " + bound);
             if (!bound) {
-                bindError = "bindService returned false — Sunmi printer service not found on this device";
+                bindError = "bindService returned false — service not found";
                 Log.w(TAG, bindError);
             }
         } catch (Exception e) {
@@ -81,13 +80,9 @@ public class SunmiPrinterPlugin extends Plugin {
             isBound = true;
             bindError = null;
             Log.i(TAG, "=== SUNMI PRINTER SERVICE CONNECTED ===");
-
-            // Log printer info for diagnostics
             try {
-                String serial = printerService.getPrinterSerialNo();
-                String version = printerService.getPrinterVersion();
                 int state = printerService.updatePrinterState();
-                Log.i(TAG, "Serial: " + serial + ", Version: " + version + ", State: " + state);
+                Log.i(TAG, "Printer state: " + state + " Serial: " + printerService.getPrinterSerialNo());
             } catch (RemoteException e) {
                 Log.w(TAG, "Could not read printer info: " + e.getMessage());
             }
@@ -101,7 +96,10 @@ public class SunmiPrinterPlugin extends Plugin {
         }
     };
 
-    // ── Diagnostic method — call from JS to check everything ──
+    // ══════════════════════════════════════════════════════════════
+    // DIAGNOSTIC
+    // ══════════════════════════════════════════════════════════════
+
     @PluginMethod
     public void getStatus(PluginCall call) {
         JSObject ret = new JSObject();
@@ -111,12 +109,9 @@ public class SunmiPrinterPlugin extends Plugin {
         ret.put("serviceAvailable", printerService != null);
         ret.put("manufacturer", Build.MANUFACTURER);
         ret.put("model", Build.MODEL);
-        ret.put("device", Build.DEVICE);
         ret.put("isSunmi", Build.MANUFACTURER.toLowerCase().contains("sunmi"));
 
-        if (bindError != null) {
-            ret.put("error", bindError);
-        }
+        if (bindError != null) ret.put("error", bindError);
 
         if (printerService != null) {
             try {
@@ -125,8 +120,6 @@ public class SunmiPrinterPlugin extends Plugin {
                 ret.put("serviceVersion", printerService.getServiceVersion());
                 int state = printerService.updatePrinterState();
                 ret.put("printerState", state);
-                // State codes: 1=normal, 2=preparing, 3=abnormal, 4=overheated,
-                // 5=no paper, 6=paper jam, 7=cover open, 505=no printer, 507=updating
                 String stateLabel;
                 switch (state) {
                     case 1: stateLabel = "NORMAL"; break;
@@ -141,87 +134,239 @@ public class SunmiPrinterPlugin extends Plugin {
                     default: stateLabel = "UNKNOWN_" + state; break;
                 }
                 ret.put("printerStateLabel", stateLabel);
-                ret.put("printerPaper", printerService.getPrinterPaper());
             } catch (RemoteException e) {
                 ret.put("infoError", e.getMessage());
             }
         }
-
         call.resolve(ret);
     }
 
     @PluginMethod
-    public void printerInit(PluginCall call) {
+    public void isConnected(PluginCall call) {
+        JSObject ret = new JSObject();
+        ret.put("connected", isBound && printerService != null);
+        call.resolve(ret);
+    }
+
+    @PluginMethod
+    public void reconnect(PluginCall call) {
+        Log.i(TAG, "Manual reconnect requested");
+        if (isBound) {
+            try { getContext().unbindService(serviceConnection); } catch (Exception e) {}
+            printerService = null;
+            isBound = false;
+        }
+        bindError = null;
+        bindPrinterService();
+        getActivity().getWindow().getDecorView().postDelayed(() -> {
+            JSObject ret = new JSObject();
+            ret.put("connected", isBound && printerService != null);
+            ret.put("error", bindError);
+            call.resolve(ret);
+        }, 2000);
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    // TEST PRINT — Simple, proven approach (no buffer tricks)
+    // ══════════════════════════════════════════════════════════════
+
+    @PluginMethod
+    public void testPrint(PluginCall call) {
         if (printerService == null) {
-            call.reject("Printer not connected (service is null). bindAttempted=" + bindAttempted + ", error=" + bindError);
+            call.reject("Printer not connected. bindAttempted=" + bindAttempted + ", error=" + bindError);
             return;
         }
-        try {
-            printerService.printerInit(defaultCallback);
-            call.resolve();
-        } catch (RemoteException e) {
-            call.reject("printerInit failed: " + e.getMessage());
+        new Thread(() -> {
+            try {
+                printerService.printerInit(null);
+                printerService.setAlignment(1, null);
+                printerService.setFontSize(28f, null);
+                printerService.printText("=== TEST CaissePro ===\n", null);
+                printerService.setFontSize(20f, null);
+                printerService.printText("Imprimante OK\n", null);
+                printerService.printText(Build.MANUFACTURER + " " + Build.MODEL + "\n", null);
+                printerService.printText(new java.text.SimpleDateFormat("dd/MM/yyyy HH:mm:ss", java.util.Locale.FRANCE)
+                    .format(new java.util.Date()) + "\n", null);
+                printerService.printText("================================\n", null);
+                printerService.printText("Ligne 1 - Test texte normal\n", null);
+                printerService.setFontSize(28f, null);
+                printerService.printText("Ligne 2 - Grand texte\n", null);
+                printerService.setFontSize(20f, null);
+                printerService.printText("Ligne 3 - Fin du test\n", null);
+                printerService.lineWrap(4, null);
+                try { printerService.cutPaper(null); } catch (Exception e) {}
+
+                JSObject ret = new JSObject();
+                ret.put("success", true);
+                ret.put("message", "Test OK — " + Build.MODEL);
+                getActivity().runOnUiThread(() -> call.resolve(ret));
+            } catch (RemoteException e) {
+                Log.e(TAG, "testPrint failed: " + e.getMessage());
+                getActivity().runOnUiThread(() -> call.reject("testPrint failed: " + e.getMessage()));
+            }
+        }).start();
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    // PRINT BATCH — The core method for all receipt printing
+    //
+    // JS sends ONE Capacitor call with a JSON array of commands.
+    // Java executes them ALL synchronously — no async gaps.
+    //
+    // Command format: { "cmd": "text|bold|size|align|line|cut|feed|raw", ...params }
+    //
+    // Examples:
+    //   { "cmd": "text", "text": "Hello\n" }
+    //   { "cmd": "bold", "enabled": true }
+    //   { "cmd": "size", "value": 28 }
+    //   { "cmd": "align", "value": 1 }       // 0=left, 1=center, 2=right
+    //   { "cmd": "line" }                     // separator line
+    //   { "cmd": "feed", "lines": 4 }
+    //   { "cmd": "cut" }
+    // ══════════════════════════════════════════════════════════════
+
+    @PluginMethod
+    public void printBatch(PluginCall call) {
+        if (printerService == null) {
+            call.reject("Printer not connected");
+            return;
         }
+
+        JSArray commands = call.getArray("commands");
+        if (commands == null || commands.length() == 0) {
+            call.reject("No print commands provided");
+            return;
+        }
+
+        Log.i(TAG, "printBatch: " + commands.length() + " commands");
+
+        new Thread(() -> {
+            try {
+                printerService.printerInit(null);
+
+                for (int i = 0; i < commands.length(); i++) {
+                    JSONObject cmd;
+                    try {
+                        cmd = commands.getJSONObject(i);
+                    } catch (JSONException e) {
+                        Log.w(TAG, "Skip invalid command at index " + i);
+                        continue;
+                    }
+
+                    String type = cmd.optString("cmd", "");
+                    switch (type) {
+                        case "text":
+                            String text = cmd.optString("text", "");
+                            if (!text.isEmpty()) {
+                                printerService.printText(text, null);
+                            }
+                            break;
+
+                        case "bold":
+                            boolean enabled = cmd.optBoolean("enabled", false);
+                            byte[] boldCmd = enabled
+                                ? new byte[]{0x1B, 0x45, 0x01}
+                                : new byte[]{0x1B, 0x45, 0x00};
+                            printerService.sendRAWData(boldCmd, null);
+                            break;
+
+                        case "size":
+                            float size = (float) cmd.optDouble("value", 20);
+                            printerService.setFontSize(size, null);
+                            break;
+
+                        case "align":
+                            int align = cmd.optInt("value", 0);
+                            printerService.setAlignment(align, null);
+                            break;
+
+                        case "line":
+                            // Print a separator line
+                            String sep = cmd.optString("char", "-");
+                            int len = cmd.optInt("len", 32);
+                            StringBuilder sb = new StringBuilder();
+                            for (int j = 0; j < len; j++) sb.append(sep);
+                            sb.append("\n");
+                            printerService.printText(sb.toString(), null);
+                            break;
+
+                        case "feed":
+                            int lines = cmd.optInt("lines", 3);
+                            printerService.lineWrap(lines, null);
+                            break;
+
+                        case "cut":
+                            try { printerService.cutPaper(null); } catch (Exception e) {}
+                            break;
+
+                        case "qr":
+                            String qrContent = cmd.optString("text", "");
+                            int qrSize = cmd.optInt("size", 6);
+                            if (!qrContent.isEmpty()) {
+                                printerService.printQRCode(qrContent, qrSize, 3, null);
+                            }
+                            break;
+
+                        case "barcode":
+                            String bcContent = cmd.optString("text", "");
+                            if (!bcContent.isEmpty()) {
+                                printerService.printBarCode(bcContent, 8, 80, 2, 2, null);
+                            }
+                            break;
+
+                        default:
+                            Log.w(TAG, "Unknown batch command: " + type);
+                            break;
+                    }
+                }
+
+                Log.i(TAG, "printBatch completed successfully");
+                JSObject ret = new JSObject();
+                ret.put("success", true);
+                ret.put("commandCount", commands.length());
+                getActivity().runOnUiThread(() -> call.resolve(ret));
+
+            } catch (Exception e) {
+                Log.e(TAG, "printBatch error: " + e.getMessage(), e);
+                final String errMsg = e.getMessage();
+                getActivity().runOnUiThread(() -> call.reject("printBatch failed: " + errMsg));
+            }
+        }).start();
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    // Legacy single-command methods (kept for compatibility)
+    // ══════════════════════════════════════════════════════════════
+
+    @PluginMethod
+    public void printerInit(PluginCall call) {
+        if (printerService == null) { call.reject("Printer not connected"); return; }
+        try { printerService.printerInit(defaultCallback); call.resolve(); }
+        catch (RemoteException e) { call.reject("printerInit failed: " + e.getMessage()); }
     }
 
     @PluginMethod
     public void printText(PluginCall call) {
         String text = call.getString("text", "");
-        if (printerService == null) {
-            call.reject("Printer not connected");
-            return;
-        }
-        try {
-            printerService.printText(text, defaultCallback);
-            call.resolve();
-        } catch (RemoteException e) {
-            call.reject("printText failed: " + e.getMessage());
-        }
-    }
-
-    @PluginMethod
-    public void printOriginalText(PluginCall call) {
-        String text = call.getString("text", "");
-        if (printerService == null) {
-            call.reject("Printer not connected");
-            return;
-        }
-        try {
-            printerService.printOriginalText(text, defaultCallback);
-            call.resolve();
-        } catch (RemoteException e) {
-            // Fallback
-            try {
-                printerService.printText(text, defaultCallback);
-                call.resolve();
-            } catch (RemoteException e2) {
-                call.reject("printOriginalText failed: " + e2.getMessage());
-            }
-        }
+        if (printerService == null) { call.reject("Printer not connected"); return; }
+        try { printerService.printText(text, defaultCallback); call.resolve(); }
+        catch (RemoteException e) { call.reject("printText failed: " + e.getMessage()); }
     }
 
     @PluginMethod
     public void setAlignment(PluginCall call) {
         int alignment = call.getInt("alignment", 0);
         if (printerService == null) { call.reject("Printer not connected"); return; }
-        try {
-            printerService.setAlignment(alignment, defaultCallback);
-            call.resolve();
-        } catch (RemoteException e) {
-            call.reject("setAlignment failed: " + e.getMessage());
-        }
+        try { printerService.setAlignment(alignment, defaultCallback); call.resolve(); }
+        catch (RemoteException e) { call.reject("setAlignment failed: " + e.getMessage()); }
     }
 
     @PluginMethod
     public void setFontSize(PluginCall call) {
         float size = call.getFloat("size", 20f);
         if (printerService == null) { call.reject("Printer not connected"); return; }
-        try {
-            printerService.setFontSize(size, defaultCallback);
-            call.resolve();
-        } catch (RemoteException e) {
-            call.reject("setFontSize failed: " + e.getMessage());
-        }
+        try { printerService.setFontSize(size, defaultCallback); call.resolve(); }
+        catch (RemoteException e) { call.reject("setFontSize failed: " + e.getMessage()); }
     }
 
     @PluginMethod
@@ -229,49 +374,25 @@ public class SunmiPrinterPlugin extends Plugin {
         boolean bold = call.getBoolean("bold", false);
         if (printerService == null) { call.reject("Printer not connected"); return; }
         try {
-            // ESC E n — bold on/off
             byte[] cmd = bold ? new byte[]{0x1B, 0x45, 0x01} : new byte[]{0x1B, 0x45, 0x00};
             printerService.sendRAWData(cmd, defaultCallback);
             call.resolve();
-        } catch (RemoteException e) {
-            call.reject("setBold failed: " + e.getMessage());
-        }
+        } catch (RemoteException e) { call.reject("setBold failed: " + e.getMessage()); }
     }
 
     @PluginMethod
     public void lineWrap(PluginCall call) {
         int lines = call.getInt("lines", 3);
         if (printerService == null) { call.reject("Printer not connected"); return; }
-        try {
-            printerService.lineWrap(lines, defaultCallback);
-            call.resolve();
-        } catch (RemoteException e) {
-            call.reject("lineWrap failed: " + e.getMessage());
-        }
+        try { printerService.lineWrap(lines, defaultCallback); call.resolve(); }
+        catch (RemoteException e) { call.reject("lineWrap failed: " + e.getMessage()); }
     }
 
     @PluginMethod
     public void cutPaper(PluginCall call) {
         if (printerService == null) { call.resolve(); return; }
-        try {
-            printerService.cutPaper(defaultCallback);
-            call.resolve();
-        } catch (RemoteException e) {
-            // Not all models support cut — silent resolve
-            call.resolve();
-        }
-    }
-
-    @PluginMethod
-    public void feedPaper(PluginCall call) {
-        int mm = call.getInt("mm", 10);
-        if (printerService == null) { call.reject("Printer not connected"); return; }
-        try {
-            printerService.feedPaper(mm, defaultCallback);
-            call.resolve();
-        } catch (RemoteException e) {
-            call.reject("feedPaper failed: " + e.getMessage());
-        }
+        try { printerService.cutPaper(defaultCallback); call.resolve(); }
+        catch (RemoteException e) { call.resolve(); }
     }
 
     @PluginMethod
@@ -281,44 +402,11 @@ public class SunmiPrinterPlugin extends Plugin {
             printerService.openDrawer(defaultCallback);
             call.resolve();
         } catch (RemoteException e) {
-            // Fallback: ESC/POS drawer kick command
             try {
                 byte[] cmd = new byte[]{0x1B, 0x70, 0x00, 0x19, (byte) 0xFA};
                 printerService.sendRAWData(cmd, defaultCallback);
                 call.resolve();
-            } catch (RemoteException e2) {
-                call.reject("openDrawer failed: " + e2.getMessage());
-            }
-        }
-    }
-
-    @PluginMethod
-    public void printQRCode(PluginCall call) {
-        String content = call.getString("content", "");
-        int size = call.getInt("size", 6);
-        int errorLevel = call.getInt("errorLevel", 3);
-        if (printerService == null) { call.reject("Printer not connected"); return; }
-        try {
-            printerService.printQRCode(content, size, errorLevel, defaultCallback);
-            call.resolve();
-        } catch (RemoteException e) {
-            call.reject("printQRCode failed: " + e.getMessage());
-        }
-    }
-
-    @PluginMethod
-    public void printBarCode(PluginCall call) {
-        String content = call.getString("content", "");
-        int symbology = call.getInt("symbology", 8);
-        int height = call.getInt("height", 80);
-        int width = call.getInt("width", 2);
-        int textPosition = call.getInt("textPosition", 2);
-        if (printerService == null) { call.reject("Printer not connected"); return; }
-        try {
-            printerService.printBarCode(content, symbology, height, width, textPosition, defaultCallback);
-            call.resolve();
-        } catch (RemoteException e) {
-            call.reject("printBarCode failed: " + e.getMessage());
+            } catch (RemoteException e2) { call.reject("openDrawer failed: " + e2.getMessage()); }
         }
     }
 
@@ -330,77 +418,14 @@ public class SunmiPrinterPlugin extends Plugin {
             byte[] data = android.util.Base64.decode(base64Data, android.util.Base64.DEFAULT);
             printerService.sendRAWData(data, defaultCallback);
             call.resolve();
-        } catch (Exception e) {
-            call.reject("sendRAWData failed: " + e.getMessage());
-        }
-    }
-
-    @PluginMethod
-    public void isConnected(PluginCall call) {
-        JSObject ret = new JSObject();
-        ret.put("connected", isBound && printerService != null);
-        call.resolve(ret);
-    }
-
-    // ── Force reconnect (useful if service was slow to start) ──
-    @PluginMethod
-    public void reconnect(PluginCall call) {
-        Log.i(TAG, "Manual reconnect requested");
-        if (isBound) {
-            try { getContext().unbindService(serviceConnection); } catch (Exception e) {}
-            printerService = null;
-            isBound = false;
-        }
-        bindError = null;
-        bindPrinterService();
-        // Give it a moment then return status
-        getActivity().getWindow().getDecorView().postDelayed(() -> {
-            JSObject ret = new JSObject();
-            ret.put("connected", isBound && printerService != null);
-            ret.put("error", bindError);
-            call.resolve(ret);
-        }, 2000);
-    }
-
-    // ── Quick test print ──
-    @PluginMethod
-    public void testPrint(PluginCall call) {
-        if (printerService == null) {
-            call.reject("Printer not connected. Status: bindAttempted=" + bindAttempted
-                + ", manufacturer=" + Build.MANUFACTURER + ", error=" + bindError);
-            return;
-        }
-        try {
-            printerService.printerInit(null);
-            printerService.setAlignment(1, null);
-            printerService.setFontSize(28f, null);
-            printerService.printText("=== TEST CaissePro ===\n", null);
-            printerService.setFontSize(20f, null);
-            printerService.printText("Imprimante OK\n", null);
-            printerService.printText(Build.MANUFACTURER + " " + Build.MODEL + "\n", null);
-            printerService.printText(new java.text.SimpleDateFormat("dd/MM/yyyy HH:mm:ss", java.util.Locale.FRANCE)
-                .format(new java.util.Date()) + "\n", null);
-            printerService.printText("================================\n", null);
-            printerService.lineWrap(4, null);
-            try { printerService.cutPaper(null); } catch (Exception e) {}
-
-            JSObject ret = new JSObject();
-            ret.put("success", true);
-            call.resolve(ret);
-        } catch (RemoteException e) {
-            call.reject("testPrint failed: " + e.getMessage());
-        }
+        } catch (Exception e) { call.reject("sendRAWData failed: " + e.getMessage()); }
     }
 
     @Override
     protected void handleOnDestroy() {
         super.handleOnDestroy();
         if (isBound) {
-            try {
-                getContext().unbindService(serviceConnection);
-            } catch (Exception e) {
-                Log.w(TAG, "Error unbinding service: " + e.getMessage());
-            }
+            try { getContext().unbindService(serviceConnection); } catch (Exception e) {}
         }
     }
 }
