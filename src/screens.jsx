@@ -3027,7 +3027,7 @@ function SizeSettingsTab({notify}){
 }
 
 function SettingsScreen(){
-  const{settings,setSettings,saveSettingsToAPI,addAudit,theme,setTheme,clockEntries,priceHistory,printerConnected,printerType,connectPrinter,disconnectPrinter,thermalPrint,notify,users,hwId,hwProfile,switchHardware,hardwareProfiles}=useApp();
+  const{settings,setSettings,saveSettingsToAPI,addAudit,theme,setTheme,clockEntries,priceHistory,printerConnected,printerType,connectPrinter,disconnectPrinter,thermalPrint,notify,users,hwId,hwProfile,switchHardware,hardwareProfiles,paymentId,paymentConfig,switchPayment,updatePaymentConfig,paymentProfiles}=useApp();
   const[tab,setTab]=useState("general");
   const[printerBaud,setPrinterBaud]=useState("9600");
   const[printerWidth,setPrinterWidth]=useState("48");
@@ -3035,7 +3035,7 @@ function SettingsScreen(){
   return(<div style={{height:"100%",overflowY:"auto",padding:20,background:C.bg}}>
     <h2 style={{fontSize:22,fontWeight:800,marginBottom:14}}>Paramètres</h2>
     <div style={{display:"flex",gap:6,marginBottom:14,flexWrap:"wrap"}}>
-      {[{id:"general",l:"Général"},{id:"retouche",l:"✂️ Retouches"},{id:"pricing",l:"💰 Prix HT/TTC"},{id:"commission",l:"Commission"},{id:"stores",l:"Magasins"},{id:"printer",l:"🖨️ Imprimante"},{id:"receipt",l:"🧾 Ticket"},{id:"screen2",l:"📺 Écran 2"},{id:"caticons",l:"🏷️ Icônes catégories"},{id:"return",l:"Retours"},{id:"sizes",l:"📏 Ordre tailles"},{id:"theme",l:"Thème"},{id:"clock",l:"Pointages"},{id:"prices",l:"Historique prix"}].map(t=>(
+      {[{id:"general",l:"Général"},{id:"retouche",l:"✂️ Retouches"},{id:"pricing",l:"💰 Prix HT/TTC"},{id:"commission",l:"Commission"},{id:"stores",l:"Magasins"},{id:"printer",l:"Imprimante"},{id:"tpe",l:"Terminal paiement"},{id:"receipt",l:"Ticket"},{id:"screen2",l:"📺 Écran 2"},{id:"caticons",l:"🏷️ Icônes catégories"},{id:"return",l:"Retours"},{id:"sizes",l:"📏 Ordre tailles"},{id:"theme",l:"Thème"},{id:"clock",l:"Pointages"},{id:"prices",l:"Historique prix"}].map(t=>(
         <button key={t.id} onClick={()=>setTab(t.id)} style={{padding:"5px 12px",borderRadius:8,border:`1.5px solid ${tab===t.id?C.primary:C.border}`,
           background:tab===t.id?C.primary:"transparent",color:tab===t.id?"#fff":C.text,fontSize:11,fontWeight:600,cursor:"pointer"}}>{t.l}</button>))}</div>
 
@@ -3382,6 +3382,58 @@ function SettingsScreen(){
         <span>→</span>
         <span style={{color:"#059669",fontWeight:700}}>{e.newPrice.toFixed(2)}€</span>
         <span style={{color:C.textMuted,fontSize:9}}>{e.user} — {new Date(e.date).toLocaleDateString("fr-FR")}</span></div>))}</div>}
+
+    {tab==="tpe"&&<div style={{maxWidth:600}}>
+      {/* Payment terminal selection */}
+      <div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.primary}22`,marginBottom:14}}>
+        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}>
+          <CreditCard size={18} color={C.primary}/>
+          <div><h3 style={{fontSize:14,fontWeight:700,margin:0}}>Terminal de paiement (TPE)</h3>
+            <p style={{fontSize:10,color:C.textMuted,margin:0}}>Selectionnez votre solution de paiement par carte. Le montant sera envoye automatiquement au TPE.</p></div></div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+          {Object.entries(paymentProfiles||{}).map(([id,p])=>(
+            <button key={id} onClick={()=>switchPayment(id)} style={{padding:"12px 14px",borderRadius:12,textAlign:"left",cursor:"pointer",
+              border:`2px solid ${paymentId===id?C.primary:C.border}`,background:paymentId===id?C.primaryLight:"transparent",transition:"all 0.15s"}}>
+              <div style={{fontSize:12,fontWeight:700,color:paymentId===id?C.primary:C.text,marginBottom:2}}>{p.name}</div>
+              <div style={{fontSize:9,color:C.textMuted}}>{p.description}</div>
+            </button>))}
+        </div>
+      </div>
+
+      {/* TPE Configuration fields */}
+      {paymentProfiles[paymentId]?.requiresConfig&&<div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`,marginBottom:14}}>
+        <h4 style={{fontSize:13,fontWeight:700,marginBottom:10}}>Configuration {paymentProfiles[paymentId]?.name}</h4>
+        {(paymentProfiles[paymentId]?.configFields||[]).map(f=>(
+          <div key={f.key} style={{marginBottom:10}}>
+            <label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>{f.label}</label>
+            {f.type==="select"?
+              <select value={paymentConfig[f.key]||""} onChange={e=>updatePaymentConfig({[f.key]:e.target.value})}
+                style={{width:"100%",padding:10,borderRadius:10,border:`2px solid ${C.border}`,fontSize:12,fontFamily:"inherit"}}>
+                <option value="">-- Choisir --</option>
+                {(f.options||[]).map(o=><option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+            :<Input value={paymentConfig[f.key]||""} onChange={e=>updatePaymentConfig({[f.key]:e.target.value})}
+                placeholder={f.placeholder||""} type={f.type||"text"}/>}
+          </div>))}
+        <Btn onClick={()=>{notify("Configuration TPE sauvegardee","success");}} style={{width:"100%",height:40,background:C.primary}}>
+          <Save size={14}/> Sauvegarder la configuration</Btn>
+      </div>}
+
+      {/* Payment status info */}
+      <div style={{background:C.surfaceAlt,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`}}>
+        <h4 style={{fontSize:13,fontWeight:700,marginBottom:8}}>Fonctionnement</h4>
+        <div style={{fontSize:11,color:C.textMuted,lineHeight:1.6}}>
+          {paymentId==="manual"&&<>Mode manuel: le caissier encaisse sur le TPE separement puis confirme le paiement dans CaissePro. Aucune connexion au TPE necessaire.</>}
+          {paymentId==="concert"&&<>Le protocole Concert envoie automatiquement le montant au pinpad. Le client presente sa carte, et la reponse (accepte/refuse) revient dans CaissePro. Standard francais compatible Ingenico, Verifone, Worldline.</>}
+          {paymentId==="sumup"&&<>CaissePro ouvre l'app SumUp avec le montant pre-rempli. Le paiement se fait sur le lecteur SumUp, puis le resultat revient dans CaissePro.</>}
+          {paymentId==="stripe"&&<>Stripe Terminal se connecte au lecteur (BBPOS Chipper, Verifone P400) via Internet. Le paiement est traite par Stripe avec retour automatique dans CaissePro.</>}
+          {paymentId==="zettle"&&<>CaissePro ouvre l'app Zettle avec le montant. Le paiement se fait sur le lecteur Zettle, compatible CB, Amex, Apple Pay.</>}
+          {paymentId==="worldline"&&<>Connexion directe au TPE Worldline (VALINA, YOMANI, LANE) via le protocole NEXO ou l'API REST locale.</>}
+          {paymentId==="pax_pay"&&<>Paiement integre sur le terminal PAX. Le montant est envoye directement au module de paiement interne.</>}
+          {paymentId==="sunmi_pay"&&<>Paiement integre sur Sunmi P-series. Le module NFC/puce de la Sunmi traite le paiement directement.</>}
+        </div>
+      </div>
+    </div>}
 
     {tab==="receipt"&&<div style={{maxWidth:550}}>
       <div style={{background:C.primaryLight,borderRadius:16,padding:20,border:`1.5px solid ${C.primary}22`,marginBottom:16}}>

@@ -87,6 +87,14 @@ function AppProvider({children}){
   const[hwId,setHwId]=useState(()=>hardwareManager.init());
   const hwProfile=useMemo(()=>hardwareManager.currentProfile,[hwId]);
   const switchHardware=useCallback((id)=>{hardwareManager.setHardware(id);setHwId(id);},[]);
+  const[paymentId,setPaymentId]=useState(()=>hardwareManager.paymentId);
+  const[paymentConfig,setPaymentConfigState]=useState(()=>hardwareManager.paymentConfig);
+  const switchPayment=useCallback((id,config)=>{hardwareManager.setPayment(id,config||paymentConfig);setPaymentId(id);},[paymentConfig]);
+  const updatePaymentConfig=useCallback((cfg)=>{hardwareManager.updatePaymentConfig(cfg);setPaymentConfigState(hardwareManager.paymentConfig);},[]);
+  const chargePayment=useCallback(async(amount,opts)=>hardwareManager.charge(amount,opts),[]);
+  const refundPayment=useCallback(async(amount,opts)=>hardwareManager.refund(amount,opts),[]);
+  // Barcode scanner auto-start
+  useEffect(()=>{const s=hardwareManager.scanner;if(!s)return;s.start();const off=s.onScan(code=>{const found=findByEAN(code);if(found)addToCart(found.product,found.variant);else notify("Code-barres inconnu: "+code,"warn");});return()=>{s.stop();off();};},[findByEAN,addToCart,notify]);
   // Default PINs are hashed on first load (SHA-256 + salt)
   const DEFAULT_PIN_HASH="3a24a2105c7a06376ff41e7e06a6cd2a3941c980d99e169c8fbb60d29b741395"; // hash of "1234"
   const defaultUsers=[{id:"u1",name:"Admin",role:"admin",pin:DEFAULT_PIN_HASH},{id:"u2",name:"Sophie",role:"cashier",pin:DEFAULT_PIN_HASH},{id:"u3",name:"Marc",role:"cashier",pin:DEFAULT_PIN_HASH}];
@@ -1029,6 +1037,8 @@ function AppProvider({children}){
     updateCustomer,deleteCustomer,adjustStock,
     printerConnected,printerType,thermalPrint,connectPrinter,disconnectPrinter,isSunmi,isAndroid,
     hwId,hwProfile,switchHardware,hardwareProfiles:hardwareManager.profiles,
+    paymentId,paymentConfig,switchPayment,updatePaymentConfig,chargePayment,refundPayment,
+    paymentProfiles:hardwareManager.paymentProfiles,
     users,setUsers,tvaRates,setTvaRates,addPendingSync,pendingSync,clearPendingSync,
   }}>{children}</AppCtx.Provider>;
 }
