@@ -3118,44 +3118,79 @@ function DebugPanel(){
 
   const testPrint=async()=>{
     setRunning(true);
-    addLog("--- TEST IMPRESSION ---","title");
+    addLog("--- TEST IMPRESSION AVANCE ---","title");
     const sp=window.Capacitor?.Plugins?.SunmiPrinter;
     if(!sp){addLog("Plugin SunmiPrinter absent!","error");setRunning(false);return;}
 
-    // Test 1: Native testPrint
-    addLog("Test 1: appel natif testPrint()...");
+    // Step 0: Check state
+    addLog("Etape 0: Verification etat imprimante...");
+    try{
+      const st=await sp.getStatus();
+      addLog(`Etat: ${st.printerState} (${st.printerStateLabel})`);
+      if(st.printerState===2){
+        addLog("ETAT 2 = PREPARING — l'imprimante n'est pas prete!","error");
+        addLog("VERIFIEZ: le papier est-il charge cote thermique vers le haut?","error");
+        addLog("VERIFIEZ: le couvercle est-il bien ferme?","error");
+        addLog("TENTATIVE: reinit du service...","info");
+        try{await sp.printerInit({});addLog("printerInit OK");}catch(e){addLog(`printerInit erreur: ${e.message}`,"error");}
+        // Wait 2s and recheck
+        await new Promise(r=>setTimeout(r,2000));
+        const st2=await sp.getStatus();
+        addLog(`Etat apres reinit: ${st2.printerState} (${st2.printerStateLabel})`);
+      }
+      if(st.printerState===5){addLog("PAS DE PAPIER! Inserez un rouleau.","error");setRunning(false);return;}
+    }catch(e){addLog(`getStatus erreur: ${e.message}`,"error");}
+
+    // Step 1: Try reconnect
+    addLog("Etape 1: Reconnexion service imprimante...");
+    try{
+      const r=await sp.reconnect();
+      addLog(`Reconnect: ${JSON.stringify(r)}`);
+      // Wait for service to rebind
+      await new Promise(r=>setTimeout(r,3000));
+      const st=await sp.getStatus();
+      addLog(`Etat apres reconnect: ${st.printerState} (${st.printerStateLabel})`);
+    }catch(e){addLog(`Reconnect erreur: ${e.message}`,"error");}
+
+    // Step 2: Raw ESC/POS test — bypass printText entirely
+    addLog("Etape 2: Envoi ESC/POS brut via sendRAWData...");
+    try{
+      // ESC @ (init) + "TEST RAW\n" + feed 4 lines
+      const initCmd="G0A="; // ESC @ in base64 = 0x1B 0x40
+      await sp.sendRAWData({data:initCmd});
+      // Send raw text as base64
+      const textBytes="VEVTVCBFU0MvUE9TIEJSVVQgLSBTaSB2b3VzIGxpc2V6IGNlY2ksIGNhIG1hcmNoZSEK"; // "TEST ESC/POS BRUT - Si vous lisez ceci, ca marche!\n"
+      await sp.sendRAWData({data:textBytes});
+      // Feed 4 lines: ESC d 04 = base64 "G2QE"
+      await sp.sendRAWData({data:"G2QE"});
+      addLog("sendRAWData OK (pas d'erreur)","success");
+    }catch(e){addLog(`sendRAWData ERREUR: ${e.message}`,"error");}
+
+    // Step 3: Native testPrint (proven method)
+    addLog("Etape 3: testPrint natif Java...");
     try{
       const r=await sp.testPrint({});
-      addLog(`testPrint resultat: ${JSON.stringify(r)}`,"success");
+      addLog(`testPrint: ${JSON.stringify(r)}`,"success");
     }catch(e){addLog(`testPrint ERREUR: ${e.message}`,"error");}
 
-    // Test 2: printBatch simple
-    addLog("Test 2: appel printBatch() avec 3 commandes...");
+    // Step 4: printBatch
+    addLog("Etape 4: printBatch...");
     try{
       const r=await sp.printBatch({commands:[
-        {cmd:"text",text:"=== DEBUG PRINT TEST ===\n"},
-        {cmd:"text",text:"Si vous lisez ceci, printBatch fonctionne!\n"},
-        {cmd:"text",text:new Date().toLocaleString("fr-FR")+"\n"},
-        {cmd:"feed",lines:4},
-        {cmd:"cut"}
+        {cmd:"text",text:"=== BATCH TEST ===\n"},
+        {cmd:"text",text:"Ligne 1 printBatch\n"},
+        {cmd:"text",text:"Ligne 2 printBatch\n"},
+        {cmd:"feed",lines:4}
       ]});
-      addLog(`printBatch resultat: ${JSON.stringify(r)}`,"success");
+      addLog(`printBatch: ${JSON.stringify(r)}`,"success");
     }catch(e){addLog(`printBatch ERREUR: ${e.message}`,"error");}
 
-    // Test 3: Single printText
-    addLog("Test 3: appel printText() unique...");
-    try{
-      const r=await sp.printText({text:"Test ligne unique\n"});
-      addLog(`printText resultat: ${JSON.stringify(r)}`,"success");
-    }catch(e){addLog(`printText ERREUR: ${e.message}`,"error");}
-
-    // Test 4: lineWrap to force paper feed
-    addLog("Test 4: lineWrap(6) pour forcer sortie papier...");
-    try{
-      const r=await sp.lineWrap({lines:6});
-      addLog(`lineWrap resultat: ${JSON.stringify(r)}`,"success");
-    }catch(e){addLog(`lineWrap ERREUR: ${e.message}`,"error");}
-
+    addLog("--- RESULTAT ---","title");
+    addLog("Si RIEN n'est sorti du papier malgre les success:","error");
+    addLog("1. Retournez le papier (face thermique vers la tete)","error");
+    addLog("2. Ouvrez/fermez le couvercle imprimante","error");
+    addLog("3. Redemarrez la Sunmi T2s","error");
+    addLog("Si du texte est sorti: l'imprimante fonctionne!","success");
     setRunning(false);
   };
 
@@ -3165,6 +3200,49 @@ function DebugPanel(){
     addLog(`Nombre tickets: ${tickets?.length||0}`);
     if(!tickets?.length){addLog("Aucun ticket en memoire — impossible de tester","error");setRunning(false);return;}
     const t=tickets[0];
+
+    // Test rendering of each field that the modal uses
+    addLog("--- Simulation rendu modal ticket ---","title");
+    try{
+      // These are the exact expressions used in the ticket detail modal
+      const renderTests=[
+        {name:"ticketNumber",expr:()=>t.ticketNumber||t.ticket_number},
+        {name:"date",expr:()=>new Date(t.date||t.createdAt||t.created_at).toLocaleString("fr-FR")},
+        {name:"userName",expr:()=>t.userName||t.user_name||"?"},
+        {name:"totalHT.toFixed(2)",expr:()=>(t.totalHT||0).toFixed(2)},
+        {name:"totalTVA.toFixed(2)",expr:()=>(t.totalTVA||0).toFixed(2)},
+        {name:"totalTTC.toFixed(2)",expr:()=>(t.totalTTC||0).toFixed(2)},
+        {name:"fingerprint",expr:()=>t.fingerprint||"-"},
+        {name:"payments map",expr:()=>(t.payments||[]).map(pm=>`${pm.method} ${(pm.amount||0).toFixed(2)}`).join(" + ")},
+        {name:"items count",expr:()=>(t.items||[]).length},
+      ];
+      for(const test of renderTests){
+        try{
+          const val=test.expr();
+          addLog(`  ${test.name} = ${val}`,"success");
+        }catch(e){
+          addLog(`  ${test.name} CRASH: ${e.message}`,"error");
+        }
+      }
+      // Test each item rendering
+      addLog("--- Test rendu de chaque item ---","title");
+      (t.items||[]).forEach((i,idx)=>{
+        try{
+          const name=i.product?.name||i.product_name||"?";
+          const color=i.variant?.color||i.variant_color||"";
+          const size=i.variant?.size||i.variant_size||"";
+          const isCustom=i.isCustom||i.is_custom;
+          const lineTTC=i.lineTTC||i.line_ttc||(i.unit_price*i.quantity);
+          const rendered=`${name}${!isCustom?` (${color}/${size})`:""} x${i.quantity} = ${(lineTTC||0).toFixed(2)}`;
+          addLog(`  Item ${idx}: ${rendered}`,"success");
+        }catch(e){
+          addLog(`  Item ${idx} CRASH: ${e.message}`,"error");
+        }
+      });
+    }catch(e){
+      addLog(`ERREUR GLOBALE: ${e.message}\n${e.stack}`,"error");
+    }
+
     addLog("Premier ticket brut:");
     try{
       addLog(JSON.stringify(t,null,1).substring(0,1500));
@@ -3207,6 +3285,13 @@ function DebugPanel(){
         <Printer size={14}/> Test impression</Btn>
       <Btn onClick={testTicketModal} disabled={running} style={{height:44,background:"#D97706",fontSize:12,fontWeight:700}}>
         <Receipt size={14}/> Inspecter tickets</Btn>
+      <Btn onClick={()=>{
+        addLog("--- ERREURS JS CAPTUREES ---","title");
+        const errs=window.__CAISSEPRO_ERRORS||[];
+        if(errs.length===0){addLog("Aucune erreur JS capturee","success");}
+        else{errs.forEach(e=>{addLog(`[${e.ts}] ${e.msg}`,"error");if(e.stack)addLog(e.stack.substring(0,300),"error");});}
+      }} style={{height:44,background:"#DC2626",fontSize:12,fontWeight:700}}>
+        Erreurs JS ({(window.__CAISSEPRO_ERRORS||[]).length})</Btn>
       <Btn onClick={()=>setLogs([])} style={{height:44,background:"#64748B",fontSize:12}}>Effacer</Btn>
     </div>
 

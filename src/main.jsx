@@ -28,6 +28,21 @@ if (LAST_BUILD !== CURRENT_BUILD) {
 
 console.log(`[CaissePro] v${__APP_VERSION__} | Build: ${__BUILD_TIME__}`);
 
+// ── Global error catcher — stores errors for the debug panel ──
+window.__CAISSEPRO_ERRORS = [];
+window.addEventListener('error', (e) => {
+  const err = `[JS ERROR] ${e.message} at ${e.filename}:${e.lineno}:${e.colno}`;
+  console.error(err);
+  window.__CAISSEPRO_ERRORS.push({ ts: new Date().toLocaleTimeString('fr-FR'), msg: err, stack: e.error?.stack || '' });
+  if (window.__CAISSEPRO_ERRORS.length > 50) window.__CAISSEPRO_ERRORS.shift();
+});
+window.addEventListener('unhandledrejection', (e) => {
+  const err = `[PROMISE ERROR] ${e.reason?.message || e.reason || 'Unknown'}`;
+  console.error(err, e.reason?.stack);
+  window.__CAISSEPRO_ERRORS.push({ ts: new Date().toLocaleTimeString('fr-FR'), msg: err, stack: e.reason?.stack || '' });
+  if (window.__CAISSEPRO_ERRORS.length > 50) window.__CAISSEPRO_ERRORS.shift();
+});
+
 ReactDOM.createRoot(document.getElementById('root')).render(<App />);
 
 // ── PWA Service Worker — DISABLED on Capacitor (causes stale cache issues) ──
