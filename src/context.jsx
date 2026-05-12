@@ -778,7 +778,7 @@ function AppProvider({children}){
         else if(type==="test")await halPrinter.testPrint();
         else if(type==="drawer")await halPrinter.openDrawer();
         notify("Impression envoyee","success");return true;
-      }catch(e){console.warn("[HAL] print failed, falling back:",e);}
+      }catch(e){console.error("[HAL] print failed, falling back:",e.message||e);notify("Erreur impression: "+(e.message||"inconnue"),"warn");}
     }
     // Try ESC/POS Web Serial/USB printer
     if(printer.connected){
