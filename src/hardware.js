@@ -89,9 +89,11 @@ class SunmiPrinterAdapter {
   }
 
   async connect() {
-    // Check for Capacitor Sunmi plugin or JS bridge
+    this._isCapacitor = false;
+    // Check for Capacitor Sunmi plugin
     if (window.Capacitor?.Plugins?.SunmiPrinter) {
       this._bridge = window.Capacitor.Plugins.SunmiPrinter;
+      this._isCapacitor = true;
     } else if (window.SunmiInnerPrinter) {
       this._bridge = window.SunmiInnerPrinter;
     } else if (window.PrintService) {
@@ -100,8 +102,9 @@ class SunmiPrinterAdapter {
 
     if (this._bridge) {
       try {
-        await this._call('printerInit');
+        await this._cap('printerInit', {});
         this.connected = true;
+        console.log('[Sunmi] Printer connected via', this._isCapacitor ? 'Capacitor plugin' : 'JS bridge');
         return true;
       } catch (e) {
         console.warn('[Sunmi] Init failed:', e);
@@ -112,6 +115,7 @@ class SunmiPrinterAdapter {
     if (window.android?.printText) {
       this._bridge = window.android;
       this.connected = true;
+      console.log('[Sunmi] Printer connected via Android bridge');
       return true;
     }
 
@@ -119,20 +123,24 @@ class SunmiPrinterAdapter {
     return false;
   }
 
-  async _call(method, ...args) {
+  // Capacitor plugins REQUIRE a single object argument — never positional args
+  async _cap(method, params) {
     if (!this._bridge) throw new Error('Sunmi bridge non disponible');
-    if (typeof this._bridge[method] === 'function') {
-      return await this._bridge[method](...args);
+    if (this._isCapacitor) {
+      // Capacitor: always pass an object
+      return await this._bridge[method](params || {});
     }
-    // Capacitor plugin style
-    if (this._bridge[method]) return await this._bridge[method](...args);
+    // Legacy JS bridge: pass raw values
+    if (typeof this._bridge[method] === 'function') {
+      const vals = params ? Object.values(params) : [];
+      return await this._bridge[method](...vals);
+    }
     throw new Error(`Methode ${method} non disponible`);
   }
 
   async printText(text) {
-    try { await this._call('printText', text); } catch (e) {
-      // Fallback: try printOriginalText or sendRAWData
-      try { await this._call('printOriginalText', text); } catch (e2) {
+    try { await this._cap('printText', { text }); } catch (e) {
+      try { await this._cap('printOriginalText', { text }); } catch (e2) {
         console.error('[Sunmi] printText failed:', e2);
       }
     }
@@ -143,15 +151,15 @@ class SunmiPrinterAdapter {
     const co = companyInfo || {};
 
     try {
-      await this._call('printerInit');
-      await this._call('setAlignment', 1); // center
+      await this._cap('printerInit', {});
+      await this._cap('setAlignment', { alignment: 1 }); // center
 
       // Header - store name
-      await this._call('setFontSize', 28);
-      await this._call('setBold', true);
+      await this._cap('setFontSize', { size: 28 });
+      await this._cap('setBold', { bold: true });
       await this.printText((s.name || co.name || 'Ma Boutique') + '\n');
-      await this._call('setFontSize', 20);
-      await this._call('setBold', false);
+      await this._cap('setFontSize', { size: 20 });
+      await this._cap('setBold', { bold: false });
 
       if (s.address) await this.printText(s.address + '\n');
       if (s.postalCode || s.city) await this.printText(`${s.postalCode || ''} ${s.city || ''}\n`);
@@ -162,10 +170,10 @@ class SunmiPrinterAdapter {
       await this.printText('================================================\n');
 
       // Ticket info
-      await this._call('setAlignment', 0); // left
-      await this._call('setBold', true);
+      await this._cap('setAlignment', { alignment: 0 }); // left
+      await this._cap('setBold', { bold: true });
       await this.printText(`N: ${ticket.ticketNumber}  ${new Date(ticket.date || ticket.createdAt || '').toLocaleString('fr-FR')}\n`);
-      await this._call('setBold', false);
+      await this._cap('setBold', { bold: false });
       await this.printText(`Caissier: ${ticket.userName || '?'}\n`);
       if (ticket.customerName) await this.printText(`Client: ${ticket.customerName}\n`);
 
@@ -180,9 +188,9 @@ class SunmiPrinterAdapter {
         const isCustom = item.isCustom || item.is_custom;
         const lineTTC = item.lineTTC || item.line_ttc || (item.unit_price * qty);
 
-        await this._call('setBold', true);
+        await this._cap('setBold', { bold: true });
         await this.printText(`${name}${!isCustom && color ? ` (${color}/${size})` : ''}\n`);
-        await this._call('setBold', false);
+        await this._cap('setBold', { bold: false });
         await this.printText(`  x${qty}  ${lineTTC.toFixed(2)} EUR\n`);
       }
 
@@ -191,9 +199,9 @@ class SunmiPrinterAdapter {
       // Promos
       if (ticket.promosApplied?.length > 0) {
         for (const promo of ticket.promosApplied) {
-          await this._call('setFontSize', 18);
+          await this._cap('setFontSize', { size: 18 });
           await this.printText(`  * ${promo}\n`);
-          await this._call('setFontSize', 20);
+          await this._cap('setFontSize', { size: 20 });
         }
         await this.printText('------------------------------------------------\n');
       }
@@ -201,11 +209,11 @@ class SunmiPrinterAdapter {
       // Totals
       await this.printText(`Total HT     ${(ticket.totalHT || 0).toFixed(2)} EUR\n`);
       await this.printText(`TVA          ${(ticket.totalTVA || 0).toFixed(2)} EUR\n`);
-      await this._call('setBold', true);
-      await this._call('setFontSize', 28);
+      await this._cap('setBold', { bold: true });
+      await this._cap('setFontSize', { size: 28 });
       await this.printText(`TOTAL TTC    ${(ticket.totalTTC || 0).toFixed(2)} EUR\n`);
-      await this._call('setFontSize', 20);
-      await this._call('setBold', false);
+      await this._cap('setFontSize', { size: 20 });
+      await this._cap('setBold', { bold: false });
 
       // Payment
       const ml = { cash: 'ESP', card: 'CB', amex: 'AMEX', giftcard: 'CAD', cheque: 'CHQ', avoir: 'AVOIR' };
@@ -217,16 +225,16 @@ class SunmiPrinterAdapter {
       await this.printText('================================================\n');
 
       // NF525
-      await this._call('setAlignment', 1);
-      await this._call('setFontSize', 18);
+      await this._cap('setAlignment', { alignment: 1 });
+      await this._cap('setFontSize', { size: 18 });
       await this.printText('EMPREINTE NF525\n');
-      await this._call('setFontSize', 22);
-      await this._call('setBold', true);
+      await this._cap('setFontSize', { size: 22 });
+      await this._cap('setBold', { bold: true });
       await this.printText(`${ticket.fingerprint || '-'}\n`);
-      await this._call('setBold', false);
+      await this._cap('setBold', { bold: false });
 
       // Footer
-      await this._call('setFontSize', 16);
+      await this._cap('setFontSize', { size: 16 });
       await this.printText(`${co.sw || 'CaissePro'} v${co.ver || '6.0.0'} - Conforme NF525\n`);
       if (s.footerMsg || co.footerMsg) await this.printText(`${s.footerMsg || co.footerMsg}\n`);
 
@@ -235,8 +243,8 @@ class SunmiPrinterAdapter {
       }
 
       // Feed and cut
-      await this._call('lineWrap', 4);
-      try { await this._call('cutPaper'); } catch (e) { /* some models don't support cut */ }
+      await this._cap('lineWrap', { lines: 4 });
+      try { await this._cap('cutPaper', {}); } catch (e) { /* some models don't support cut */ }
 
       return true;
     } catch (e) {
@@ -249,16 +257,16 @@ class SunmiPrinterAdapter {
     const s = settings || {};
     const co = companyInfo || {};
     try {
-      await this._call('printerInit');
-      await this._call('setAlignment', 1);
-      await this._call('setFontSize', 28);
-      await this._call('setBold', true);
+      await this._cap('printerInit', {});
+      await this._cap('setAlignment', { alignment: 1 });
+      await this._cap('setFontSize', { size: 28 });
+      await this._cap('setBold', { bold: true });
       await this.printText('AVOIR / NOTE DE CREDIT\n');
-      await this._call('setFontSize', 22);
+      await this._cap('setFontSize', { size: 22 });
       await this.printText((s.name || co.name || 'Ma Boutique') + '\n');
-      await this._call('setBold', false);
-      await this._call('setFontSize', 20);
-      await this._call('setAlignment', 0);
+      await this._cap('setBold', { bold: false });
+      await this._cap('setFontSize', { size: 20 });
+      await this._cap('setAlignment', { alignment: 0 });
       await this.printText('================================================\n');
       await this.printText(`N: ${avoir.avoirNumber}\n`);
       await this.printText(`Ticket original: ${avoir.originalTicket}\n`);
@@ -271,17 +279,17 @@ class SunmiPrinterAdapter {
         await this.printText(`${name}${v} x${item.quantity}  -${(item.lineTTC || 0).toFixed(2)} EUR\n`);
       }
       await this.printText('------------------------------------------------\n');
-      await this._call('setBold', true);
-      await this._call('setFontSize', 28);
+      await this._cap('setBold', { bold: true });
+      await this._cap('setFontSize', { size: 28 });
       await this.printText(`TOTAL AVOIR  -${(avoir.totalTTC || 0).toFixed(2)} EUR\n`);
-      await this._call('setFontSize', 20);
-      await this._call('setBold', false);
+      await this._cap('setFontSize', { size: 20 });
+      await this._cap('setBold', { bold: false });
       await this.printText('================================================\n');
-      await this._call('setAlignment', 1);
-      await this._call('setFontSize', 18);
+      await this._cap('setAlignment', { alignment: 1 });
+      await this._cap('setFontSize', { size: 18 });
       await this.printText(`EMPREINTE NF525\n${avoir.fingerprint || '-'}\n`);
-      await this._call('lineWrap', 4);
-      try { await this._call('cutPaper'); } catch (e) {}
+      await this._cap('lineWrap', { lines: 4 });
+      try { await this._cap('cutPaper', {}); } catch (e) {}
       return true;
     } catch (e) { throw e; }
   }
@@ -290,62 +298,62 @@ class SunmiPrinterAdapter {
     const s = settings || {};
     const co = companyInfo || {};
     try {
-      await this._call('printerInit');
-      await this._call('setAlignment', 1);
-      await this._call('setFontSize', 28);
-      await this._call('setBold', true);
+      await this._cap('printerInit', {});
+      await this._cap('setAlignment', { alignment: 1 });
+      await this._cap('setFontSize', { size: 28 });
+      await this._cap('setBold', { bold: true });
       await this.printText('CLOTURE DE CAISSE\n');
-      await this._call('setFontSize', 22);
+      await this._cap('setFontSize', { size: 22 });
       await this.printText((s.name || co.name) + '\n');
-      await this._call('setBold', false);
-      await this._call('setFontSize', 20);
-      await this._call('setAlignment', 0);
+      await this._cap('setBold', { bold: false });
+      await this._cap('setFontSize', { size: 20 });
+      await this._cap('setAlignment', { alignment: 0 });
       await this.printText('================================================\n');
       await this.printText(`Date: ${new Date(closure.date || closure.closedAt).toLocaleString('fr-FR')}\n`);
       await this.printText(`Caissier: ${closure.userName || '?'}\n`);
       await this.printText('------------------------------------------------\n');
-      await this._call('setBold', true);
+      await this._cap('setBold', { bold: true });
       await this.printText(`CA TTC       ${(closure.totalTTC || closure.totalCA || 0).toFixed(2)} EUR\n`);
-      await this._call('setBold', false);
+      await this._cap('setBold', { bold: false });
       await this.printText(`Total HT     ${(closure.totalHT || 0).toFixed(2)} EUR\n`);
       await this.printText(`Total TVA    ${(closure.totalTVA || 0).toFixed(2)} EUR\n`);
       await this.printText(`Nb ventes    ${closure.salesCount || closure.nbSales || 0}\n`);
       await this.printText(`Panier moyen ${(closure.avgBasket || 0).toFixed(2)} EUR\n`);
       await this.printText('================================================\n');
-      await this._call('setAlignment', 1);
-      await this._call('setFontSize', 18);
+      await this._cap('setAlignment', { alignment: 1 });
+      await this._cap('setFontSize', { size: 18 });
       await this.printText(`EMPREINTE NF525\n${closure.fingerprint || '-'}\n`);
-      await this._call('lineWrap', 4);
-      try { await this._call('cutPaper'); } catch (e) {}
+      await this._cap('lineWrap', { lines: 4 });
+      try { await this._cap('cutPaper', {}); } catch (e) {}
       return true;
     } catch (e) { throw e; }
   }
 
   async testPrint() {
     try {
-      await this._call('printerInit');
-      await this._call('setAlignment', 1);
-      await this._call('setFontSize', 28);
-      await this._call('setBold', true);
+      await this._cap('printerInit', {});
+      await this._cap('setAlignment', { alignment: 1 });
+      await this._cap('setFontSize', { size: 28 });
+      await this._cap('setBold', { bold: true });
       await this.printText('TEST IMPRESSION\n');
-      await this._call('setFontSize', 20);
-      await this._call('setBold', false);
+      await this._cap('setFontSize', { size: 20 });
+      await this._cap('setBold', { bold: false });
       await this.printText('================================================\n');
-      await this._call('setAlignment', 0);
+      await this._cap('setAlignment', { alignment: 0 });
       await this.printText('CaissePro - Imprimante Sunmi\n');
       await this.printText(`Date: ${new Date().toLocaleString('fr-FR')}\n`);
       await this.printText('Caracteres: EUR a e c u o\n');
       await this.printText('================================================\n');
-      await this._call('setAlignment', 1);
+      await this._cap('setAlignment', { alignment: 1 });
       await this.printText('Test OK !\n');
-      await this._call('lineWrap', 4);
-      try { await this._call('cutPaper'); } catch (e) {}
+      await this._cap('lineWrap', { lines: 4 });
+      try { await this._cap('cutPaper', {}); } catch (e) {}
       return true;
     } catch (e) { throw e; }
   }
 
   async openDrawer() {
-    try { await this._call('openDrawer'); } catch (e) {
+    try { await this._cap('openDrawer', {}); } catch (e) {
       console.warn('[Sunmi] openDrawer not available');
     }
   }
