@@ -649,19 +649,32 @@ function AppProvider({children}){
   const findByEAN=useCallback((ean)=>{for(const p of products)for(const v of p.variants)if(v.ean===ean)return{product:p,variant:v};return null;},[products]);
 
   // ══ THERMAL PRINTER ══
+  // Detect Sunmi device
+  const isSunmi=useMemo(()=>{
+    const ua=navigator.userAgent||"";
+    return ua.includes("Sunmi")||typeof window.SunmiPOS!=="undefined"||typeof window.PrintService!=="undefined";
+  },[]);
+  const isAndroid=useMemo(()=>/Android/i.test(navigator.userAgent),[]);
+
   const printReceiptOnly=useCallback(()=>{
     const el=document.querySelector("[data-print-receipt]");
     if(!el){window.print();return;}
-    const w=window.open("","_blank","width=320,height=600");
-    if(!w){notify("Popup bloqué — autorisez les popups","error");return;}
-    w.document.write(`<html><head><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Courier New',monospace;font-size:11px;padding:8px;width:72mm;max-width:72mm}
-      .receipt-content{width:100%}@media print{@page{size:72mm auto;margin:2mm}}</style></head>
-      <body><div class="receipt-content"></div></body></html>`);
-    w.document.close();
-    // Safe DOM copy instead of raw innerHTML injection
-    const target=w.document.querySelector(".receipt-content");
-    target.innerHTML=el.innerHTML;
-    w.focus();setTimeout(()=>{w.print();w.close();},300);
+    // Use hidden iframe instead of popup (works on Android/Sunmi)
+    let iframe=document.getElementById("__print_iframe");
+    if(!iframe){iframe=document.createElement("iframe");iframe.id="__print_iframe";
+      iframe.style.cssText="position:fixed;top:-9999px;left:-9999px;width:80mm;height:0;border:none;visibility:hidden;";
+      document.body.appendChild(iframe);}
+    const doc=iframe.contentDocument||iframe.contentWindow.document;
+    doc.open();
+    doc.write(`<html><head><style>
+      *{margin:0;padding:0;box-sizing:border-box}
+      body{font-family:'Courier New',monospace;font-size:11px;padding:4px;width:72mm;max-width:72mm;color:#000}
+      table{width:100%;border-collapse:collapse}td{padding:1px 0}
+      .sep{border-top:1px dashed #000;margin:4px 0}
+      @media print{@page{size:72mm auto;margin:2mm}body{padding:0}}
+    </style></head><body>${el.innerHTML}</body></html>`);
+    doc.close();
+    setTimeout(()=>{try{iframe.contentWindow.focus();iframe.contentWindow.print();}catch(e){window.print();}},200);
   },[]);
 
   const thermalPrint=useCallback(async(type,data)=>{
@@ -898,7 +911,7 @@ function AppProvider({children}){
   const openCustomerDisplay=useCallback(()=>{
     if(customerDisplayRef.current&&!customerDisplayRef.current.closed){customerDisplayRef.current.focus();return;}
     const w=window.open("","CaisseProClient","width=800,height=600,menubar=no,toolbar=no,location=no,status=no");
-    if(!w){notify("Impossible d'ouvrir l'écran client — autorisez les popups","error");return;}
+    if(!w){notify("Popups bloques sur cet appareil. Sur PC, autorisez les popups. Sur tablette Sunmi, utilisez le mode kiosque.","warn");return;}
     customerDisplayRef.current=w;
     w.document.write(`<!DOCTYPE html><html><head><title>Ecran Client</title><style>
       *{margin:0;padding:0;box-sizing:border-box}body{font-family:'DM Sans',system-ui,sans-serif;background:#F8FAF7;overflow:hidden}
@@ -987,7 +1000,7 @@ function AppProvider({children}){
     processReturn,giftCards,createGiftCard,useGiftCard,checkGiftCard,
     updateProduct,deleteProduct,addVariantToProduct,deleteVariant,
     updateCustomer,deleteCustomer,adjustStock,
-    printerConnected,printerType,thermalPrint,connectPrinter,disconnectPrinter,
+    printerConnected,printerType,thermalPrint,connectPrinter,disconnectPrinter,isSunmi,isAndroid,
     users,setUsers,tvaRates,setTvaRates,addPendingSync,pendingSync,clearPendingSync,
   }}>{children}</AppCtx.Provider>;
 }
