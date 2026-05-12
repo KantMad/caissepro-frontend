@@ -93,6 +93,14 @@ function AppProvider({children}){
   const updatePaymentConfig=useCallback((cfg)=>{hardwareManager.updatePaymentConfig(cfg);setPaymentConfigState(hardwareManager.paymentConfig);},[]);
   const chargePayment=useCallback(async(amount,opts)=>hardwareManager.charge(amount,opts),[]);
   const refundPayment=useCallback(async(amount,opts)=>hardwareManager.refund(amount,opts),[]);
+  // Listen for HAL auto-connect events (printer, payment)
+  useEffect(()=>{
+    const unsub=hardwareManager.on((event,data)=>{
+      if(event==='printer-status'&&data.connected){setPrinterConnected(true);setPrinterType(hwId);}
+      if(event==='payment-status')console.log('[HAL] Payment status:',data);
+    });
+    return unsub;
+  },[hwId]);
   // Barcode scanner auto-start (moved after findByEAN/addToCart declarations)
   // Default PINs are hashed on first load (SHA-256 + salt)
   const DEFAULT_PIN_HASH="3a24a2105c7a06376ff41e7e06a6cd2a3941c980d99e169c8fbb60d29b741395"; // hash of "1234"
@@ -752,6 +760,10 @@ function AppProvider({children}){
 
   const thermalPrint=useCallback(async(type,data)=>{
     const halPrinter=hardwareManager.printer;
+    // Auto-connect printer if not yet connected
+    if(halPrinter&&!halPrinter.connected){
+      try{await halPrinter.connect();if(halPrinter.connected){setPrinterConnected(true);setPrinterType(hwId);}}catch(e){console.warn('[HAL] printer auto-connect:',e);}
+    }
     // Try HAL native printer first (Sunmi/PAX/iMin)
     if(halPrinter&&halPrinter.connected){
       try{

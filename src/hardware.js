@@ -1238,11 +1238,24 @@ class HardwareManager {
     // Load payment config
     const savedPayment = localStorage.getItem('caissepro_payment_type');
     const savedPaymentConfig = localStorage.getItem('caissepro_payment_config');
-    this._paymentId = savedPayment || 'manual';
+    this._paymentId = savedPayment || 'auto';
     try { this._paymentConfig = savedPaymentConfig ? JSON.parse(savedPaymentConfig) : {}; } catch (e) { this._paymentConfig = {}; }
 
     this._initAdapters();
     console.log(`[HAL] Hardware: ${this._hardwareId} (${this.currentProfile?.name}), Payment: ${this._paymentId}`);
+
+    // Auto-connect printer and payment terminal in background
+    setTimeout(async () => {
+      try {
+        const printerOk = await this.connectPrinter();
+        console.log('[HAL] Printer auto-connect:', printerOk ? 'OK' : 'failed');
+      } catch (e) { console.warn('[HAL] Printer auto-connect error:', e.message); }
+      try {
+        const payOk = await this.connectPayment();
+        console.log('[HAL] Payment auto-connect:', payOk ? 'OK' : 'skipped');
+      } catch (e) { console.warn('[HAL] Payment auto-connect error:', e.message); }
+    }, 2000); // Wait 2s for Capacitor plugins to be ready
+
     return this._hardwareId;
   }
 
@@ -1316,9 +1329,12 @@ class HardwareManager {
     return ok;
   }
 
-  // Charge via payment terminal
+  // Charge via payment terminal (auto-connect if needed)
   async charge(amount, options = {}) {
     if (!this._payment) return { success: false, error: 'Aucun terminal configure' };
+    if (!this._payment.connected) {
+      try { await this._payment.connect(); } catch (e) { console.warn('[HAL] Payment connect on charge:', e); }
+    }
     return await this._payment.charge(amount, options);
   }
 
