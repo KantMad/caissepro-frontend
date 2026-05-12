@@ -10,6 +10,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(SunmiPrinterPlugin.class);
         registerPlugin(PaymentTerminalPlugin.class);
         registerPlugin(AppInstallerPlugin.class);
+        registerPlugin(ConcertPlugin.class);
         super.onCreate(savedInstanceState);
     }
 }

@@ -1052,50 +1052,129 @@ class WorldlinePaymentAdapter {
   disconnect() { this.connected = false; }
 }
 
-// ── Concert Protocol (French pinpad via USB Serial) ──
+// ── Concert Protocol (French standard POS ↔ pinpad via TCP/IP) ──
+// Works with: Ingenico (Desk/5000, Move/5000, Lane/7000),
+//             Verifone (V240m, P400), Worldline (VALINA, YOMANI)
 class ConcertPaymentAdapter {
-  constructor(config = {}) { this.config = config; this.connected = false; }
+  constructor(config = {}) {
+    this.config = config;
+    this.connected = false;
+    this._bridge = null;
+  }
+
+  _getBridge() {
+    if (!this._bridge) this._bridge = window.Capacitor?.Plugins?.ConcertProtocol || null;
+    return this._bridge;
+  }
 
   async connect() {
-    // Concert pinpads connected via USB — use native plugin for Intent-based access
-    const bridge = _getPayBridge();
-    if (bridge) {
-      const hw = await bridge.detectHardware();
-      this.connected = hw.hasConcertApp || false;
-      if (this.connected) { console.log('[Concert] Found Concert/PCL app'); return true; }
+    const bridge = this._getBridge();
+    if (!bridge) {
+      console.warn('[Concert] ConcertProtocol plugin not available');
+      this.connected = false;
+      return false;
     }
-    // Manual fallback — Concert protocol requires a companion app or USB serial driver
-    this.connected = true; // Always "connected" for manual mode
-    return true;
+    const host = this.config.tpeHost;
+    const port = parseInt(this.config.tpePort) || 8888;
+    if (!host) {
+      console.warn('[Concert] No TPE host configured');
+      this.connected = false;
+      return false;
+    }
+    try {
+      const result = await bridge.ping({ host, port });
+      this.connected = result.success === true;
+      console.log('[Concert] Ping:', result.success ? 'OK' : result.error);
+      return this.connected;
+    } catch (e) {
+      console.warn('[Concert] Ping failed:', e.message || e);
+      this.connected = false;
+      return false;
+    }
   }
 
   async charge(amount, options = {}) {
-    // Try native Intent first (Concert companion app or Ingenico PCL service)
-    const bridge = _getPayBridge();
-    if (bridge) {
-      try {
-        const result = await bridge.sale({
-          amount: Math.round(amount * 100), currency: options.currency || 'EUR',
-          reference: options.reference || `CP-${Date.now()}`, provider: 'auto',
-        });
-        if (!result.requiresManual) return result;
-      } catch (e) { console.warn('[Concert] Native failed:', e); }
+    const bridge = this._getBridge();
+    const host = this.config.tpeHost;
+    const port = parseInt(this.config.tpePort) || 8888;
+
+    if (!bridge || !host) {
+      return _manualPayment(amount, 'Encaissement', 'TPE Concert (non configure)');
     }
-    return _manualPayment(amount, 'Encaissement', 'TPE Concert');
+
+    try {
+      console.log(`[Concert] Sale ${amount} EUR to ${host}:${port}`);
+      const result = await bridge.sale({
+        host,
+        port,
+        amount: Math.round(amount * 100),
+        currency: options.currency || 'EUR',
+        reference: options.reference || `CP-${Date.now()}`,
+      });
+      console.log('[Concert] Sale result:', JSON.stringify(result));
+
+      if (result.success) {
+        return {
+          success: true,
+          status: 'approved',
+          authCode: result.authCode || '',
+          transactionId: result.rawResponse || '',
+          cardType: 'CB',
+          maskedPan: '',
+        };
+      } else {
+        return {
+          success: false,
+          status: result.status || 'declined',
+          error: result.error || 'Transaction refusee',
+        };
+      }
+    } catch (e) {
+      console.error('[Concert] Sale error:', e.message || e);
+      // If TCP connection fails, offer manual fallback
+      return _manualPayment(amount, 'Encaissement', 'TPE Concert (erreur connexion)');
+    }
   }
 
   async refund(amount, options = {}) {
-    const bridge = _getPayBridge();
-    if (bridge) {
-      try {
-        const result = await bridge.refund({
-          amount: Math.round(amount * 100), currency: options.currency || 'EUR',
-          reference: options.reference || '', provider: 'auto',
-        });
-        if (!result.requiresManual) return result;
-      } catch (e) {}
+    const bridge = this._getBridge();
+    const host = this.config.tpeHost;
+    const port = parseInt(this.config.tpePort) || 8888;
+
+    if (!bridge || !host) {
+      return _manualPayment(amount, 'Remboursement', 'TPE Concert');
     }
-    return _manualPayment(amount, 'Remboursement', 'TPE Concert');
+
+    try {
+      const result = await bridge.refund({
+        host,
+        port,
+        amount: Math.round(amount * 100),
+        currency: options.currency || 'EUR',
+      });
+
+      if (result.success) {
+        return { success: true, status: 'refunded', authCode: result.authCode || '' };
+      } else {
+        return { success: false, status: result.status || 'error', error: result.error || 'Remboursement refuse' };
+      }
+    } catch (e) {
+      return _manualPayment(amount, 'Remboursement', 'TPE Concert');
+    }
+  }
+
+  // Diagnostic: test TCP connection to TPE
+  async testConnection() {
+    const bridge = this._getBridge();
+    if (!bridge) return { success: false, error: 'Plugin ConcertProtocol non disponible' };
+    const host = this.config.tpeHost;
+    const port = parseInt(this.config.tpePort) || 8888;
+    if (!host) return { success: false, error: 'Adresse IP du TPE non configuree' };
+    try {
+      return await bridge.ping({ host, port });
+    } catch (e) {
+      return { success: false, error: e.message || 'Erreur connexion' };
+    }
   }
 
   disconnect() { this.connected = false; }

@@ -3478,8 +3478,33 @@ function SettingsScreen(){
             :<Input value={paymentConfig[f.key]||""} onChange={e=>updatePaymentConfig({[f.key]:e.target.value})}
                 placeholder={f.placeholder||""} type={f.type||"text"}/>}
           </div>))}
-        <Btn onClick={()=>{notify("Configuration TPE sauvegardee","success");}} style={{width:"100%",height:40,background:C.primary}}>
-          <Save size={14}/> Sauvegarder la configuration</Btn>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+          <Btn onClick={()=>{notify("Configuration TPE sauvegardee","success");}} style={{height:40,background:C.primary}}>
+            <Save size={14}/> Sauvegarder</Btn>
+          {paymentId==="concert"&&<Btn onClick={async()=>{
+            setDiagLoading(true);
+            try{
+              const adapter=hardwareManager.payment;
+              if(adapter?.testConnection){
+                const r=await adapter.testConnection();
+                setPrinterDiag({tpe:true,concertTest:r,timestamp:new Date().toLocaleTimeString('fr-FR')});
+                notify(r.success?"TPE accessible: "+r.message:"TPE injoignable: "+r.error,r.success?"success":"error");
+              }else{
+                notify("Adaptateur Concert non actif — sauvegardez d'abord la config","warn");
+              }
+            }catch(e){notify("Erreur: "+e.message,"error");}
+            setDiagLoading(false);
+          }} disabled={diagLoading} style={{height:40,background:C.info}}>
+            <Activity size={14}/> {diagLoading?"Test...":"Tester connexion TPE"}</Btn>}
+        </div>
+        {paymentId==="concert"&&<div style={{marginTop:10,background:C.infoLight,borderRadius:10,padding:12,border:`1px solid ${C.info}22`,fontSize:11,color:C.text,lineHeight:1.6}}>
+          <strong>Configuration du Ingenico Desk/5000 :</strong><br/>
+          1. Sur le TPE: Menu Technique &gt; Communication &gt; Ethernet &gt; notez l'adresse IP<br/>
+          2. Entrez cette IP ci-dessus (ex: 192.168.1.50)<br/>
+          3. Port par defaut: 8888 (varie selon config)<br/>
+          4. Le TPE doit etre en <strong>mode caisse/ECR</strong> (demandez a votre prestataire monetique)<br/>
+          5. Cliquez "Tester connexion" pour verifier
+        </div>}
       </div>}
 
       {/* TPE Diagnostic */}
