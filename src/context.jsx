@@ -448,19 +448,18 @@ function AppProvider({children}){
       if(cardMethods.includes(p.method)&&p.amount>0){
         try{
           const ref=`CP-${Date.now()}`;
-          const result=await hardwareManager.charge(p.amount,{currency:'EUR',reference:ref,method:p.method});
+          // Race between charge and a 3-min safety timeout
+          const result=await Promise.race([
+            hardwareManager.charge(p.amount,{currency:'EUR',reference:ref,method:p.method}),
+            new Promise(r=>setTimeout(()=>r({success:false,status:'cancelled',error:'Timeout TPE (3min)'}),180000))
+          ]);
           if(result&&result.success){
             p.authCode=result.authCode||'';p.transactionId=result.transactionId||'';
             p.cardType=result.cardType||p.method;p.maskedPan=result.maskedPan||'';
-          }else if(result&&result.requiresManual){
-            // Manual mode — wait for cashier confirmation (handled by UI event listener)
-            // The resolve callback in the event will be called by the ManualPaymentModal
           }else{
-            // Payment failed or was cancelled
-            if(result?.status==='cancelled'){notify("Paiement annule","warn");return null;}
-            // If declined, let the cashier decide
-            const errMsg=result?.error||'Paiement refuse';
-            notify(errMsg,"danger");return null;
+            // Payment failed, cancelled or timed out
+            const errMsg=result?.error||(result?.status==='cancelled'?'Paiement annule':'Paiement refuse');
+            notify(errMsg,"warn");return null;
           }
         }catch(e){
           console.error('[Payment] TPE charge error:',e);

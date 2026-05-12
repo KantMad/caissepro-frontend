@@ -716,8 +716,13 @@ function _manualPayment(amount, type = 'Encaissement', provider = '') {
     ? `${type}: ${amount.toFixed(2)} EUR sur ${provider} — confirmez une fois effectue`
     : `${type}: ${amount.toFixed(2)} EUR sur le TPE — confirmez une fois effectue`;
   return new Promise((resolve) => {
+    // Safety timeout: if no UI responds within 3 minutes, cancel the payment
+    const timeout = setTimeout(() => {
+      resolve({ success: false, status: 'cancelled', error: 'Timeout — aucune confirmation recue' });
+    }, 180000);
+    const wrappedResolve = (result) => { clearTimeout(timeout); resolve(result); };
     window.dispatchEvent(new CustomEvent('caissepro:payment-manual', {
-      detail: { amount, type, message: msg, provider, resolve }
+      detail: { amount, type, message: msg, provider, resolve: wrappedResolve }
     }));
   });
 }
