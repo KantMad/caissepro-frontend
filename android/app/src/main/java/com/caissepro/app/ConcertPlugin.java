@@ -290,38 +290,40 @@ public class ConcertPlugin extends Plugin {
             throws IOException {
 
         // Build TLV message
+        // Reference: https://github.com/akretion/caisse-ap-ip (tested with Desk/5000)
         LinkedHashMap<String, String> tags = new LinkedHashMap<>();
 
         // CZ must be first — protocol version
-        // Terminal responded with 0301, so we match it
-        tags.put("CZ", "0301");
+        // POS always sends "0300" — the terminal responds with its own version (e.g. 0301)
+        tags.put("CZ", "0300");
 
-        // NOTE: Do NOT send CJ — it's the terminal's own identifier (e.g. 330538600404).
-        // The POS should not send CJ; the terminal returns its CJ in the response.
+        // CJ: Identifiant Protocole Concert — REQUIRED
+        // "012345678901" is the standard value used by all POS implementations
+        tags.put("CJ", "012345678901");
 
         // CA: POS/cash register number
         String pos = posNumber != null ? posNumber : "01";
         if (pos.length() < 2) pos = "0" + pos;
         tags.put("CA", pos);
 
-        // CE: currency ISO 4217 numeric (send BEFORE amount per spec ordering)
+        // CE: currency ISO 4217 numeric
         tags.put("CE", getCurrencyNumeric(currency));
 
-        // BA: answer mode — "0"=wait for transaction end (recommended)
+        // BA: answer mode — "0"=wait for transaction end
         tags.put("BA", "0");
 
         // CD: action — "0"=debit, "1"=reimburse/refund
         tags.put("CD", action);
 
-        // CB: amount in cents (variable length)
+        // CB: amount in cents (minimum 2 digits per spec)
+        String amountStr = String.valueOf(amountCents);
+        if (amountStr.length() < 2) amountStr = "0" + amountStr;
         if (amountCents > 0) {
-            tags.put("CB", String.valueOf(amountCents));
+            tags.put("CB", amountStr);
         }
 
-        // CF: private/reference data (optional)
-        if (reference != null && !reference.isEmpty()) {
-            tags.put("CF", reference);
-        }
+        // NOTE: Do NOT send CF (private data) — the reference implementation
+        // doesn't send it, and it may cause format errors on some terminals
 
         // Build the TLV string
         String message = buildTLVMessage(tags);

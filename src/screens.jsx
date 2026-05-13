@@ -3368,23 +3368,26 @@ function DebugPanel(){
     if(!cp){addLog("Plugin absent","error");setRunning(false);return;}
 
     // Build V3 TLV message manually for display (matching what Java sends)
+    // Reference: github.com/akretion/caisse-ap-ip (tested with Desk/5000)
     const amount=Math.round(parseFloat(tpeAmount)*100)||100;
-    const amtStr=String(amount);
+    let amtStr=String(amount);
+    if(amtStr.length<2)amtStr="0"+amtStr;
     const buildTag=(t,v)=>`${t}${String(v.length).padStart(3,"0")}${v}`;
-    const tlv=buildTag("CZ","0301")+buildTag("CA","01")+buildTag("CE","978")
-      +buildTag("BA","0")+buildTag("CD","0")+buildTag("CB",amtStr);
+    const tlv=buildTag("CZ","0300")+buildTag("CJ","012345678901")+buildTag("CA","01")
+      +buildTag("CE","978")+buildTag("BA","0")+buildTag("CD","0")+buildTag("CB",amtStr);
 
     addLog(`Message TLV construit (${tlv.length} chars):`,"title");
     addLog(`  [${tlv}]`);
     addLog("");
-    addLog("Decodage des tags:","title");
-    addLog(`  CZ = 0301 (version protocole — match le TPE)`);
+    addLog("Decodage des tags (identique au code akretion/caisse-ap-ip):","title");
+    addLog(`  CZ = 0300 (version protocole caisse — le TPE repond avec sa version 0301)`);
+    addLog(`  CJ = 012345678901 (identifiant protocole Concert — OBLIGATOIRE)`);
     addLog(`  CA = 01 (numero de caisse)`);
     addLog(`  CE = 978 (devise: EUR)`);
     addLog(`  BA = 0 (mode reponse: attendre fin transaction)`);
     addLog(`  CD = 0 (action: 0=debit, 1=remboursement)`);
     addLog(`  CB = ${amtStr} (montant en centimes = ${(amount/100).toFixed(2)} EUR)`);
-    addLog(`  (PAS de CJ — c'est l'identifiant du terminal, pas de la caisse)`);
+    addLog(`  (PAS de CF — le code de reference n'en envoie pas)`);
 
     // Also show what V2 would look like for comparison
     addLog("");
