@@ -17,7 +17,7 @@ android {
         }
     }
     buildFeatures {
-        aidl true
+        // aidl true — no longer needed, using Sunmi SDK instead
     }
     buildTypes {
         release {
@@ -43,6 +43,8 @@ dependencies {
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
     androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
     implementation project(':capacitor-cordova-android-plugins')
+    // Sunmi Printer SDK — handles AIDL versioning for T/P/V/Mini series automatically
+    implementation 'com.sunmi:printerlibrary:1.0.24'
 }
 
 apply from: 'capacitor.build.gradle'
