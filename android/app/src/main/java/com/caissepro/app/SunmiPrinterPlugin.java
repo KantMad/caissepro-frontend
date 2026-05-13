@@ -248,6 +248,38 @@ public class SunmiPrinterPlugin extends Plugin {
     // ══════════════════════════════════════════════════════════════
 
     @PluginMethod
+    public void resetPrinter(PluginCall call) {
+        if (printerService == null) {
+            call.reject("Printer not connected");
+            return;
+        }
+        new Thread(() -> {
+            try {
+                Log.i(TAG, "resetPrinter: exiting buffer mode + printerInit");
+                // Force exit buffer mode (may be stuck from a previous enterPrinterBuffer)
+                try { printerService.exitPrinterBuffer(false); } catch (Exception e) {
+                    Log.w(TAG, "exitPrinterBuffer: " + e.getMessage());
+                }
+                // Also try commitPrinterBuffer to flush anything stuck
+                try { printerService.commitPrinterBuffer(); } catch (Exception e) {
+                    Log.w(TAG, "commitPrinterBuffer: " + e.getMessage());
+                }
+                // Full re-init
+                printerService.printerInit(null);
+                Thread.sleep(200);
+
+                JSObject ret = new JSObject();
+                ret.put("success", true);
+                ret.put("message", "Printer reset — buffer mode cleared");
+                getActivity().runOnUiThread(() -> call.resolve(ret));
+            } catch (Exception e) {
+                Log.e(TAG, "resetPrinter error: " + e.getMessage());
+                getActivity().runOnUiThread(() -> call.reject("resetPrinter failed: " + e.getMessage()));
+            }
+        }).start();
+    }
+
+    @PluginMethod
     public void testPrint(PluginCall call) {
         if (printerService == null) {
             call.reject("Printer not connected. bindAttempted=" + bindAttempted + ", error=" + bindError);
@@ -255,6 +287,8 @@ public class SunmiPrinterPlugin extends Plugin {
         }
         new Thread(() -> {
             try {
+                // Always exit buffer mode first in case it's stuck
+                try { printerService.exitPrinterBuffer(false); } catch (Exception e) {}
                 printerService.printerInit(null);
                 printerService.setAlignment(1, null);
                 printerService.setFontSize(28f, null);
@@ -319,6 +353,8 @@ public class SunmiPrinterPlugin extends Plugin {
 
         new Thread(() -> {
             try {
+                // Always exit buffer mode first in case it's stuck
+                try { printerService.exitPrinterBuffer(false); } catch (Exception e) {}
                 printerService.printerInit(null);
 
                 // Track current font size so "bold" can bump it up slightly
@@ -440,6 +476,8 @@ public class SunmiPrinterPlugin extends Plugin {
 
         new Thread(() -> {
             try {
+                // Always exit buffer mode first in case it's stuck
+                try { printerService.exitPrinterBuffer(false); } catch (Exception e) {}
                 printerService.printerInit(null);
 
                 if ("simple".equals(mode)) {

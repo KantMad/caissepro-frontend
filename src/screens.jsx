@@ -3823,6 +3823,20 @@ function DebugPanel(){
         <Printer size={14}/> Test ticket formate</Btn>
       <Btn onClick={testPrintDirect} disabled={running} style={{height:44,background:"#DC2626",fontSize:12,fontWeight:700}}>
         <Zap size={14}/> Print DIRECT (Java natif)</Btn>
+      <Btn onClick={async()=>{
+        setRunning(true);clearLogs();
+        addLog("=== RESET IMPRIMANTE ===","title");
+        const sp=window.Capacitor?.Plugins?.SunmiPrinter;
+        if(!sp){addLog("Plugin absent","error");setRunning(false);return;}
+        if(!sp.resetPrinter){addLog("Methode resetPrinter absente — APK pas a jour?","error");setRunning(false);return;}
+        try{
+          const r=await sp.resetPrinter();
+          addLog(`Reset OK: ${JSON.stringify(r)}`,"success");
+          addLog("Buffer mode desactive. Retestez les impressions maintenant.","info");
+        }catch(e){addLog(`ERREUR: ${e.message}`,"error");}
+        setRunning(false);
+      }} disabled={running} style={{height:44,background:"#7C3AED",fontSize:12,fontWeight:700}}>
+        <Activity size={14}/> RESET imprimante</Btn>
     </div>}
 
     {/* === TPE TAB === */}
