@@ -1449,17 +1449,19 @@ function HistoryScreen(){
       </div>
     )):<div style={{textAlign:"center",padding:30,color:C.textLight}}>Aucun avoir</div>)}
 
-    {/* TEST MODAL — ultra simple, to verify Modal works on Capacitor */}
-    <Modal open={testModal} onClose={()=>setTestModal(false)} title="Test Modal">
-      <div style={{padding:10}}>
-        <div style={{fontSize:14,fontWeight:700,marginBottom:10}}>Si tu vois ce message, le Modal fonctionne!</div>
-        <div style={{fontSize:11,color:"#666",marginBottom:10}}>reprintTk = {reprintTk?"OUI ("+Object.keys(reprintTk).length+" keys)":"null"}</div>
-        {reprintTk&&<div style={{fontSize:10,fontFamily:"monospace",background:"#F1F5F9",padding:8,borderRadius:6,maxHeight:200,overflow:"auto",wordBreak:"break-all"}}>
+    {/* TEST MODAL — INLINE (no Modal component) to test if rendering works */}
+    {testModal&&<div style={{position:"fixed",top:0,left:0,right:0,bottom:0,zIndex:99999,background:"rgba(0,0,0,0.6)",display:"flex",alignItems:"center",justifyContent:"center"}}
+      onClick={()=>setTestModal(false)}>
+      <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:16,padding:24,width:"90%",maxWidth:500,maxHeight:"80vh",overflow:"auto"}}>
+        <h3 style={{margin:"0 0 12px",fontSize:16}}>Test Modal INLINE</h3>
+        <div style={{fontSize:13,marginBottom:8,color:"#16A34A",fontWeight:700}}>Si tu vois ceci, le rendu inline fonctionne!</div>
+        <div style={{fontSize:11,color:"#666",marginBottom:8}}>reprintTk = {reprintTk?"OUI ("+Object.keys(reprintTk).length+" keys)":"null"}</div>
+        {reprintTk&&<div style={{fontSize:9,fontFamily:"monospace",background:"#F1F5F9",padding:8,borderRadius:6,maxHeight:200,overflow:"auto",wordBreak:"break-all"}}>
           {JSON.stringify(reprintTk,null,1).substring(0,1000)}
         </div>}
-        <Btn onClick={()=>setTestModal(false)} style={{marginTop:10,width:"100%"}}>Fermer</Btn>
+        <button onClick={()=>setTestModal(false)} style={{marginTop:12,width:"100%",padding:12,background:"#2563EB",color:"#fff",border:"none",borderRadius:10,fontSize:14,fontWeight:700}}>Fermer</button>
       </div>
-    </Modal>
+    </div>}
 
     {/* Ticket detail/reprint modal */}
     <Modal open={!!reprintTk} onClose={()=>setReprintTk(null)} title={`Ticket ${reprintTk?.ticketNumber||reprintTk?.ticket_number||"?"}`} wide>
