@@ -3,12 +3,16 @@ import { X, CheckCircle2, AlertTriangle, Activity } from "lucide-react";
 import { C } from "./constants.jsx";
 import { useApp } from "./context.jsx";
 
-export const Modal=({open,onClose,title,sub,children,wide})=>{if(!open)return null;return(
-  <div style={{position:"fixed",inset:0,zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",animation:"fadeIn 0.2s ease"}} onClick={onClose}>
-    <div style={{position:"absolute",inset:0,background:"rgba(15,23,42,0.5)",backdropFilter:"blur(12px)",WebkitBackdropFilter:"blur(12px)"}}/>
+export const Modal=({open,onClose,title,sub,children,wide})=>{if(!open)return null;
+  // Detect Capacitor Android — backdropFilter crashes the WebView
+  const isNative=!!(window.Capacitor?.isNativePlatform?.());
+  return(
+  <div style={{position:"fixed",top:0,left:0,right:0,bottom:0,zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center"}} onClick={onClose}>
+    <div style={{position:"absolute",top:0,left:0,right:0,bottom:0,background:isNative?"rgba(15,23,42,0.6)":"rgba(15,23,42,0.5)",
+      ...(isNative?{}:{backdropFilter:"blur(12px)",WebkitBackdropFilter:"blur(12px)"})}}/>
     <div onClick={e=>e.stopPropagation()} style={{position:"relative",background:C.surface,borderRadius:20,padding:0,
       width:wide?"820px":"480px",maxWidth:"94vw",maxHeight:"90vh",overflowY:"auto",
-      boxShadow:"0 24px 80px rgba(15,23,42,0.18), 0 0 0 1px rgba(15,23,42,0.05), inset 0 1px 0 rgba(255,255,255,0.8)",animation:"modalPop 0.25s cubic-bezier(0.34,1.56,0.64,1)"}}>
+      boxShadow:"0 24px 80px rgba(15,23,42,0.18), 0 0 0 1px rgba(15,23,42,0.05), inset 0 1px 0 rgba(255,255,255,0.8)"}}>
       {title&&<div style={{padding:"24px 28px 0 28px",display:"flex",alignItems:"start",justifyContent:"space-between"}}>
         <div><h2 style={{fontSize:18,fontWeight:700,marginBottom:sub?4:0,letterSpacing:"-0.4px",color:C.text}}>{title}</h2>
           {sub&&<p style={{fontSize:12,color:C.textMuted,marginTop:2,lineHeight:1.4}}>{sub}</p>}</div>
