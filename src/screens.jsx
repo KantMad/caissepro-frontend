@@ -3380,6 +3380,67 @@ function DebugPanel(){
   };
 
   // ══════════════════════════════════════════════
+  // TEST PRINT RAW ESC/POS (bypass AIDL)
+  // ══════════════════════════════════════════════
+  const testPrintRaw=async()=>{
+    setRunning(true);clearLogs();
+    addLog("=== TEST ESC/POS RAW (bypass AIDL complet) ===","title");
+    const sp=window.Capacitor?.Plugins?.SunmiPrinter;
+    if(!sp){addLog("Plugin absent","error");setRunning(false);return;}
+    if(!sp.printRaw){addLog("Methode printRaw absente — APK pas a jour?","error");setRunning(false);return;}
+
+    addLog("Le service AIDL est en PREPARING (state=2).","info");
+    addLog("printText/setFontSize sont ignores dans cet etat.","info");
+    addLog("sendRAWData (ESC/POS brut) bypasse ce blocage.","info");
+
+    // Test 1: simple text via printRaw
+    addLog("--- Test RAW simple (texte seul) ---","title");
+    try{
+      const r=await sp.printRaw({commands:[
+        {cmd:"text",text:"=== ESC/POS RAW TEST ===\n"},
+        {cmd:"text",text:"Bypass AIDL complet!\n"},
+        {cmd:"text",text:`Date: ${new Date().toLocaleString("fr-FR")}\n`},
+        {cmd:"text",text:"================================\n"},
+        {cmd:"feed",lines:4},{cmd:"cut"}
+      ]});
+      addLog(`OK: ${JSON.stringify(r)}`,"success");
+    }catch(e){addLog(`ERREUR: ${e.message}`,"error");}
+
+    // Test 2: formatted ticket via printRaw
+    addLog("--- Test RAW ticket formate ---","title");
+    try{
+      const r=await sp.printRaw({commands:[
+        {cmd:"align",value:1},{cmd:"size",value:28},{cmd:"bold",enabled:true},
+        {cmd:"text",text:"MA BOUTIQUE\n"},
+        {cmd:"size",value:20},{cmd:"bold",enabled:false},
+        {cmd:"text",text:"123 Rue du Commerce\n"},
+        {cmd:"align",value:0},
+        {cmd:"text",text:"================================\n"},
+        {cmd:"text",text:"N: TK-RAW  " + new Date().toLocaleString("fr-FR") + "\n"},
+        {cmd:"text",text:"Caissier: Admin\n"},
+        {cmd:"text",text:"--------------------------------\n"},
+        {cmd:"bold",enabled:true},
+        {cmd:"text",text:"Jean Slim (Bleu/38)\n"},
+        {cmd:"bold",enabled:false},
+        {cmd:"text",text:"  x1  59.90 EUR\n"},
+        {cmd:"text",text:"--------------------------------\n"},
+        {cmd:"size",value:28},
+        {cmd:"text",text:"TOTAL TTC  59.90 EUR\n"},
+        {cmd:"size",value:20},
+        {cmd:"text",text:"Paiement: CB 59.90 EUR\n"},
+        {cmd:"text",text:"================================\n"},
+        {cmd:"feed",lines:4},{cmd:"cut"}
+      ]});
+      addLog(`OK: ${JSON.stringify(r)}`,"success");
+    }catch(e){addLog(`ERREUR: ${e.message}`,"error");}
+
+    addLog("--- VERDICT ---","title");
+    addLog("Si le texte sort = ESC/POS fonctionne, AIDL est bloque","success");
+    addLog("Si rien ne sort = le probleme est plus profond","error");
+    setRunning(false);
+  };
+
+  // ══════════════════════════════════════════════
   // PRINT DIRECT — Appels Java natifs, sans JSON
   // ══════════════════════════════════════════════
   const testPrintDirect=async()=>{
@@ -3821,8 +3882,10 @@ function DebugPanel(){
         <Printer size={14}/> Tester 5 methodes</Btn>
       <Btn onClick={testFormattedPrint} disabled={running} style={{height:44,background:"#D97706",fontSize:12,fontWeight:700}}>
         <Printer size={14}/> Test ticket formate</Btn>
-      <Btn onClick={testPrintDirect} disabled={running} style={{height:44,background:"#DC2626",fontSize:12,fontWeight:700}}>
-        <Zap size={14}/> Print DIRECT (Java natif)</Btn>
+      <Btn onClick={testPrintRaw} disabled={running} style={{height:44,background:"#DC2626",fontSize:12,fontWeight:700}}>
+        <Zap size={14}/> Test ESC/POS RAW</Btn>
+      <Btn onClick={testPrintDirect} disabled={running} style={{height:44,background:"#9333EA",fontSize:12,fontWeight:700}}>
+        <Zap size={14}/> Print DIRECT (AIDL)</Btn>
       <Btn onClick={async()=>{
         setRunning(true);clearLogs();
         addLog("=== RESET IMPRIMANTE ===","title");

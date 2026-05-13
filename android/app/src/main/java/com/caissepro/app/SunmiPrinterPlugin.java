@@ -567,6 +567,124 @@ public class SunmiPrinterPlugin extends Plugin {
     }
 
     // ══════════════════════════════════════════════════════════════
+    // PRINT RAW ESC/POS — Bypass the AIDL pipeline entirely
+    //
+    // When printerState=2 (PREPARING), all AIDL calls (printText,
+    // setFontSize, setAlignment) are silently dropped. But sendRAWData
+    // still works because it bypasses the AIDL print queue.
+    //
+    // This method builds a complete ESC/POS byte stream from the same
+    // JSON command array used by printBatch, then sends it as ONE
+    // sendRAWData call.
+    // ══════════════════════════════════════════════════════════════
+
+    @PluginMethod
+    public void printRaw(PluginCall call) {
+        if (printerService == null) {
+            call.reject("Printer not connected");
+            return;
+        }
+
+        JSArray commands = call.getArray("commands");
+        if (commands == null || commands.length() == 0) {
+            call.reject("No print commands provided");
+            return;
+        }
+
+        Log.i(TAG, "printRaw: " + commands.length() + " commands → building ESC/POS bytes");
+
+        new Thread(() -> {
+            try {
+                java.io.ByteArrayOutputStream buf = new java.io.ByteArrayOutputStream();
+
+                // ESC @ — Initialize printer
+                buf.write(new byte[]{0x1B, 0x40});
+
+                for (int i = 0; i < commands.length(); i++) {
+                    JSONObject cmd;
+                    try {
+                        cmd = commands.getJSONObject(i);
+                    } catch (JSONException e) {
+                        continue;
+                    }
+
+                    String type = cmd.optString("cmd", "");
+                    switch (type) {
+                        case "text":
+                            String text = cmd.optString("text", "");
+                            if (!text.isEmpty()) {
+                                buf.write(text.getBytes("UTF-8"));
+                            }
+                            break;
+
+                        case "bold":
+                            boolean enabled = cmd.optBoolean("enabled", false);
+                            buf.write(new byte[]{0x1B, 0x45, (byte)(enabled ? 1 : 0)});
+                            break;
+
+                        case "size":
+                            int sizeVal = cmd.optInt("value", 20);
+                            // ESC/POS GS ! n — character size multiplier
+                            // Map our font sizes to ESC/POS size codes:
+                            // <=18 = small (normal), 20-24 = normal, >=26 = double height+width
+                            byte sizeCode;
+                            if (sizeVal >= 26) {
+                                sizeCode = 0x11; // double width + double height
+                            } else if (sizeVal <= 18) {
+                                sizeCode = 0x00; // normal
+                            } else {
+                                sizeCode = 0x00; // normal
+                            }
+                            buf.write(new byte[]{0x1D, 0x21, sizeCode});
+                            break;
+
+                        case "align":
+                            int align = cmd.optInt("value", 0);
+                            buf.write(new byte[]{0x1B, 0x61, (byte)align});
+                            break;
+
+                        case "line":
+                            String sep = cmd.optString("char", "-");
+                            int len = cmd.optInt("len", 32);
+                            StringBuilder sb = new StringBuilder();
+                            for (int j = 0; j < len; j++) sb.append(sep);
+                            sb.append("\n");
+                            buf.write(sb.toString().getBytes("UTF-8"));
+                            break;
+
+                        case "feed":
+                            int lines = cmd.optInt("lines", 3);
+                            buf.write(new byte[]{0x1B, 0x64, (byte)lines});
+                            break;
+
+                        case "cut":
+                            buf.write(new byte[]{0x1D, 0x56, 0x00});
+                            break;
+
+                        default:
+                            break;
+                    }
+                }
+
+                byte[] rawData = buf.toByteArray();
+                Log.i(TAG, "printRaw: sending " + rawData.length + " bytes via sendRAWData");
+                printerService.sendRAWData(rawData, null);
+
+                JSObject ret = new JSObject();
+                ret.put("success", true);
+                ret.put("commandCount", commands.length());
+                ret.put("bytesSent", rawData.length);
+                getActivity().runOnUiThread(() -> call.resolve(ret));
+
+            } catch (Exception e) {
+                Log.e(TAG, "printRaw error: " + e.getMessage(), e);
+                final String errMsg = e.getMessage();
+                getActivity().runOnUiThread(() -> call.reject("printRaw failed: " + errMsg));
+            }
+        }).start();
+    }
+
+    // ══════════════════════════════════════════════════════════════
     // Legacy single-command methods (kept for compatibility)
     // ══════════════════════════════════════════════════════════════
 

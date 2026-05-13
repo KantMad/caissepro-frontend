@@ -383,31 +383,49 @@ class SunmiPrinterAdapter {
   }
 
   async printReceipt(ticket, settings, companyInfo) {
-    if (this._isCapacitor && this._bridge?.printBatch) {
-      // Use single batch call — all commands executed synchronously in Java
+    if (this._isCapacitor && this._bridge) {
       const commands = this._buildReceiptBatch(ticket, settings, companyInfo);
-      console.log('[Sunmi] printBatch receipt:', commands.length, 'commands');
-      const result = await this._bridge.printBatch({ commands });
-      console.log('[Sunmi] printBatch result:', JSON.stringify(result));
-      return true;
+      console.log('[Sunmi] printReceipt:', commands.length, 'commands');
+
+      // Prefer printRaw (ESC/POS) — works even when printerState=2 (PREPARING)
+      // Falls back to printBatch (AIDL) if printRaw not available
+      if (this._bridge.printRaw) {
+        console.log('[Sunmi] Using printRaw (ESC/POS bypass)');
+        const result = await this._bridge.printRaw({ commands });
+        console.log('[Sunmi] printRaw result:', JSON.stringify(result));
+        return true;
+      } else if (this._bridge.printBatch) {
+        console.log('[Sunmi] Using printBatch (AIDL)');
+        const result = await this._bridge.printBatch({ commands });
+        console.log('[Sunmi] printBatch result:', JSON.stringify(result));
+        return true;
+      }
     }
     // Fallback for non-Capacitor (legacy bridge) — sequential calls
     return this._legacyPrintReceipt(ticket, settings, companyInfo);
   }
 
   async printAvoir(avoir, settings, companyInfo) {
-    if (this._isCapacitor && this._bridge?.printBatch) {
+    if (this._isCapacitor && this._bridge) {
       const commands = this._buildAvoirBatch(avoir, settings, companyInfo);
-      await this._bridge.printBatch({ commands });
+      if (this._bridge.printRaw) {
+        await this._bridge.printRaw({ commands });
+      } else if (this._bridge.printBatch) {
+        await this._bridge.printBatch({ commands });
+      }
       return true;
     }
     return this._legacyPrintAvoir(avoir, settings, companyInfo);
   }
 
   async printClosure(closure, settings, companyInfo) {
-    if (this._isCapacitor && this._bridge?.printBatch) {
+    if (this._isCapacitor && this._bridge) {
       const commands = this._buildClosureBatch(closure, settings, companyInfo);
-      await this._bridge.printBatch({ commands });
+      if (this._bridge.printRaw) {
+        await this._bridge.printRaw({ commands });
+      } else if (this._bridge.printBatch) {
+        await this._bridge.printBatch({ commands });
+      }
       return true;
     }
     return this._legacyPrintClosure(closure, settings, companyInfo);
