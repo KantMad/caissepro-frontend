@@ -20,17 +20,15 @@ import com.sunmi.peripheral.printer.InnerPrinterManager;
 import com.sunmi.peripheral.printer.InnerResultCallback;
 import com.sunmi.peripheral.printer.SunmiPrinterService;
 
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
 import java.text.Normalizer;
 
 /**
  * CaissePro Sunmi Printer Plugin - official Sunmi SDK
  *
  * Uses SDK printText() for all text (reliable on all Sunmi models).
- * Accented characters are normalized (e->e, c->c) because the T2s
- * firmware interprets UTF-8 multi-byte as Chinese/GBK.
- * A testCodepage method probes which ESC/POS codepages the device supports.
+ * printText handles Unicode accents natively (éèàùçôîê).
+ * sendRAWData with ESC/POS text commands produces blank/Chinese on T2s,
+ * so we avoid it for text. Only used for cut and drawer commands.
  */
 @CapacitorPlugin(name = "SunmiPrinter")
 public class SunmiPrinterPlugin extends Plugin {
@@ -256,17 +254,17 @@ public class SunmiPrinterPlugin extends Plugin {
                 printerService.printerInit(null);
                 printerService.setAlignment(1, null);
                 printerService.setFontSize(28f, null);
-                printerService.printText(normalize("=== TEST CaissePro ===\n"), null);
+                printerService.printText("=== TEST CaissePro ===\n", null);
                 printerService.setFontSize(20f, null);
-                printerService.printText(normalize("SDK Mode - Imprimante OK\n"), null);
-                printerService.printText(normalize(Build.MANUFACTURER + " " + Build.MODEL + "\n"), null);
-                printerService.printText(normalize(new java.text.SimpleDateFormat("dd/MM/yyyy HH:mm:ss", java.util.Locale.FRANCE)
-                    .format(new java.util.Date()) + "\n"), null);
+                printerService.printText("SDK Mode - Imprimante OK\n", null);
+                printerService.printText(Build.MANUFACTURER + " " + Build.MODEL + "\n", null);
+                printerService.printText(new java.text.SimpleDateFormat("dd/MM/yyyy HH:mm:ss", java.util.Locale.FRANCE)
+                    .format(new java.util.Date()) + "\n", null);
                 printerService.printText("================================\n", null);
                 printerService.setAlignment(0, null);
                 printerService.printText("Ligne 1 - Test texte normal\n", null);
-                printerService.printText(normalize("Accents normalises: ecauc (eecaucoie)\n"), null);
-                printerService.printText(normalize("Prix: 29,90 EUR TTC\n"), null);
+                printerService.printText("Accents: éèàùçôîê\n", null);
+                printerService.printText("Prix: 29,90 € TTC\n", null);
                 printerService.setFontSize(28f, null);
                 printerService.printText("Ligne 2 - Grand texte\n", null);
                 printerService.setFontSize(20f, null);
@@ -408,7 +406,7 @@ public class SunmiPrinterPlugin extends Plugin {
     }
 
     // ══════════════════════════════════════════════════════════════
-    // PRINT BATCH - Core receipt printing (SDK printText + normalize)
+    // PRINT BATCH - Core receipt printing (SDK printText, accents native)
     // ══════════════════════════════════════════════════════════════
 
     @PluginMethod
@@ -433,7 +431,7 @@ public class SunmiPrinterPlugin extends Plugin {
                     switch (type) {
                         case "text":
                             String text = cmd.optString("text", "");
-                            if (!text.isEmpty()) printerService.printText(normalize(text), null);
+                            if (!text.isEmpty()) printerService.printText(text), null);
                             break;
                         case "bold":
                             boolean enabled = cmd.optBoolean("enabled", false);
@@ -489,71 +487,15 @@ public class SunmiPrinterPlugin extends Plugin {
     }
 
     // ══════════════════════════════════════════════════════════════
-    // PRINT RAW ESC/POS (no codepage — UTF-8 + normalize)
+    // PRINT RAW — now uses SDK printText (sendRAWData can't handle accents)
     // ══════════════════════════════════════════════════════════════
 
     @PluginMethod
     public void printRaw(PluginCall call) {
-        if (printerService == null) { call.reject("Printer not connected"); return; }
-        JSArray commands = call.getArray("commands");
-        if (commands == null || commands.length() == 0) { call.reject("No commands"); return; }
-
-        new Thread(() -> {
-            try {
-                ByteArrayOutputStream buf = new ByteArrayOutputStream();
-                buf.write(new byte[]{0x1B, 0x40}); // ESC @ init
-
-                for (int i = 0; i < commands.length(); i++) {
-                    JSONObject cmd;
-                    try { cmd = commands.getJSONObject(i); } catch (JSONException e) { continue; }
-                    String type = cmd.optString("cmd", "");
-                    switch (type) {
-                        case "text":
-                            String text = cmd.optString("text", "");
-                            if (!text.isEmpty()) buf.write(normalize(text).getBytes("UTF-8"));
-                            break;
-                        case "bold":
-                            buf.write(new byte[]{0x1B, 0x45, (byte)(cmd.optBoolean("enabled", false) ? 1 : 0)});
-                            break;
-                        case "size":
-                            int sz = cmd.optInt("value", 20);
-                            if (sz >= 26) buf.write(new byte[]{0x1D, 0x21, 0x11});
-                            else if (sz >= 22) buf.write(new byte[]{0x1D, 0x21, 0x01});
-                            else buf.write(new byte[]{0x1D, 0x21, 0x00});
-                            break;
-                        case "align":
-                            buf.write(new byte[]{0x1B, 0x61, (byte)cmd.optInt("value", 0)});
-                            break;
-                        case "line":
-                            String s = cmd.optString("char", "-");
-                            int l = cmd.optInt("len", 32);
-                            StringBuilder sb = new StringBuilder();
-                            for (int j = 0; j < l; j++) sb.append(s);
-                            sb.append("\n");
-                            buf.write(sb.toString().getBytes("UTF-8"));
-                            break;
-                        case "feed":
-                            buf.write(new byte[]{0x1B, 0x64, (byte)cmd.optInt("lines", 3)});
-                            break;
-                        case "cut":
-                            buf.write(new byte[]{0x1D, 0x56, 0x01});
-                            break;
-                    }
-                }
-
-                byte[] rawData = buf.toByteArray();
-                printerService.sendRAWData(rawData, null);
-
-                JSObject ret = new JSObject();
-                ret.put("success", true);
-                ret.put("commandCount", commands.length());
-                ret.put("bytesSent", rawData.length);
-                getActivity().runOnUiThread(() -> call.resolve(ret));
-            } catch (Exception e) {
-                final String err = e.getMessage();
-                getActivity().runOnUiThread(() -> call.reject("printRaw failed: " + err));
-            }
-        }).start();
+        // printRaw now delegates to printBatch (SDK printText handles accents,
+        // sendRAWData with ESC/POS does not work for text on T2s)
+        Log.i(TAG, "printRaw -> delegating to printBatch (SDK mode)");
+        printBatch(call);
     }
 
     // ══════════════════════════════════════════════════════════════
@@ -570,7 +512,7 @@ public class SunmiPrinterPlugin extends Plugin {
                 if ("simple".equals(mode)) {
                     printerService.printText("=== PRINT DIRECT (SDK) ===\n", null);
                     printerService.printText("Ce texte vient du SDK Sunmi\n", null);
-                    printerService.printText(normalize("Accents normalises: e e a u c o\n"), null);
+                    printerService.printText("Accents: é è à ù ç ô\n", null);
                     printerService.printText("================================\n", null);
                     printerService.lineWrap(4, null);
                 } else if ("formatted".equals(mode)) {
@@ -578,7 +520,7 @@ public class SunmiPrinterPlugin extends Plugin {
                     printerService.setFontSize(28f, null);
                     printerService.printText("MA BOUTIQUE\n", null);
                     printerService.setFontSize(20f, null);
-                    printerService.printText(normalize("123 Rue du Commerce\n"), null);
+                    printerService.printText("123 Rue du Commerce\n", null);
                     printerService.setAlignment(0, null);
                     printerService.printText("================================\n", null);
                     printerService.printText("TOTAL TTC    59.90 EUR\n", null);
