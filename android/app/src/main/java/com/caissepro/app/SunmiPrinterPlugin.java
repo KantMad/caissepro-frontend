@@ -334,9 +334,11 @@ public class SunmiPrinterPlugin extends Plugin {
                     }
 
                     String type = cmd.optString("cmd", "");
+                    Log.d(TAG, "printBatch cmd[" + i + "]=" + type + " raw=" + cmd.toString());
                     switch (type) {
                         case "text":
                             String text = cmd.optString("text", "");
+                            Log.d(TAG, "  printText: [" + text.replace("\n","\\n") + "]");
                             if (!text.isEmpty()) {
                                 printerService.printText(text, null);
                             }
@@ -416,6 +418,112 @@ public class SunmiPrinterPlugin extends Plugin {
                 Log.e(TAG, "printBatch error: " + e.getMessage(), e);
                 final String errMsg = e.getMessage();
                 getActivity().runOnUiThread(() -> call.reject("printBatch failed: " + errMsg));
+            }
+        }).start();
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    // PRINT DIRECT — Bypass JSON parsing, hardcoded AIDL calls
+    // Used to diagnose if printBatch JSON parsing is the problem
+    // ══════════════════════════════════════════════════════════════
+
+    @PluginMethod
+    public void printDirect(PluginCall call) {
+        if (printerService == null) {
+            call.reject("Printer not connected");
+            return;
+        }
+
+        // Get mode: "simple" = text only, "formatted" = with align/size, "ticket" = full receipt
+        String mode = call.getString("mode", "simple");
+        Log.i(TAG, "printDirect mode=" + mode);
+
+        new Thread(() -> {
+            try {
+                printerService.printerInit(null);
+
+                if ("simple".equals(mode)) {
+                    // === SIMPLE: Just text, like testPrint but minimal ===
+                    printerService.printText("=== PRINT DIRECT SIMPLE ===\n", null);
+                    printerService.printText("Ce texte vient de printDirect\n", null);
+                    printerService.printText("Pas de JSON, pas de boucle\n", null);
+                    printerService.printText("================================\n", null);
+                    printerService.lineWrap(4, null);
+                    try { printerService.cutPaper(null); } catch (Exception e) {}
+
+                } else if ("formatted".equals(mode)) {
+                    // === FORMATTED: With setAlignment + setFontSize ===
+                    printerService.setAlignment(1, null);
+                    printerService.setFontSize(28f, null);
+                    printerService.printText("MA BOUTIQUE\n", null);
+                    printerService.setFontSize(20f, null);
+                    printerService.printText("123 Rue du Commerce\n", null);
+                    printerService.printText("75001 Paris\n", null);
+                    printerService.setAlignment(0, null);
+                    printerService.printText("================================\n", null);
+                    printerService.printText("N: TK-DIRECT  " + new java.text.SimpleDateFormat("dd/MM/yyyy HH:mm", java.util.Locale.FRANCE).format(new java.util.Date()) + "\n", null);
+                    printerService.printText("Caissier: Admin\n", null);
+                    printerService.printText("--------------------------------\n", null);
+                    printerService.setFontSize(22f, null);
+                    printerService.printText("Jean Slim (Bleu/38)\n", null);
+                    printerService.setFontSize(20f, null);
+                    printerService.printText("  x1  59.90 EUR\n", null);
+                    printerService.printText("--------------------------------\n", null);
+                    printerService.setFontSize(28f, null);
+                    printerService.printText("TOTAL TTC    59.90 EUR\n", null);
+                    printerService.setFontSize(20f, null);
+                    printerService.printText("Paiement: CB 59.90 EUR\n", null);
+                    printerService.printText("================================\n", null);
+                    printerService.setAlignment(1, null);
+                    printerService.setFontSize(18f, null);
+                    printerService.printText("EMPREINTE NF525\n", null);
+                    printerService.printText("ABC123DEF456\n", null);
+                    printerService.lineWrap(4, null);
+                    try { printerService.cutPaper(null); } catch (Exception e) {}
+
+                } else if ("ticket".equals(mode)) {
+                    // === TICKET: Uses data passed from JS ===
+                    String shopName = call.getString("shopName", "Ma Boutique");
+                    String address = call.getString("address", "");
+                    String ticketNum = call.getString("ticketNum", "?");
+                    String total = call.getString("total", "0.00");
+                    String payment = call.getString("payment", "CB");
+                    String items = call.getString("items", "");
+
+                    printerService.setAlignment(1, null);
+                    printerService.setFontSize(28f, null);
+                    printerService.printText(shopName + "\n", null);
+                    printerService.setFontSize(20f, null);
+                    if (!address.isEmpty()) printerService.printText(address + "\n", null);
+                    printerService.setAlignment(0, null);
+                    printerService.printText("================================\n", null);
+                    printerService.printText("N: " + ticketNum + "  " + new java.text.SimpleDateFormat("dd/MM/yyyy HH:mm", java.util.Locale.FRANCE).format(new java.util.Date()) + "\n", null);
+                    printerService.printText("--------------------------------\n", null);
+                    // Items: simple newline-separated string
+                    if (!items.isEmpty()) {
+                        for (String line : items.split("\\|")) {
+                            printerService.printText(line + "\n", null);
+                        }
+                    }
+                    printerService.printText("--------------------------------\n", null);
+                    printerService.setFontSize(28f, null);
+                    printerService.printText("TOTAL TTC  " + total + " EUR\n", null);
+                    printerService.setFontSize(20f, null);
+                    printerService.printText("Paiement: " + payment + " " + total + " EUR\n", null);
+                    printerService.printText("================================\n", null);
+                    printerService.lineWrap(4, null);
+                    try { printerService.cutPaper(null); } catch (Exception e) {}
+                }
+
+                JSObject ret = new JSObject();
+                ret.put("success", true);
+                ret.put("mode", mode);
+                getActivity().runOnUiThread(() -> call.resolve(ret));
+
+            } catch (Exception e) {
+                Log.e(TAG, "printDirect error: " + e.getMessage(), e);
+                final String errMsg = e.getMessage();
+                getActivity().runOnUiThread(() -> call.reject("printDirect failed: " + errMsg));
             }
         }).start();
     }

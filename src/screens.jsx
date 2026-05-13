@@ -3380,6 +3380,37 @@ function DebugPanel(){
   };
 
   // ══════════════════════════════════════════════
+  // PRINT DIRECT — Appels Java natifs, sans JSON
+  // ══════════════════════════════════════════════
+  const testPrintDirect=async()=>{
+    setRunning(true);clearLogs();
+    addLog("=== TEST PRINT DIRECT (Java natif, sans JSON) ===","title");
+    const sp=window.Capacitor?.Plugins?.SunmiPrinter;
+    if(!sp){addLog("Plugin absent","error");setRunning(false);return;}
+    if(!sp.printDirect){addLog("Methode printDirect absente — APK pas a jour?","error");setRunning(false);return;}
+
+    // Test 1: simple
+    addLog("--- Direct SIMPLE (3 lignes texte) ---","title");
+    try{
+      const r=await sp.printDirect({mode:"simple"});
+      addLog(`OK: ${JSON.stringify(r)}`,"success");
+    }catch(e){addLog(`ERREUR: ${e.message}`,"error");}
+
+    // Test 2: formatted (align+size, no bold)
+    addLog("--- Direct FORMATE (align+size) ---","title");
+    try{
+      const r=await sp.printDirect({mode:"formatted"});
+      addLog(`OK: ${JSON.stringify(r)}`,"success");
+    }catch(e){addLog(`ERREUR: ${e.message}`,"error");}
+
+    addLog("--- VERDICT ---","title");
+    addLog("Si Direct SIMPLE sort = le probleme est dans printBatch (JSON)","info");
+    addLog("Si Direct FORMATE sort = on peut imprimer les tickets via printDirect","info");
+    addLog("Si rien ne sort = probleme avec le service imprimante","error");
+    setRunning(false);
+  };
+
+  // ══════════════════════════════════════════════
   // TPE / CONCERT PROTOCOL TESTS
   // ══════════════════════════════════════════════
   const testTpePlugin=async()=>{
@@ -3790,6 +3821,8 @@ function DebugPanel(){
         <Printer size={14}/> Tester 5 methodes</Btn>
       <Btn onClick={testFormattedPrint} disabled={running} style={{height:44,background:"#D97706",fontSize:12,fontWeight:700}}>
         <Printer size={14}/> Test ticket formate</Btn>
+      <Btn onClick={testPrintDirect} disabled={running} style={{height:44,background:"#DC2626",fontSize:12,fontWeight:700}}>
+        <Zap size={14}/> Print DIRECT (Java natif)</Btn>
     </div>}
 
     {/* === TPE TAB === */}
