@@ -22,28 +22,23 @@ import com.sunmi.peripheral.printer.SunmiPrinterService;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.text.Normalizer;
 
 /**
  * CaissePro Sunmi Printer Plugin - official Sunmi SDK
  *
- * ALL text printing uses sendRAWData with ESC/POS codepage WPC1252
- * to ensure French accented characters print correctly.
- * We never mix sendRAWData codepage commands with printText SDK calls.
+ * Uses SDK printText() for all text (reliable on all Sunmi models).
+ * Accented characters are normalized (e->e, c->c) because the T2s
+ * firmware interprets UTF-8 multi-byte as Chinese/GBK.
+ * A testCodepage method probes which ESC/POS codepages the device supports.
  */
 @CapacitorPlugin(name = "SunmiPrinter")
 public class SunmiPrinterPlugin extends Plugin {
     private static final String TAG = "SunmiPrinter";
-    private static final String CHARSET = "Windows-1252";
     private SunmiPrinterService printerService = null;
     private boolean isBound = false;
     private boolean bindAttempted = false;
     private String bindError = null;
-
-    // ESC/POS constants
-    private static final byte[] ESC_INIT = {0x1B, 0x40};
-    private static final byte[] ESC_CODEPAGE_WPC1252 = {0x1B, 0x74, 0x10};
-    private static final byte ESC = 0x1B;
-    private static final byte GS = 0x1D;
 
     private final InnerPrinterCallback printerCallback = new InnerPrinterCallback() {
         @Override
@@ -92,51 +87,18 @@ public class SunmiPrinterPlugin extends Plugin {
         }
     }
 
-    // ---- RAW HELPERS ----
-
-    /** Start a raw ESC/POS buffer with init + codepage WPC1252 */
-    private ByteArrayOutputStream rawBegin() throws IOException {
-        ByteArrayOutputStream buf = new ByteArrayOutputStream();
-        buf.write(ESC_INIT);
-        buf.write(ESC_CODEPAGE_WPC1252);
-        return buf;
-    }
-
-    /** Write text encoded in Windows-1252 */
-    private void rawText(ByteArrayOutputStream buf, String text) throws IOException {
-        if (text != null && !text.isEmpty()) {
-            buf.write(text.getBytes(CHARSET));
-        }
-    }
-
-    /** ESC a n - set alignment (0=left, 1=center, 2=right) */
-    private void rawAlign(ByteArrayOutputStream buf, int align) throws IOException {
-        buf.write(new byte[]{ESC, 0x61, (byte) align});
-    }
-
-    /** GS ! n - set character size (0x00=normal, 0x11=double, 0x01=double-height only) */
-    private void rawSize(ByteArrayOutputStream buf, int n) throws IOException {
-        buf.write(new byte[]{GS, 0x21, (byte) n});
-    }
-
-    /** ESC E n - bold on/off */
-    private void rawBold(ByteArrayOutputStream buf, boolean on) throws IOException {
-        buf.write(new byte[]{ESC, 0x45, (byte) (on ? 1 : 0)});
-    }
-
-    /** ESC d n - feed n lines */
-    private void rawFeed(ByteArrayOutputStream buf, int lines) throws IOException {
-        buf.write(new byte[]{ESC, 0x64, (byte) lines});
-    }
-
-    /** GS V 1 - partial cut */
-    private void rawCut(ByteArrayOutputStream buf) throws IOException {
-        buf.write(new byte[]{GS, 0x56, 0x01});
-    }
-
-    /** Send the buffer to the printer */
-    private void rawSend(ByteArrayOutputStream buf) throws RemoteException {
-        printerService.sendRAWData(buf.toByteArray(), null);
+    // ── Accent normalization ──
+    // Strips diacritics: e->e, e->e, c->c, a->a, etc.
+    // Preserves EUR symbol as "EUR"
+    private static String normalize(String input) {
+        if (input == null) return "";
+        // Replace EUR sign before normalization
+        String s = input.replace("€", "EUR");
+        // NFD decomposition separates base char from combining diacritical marks
+        s = Normalizer.normalize(s, Normalizer.Form.NFD);
+        // Remove all combining diacritical marks (Unicode category M)
+        s = s.replaceAll("\\p{M}", "");
+        return s;
     }
 
     // ══════════════════════════════════════════════════════════════
@@ -280,7 +242,7 @@ public class SunmiPrinterPlugin extends Plugin {
     }
 
     // ══════════════════════════════════════════════════════════════
-    // TEST PRINT — full raw ESC/POS, no SDK printText
+    // TEST PRINT — SDK printText (proven to work on T2s)
     // ══════════════════════════════════════════════════════════════
 
     @PluginMethod
@@ -291,39 +253,27 @@ public class SunmiPrinterPlugin extends Plugin {
         }
         new Thread(() -> {
             try {
-                ByteArrayOutputStream buf = rawBegin();
-
-                // Header centered, double size
-                rawAlign(buf, 1);
-                rawSize(buf, 0x11);
-                rawText(buf, "=== TEST CaissePro ===\n");
-
-                // Normal size
-                rawSize(buf, 0x00);
-                rawText(buf, "SDK Mode - Imprimante OK\n");
-                rawText(buf, Build.MANUFACTURER + " " + Build.MODEL + "\n");
-                rawText(buf, new java.text.SimpleDateFormat("dd/MM/yyyy HH:mm:ss", java.util.Locale.FRANCE)
-                    .format(new java.util.Date()) + "\n");
-                rawText(buf, "================================\n");
-
-                // Left align for body
-                rawAlign(buf, 0);
-                rawText(buf, "Ligne 1 - Test texte normal\n");
-                rawText(buf, "Accents: é è à ù ç ô î ê\n");
-                rawText(buf, "Euro: 29,90 € TTC\n");
-
-                // Double size
-                rawSize(buf, 0x11);
-                rawText(buf, "Ligne 2 - Grand texte\n");
-
-                // Normal
-                rawSize(buf, 0x00);
-                rawText(buf, "Ligne 3 - Fin du test\n");
-
-                rawFeed(buf, 4);
-                rawCut(buf);
-
-                rawSend(buf);
+                printerService.printerInit(null);
+                printerService.setAlignment(1, null);
+                printerService.setFontSize(28f, null);
+                printerService.printText(normalize("=== TEST CaissePro ===\n"), null);
+                printerService.setFontSize(20f, null);
+                printerService.printText(normalize("SDK Mode - Imprimante OK\n"), null);
+                printerService.printText(normalize(Build.MANUFACTURER + " " + Build.MODEL + "\n"), null);
+                printerService.printText(normalize(new java.text.SimpleDateFormat("dd/MM/yyyy HH:mm:ss", java.util.Locale.FRANCE)
+                    .format(new java.util.Date()) + "\n"), null);
+                printerService.printText("================================\n", null);
+                printerService.setAlignment(0, null);
+                printerService.printText("Ligne 1 - Test texte normal\n", null);
+                printerService.printText(normalize("Accents normalises: ecauc (eecaucoie)\n"), null);
+                printerService.printText(normalize("Prix: 29,90 EUR TTC\n"), null);
+                printerService.setFontSize(28f, null);
+                printerService.printText("Ligne 2 - Grand texte\n", null);
+                printerService.setFontSize(20f, null);
+                printerService.printText("Ligne 3 - Fin du test\n", null);
+                printerService.lineWrap(4, null);
+                // Cut via ESC/POS
+                try { printerService.sendRAWData(new byte[]{0x1D, 0x56, 0x01}, null); } catch (Exception e) {}
 
                 JSObject ret = new JSObject();
                 ret.put("success", true);
@@ -333,6 +283,77 @@ public class SunmiPrinterPlugin extends Plugin {
                 Log.e(TAG, "testPrint failed: " + e.getMessage());
                 final String err = e.getMessage();
                 getActivity().runOnUiThread(() -> call.reject("testPrint failed: " + err));
+            }
+        }).start();
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    // TEST CODEPAGE — probes which ESC/POS codepages work on this device
+    // Prints a line for each codepage with accented chars.
+    // The one that shows correct accents is the right one.
+    // ══════════════════════════════════════════════════════════════
+
+    @PluginMethod
+    public void testCodepage(PluginCall call) {
+        if (printerService == null) { call.reject("Printer not connected"); return; }
+        new Thread(() -> {
+            try {
+                ByteArrayOutputStream buf = new ByteArrayOutputStream();
+                buf.write(new byte[]{0x1B, 0x40}); // ESC @ init
+
+                // Test string with French accents encoded in each candidate codepage
+                // In Windows-1252/CP850/CP858: e=0xE9, e=0xE8, a=0xE0, c=0xE7, EUR=0x80(1252)/0xD5(858)
+                String testLine = "eecaucoie EUR";
+
+                // Codepages to test (common thermal printer codepages)
+                int[][] pages = {
+                    {0,  0},   // CP437 (US)
+                    {2,  2},   // CP850 (Multilingual Latin 1)
+                    {3,  3},   // CP860 (Portuguese)
+                    {16, 16},  // WPC1252
+                    {19, 19},  // CP858 (CP850 + EUR)
+                    {21, 21},  // CP862 (Hebrew)
+                    {255, 255}, // UTF-8 (some printers)
+                };
+
+                for (int[] page : pages) {
+                    int n = page[0];
+                    // Set codepage
+                    buf.write(new byte[]{0x1B, 0x74, (byte) n});
+
+                    // Write label in ASCII (safe)
+                    String label = "CP " + n + ": ";
+                    buf.write(label.getBytes("US-ASCII"));
+
+                    // Write test chars as raw bytes for this codepage
+                    // e(0xE9) e(0xE8) a(0xE0) u(0xF9) c(0xE7) o(0xF4) i(0xEE) e(0xEA) EUR(0x80 for cp1252)
+                    buf.write(new byte[]{
+                        (byte)0xE9, ' ', (byte)0xE8, ' ', (byte)0xE0, ' ',
+                        (byte)0xF9, ' ', (byte)0xE7, ' ', (byte)0xF4, ' ',
+                        (byte)0xEE, ' ', (byte)0xEA, '\n'
+                    });
+                }
+
+                // Also test without any codepage - just UTF-8 bytes via sendRAWData
+                buf.write("\n--- UTF-8 direct ---\n".getBytes("US-ASCII"));
+                buf.write("eecaucoie\n".getBytes("UTF-8"));
+
+                // Also test: no codepage, ASCII only
+                buf.write("--- ASCII only ---\n".getBytes("US-ASCII"));
+                buf.write("ecaucoie (normalized)\n".getBytes("US-ASCII"));
+
+                buf.write(new byte[]{0x1B, 0x64, 0x04}); // feed 4
+                buf.write(new byte[]{0x1D, 0x56, 0x01}); // cut
+
+                printerService.sendRAWData(buf.toByteArray(), null);
+
+                JSObject ret = new JSObject();
+                ret.put("success", true);
+                ret.put("message", "Codepage test sent - check which line shows correct accents");
+                getActivity().runOnUiThread(() -> call.resolve(ret));
+            } catch (Exception e) {
+                final String err = e.getMessage();
+                getActivity().runOnUiThread(() -> call.reject("testCodepage failed: " + err));
             }
         }).start();
     }
@@ -383,7 +404,7 @@ public class SunmiPrinterPlugin extends Plugin {
     }
 
     // ══════════════════════════════════════════════════════════════
-    // PRINT BATCH - Core receipt printing (full raw ESC/POS)
+    // PRINT BATCH - Core receipt printing (SDK printText + normalize)
     // ══════════════════════════════════════════════════════════════
 
     @PluginMethod
@@ -396,7 +417,8 @@ public class SunmiPrinterPlugin extends Plugin {
 
         new Thread(() -> {
             try {
-                ByteArrayOutputStream buf = rawBegin();
+                printerService.printerInit(null);
+                float currentSize = 20f;
 
                 for (int i = 0; i < commands.length(); i++) {
                     JSONObject cmd;
@@ -406,21 +428,21 @@ public class SunmiPrinterPlugin extends Plugin {
                     String type = cmd.optString("cmd", "");
                     switch (type) {
                         case "text":
-                            rawText(buf, cmd.optString("text", ""));
+                            String text = cmd.optString("text", "");
+                            if (!text.isEmpty()) printerService.printText(normalize(text), null);
                             break;
                         case "bold":
-                            rawBold(buf, cmd.optBoolean("enabled", false));
+                            boolean enabled = cmd.optBoolean("enabled", false);
+                            printerService.setFontSize(enabled ? currentSize + 2f : currentSize, null);
                             break;
                         case "size":
-                            int sz = cmd.optInt("value", 20);
-                            // Map font size values to ESC/POS size codes
-                            // Normal=20, Large>=26 → double, Medium 22-25 → double-height only
-                            if (sz >= 26) rawSize(buf, 0x11);       // double width+height
-                            else if (sz >= 22) rawSize(buf, 0x01);  // double height only
-                            else rawSize(buf, 0x00);                // normal
+                            float size = (float) cmd.optDouble("value", 20);
+                            currentSize = size;
+                            printerService.setFontSize(size, null);
                             break;
                         case "align":
-                            rawAlign(buf, cmd.optInt("value", 0));
+                            int align = cmd.optInt("value", 0);
+                            printerService.setAlignment(align, null);
                             break;
                         case "line":
                             String sep = cmd.optString("char", "-");
@@ -428,43 +450,25 @@ public class SunmiPrinterPlugin extends Plugin {
                             StringBuilder sb = new StringBuilder();
                             for (int j = 0; j < len; j++) sb.append(sep);
                             sb.append("\n");
-                            rawText(buf, sb.toString());
+                            printerService.printText(sb.toString(), null);
                             break;
                         case "feed":
-                            rawFeed(buf, cmd.optInt("lines", 3));
+                            int lines = cmd.optInt("lines", 3);
+                            printerService.lineWrap(lines, null);
                             break;
                         case "cut":
-                            rawCut(buf);
+                            try { printerService.sendRAWData(new byte[]{0x1D, 0x56, 0x01}, null); } catch (Exception e) {}
                             break;
                         case "qr":
-                            // Flush current raw buffer, then use SDK for QR
-                            if (buf.size() > 0) {
-                                rawSend(buf);
-                                buf.reset();
-                            }
                             String qr = cmd.optString("text", "");
                             int qrSz = cmd.optInt("size", 6);
                             if (!qr.isEmpty()) printerService.printQRCode(qr, qrSz, 3, null);
-                            // Re-init codepage after SDK call
-                            buf.write(ESC_CODEPAGE_WPC1252);
                             break;
                         case "barcode":
-                            // Flush current raw buffer, then use SDK for barcode
-                            if (buf.size() > 0) {
-                                rawSend(buf);
-                                buf.reset();
-                            }
                             String bc = cmd.optString("text", "");
                             if (!bc.isEmpty()) printerService.printBarCode(bc, 8, 80, 2, 2, null);
-                            // Re-init codepage after SDK call
-                            buf.write(ESC_CODEPAGE_WPC1252);
                             break;
                     }
-                }
-
-                // Send remaining buffer
-                if (buf.size() > 0) {
-                    rawSend(buf);
                 }
 
                 Log.i(TAG, "printBatch completed");
@@ -481,7 +485,7 @@ public class SunmiPrinterPlugin extends Plugin {
     }
 
     // ══════════════════════════════════════════════════════════════
-    // PRINT RAW ESC/POS
+    // PRINT RAW ESC/POS (no codepage — UTF-8 + normalize)
     // ══════════════════════════════════════════════════════════════
 
     @PluginMethod
@@ -492,7 +496,8 @@ public class SunmiPrinterPlugin extends Plugin {
 
         new Thread(() -> {
             try {
-                ByteArrayOutputStream buf = rawBegin();
+                ByteArrayOutputStream buf = new ByteArrayOutputStream();
+                buf.write(new byte[]{0x1B, 0x40}); // ESC @ init
 
                 for (int i = 0; i < commands.length(); i++) {
                     JSONObject cmd;
@@ -500,19 +505,20 @@ public class SunmiPrinterPlugin extends Plugin {
                     String type = cmd.optString("cmd", "");
                     switch (type) {
                         case "text":
-                            rawText(buf, cmd.optString("text", ""));
+                            String text = cmd.optString("text", "");
+                            if (!text.isEmpty()) buf.write(normalize(text).getBytes("UTF-8"));
                             break;
                         case "bold":
-                            rawBold(buf, cmd.optBoolean("enabled", false));
+                            buf.write(new byte[]{0x1B, 0x45, (byte)(cmd.optBoolean("enabled", false) ? 1 : 0)});
                             break;
                         case "size":
                             int sz = cmd.optInt("value", 20);
-                            if (sz >= 26) rawSize(buf, 0x11);
-                            else if (sz >= 22) rawSize(buf, 0x01);
-                            else rawSize(buf, 0x00);
+                            if (sz >= 26) buf.write(new byte[]{0x1D, 0x21, 0x11});
+                            else if (sz >= 22) buf.write(new byte[]{0x1D, 0x21, 0x01});
+                            else buf.write(new byte[]{0x1D, 0x21, 0x00});
                             break;
                         case "align":
-                            rawAlign(buf, cmd.optInt("value", 0));
+                            buf.write(new byte[]{0x1B, 0x61, (byte)cmd.optInt("value", 0)});
                             break;
                         case "line":
                             String s = cmd.optString("char", "-");
@@ -520,13 +526,13 @@ public class SunmiPrinterPlugin extends Plugin {
                             StringBuilder sb = new StringBuilder();
                             for (int j = 0; j < l; j++) sb.append(s);
                             sb.append("\n");
-                            rawText(buf, sb.toString());
+                            buf.write(sb.toString().getBytes("UTF-8"));
                             break;
                         case "feed":
-                            rawFeed(buf, cmd.optInt("lines", 3));
+                            buf.write(new byte[]{0x1B, 0x64, (byte)cmd.optInt("lines", 3)});
                             break;
                         case "cut":
-                            rawCut(buf);
+                            buf.write(new byte[]{0x1D, 0x56, 0x01});
                             break;
                     }
                 }
@@ -547,7 +553,7 @@ public class SunmiPrinterPlugin extends Plugin {
     }
 
     // ══════════════════════════════════════════════════════════════
-    // PRINT DIRECT - diagnostic (full raw ESC/POS)
+    // PRINT DIRECT - diagnostic (SDK printText)
     // ══════════════════════════════════════════════════════════════
 
     @PluginMethod
@@ -556,27 +562,26 @@ public class SunmiPrinterPlugin extends Plugin {
         String mode = call.getString("mode", "simple");
         new Thread(() -> {
             try {
-                ByteArrayOutputStream buf = rawBegin();
-
+                printerService.printerInit(null);
                 if ("simple".equals(mode)) {
-                    rawText(buf, "=== PRINT DIRECT (SDK) ===\n");
-                    rawText(buf, "Ce texte vient du SDK Sunmi\n");
-                    rawText(buf, "Accents: é è à ù ç ô\n");
-                    rawText(buf, "================================\n");
-                    rawFeed(buf, 4);
+                    printerService.printText("=== PRINT DIRECT (SDK) ===\n", null);
+                    printerService.printText("Ce texte vient du SDK Sunmi\n", null);
+                    printerService.printText(normalize("Accents normalises: e e a u c o\n"), null);
+                    printerService.printText("================================\n", null);
+                    printerService.lineWrap(4, null);
                 } else if ("formatted".equals(mode)) {
-                    rawAlign(buf, 1);
-                    rawSize(buf, 0x11);
-                    rawText(buf, "MA BOUTIQUE\n");
-                    rawSize(buf, 0x00);
-                    rawText(buf, "123 Rue du Commerce\n");
-                    rawAlign(buf, 0);
-                    rawText(buf, "================================\n");
-                    rawText(buf, "TOTAL TTC    59.90 EUR\n");
-                    rawFeed(buf, 4);
+                    printerService.setAlignment(1, null);
+                    printerService.setFontSize(28f, null);
+                    printerService.printText("MA BOUTIQUE\n", null);
+                    printerService.setFontSize(20f, null);
+                    printerService.printText(normalize("123 Rue du Commerce\n"), null);
+                    printerService.setAlignment(0, null);
+                    printerService.printText("================================\n", null);
+                    printerService.printText("TOTAL TTC    59.90 EUR\n", null);
+                    printerService.lineWrap(4, null);
                 }
-
-                rawSend(buf);
+                // Cut
+                try { printerService.sendRAWData(new byte[]{0x1D, 0x56, 0x01}, null); } catch (Exception e) {}
 
                 JSObject ret = new JSObject();
                 ret.put("success", true);

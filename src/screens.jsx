@@ -3920,6 +3920,21 @@ function DebugPanel(){
         setRunning(false);
       }} disabled={running} style={{height:44,background:"#7C3AED",fontSize:12,fontWeight:700}}>
         <Activity size={14}/> RESET imprimante</Btn>
+      <Btn onClick={async()=>{
+        setRunning(true);clearLogs();
+        addLog("=== TEST CODEPAGES ACCENTS ===","title");
+        addLog("Imprime une ligne par codepage avec les accents francais","info");
+        addLog("La ligne correcte = la bonne codepage pour ce modele","info");
+        const sp=window.Capacitor?.Plugins?.SunmiPrinter;
+        if(!sp||!sp.testCodepage){addLog("testCodepage absent — APK pas a jour?","error");setRunning(false);return;}
+        try{
+          const r=await sp.testCodepage({});
+          addLog(`OK: ${r.message}`,"success");
+          addLog("Regardez le ticket imprime pour identifier la bonne codepage","info");
+        }catch(e){addLog(`ERREUR: ${e.message}`,"error");}
+        setRunning(false);
+      }} disabled={running} style={{height:44,background:"#EA580C",fontSize:12,fontWeight:700}}>
+        <Zap size={14}/> Test CODEPAGES accents</Btn>
     </div>}
 
     {/* === TPE TAB === */}
