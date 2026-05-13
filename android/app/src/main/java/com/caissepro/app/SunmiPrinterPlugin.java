@@ -61,6 +61,16 @@ public class SunmiPrinterPlugin extends Plugin {
             Intent intent = new Intent();
             intent.setPackage("woyou.aidlservice.jiuiv5");
             intent.setAction("woyou.aidlservice.jiuiv5.IWoyouService");
+
+            // IMPORTANT: startService BEFORE bindService (per Sunmi official demo)
+            // This ensures the printer service is running before we try to bind
+            try {
+                getContext().startService(intent);
+                Log.i(TAG, "startService called");
+            } catch (Exception e) {
+                Log.w(TAG, "startService failed (may be normal on newer Android): " + e.getMessage());
+            }
+
             boolean bound = getContext().bindService(intent, serviceConnection, Context.BIND_AUTO_CREATE);
             Log.i(TAG, "bindService returned: " + bound);
             if (!bound) {
@@ -164,6 +174,73 @@ public class SunmiPrinterPlugin extends Plugin {
             ret.put("error", bindError);
             call.resolve(ret);
         }, 2000);
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    // SELF CHECK — Hardware test page (definitive print test)
+    // If this prints, hardware is OK. If blank, paper is backwards.
+    // ══════════════════════════════════════════════════════════════
+
+    @PluginMethod
+    public void selfCheck(PluginCall call) {
+        if (printerService == null) {
+            call.reject("Printer not connected");
+            return;
+        }
+        new Thread(() -> {
+            try {
+                // printerSelfChecking prints the built-in hardware test page
+                printerService.printerSelfChecking(null);
+                JSObject ret = new JSObject();
+                ret.put("success", true);
+                ret.put("message", "Self-check sent — if nothing prints, flip the paper!");
+                getActivity().runOnUiThread(() -> call.resolve(ret));
+            } catch (RemoteException e) {
+                Log.e(TAG, "selfCheck failed: " + e.getMessage());
+                getActivity().runOnUiThread(() -> call.reject("selfCheck failed: " + e.getMessage()));
+            }
+        }).start();
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    // WAIT FOR READY — Poll printer state until NORMAL (state 1)
+    // ══════════════════════════════════════════════════════════════
+
+    @PluginMethod
+    public void waitForReady(PluginCall call) {
+        if (printerService == null) {
+            call.reject("Printer not connected");
+            return;
+        }
+        int maxWaitMs = call.getInt("timeout", 10000);
+
+        new Thread(() -> {
+            long start = System.currentTimeMillis();
+            int lastState = -1;
+            while (System.currentTimeMillis() - start < maxWaitMs) {
+                try {
+                    lastState = printerService.updatePrinterState();
+                    Log.d(TAG, "waitForReady: state=" + lastState);
+                    if (lastState == 1) {
+                        JSObject ret = new JSObject();
+                        ret.put("ready", true);
+                        ret.put("state", lastState);
+                        ret.put("waitedMs", System.currentTimeMillis() - start);
+                        getActivity().runOnUiThread(() -> call.resolve(ret));
+                        return;
+                    }
+                } catch (RemoteException e) {
+                    Log.w(TAG, "waitForReady state check error: " + e.getMessage());
+                }
+                try { Thread.sleep(500); } catch (InterruptedException e) { break; }
+            }
+            JSObject ret = new JSObject();
+            ret.put("ready", false);
+            ret.put("state", lastState);
+            ret.put("waitedMs", System.currentTimeMillis() - start);
+            ret.put("error", "Printer still not ready after " + maxWaitMs + "ms (state=" + lastState + ")");
+            getActivity().runOnUiThread(() -> call.resolve(ret));
+        }).start();
     }
 
     // ══════════════════════════════════════════════════════════════

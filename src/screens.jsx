@@ -3159,9 +3159,33 @@ function DebugPanel(){
       addLog(`Status complet: ${JSON.stringify(st,null,1)}`);
       const stateColors={1:"success",2:"error",3:"error",4:"error",5:"error"};
       addLog(`Etat: ${st.printerState} = ${st.printerStateLabel}`,stateColors[st.printerState]||"info");
-      if(st.printerState===2)addLog("PREPARING = imprimante pas prete. Verifiez papier et couvercle.","error");
+      if(st.printerState===2){
+        addLog("PREPARING = imprimante pas prete.","error");
+        addLog("Tentative d attente (10s max)...","info");
+        try{
+          const wr=await sp.waitForReady({timeout:10000});
+          if(wr.ready)addLog(`Prete apres ${wr.waitedMs}ms!`,"success");
+          else addLog(`Toujours pas prete apres ${wr.waitedMs}ms (state=${wr.state})`,"error");
+        }catch(e){addLog(`waitForReady erreur: ${e.message}`,"error");}
+      }
       if(st.printerState===1)addLog("NORMAL = imprimante prete!","success");
     }catch(e){addLog(`Erreur: ${e.message}`,"error");}
+    setRunning(false);
+  };
+
+  const testSelfCheck=async()=>{
+    setRunning(true);clearLogs();
+    addLog("=== SELF-CHECK HARDWARE ===","title");
+    addLog("Ceci lance la page de test interne de l imprimante Sunmi.","info");
+    addLog("Si RIEN ne sort: le papier est a l envers!","warn");
+    addLog("Si une page sort: le hardware marche, probleme logiciel.","info");
+    const sp=window.Capacitor?.Plugins?.SunmiPrinter;
+    if(!sp){addLog("Plugin SunmiPrinter ABSENT","error");setRunning(false);return;}
+    try{
+      const r=await sp.selfCheck();
+      addLog(`Resultat: ${JSON.stringify(r)}`,"success");
+      addLog("Regardez l imprimante...","title");
+    }catch(e){addLog(`ERREUR: ${e.message}`,"error");}
     setRunning(false);
   };
 
@@ -3633,6 +3657,8 @@ function DebugPanel(){
     {debugTab==="printer"&&<div style={{display:"flex",gap:8,marginBottom:12,flexWrap:"wrap"}}>
       <Btn onClick={testPrinterStatus} disabled={running} style={{height:44,background:"#2563EB",fontSize:12,fontWeight:700}}>
         <Activity size={14}/> Etat imprimante</Btn>
+      <Btn onClick={testSelfCheck} disabled={running} style={{height:44,background:"#7C3AED",fontSize:12,fontWeight:700}}>
+        <Zap size={14}/> Self-check hardware</Btn>
       <Btn onClick={testPrinterPrint} disabled={running} style={{height:44,background:"#059669",fontSize:12,fontWeight:700}}>
         <Printer size={14}/> Tester 5 methodes</Btn>
     </div>}
