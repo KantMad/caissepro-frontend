@@ -235,6 +235,8 @@ public class SunmiPrinterPlugin extends Plugin {
         new Thread(() -> {
             try {
                 printerService.printerInit(null);
+                // Set codepage to WPC1252 (Western European) for French accents
+                printerService.sendRAWData(new byte[]{0x1B, 0x74, 0x10}, null);
                 printerService.setAlignment(1, null);
                 printerService.setFontSize(28f, null);
                 printerService.printText("=== TEST CaissePro ===\n", null);
@@ -245,6 +247,8 @@ public class SunmiPrinterPlugin extends Plugin {
                     .format(new java.util.Date()) + "\n", null);
                 printerService.printText("================================\n", null);
                 printerService.printText("Ligne 1 - Test texte normal\n", null);
+                printerService.printText("Accents: é è à ù ç ô î ê\n", null);
+                printerService.printText("Direct: éèàùçôîê€\n", null);
                 printerService.setFontSize(28f, null);
                 printerService.printText("Ligne 2 - Grand texte\n", null);
                 printerService.setFontSize(20f, null);
@@ -324,6 +328,8 @@ public class SunmiPrinterPlugin extends Plugin {
         new Thread(() -> {
             try {
                 printerService.printerInit(null);
+                // Set codepage to WPC1252 (Western European) for French accents
+                printerService.sendRAWData(new byte[]{0x1B, 0x74, 0x10}, null);
                 float currentSize = 20f;
 
                 for (int i = 0; i < commands.length(); i++) {
@@ -404,6 +410,7 @@ public class SunmiPrinterPlugin extends Plugin {
             try {
                 java.io.ByteArrayOutputStream buf = new java.io.ByteArrayOutputStream();
                 buf.write(new byte[]{0x1B, 0x40}); // ESC @ init
+                buf.write(new byte[]{0x1B, 0x74, 0x10}); // Set codepage WPC1252 for French accents
 
                 for (int i = 0; i < commands.length(); i++) {
                     JSONObject cmd;
@@ -412,7 +419,7 @@ public class SunmiPrinterPlugin extends Plugin {
                     switch (type) {
                         case "text":
                             String text = cmd.optString("text", "");
-                            if (!text.isEmpty()) buf.write(text.getBytes("UTF-8"));
+                            if (!text.isEmpty()) buf.write(text.getBytes("Windows-1252"));
                             break;
                         case "bold":
                             buf.write(new byte[]{0x1B, 0x45, (byte)(cmd.optBoolean("enabled", false) ? 1 : 0)});
@@ -430,7 +437,7 @@ public class SunmiPrinterPlugin extends Plugin {
                             StringBuilder sb = new StringBuilder();
                             for (int j = 0; j < l; j++) sb.append(s);
                             sb.append("\n");
-                            buf.write(sb.toString().getBytes("UTF-8"));
+                            buf.write(sb.toString().getBytes("Windows-1252"));
                             break;
                         case "feed":
                             buf.write(new byte[]{0x1B, 0x64, (byte)cmd.optInt("lines", 3)});
@@ -467,6 +474,8 @@ public class SunmiPrinterPlugin extends Plugin {
         new Thread(() -> {
             try {
                 printerService.printerInit(null);
+                // Set codepage to WPC1252 (Western European) for French accents
+                printerService.sendRAWData(new byte[]{0x1B, 0x74, 0x10}, null);
                 if ("simple".equals(mode)) {
                     printerService.printText("=== PRINT DIRECT (SDK) ===\n", null);
                     printerService.printText("Ce texte vient du SDK Sunmi\n", null);
