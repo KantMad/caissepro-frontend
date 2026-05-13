@@ -41,10 +41,14 @@ public class SunmiPrinterPlugin extends Plugin {
     private String bindError = null;
 
     private final ICallback defaultCallback = new ICallback.Stub() {
-        @Override public void onRunResult(boolean isSuccess) {}
-        @Override public void onReturnString(String result) {}
+        @Override public void onRunResult(boolean isSuccess) {
+            Log.d(TAG, "Callback onRunResult: " + isSuccess);
+        }
+        @Override public void onReturnString(String result) {
+            Log.d(TAG, "Callback onReturnString: " + result);
+        }
         @Override public void onRaiseException(int code, String msg) {
-            Log.e(TAG, "Print exception " + code + ": " + msg);
+            Log.e(TAG, "Callback EXCEPTION code=" + code + " msg=" + msg);
         }
     };
 
@@ -265,7 +269,7 @@ public class SunmiPrinterPlugin extends Plugin {
                     Log.w(TAG, "commitPrinterBuffer: " + e.getMessage());
                 }
                 // Full re-init
-                printerService.printerInit(null);
+                printerService.printerInit(defaultCallback);
                 Thread.sleep(200);
 
                 JSObject ret = new JSObject();
@@ -289,23 +293,23 @@ public class SunmiPrinterPlugin extends Plugin {
             try {
                 // Always exit buffer mode first in case it's stuck
                 try { printerService.exitPrinterBuffer(false); } catch (Exception e) {}
-                printerService.printerInit(null);
-                printerService.setAlignment(1, null);
-                printerService.setFontSize(28f, null);
-                printerService.printText("=== TEST CaissePro ===\n", null);
-                printerService.setFontSize(20f, null);
-                printerService.printText("Imprimante OK\n", null);
-                printerService.printText(Build.MANUFACTURER + " " + Build.MODEL + "\n", null);
+                printerService.printerInit(defaultCallback);
+                printerService.setAlignment(1, defaultCallback);
+                printerService.setFontSize(28f, defaultCallback);
+                printerService.printText("=== TEST CaissePro ===\n", defaultCallback);
+                printerService.setFontSize(20f, defaultCallback);
+                printerService.printText("Imprimante OK\n", defaultCallback);
+                printerService.printText(Build.MANUFACTURER + " " + Build.MODEL + "\n", defaultCallback);
                 printerService.printText(new java.text.SimpleDateFormat("dd/MM/yyyy HH:mm:ss", java.util.Locale.FRANCE)
-                    .format(new java.util.Date()) + "\n", null);
-                printerService.printText("================================\n", null);
-                printerService.printText("Ligne 1 - Test texte normal\n", null);
-                printerService.setFontSize(28f, null);
-                printerService.printText("Ligne 2 - Grand texte\n", null);
-                printerService.setFontSize(20f, null);
-                printerService.printText("Ligne 3 - Fin du test\n", null);
-                printerService.lineWrap(4, null);
-                try { printerService.cutPaper(null); } catch (Exception e) {}
+                    .format(new java.util.Date()) + "\n", defaultCallback);
+                printerService.printText("================================\n", defaultCallback);
+                printerService.printText("Ligne 1 - Test texte normal\n", defaultCallback);
+                printerService.setFontSize(28f, defaultCallback);
+                printerService.printText("Ligne 2 - Grand texte\n", defaultCallback);
+                printerService.setFontSize(20f, defaultCallback);
+                printerService.printText("Ligne 3 - Fin du test\n", defaultCallback);
+                printerService.lineWrap(4, defaultCallback);
+                try { printerService.cutPaper(defaultCallback); } catch (Exception e) {}
 
                 JSObject ret = new JSObject();
                 ret.put("success", true);
@@ -355,7 +359,7 @@ public class SunmiPrinterPlugin extends Plugin {
             try {
                 // Always exit buffer mode first in case it's stuck
                 try { printerService.exitPrinterBuffer(false); } catch (Exception e) {}
-                printerService.printerInit(null);
+                printerService.printerInit(defaultCallback);
 
                 // Track current font size so "bold" can bump it up slightly
                 float currentSize = 20f;
@@ -370,71 +374,65 @@ public class SunmiPrinterPlugin extends Plugin {
                     }
 
                     String type = cmd.optString("cmd", "");
-                    Log.d(TAG, "printBatch cmd[" + i + "]=" + type + " raw=" + cmd.toString());
+                    Log.d(TAG, "printBatch cmd[" + i + "]=" + type);
                     switch (type) {
                         case "text":
                             String text = cmd.optString("text", "");
-                            Log.d(TAG, "  printText: [" + text.replace("\n","\\n") + "]");
                             if (!text.isEmpty()) {
-                                printerService.printText(text, null);
+                                printerService.printText(text, defaultCallback);
                             }
                             break;
 
                         case "bold":
-                            // === FIX: Do NOT use sendRAWData (ESC/POS) mixed with AIDL ===
-                            // sendRAWData corrupts the print pipeline when mixed with
-                            // setFontSize/setAlignment/printText AIDL calls.
-                            // Instead, simulate bold by bumping font size +2.
                             boolean enabled = cmd.optBoolean("enabled", false);
                             if (enabled) {
-                                printerService.setFontSize(currentSize + 2f, null);
+                                printerService.setFontSize(currentSize + 2f, defaultCallback);
                             } else {
-                                printerService.setFontSize(currentSize, null);
+                                printerService.setFontSize(currentSize, defaultCallback);
                             }
                             break;
 
                         case "size":
                             float size = (float) cmd.optDouble("value", 20);
                             currentSize = size;
-                            printerService.setFontSize(size, null);
+                            printerService.setFontSize(size, defaultCallback);
                             break;
 
                         case "align":
                             int align = cmd.optInt("value", 0);
-                            printerService.setAlignment(align, null);
+                            printerService.setAlignment(align, defaultCallback);
                             break;
 
                         case "line":
-                            // Print a separator line
                             String sep = cmd.optString("char", "-");
                             int len = cmd.optInt("len", 32);
                             StringBuilder sb = new StringBuilder();
                             for (int j = 0; j < len; j++) sb.append(sep);
                             sb.append("\n");
-                            printerService.printText(sb.toString(), null);
+                            printerService.printText(sb.toString(), defaultCallback);
                             break;
 
                         case "feed":
                             int lines = cmd.optInt("lines", 3);
-                            printerService.lineWrap(lines, null);
+                            printerService.lineWrap(lines, defaultCallback);
                             break;
 
                         case "cut":
-                            try { printerService.cutPaper(null); } catch (Exception e) {}
+                            try { printerService.cutPaper(defaultCallback); } catch (Exception e) {}
                             break;
 
                         case "qr":
                             String qrContent = cmd.optString("text", "");
                             int qrSize = cmd.optInt("size", 6);
                             if (!qrContent.isEmpty()) {
-                                printerService.printQRCode(qrContent, qrSize, 3, null);
+                                printerService.printQRCode(qrContent, qrSize, 3, defaultCallback);
                             }
                             break;
 
                         case "barcode":
                             String bcContent = cmd.optString("text", "");
                             if (!bcContent.isEmpty()) {
-                                printerService.printBarCode(bcContent, 8, 80, 2, 2, null);
+                                printerService.printBarCode(bcContent, 8, 80, 2, 2, defaultCallback);
                             }
                             break;
 
@@ -478,49 +476,46 @@ public class SunmiPrinterPlugin extends Plugin {
             try {
                 // Always exit buffer mode first in case it's stuck
                 try { printerService.exitPrinterBuffer(false); } catch (Exception e) {}
-                printerService.printerInit(null);
+                printerService.printerInit(defaultCallback);
 
                 if ("simple".equals(mode)) {
-                    // === SIMPLE: Just text, like testPrint but minimal ===
-                    printerService.printText("=== PRINT DIRECT SIMPLE ===\n", null);
-                    printerService.printText("Ce texte vient de printDirect\n", null);
-                    printerService.printText("Pas de JSON, pas de boucle\n", null);
-                    printerService.printText("================================\n", null);
-                    printerService.lineWrap(4, null);
-                    try { printerService.cutPaper(null); } catch (Exception e) {}
+                    printerService.printText("=== PRINT DIRECT SIMPLE ===\n", defaultCallback);
+                    printerService.printText("Ce texte vient de printDirect\n", defaultCallback);
+                    printerService.printText("Pas de JSON, pas de boucle\n", defaultCallback);
+                    printerService.printText("================================\n", defaultCallback);
+                    printerService.lineWrap(4, defaultCallback);
+                    try { printerService.cutPaper(defaultCallback); } catch (Exception e) {}
 
                 } else if ("formatted".equals(mode)) {
-                    // === FORMATTED: With setAlignment + setFontSize ===
-                    printerService.setAlignment(1, null);
-                    printerService.setFontSize(28f, null);
-                    printerService.printText("MA BOUTIQUE\n", null);
-                    printerService.setFontSize(20f, null);
-                    printerService.printText("123 Rue du Commerce\n", null);
-                    printerService.printText("75001 Paris\n", null);
-                    printerService.setAlignment(0, null);
-                    printerService.printText("================================\n", null);
-                    printerService.printText("N: TK-DIRECT  " + new java.text.SimpleDateFormat("dd/MM/yyyy HH:mm", java.util.Locale.FRANCE).format(new java.util.Date()) + "\n", null);
-                    printerService.printText("Caissier: Admin\n", null);
-                    printerService.printText("--------------------------------\n", null);
-                    printerService.setFontSize(22f, null);
-                    printerService.printText("Jean Slim (Bleu/38)\n", null);
-                    printerService.setFontSize(20f, null);
-                    printerService.printText("  x1  59.90 EUR\n", null);
-                    printerService.printText("--------------------------------\n", null);
-                    printerService.setFontSize(28f, null);
-                    printerService.printText("TOTAL TTC    59.90 EUR\n", null);
-                    printerService.setFontSize(20f, null);
-                    printerService.printText("Paiement: CB 59.90 EUR\n", null);
-                    printerService.printText("================================\n", null);
-                    printerService.setAlignment(1, null);
-                    printerService.setFontSize(18f, null);
-                    printerService.printText("EMPREINTE NF525\n", null);
-                    printerService.printText("ABC123DEF456\n", null);
-                    printerService.lineWrap(4, null);
-                    try { printerService.cutPaper(null); } catch (Exception e) {}
+                    printerService.setAlignment(1, defaultCallback);
+                    printerService.setFontSize(28f, defaultCallback);
+                    printerService.printText("MA BOUTIQUE\n", defaultCallback);
+                    printerService.setFontSize(20f, defaultCallback);
+                    printerService.printText("123 Rue du Commerce\n", defaultCallback);
+                    printerService.printText("75001 Paris\n", defaultCallback);
+                    printerService.setAlignment(0, defaultCallback);
+                    printerService.printText("================================\n", defaultCallback);
+                    printerService.printText("N: TK-DIRECT  " + new java.text.SimpleDateFormat("dd/MM/yyyy HH:mm", java.util.Locale.FRANCE).format(new java.util.Date()) + "\n", defaultCallback);
+                    printerService.printText("Caissier: Admin\n", defaultCallback);
+                    printerService.printText("--------------------------------\n", defaultCallback);
+                    printerService.setFontSize(22f, defaultCallback);
+                    printerService.printText("Jean Slim (Bleu/38)\n", defaultCallback);
+                    printerService.setFontSize(20f, defaultCallback);
+                    printerService.printText("  x1  59.90 EUR\n", defaultCallback);
+                    printerService.printText("--------------------------------\n", defaultCallback);
+                    printerService.setFontSize(28f, defaultCallback);
+                    printerService.printText("TOTAL TTC    59.90 EUR\n", defaultCallback);
+                    printerService.setFontSize(20f, defaultCallback);
+                    printerService.printText("Paiement: CB 59.90 EUR\n", defaultCallback);
+                    printerService.printText("================================\n", defaultCallback);
+                    printerService.setAlignment(1, defaultCallback);
+                    printerService.setFontSize(18f, defaultCallback);
+                    printerService.printText("EMPREINTE NF525\n", defaultCallback);
+                    printerService.printText("ABC123DEF456\n", defaultCallback);
+                    printerService.lineWrap(4, defaultCallback);
+                    try { printerService.cutPaper(defaultCallback); } catch (Exception e) {}
 
                 } else if ("ticket".equals(mode)) {
-                    // === TICKET: Uses data passed from JS ===
                     String shopName = call.getString("shopName", "Ma Boutique");
                     String address = call.getString("address", "");
                     String ticketNum = call.getString("ticketNum", "?");
@@ -528,29 +523,28 @@ public class SunmiPrinterPlugin extends Plugin {
                     String payment = call.getString("payment", "CB");
                     String items = call.getString("items", "");
 
-                    printerService.setAlignment(1, null);
-                    printerService.setFontSize(28f, null);
-                    printerService.printText(shopName + "\n", null);
-                    printerService.setFontSize(20f, null);
-                    if (!address.isEmpty()) printerService.printText(address + "\n", null);
-                    printerService.setAlignment(0, null);
-                    printerService.printText("================================\n", null);
-                    printerService.printText("N: " + ticketNum + "  " + new java.text.SimpleDateFormat("dd/MM/yyyy HH:mm", java.util.Locale.FRANCE).format(new java.util.Date()) + "\n", null);
-                    printerService.printText("--------------------------------\n", null);
-                    // Items: simple newline-separated string
+                    printerService.setAlignment(1, defaultCallback);
+                    printerService.setFontSize(28f, defaultCallback);
+                    printerService.printText(shopName + "\n", defaultCallback);
+                    printerService.setFontSize(20f, defaultCallback);
+                    if (!address.isEmpty()) printerService.printText(address + "\n", defaultCallback);
+                    printerService.setAlignment(0, defaultCallback);
+                    printerService.printText("================================\n", defaultCallback);
+                    printerService.printText("N: " + ticketNum + "  " + new java.text.SimpleDateFormat("dd/MM/yyyy HH:mm", java.util.Locale.FRANCE).format(new java.util.Date()) + "\n", defaultCallback);
+                    printerService.printText("--------------------------------\n", defaultCallback);
                     if (!items.isEmpty()) {
                         for (String line : items.split("\\|")) {
-                            printerService.printText(line + "\n", null);
+                            printerService.printText(line + "\n", defaultCallback);
                         }
                     }
-                    printerService.printText("--------------------------------\n", null);
-                    printerService.setFontSize(28f, null);
-                    printerService.printText("TOTAL TTC  " + total + " EUR\n", null);
-                    printerService.setFontSize(20f, null);
-                    printerService.printText("Paiement: " + payment + " " + total + " EUR\n", null);
-                    printerService.printText("================================\n", null);
-                    printerService.lineWrap(4, null);
-                    try { printerService.cutPaper(null); } catch (Exception e) {}
+                    printerService.printText("--------------------------------\n", defaultCallback);
+                    printerService.setFontSize(28f, defaultCallback);
+                    printerService.printText("TOTAL TTC  " + total + " EUR\n", defaultCallback);
+                    printerService.setFontSize(20f, defaultCallback);
+                    printerService.printText("Paiement: " + payment + " " + total + " EUR\n", defaultCallback);
+                    printerService.printText("================================\n", defaultCallback);
+                    printerService.lineWrap(4, defaultCallback);
+                    try { printerService.cutPaper(defaultCallback); } catch (Exception e) {}
                 }
 
                 JSObject ret = new JSObject();
@@ -668,7 +662,7 @@ public class SunmiPrinterPlugin extends Plugin {
 
                 byte[] rawData = buf.toByteArray();
                 Log.i(TAG, "printRaw: sending " + rawData.length + " bytes via sendRAWData");
-                printerService.sendRAWData(rawData, null);
+                printerService.sendRAWData(rawData, defaultCallback);
 
                 JSObject ret = new JSObject();
                 ret.put("success", true);
