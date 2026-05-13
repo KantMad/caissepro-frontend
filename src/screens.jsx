@@ -141,7 +141,7 @@ function SalesScreen(){
     gDisc,gDiscType,setCartGD,promoCode,setPromoCode,calcPromoDiscount,isOnline,findByEAN,offlineMode,
     parked,parkCart,restoreCart,customers,addCustomer,selCust,setSelCust,perm,notify,
     stockAlerts,activePromos,avoirPayment,setAvoirPayment,getLoyaltyTier,tickets,saleNote,setSaleNote,favorites,toggleFavorite,getLastPriceForCustomer,settings,
-    printerConnected,thermalPrint,pendingSync,clearPendingSync,users,currentUser,avoirs,consumeAvoir,addAudit,addJET,trainingMode}=useApp();
+    printerConnected,thermalPrint,pendingSync,clearPendingSync,users,currentUser,avoirs,consumeAvoir,isAvoirExpired,addAudit,addJET,trainingMode}=useApp();
   const[search,setSearch]=useState("");const[cat,setCat]=useState("Tous");const[vm,setVm]=useState(null);const[selSeller,setSelSeller]=useState(null);
   const[dm,setDm]=useState(null);const[dv,setDv]=useState("");const[gm,setGm]=useState(false);const[gv,setGv]=useState("");const[gtp,setGtp]=useState("percentage");
   const[lastTk,setLastTk]=useState(null);const[tkModal,setTkModal]=useState(false);const[busy,setBusy]=useState(false);
@@ -151,7 +151,7 @@ function SalesScreen(){
   const[payMethodModal,setPayMethodModal]=useState(false);const[avoirSelectModal,setAvoirSelectModal]=useState(false);
   const[retoucheModal,setRetoucheModal]=useState(false);const[retForm,setRetForm]=useState({client:"",phone:"",date:new Date().toISOString().split("T")[0],notes:"",items:[{desc:"",price:""}]});
   const[newCustModal,setNewCustModal]=useState(false);const[ncF,setNcF]=useState("");const[ncL,setNcL]=useState("");const[ncE,setNcE]=useState("");const[ncP,setNcP]=useState("");
-  const[syncConfirm,setSyncConfirm]=useState(false);
+  const[syncConfirm,setSyncConfirm]=useState(false);const[avoirSearch,setAvoirSearch]=useState("");
   const[codeInput,setCodeInput]=useState("");
   const[confirmVoid,setConfirmVoid]=useState(false);const[voidReason,setVoidReason]=useState("");
   const[showShortcuts,setShowShortcuts]=useState(false);
@@ -654,25 +654,31 @@ function SalesScreen(){
     </Modal>
 
     {/* AVOIR SELECTION MODAL */}
-    <Modal open={avoirSelectModal} onClose={()=>setAvoirSelectModal(false)} title="Paiement par avoir" sub={`Total à payer: ${totals.tTTC.toFixed(2)}€`}>
-      {(()=>{const available=avoirs.filter(a=>!a.used&&(a.remaining??a.totalTTC)>0);
-        return available.length===0?<div style={{textAlign:"center",padding:30,color:C.textLight}}>
-          <RotateCcw size={32} color={C.border} style={{marginBottom:10}}/>
-          <div style={{fontSize:14,fontWeight:700,marginBottom:4}}>Aucun avoir disponible</div>
-          <div style={{fontSize:11}}>Les avoirs sont générés lors des retours en caisse.</div></div>
-        :<div style={{display:"flex",flexDirection:"column",gap:8}}>
-          <div style={{fontSize:11,color:C.textMuted,marginBottom:4}}>{available.length} avoir(s) disponible(s)</div>
-          {available.map(a=>{const rem=a.remaining??a.totalTTC;const canApply=Math.min(rem,totals.tTTC);
+    <Modal open={avoirSelectModal} onClose={()=>{setAvoirSelectModal(false);setAvoirSearch("");}} title="Paiement par avoir" sub={`Total: ${totals.tTTC.toFixed(2)}EUR`}>
+      {(()=>{const available=avoirs.filter(a=>!a.used&&(a.remaining??a.totalTTC)>0&&!(isAvoirExpired?.(a)));
+        const shown=avoirSearch?available.filter(a=>(a.avoirNumber||"").toLowerCase().includes(avoirSearch.toLowerCase())||
+          (a.customerName||"").toLowerCase().includes(avoirSearch.toLowerCase())||(a.originalTicket||"").toLowerCase().includes(avoirSearch.toLowerCase())):available;
+        return<div style={{display:"flex",flexDirection:"column",gap:8}}>
+          {available.length>0&&<div style={{position:"relative"}}><Search size={13} style={{position:"absolute",left:10,top:11,color:C.textMuted}}/>
+            <Input value={avoirSearch} onChange={e=>setAvoirSearch(e.target.value)} placeholder="Rechercher par numero, client, ticket..." style={{paddingLeft:30,marginBottom:4}}/></div>}
+          <div style={{fontSize:11,color:C.textMuted}}>{shown.length} avoir(s) disponible(s){available.length!==shown.length?` sur ${available.length}`:""}</div>
+          {shown.length===0&&<div style={{textAlign:"center",padding:20,color:C.textLight}}>
+            <RotateCcw size={28} color={C.border} style={{marginBottom:8}}/>
+            <div style={{fontSize:13,fontWeight:700,marginBottom:2}}>Aucun avoir{avoirSearch?" pour cette recherche":" disponible"}</div>
+            <div style={{fontSize:11}}>Les avoirs sont generes lors des retours en caisse.</div></div>}
+          {shown.map(a=>{const rem=a.remaining??a.totalTTC;const canApply=Math.min(rem,totals.tTTC);
+            const expiryDate=new Date(new Date(a.date).setMonth(new Date(a.date).getMonth()+(settings.returnPolicy?.avoirExpiryMonths||12)));
             return(<div key={a.avoirNumber} style={{padding:14,borderRadius:14,border:`2px solid ${C.fiscal}25`,background:C.surfaceAlt,display:"flex",alignItems:"center",gap:12}}>
               <div style={{flex:1}}>
-                <div style={{fontSize:13,fontWeight:700}}>{a.avoirNumber}</div>
-                <div style={{fontSize:10,color:C.textMuted}}>Ticket: {a.originalTicket} — {new Date(a.date).toLocaleDateString("fr-FR")}</div>
-                {a.customerName&&<div style={{fontSize:10,color:C.textMuted}}>Client: {a.customerName}</div>}
-                <div style={{fontSize:12,fontWeight:700,color:C.fiscal,marginTop:4}}>Solde: {rem.toFixed(2)}€</div></div>
-              <Btn onClick={()=>{setAvoirPayment(canApply);consumeAvoir(a.avoirNumber,canApply);setAvoirSelectModal(false);
-                if(canApply>=totals.tTTC){quickPay("avoir");}else{notify(`Avoir ${a.avoirNumber}: ${canApply.toFixed(2)}€ appliqué. Reste ${(totals.tTTC-canApply).toFixed(2)}€ à payer.`,"info");openPay();}}}
+                <div style={{fontSize:13,fontWeight:700,fontFamily:"monospace"}}>{a.avoirNumber}</div>
+                <div style={{fontSize:10,color:C.textMuted}}>Ticket: {a.originalTicket} -- {new Date(a.date).toLocaleDateString("fr-FR")}</div>
+                {a.customerName&&<div style={{fontSize:10,color:C.accent}}>Client: {a.customerName}</div>}
+                <div style={{fontSize:10,color:C.textLight}}>Expire: {expiryDate.toLocaleDateString("fr-FR")}</div>
+                <div style={{fontSize:12,fontWeight:700,color:C.fiscal,marginTop:4}}>Solde: {rem.toFixed(2)}EUR</div></div>
+              <Btn onClick={()=>{setAvoirPayment(canApply);consumeAvoir(a.avoirNumber,canApply);setAvoirSelectModal(false);setAvoirSearch("");
+                if(canApply>=totals.tTTC){quickPay("avoir");}else{notify(`Avoir ${a.avoirNumber}: ${canApply.toFixed(2)}EUR applique. Reste ${(totals.tTTC-canApply).toFixed(2)}EUR.`,"info");openPay();}}}
                 style={{background:C.fiscal,padding:"10px 16px",fontSize:12}}>
-                Appliquer {canApply.toFixed(2)}€</Btn>
+                Appliquer {canApply.toFixed(2)}EUR</Btn>
             </div>);})}
         </div>;})()}
     </Modal>
@@ -1648,25 +1654,34 @@ function HistoryScreen(){
 
 /* ══════════ RETURN SCREEN ══════════ */
 function ReturnScreen(){
-  const{tickets,products,processReturn,findByEAN,avoirs,settings,notify,printerConnected,thermalPrint,setAvoirPayment,setMode:setAppMode,users,currentUser,addAudit}=useApp();
+  const{tickets,products,processReturn,findByEAN,avoirs,settings,notify,printerConnected,thermalPrint,setAvoirPayment,setMode:setAppMode,users,currentUser,addAudit,isAvoirExpired}=useApp();
+  const rp=settings.returnPolicy||{};
   const[mode,setMode]=useState("ticket");// ticket | scan | free
   const[searchTk,setSearchTk]=useState("");const[selectedTk,setSelectedTk]=useState(null);
-  const[returnItems,setReturnItems]=useState([]);const[reason,setReason]=useState("Échange taille");
-  const[refundMethod,setRefundMethod]=useState("avoir");const[restock,setRestock]=useState(true);const[defective,setDefective]=useState(false);
+  const[returnItems,setReturnItems]=useState([]);
+  const REASONS=rp.reasons?.length?rp.reasons:["Echange taille","Echange couleur","Defectueux","N'aime plus","Cadeau a retourner","Erreur de commande","Autre"];
+  const[reason,setReason]=useState(REASONS[0]);
+  const ALL_REFUND_METHODS=[{id:"avoir",l:"Avoir / Credit magasin",i:Gift,d:"Genere un avoir utilisable en caisse",sk:"allowAvoir"},
+    {id:"cash",l:"Remboursement especes",i:Banknote,d:"Remboursement immediat en liquide",sk:"allowCashRefund"},
+    {id:"card",l:"Remboursement carte",i:CreditCard,d:"Remboursement sur la carte du client",sk:"allowCardRefund"},
+    {id:"exchange",l:"Echange immediat",i:RotateCcw,d:"Retour + nouvelle vente, payer la difference",sk:"allowExchange"}];
+  const REFUND_METHODS=ALL_REFUND_METHODS.filter(m=>rp[m.sk]!==false);
+  const[refundMethod,setRefundMethod]=useState(()=>REFUND_METHODS[0]?.id||"avoir");
+  const[restock,setRestock]=useState(rp.autoRestock!==false);const[defective,setDefective]=useState(false);
   const[searchProd,setSearchProd]=useState("");const[freeItem,setFreeItem]=useState(null);const[freeQty,setFreeQty]=useState(1);
   const[lastAvoir,setLastAvoir]=useState(null);
+  const[avoirLookup,setAvoirLookup]=useState("");
   // C5 fix: Manager approval required for free/scan returns
   const[managerApproved,setManagerApproved]=useState(false);const[managerPinInput,setManagerPinInput]=useState("");const[managerPinError,setManagerPinError]=useState("");
   const verifyManagerPin=async()=>{const admin=users.find(u=>u.role==="admin");
-    if(!admin){setManagerPinError("Aucun admin trouvé");return;}
+    if(!admin){setManagerPinError("Aucun admin trouve");return;}
     const ok=await verifyPin(managerPinInput,admin.pin);
     if(ok){setManagerApproved(true);setManagerPinError("");setManagerPinInput("");addAudit("MANAGER_APPROVE","Approbation manager pour retour libre/scan");}
     else{setManagerPinError("PIN manager incorrect");}};
-  const REASONS=["Échange taille","Échange couleur","Défectueux","N'aime plus","Cadeau à retourner","Erreur de commande","Autre"];
-  const REFUND_METHODS=[{id:"avoir",l:"Avoir / Crédit magasin",i:Gift,d:"Génère un avoir utilisable en caisse"},
-    {id:"cash",l:"Remboursement espèces",i:Banknote,d:"Remboursement immédiat en liquide"},
-    {id:"card",l:"Remboursement carte",i:CreditCard,d:"Remboursement sur la carte du client"},
-    {id:"exchange",l:"Échange immédiat",i:RotateCcw,d:"Retour + nouvelle vente, payer la différence"}];
+  // Avoir search for history panel
+  const filteredAvoirs=useMemo(()=>{if(!avoirLookup)return avoirs.slice(0,20);const q=avoirLookup.toLowerCase();
+    return avoirs.filter(a=>(a.avoirNumber||"").toLowerCase().includes(q)||(a.customerName||"").toLowerCase().includes(q)||
+      (a.originalTicket||"").toLowerCase().includes(q)).slice(0,30);},[avoirs,avoirLookup]);
 
   const foundTickets=useMemo(()=>{if(!searchTk||searchTk.length<2)return[];const q=searchTk.toLowerCase();
     return tickets.filter(t=>(t.ticketNumber||"").toLowerCase().includes(q)||(t.customerName||"").toLowerCase().includes(q))
@@ -1691,7 +1706,11 @@ function ReturnScreen(){
   const updateReturnQty=(key,qty)=>setReturnItems(prev=>prev.map(r=>r.key===key?{...r,qty:Math.min(Math.max(1,qty),r.maxQty)}:r));
   const returnTotal=returnItems.reduce((s,r)=>s+r.unitPrice*r.qty,0);
 
-  const doReturn=async()=>{if(!returnItems.length){notify("Sélectionnez au moins un article","error");return;}
+  const doReturn=async()=>{if(!returnItems.length){notify("Selectionnez au moins un article","error");return;}
+    // Enforce maxNoApproval
+    const maxNA=rp.maxNoApproval||Infinity;
+    if(returnTotal>maxNA&&currentUser?.role!=="admin"&&!managerApproved){
+      notify(`Montant > ${maxNA}EUR -- approbation manager requise`,"error");return;}
     const items=returnItems.map(r=>({productId:r.productId,variantId:r.variantId,qty:r.qty}));
     // Construire le ticket synthétique pour scan/free avec le bon taux de TVA par produit
     const syntheticTicket=selectedTk||{ticketNumber:"RETOUR-LIBRE",date:new Date().toISOString(),items:returnItems.map(r=>{
@@ -1726,7 +1745,9 @@ function ReturnScreen(){
 
     {/* Mode tabs */}
     <div style={{display:"flex",gap:6,marginBottom:14}}>
-      {[{id:"ticket",l:"Par ticket de caisse",i:Receipt},{id:"scan",l:"Par scan / recherche produit",i:ScanLine},{id:"free",l:"Retour libre (sans ticket)",i:Edit}].map(m=>(
+      {[{id:"ticket",l:"Par ticket de caisse",i:Receipt},
+        ...(rp.requireReceipt===true?[]:[{id:"scan",l:"Par scan / recherche produit",i:ScanLine},{id:"free",l:"Retour libre (sans ticket)",i:Edit}])
+      ].map(m=>(
         <button key={m.id} onClick={()=>{setMode(m.id);setSelectedTk(null);setReturnItems([]);setFreeItem(null);if(m.id==="ticket")setManagerApproved(false);setManagerPinInput("");setManagerPinError("");}}
           style={{flex:1,padding:"12px 14px",borderRadius:12,border:`2px solid ${mode===m.id?C.primary:C.border}`,
             background:mode===m.id?C.primaryLight:"transparent",cursor:"pointer",transition:"all 0.15s",textAlign:"left"}}>
@@ -1809,16 +1830,30 @@ function ReturnScreen(){
                 <span style={{fontSize:12,fontWeight:700,color:C.primary}}>{p.price.toFixed(2)}€</span>
               </div>);})}</div>))}</div>}
 
-        {/* Historique avoirs */}
+        {/* Historique avoirs — avec recherche */}
         {!returnItems.length&&!selectedTk&&<div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`,marginTop:14}}>
-          <div style={{fontSize:14,fontWeight:700,marginBottom:10}}>Avoirs émis ({avoirs.length})</div>
-          {avoirs.length===0&&<div style={{color:C.textLight,fontSize:11}}>Aucun avoir</div>}
-          {avoirs.slice(0,15).map(a=>(<div key={a.avoirNumber} style={{display:"flex",alignItems:"center",gap:10,padding:8,borderBottom:`1px solid ${C.border}`}}>
-            <RotateCcw size={13} color={C.fiscal}/>
-            <div style={{flex:1}}><div style={{fontSize:11,fontWeight:600}}>{a.avoirNumber}</div>
-              <div style={{fontSize:9,color:C.textMuted}}>{new Date(a.date).toLocaleDateString("fr-FR")} — Réf: {a.originalTicket} — {a.reason} — {a.refundMethod}</div></div>
-            <span style={{fontSize:12,fontWeight:700,color:C.danger}}>-{a.totalTTC.toFixed(2)}€</span>
-          </div>))}</div>}
+          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
+            <div style={{fontSize:14,fontWeight:700,flex:1}}>Avoirs ({avoirs.length})</div>
+            <div style={{position:"relative",flex:1,maxWidth:260}}><Search size={13} style={{position:"absolute",left:8,top:9,color:C.textMuted}}/>
+              <Input value={avoirLookup} onChange={e=>setAvoirLookup(e.target.value)} placeholder="Rechercher avoir, client, ticket..." style={{paddingLeft:28,height:34,fontSize:11}}/></div></div>
+          {filteredAvoirs.length===0&&<div style={{color:C.textLight,fontSize:11,textAlign:"center",padding:14}}>Aucun avoir{avoirLookup?" pour cette recherche":""}</div>}
+          {filteredAvoirs.map(a=>{const expired=isAvoirExpired?.(a);const isAvoirType=a.refundMethod==="avoir";
+            return(<div key={a.avoirNumber||a.id} style={{display:"flex",alignItems:"center",gap:10,padding:10,borderBottom:`1px solid ${C.border}`,opacity:expired?0.5:1}}>
+            <div style={{width:30,height:30,borderRadius:8,background:expired?C.surfaceAlt:isAvoirType&&!a.used?C.fiscalLight:C.dangerLight,
+              display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+              <RotateCcw size={13} color={expired?C.textMuted:isAvoirType&&!a.used?C.fiscal:C.danger}/></div>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{display:"flex",alignItems:"center",gap:4,flexWrap:"wrap"}}>
+                <span style={{fontSize:11,fontWeight:700,fontFamily:"monospace"}}>{a.avoirNumber}</span>
+                <Badge color={a.refundMethod==="avoir"?C.primary:a.refundMethod==="cash"?C.accent:a.refundMethod==="card"?C.info:"#8B5CF6"}>
+                  {({avoir:"Avoir",cash:"ESP",card:"CB",exchange:"ECH"})[a.refundMethod]||a.refundMethod}</Badge>
+                {isAvoirType&&!a.used&&!expired&&<Badge color={C.fiscal}>Solde: {(a.remaining??a.totalTTC).toFixed(2)}EUR</Badge>}
+                {a.used&&<Badge color={C.textMuted}>Utilise</Badge>}
+                {expired&&<Badge color={C.danger}>Expire</Badge>}</div>
+              <div style={{fontSize:9,color:C.textMuted,marginTop:1}}>
+                {new Date(a.date).toLocaleDateString("fr-FR")} -- Ref: {a.originalTicket}{a.customerName?` -- ${a.customerName}`:""}{a.reason?` -- ${a.reason}`:""}</div></div>
+            <span style={{fontSize:12,fontWeight:700,color:C.danger,whiteSpace:"nowrap"}}>-{(a.totalTTC||0).toFixed(2)}EUR</span>
+          </div>);})}</div>}
       </div>
 
       {/* Right — Return summary */}
@@ -3020,7 +3055,7 @@ function ProductsScreen(){
 
 /* ══════════ SETTINGS ══════════ */
 function ReturnsHistoryScreen(){
-  const{avoirs,tickets,notify,settings,setSettings,saveSettingsToAPI,addAudit}=useApp();
+  const{avoirs,tickets,notify,settings,setSettings,saveSettingsToAPI,addAudit,isAvoirExpired}=useApp();
   const[filter,setFilter]=useState("all");const[search,setSearch]=useState("");
   const[tab,setTab]=useState(avoirs.length>0?"history":"settings");
   const sorted=[...avoirs].sort((a,b)=>new Date(b.date)-new Date(a.date));
@@ -3029,12 +3064,14 @@ function ReturnsHistoryScreen(){
     if(filter==="cash"&&a.refundMethod!=="cash")return false;
     if(filter==="card"&&a.refundMethod!=="card")return false;
     if(filter==="exchange"&&a.refundMethod!=="exchange")return false;
-    if(search){const s=search.toLowerCase();return(a.code||"").toLowerCase().includes(s)||(a.reason||"").toLowerCase().includes(s)||(a.items||[]).some(it=>(it.name||"").toLowerCase().includes(s));}
+    if(search){const s=search.toLowerCase();return(a.avoirNumber||"").toLowerCase().includes(s)||(a.reason||"").toLowerCase().includes(s)||
+      (a.originalTicket||"").toLowerCase().includes(s)||(a.customerName||"").toLowerCase().includes(s)||
+      (a.items||[]).some(it=>((it.product?.name||it.product_name||"").toLowerCase().includes(s)));}
     return true;
   });
   const totalReturns=avoirs.length;
-  const totalValue=avoirs.reduce((s,a)=>s+(a.amount||0),0);
-  const totalItems=avoirs.reduce((s,a)=>s+(a.items||[]).reduce((ss,it)=>ss+(it.qty||1),0),0);
+  const totalValue=avoirs.reduce((s,a)=>s+(a.totalTTC||0),0);
+  const totalItems=avoirs.reduce((s,a)=>s+(a.items||[]).reduce((ss,it)=>ss+(it.quantity||it.qty||1),0),0);
   const reasonStats={};avoirs.forEach(a=>{const r=a.reason||"Non spécifié";reasonStats[r]=(reasonStats[r]||0)+1;});
   const methodStats={};avoirs.forEach(a=>{const m=a.refundMethod||"avoir";methodStats[m]=(methodStats[m]||0)+1;});
 
@@ -3057,12 +3094,21 @@ function ReturnsHistoryScreen(){
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:12}}>
           <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>DÉLAI DE RETOUR (jours)</label>
             <Input type="number" value={settings.returnPolicy?.days||30} onChange={e=>setSettings(s=>({...s,returnPolicy:{...s.returnPolicy,days:parseInt(e.target.value)||30}}))}/></div>
-          <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>MONTANT MAX SANS APPROBATION (€)</label>
+          <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>MONTANT MAX SANS APPROBATION (EUR)</label>
             <Input type="number" value={settings.returnPolicy?.maxNoApproval||100} onChange={e=>setSettings(s=>({...s,returnPolicy:{...s.returnPolicy,maxNoApproval:parseFloat(e.target.value)||100}}))}/></div></div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:12}}>
+          <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>VALIDITE AVOIR (mois)</label>
+            <Input type="number" value={settings.returnPolicy?.avoirExpiryMonths||12} onChange={e=>setSettings(s=>({...s,returnPolicy:{...s.returnPolicy,avoirExpiryMonths:parseInt(e.target.value)||12}}))}/></div>
+          <div/>
+        </div>
         <div style={{marginBottom:12}}><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>CONDITIONS DE RETOUR</label>
           <textarea value={settings.returnPolicy?.conditions||""} onChange={e=>setSettings(s=>({...s,returnPolicy:{...s.returnPolicy,conditions:e.target.value}}))}
             style={{width:"100%",height:60,padding:10,borderRadius:10,border:`2px solid ${C.border}`,fontSize:12,fontFamily:"inherit",resize:"vertical"}}
-            placeholder="Article non porté, étiquette présente…"/></div>
+            placeholder="Article non porte, etiquette presente..."/></div>
+        <div style={{marginBottom:12}}><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>MOTIFS DE RETOUR PERSONNALISES (un par ligne)</label>
+          <textarea value={(settings.returnPolicy?.reasons||[]).join("\n")} onChange={e=>setSettings(s=>({...s,returnPolicy:{...s.returnPolicy,reasons:e.target.value.split("\n").filter(r=>r.trim())}}))}
+            style={{width:"100%",height:80,padding:10,borderRadius:10,border:`2px solid ${C.border}`,fontSize:12,fontFamily:"inherit",resize:"vertical"}}
+            placeholder={"Echange taille\nEchange couleur\nDefectueux\nN'aime plus\nCadeau a retourner\nErreur de commande\nAutre"}/></div>
       </div>
       <div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`,marginBottom:14}}>
         <h4 style={{fontSize:13,fontWeight:700,marginBottom:10}}>Modes de remboursement autorisés</h4>
@@ -3148,22 +3194,28 @@ function ReturnsHistoryScreen(){
       </div>
       {filtered.length===0&&<div style={{textAlign:"center",padding:30,color:C.textLight}}>
         <RotateCcw size={32} style={{marginBottom:8,opacity:0.3}}/><div>Aucun retour trouvé</div></div>}
-      {filtered.map(a=>(<div key={a.id||a.code} style={{padding:12,borderBottom:`1px solid ${C.border}`,display:"flex",alignItems:"center",gap:12}}>
-        <div style={{width:40,height:40,borderRadius:10,background:C.dangerLight,display:"flex",alignItems:"center",justifyContent:"center"}}><RotateCcw size={16} color={C.danger}/></div>
+      {filtered.map(a=>{const expired=isAvoirExpired?.(a);return(<div key={a.id||a.avoirNumber} style={{padding:12,borderBottom:`1px solid ${C.border}`,display:"flex",alignItems:"center",gap:12,opacity:expired?0.6:1}}>
+        <div style={{width:40,height:40,borderRadius:10,background:expired?C.surfaceAlt:C.dangerLight,display:"flex",alignItems:"center",justifyContent:"center"}}><RotateCcw size={16} color={expired?C.textMuted:C.danger}/></div>
         <div style={{flex:1}}>
-          <div style={{display:"flex",alignItems:"center",gap:6}}>
-            <span style={{fontSize:13,fontWeight:700}}>{a.code||"RET-"+String(a.id).slice(-6)}</span>
+          <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
+            <span style={{fontSize:13,fontWeight:700}}>{a.avoirNumber||("RET-"+String(a.id).slice(-6))}</span>
             <Badge color={a.refundMethod==="avoir"?C.primary:a.refundMethod==="cash"?C.accent:a.refundMethod==="card"?C.info:"#8B5CF6"}>
-              {a.refundMethod==="avoir"?"Avoir":a.refundMethod==="cash"?"Espèces":a.refundMethod==="card"?"Carte":"Échange"}</Badge>
-            {a.originalTicket&&<span style={{fontSize:10,color:C.textMuted}}>Ticket: {a.originalTicket}</span>}</div>
+              {a.refundMethod==="avoir"?"Avoir":a.refundMethod==="cash"?"Especes":a.refundMethod==="card"?"Carte":"Echange"}</Badge>
+            {a.originalTicket&&<span style={{fontSize:10,color:C.textMuted,fontFamily:"monospace"}}>Ticket: {a.originalTicket}</span>}
+            {a.customerName&&<span style={{fontSize:10,color:C.accent}}>Client: {a.customerName}</span>}
+            {expired&&<Badge color={C.danger}>Expire</Badge>}
+            {a.refundMethod==="avoir"&&!a.used&&!expired&&<Badge color={C.fiscal}>Solde: {(a.remaining??a.totalTTC).toFixed(2)}EUR</Badge>}
+            {a.used&&<Badge color={C.textMuted}>Utilise</Badge>}</div>
           <div style={{fontSize:11,color:C.textMuted,marginTop:2}}>
-            {(a.items||[]).map(it=>`${it.name}${it.variant?" ("+it.variant+")":""}${it.qty>1?" x"+it.qty:""}`).join(", ")}
-            {a.reason&&<span> — {a.reason}</span>}</div></div>
+            {(a.items||[]).map(it=>`${it.product?.name||it.product_name||"?"}${it.variant?(" ("+((it.variant?.color||it.variant_color||"")+"/"+(it.variant?.size||it.variant_size||""))+")"):""} x${it.quantity||it.qty||1}`).join(", ")}
+            {a.reason&&<span> -- {a.reason}</span>}</div>
+          {a.userName&&<div style={{fontSize:9,color:C.textLight,marginTop:1}}>Par: {a.userName}</div>}</div>
         <div style={{textAlign:"right"}}>
-          <div style={{fontSize:14,fontWeight:800,color:C.danger}}>{(a.amount||0).toFixed(2)}€</div>
+          <div style={{fontSize:14,fontWeight:800,color:C.danger}}>-{(a.totalTTC||0).toFixed(2)}EUR</div>
           <div style={{fontSize:10,color:C.textMuted}}>{new Date(a.date).toLocaleDateString("fr-FR",{day:"2-digit",month:"short",year:"numeric",hour:"2-digit",minute:"2-digit"})}</div>
+          {a.fingerprint&&<div style={{fontSize:8,color:C.fiscal,fontFamily:"monospace"}}>{a.fingerprint}</div>}
         </div>
-      </div>))}
+      </div>);})}
     </div>
     </>}
   </div>);

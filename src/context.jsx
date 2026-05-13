@@ -179,6 +179,9 @@ function AppProvider({children}){
       // Load tickets and closures from backend
       try{const salesData=await API.sales.list({limit:200});if(salesData?.length)setTickets(salesData.map(s=>({...s,ticketNumber:s.ticket_number,totalHT:parseFloat(s.total_ht),totalTVA:parseFloat(s.total_tva),totalTTC:parseFloat(s.total_ttc),date:s.created_at,userName:s.user_name,paymentMethod:s.payment_method,customerName:s.customer_name,fingerprint:s.fingerprint})));}catch(e){}
       try{const closData=await API.fiscal.closures();if(closData?.length)setClosures(closData.map(c=>({...c,type:c.closure_type,totalHT:parseFloat(c.total_ht),totalTVA:parseFloat(c.total_tva),totalTTC:parseFloat(c.total_ttc),totalMargin:parseFloat(c.total_margin||0),date:c.created_at,userName:c.user_name})));}catch(e){}
+      // Load avoirs from server
+      try{const avoirsData=await API.returns.list({limit:500});if(avoirsData?.length)setAvoirs(norm.avoirs(avoirsData));}catch(e){/* keep localStorage avoirs */}
+      try{const ctr=await API.returns.counter();if(ctr?.seq)setAvoirSeq(ctr.seq);}catch(e){}
     }catch(e){
       console.warn("Chargement données échoué:",e.message);
       if(e.message?.includes("401")||e.message?.includes("Unauthorized")){setCurrentUser(null);API.clearToken();}
@@ -206,7 +209,8 @@ function AppProvider({children}){
           else if(action.type==="closeRegister")await API.settings.closeRegister(action.data.registerId,{closedAt:new Date().toISOString()});
           else if(action.type==="offlineSale")await API.sales.checkout(action.data);
           else if(action.type==="offlineClosure")await API.fiscal.closure(action.data);
-          else if(action.type==="offlineAvoir")await API.sales.void(action.data.saleId,action.data.reason);
+          else if(action.type==="offlineAvoir"){try{await API.returns.create(action.data);}catch(e2){await API.sales.void(action.data.saleId,action.data.reason);}}
+          else if(action.type==="consumeAvoir")await API.returns.consume(action.data.avoirNumber,action.data.amount);
           else{failed.push({...action,retries:(action.retries||0)+1,lastError:"Type inconnu"});continue;}
           synced++;
         }catch(e){
@@ -1009,8 +1013,11 @@ function AppProvider({children}){
   // ══ RETURNS / AVOIRS ══
   const[avoirSeq,setAvoirSeq]=useState(()=>{try{return parseInt(localStorage.getItem("caissepro_avoirseq"))||0;}catch(e){return 0;}});
   useEffect(()=>{try{localStorage.setItem("caissepro_avoirseq",String(avoirSeq));}catch(e){}},[avoirSeq]);
-  const processReturn=useCallback(async(ticket,returnItems,reason,refundMethod,doRestock=true,defective=false)=>{
+  const processReturn=useCallback(async(ticket,returnItems,reason,refundMethod,doRestock,defective=false)=>{
     if(!returnItems.length)return null;
+    const rp=settings.returnPolicy||{};
+    // Enforce settings: motif obligatoire
+    if(rp.requireReason===true&&!reason?.trim()){notify("Motif de retour obligatoire","error");return null;}
     // Validation: empêcher double-retour (vérifier si articles déjà retournés)
     const existingReturns=avoirs.filter(a=>a.originalTicket===ticket.ticketNumber);
     const alreadyReturned={};existingReturns.forEach(a=>(a.items||[]).forEach(i=>{
@@ -1019,7 +1026,7 @@ function AppProvider({children}){
       const k=`${ri.productId}-${ri.variantId}`;const returned=alreadyReturned[k]||0;
       const origItem=ticket.items?.find(i=>(i.product?.id||i.product_id)===ri.productId&&(i.variant?.id||i.variant_id)===ri.variantId);
       const maxAllowed=(origItem?.quantity||ri.qty)-returned;
-      if(ri.qty>maxAllowed){notify(`Article déjà retourné (max: ${maxAllowed})`,"error");return null;}}
+      if(ri.qty>maxAllowed){notify(`Article deja retourne (max: ${maxAllowed})`,"error");return null;}}
 
     const seq=avoirSeq+1;const avoirNumber=`AV-${new Date().getFullYear()}-${String(seq).padStart(6,"0")}`;
     const date=new Date().toISOString();
@@ -1034,6 +1041,10 @@ function AppProvider({children}){
     }).filter(Boolean);
     const totalTTC=totalHT+totalTVA;
 
+    // Enforce settings: montant max sans approbation
+    if(rp.maxNoApproval&&totalTTC>rp.maxNoApproval&&currentUser?.role!=="admin"){
+      notify(`Montant > ${rp.maxNoApproval}EUR -- approbation manager requise`,"error");return null;}
+
     // NF525: SHA-256 hash chain pour avoirs — inclut ID caisse, type, séquence
     const caisseId=currentStore?.id||cashReg?.id||"CAISSE-01";
     const lastAvoirHash=avoirs.length>0?(avoirs[0].hash||""):lastHash;
@@ -1047,47 +1058,75 @@ function AppProvider({children}){
       customerId:ticket.customerId,customerName:ticket.customerName,
       hash,fingerprint};
 
-    // Essai API pour persister l'avoir côté serveur
+    // Essai API retours dédié, fallback sur void, puis offline
+    const apiPayload={originalTicket:ticket.ticketNumber||ticket.id,reason,refundMethod,avoirNumber,
+      items:items.map(i=>({productId:i.product_id||i.product?.id,variantId:i.variant_id||i.variant?.id,
+        qty:i.quantity,lineTTC:i.lineTTC,lineHT:i.lineHT,lineTVA:i.lineTVA})),
+      totalHT,totalTVA,totalTTC,restock:doRestock!==undefined?doRestock:(rp.autoRestock!==false),defective};
     try{
-      const apiResult=await API.sales.void(ticket.ticketNumber||ticket.id,reason);
-      if(apiResult?.seq)avoir.seq=apiResult.seq;
+      const apiResult=await API.returns.create(apiPayload);
+      if(apiResult?.seq){avoir.seq=apiResult.seq;setAvoirSeq(apiResult.seq);}
       if(apiResult?.hash)avoir.hash=apiResult.hash;
       if(apiResult?.fingerprint)avoir.fingerprint=apiResult.fingerprint;
+      if(apiResult?.avoirNumber)avoir.avoirNumber=apiResult.avoirNumber;
     }catch(e){
-      console.warn("Avoir API échoué, mode local:",e.message);
-      addPendingSync({type:"offlineAvoir",data:{saleId:ticket.ticketNumber||ticket.id,reason,avoirNumber,items:items.map(i=>({productId:i.product_id||i.product?.id,variantId:i.variant_id||i.variant?.id,qty:i.quantity}))}});
+      // Fallback: legacy void endpoint
+      try{const voidResult=await API.sales.void(ticket.ticketNumber||ticket.id,reason);
+        if(voidResult?.seq)avoir.seq=voidResult.seq;
+        if(voidResult?.hash)avoir.hash=voidResult.hash;
+        if(voidResult?.fingerprint)avoir.fingerprint=voidResult.fingerprint;
+      }catch(e2){
+        console.warn("Avoir API echoue, mode local:",e.message);
+        addPendingSync({type:"offlineAvoir",data:{...apiPayload,saleId:ticket.ticketNumber||ticket.id}});
+      }
     }
 
     setAvoirSeq(seq);setAvoirs(p=>[avoir,...p]);
 
     // Restock: remettre en stock les articles retournés
-    if(doRestock){
+    const effectiveRestock=doRestock!==undefined?doRestock:(rp.autoRestock!==false);
+    if(effectiveRestock){
       for(const ri of returnItems){
-        try{await API.stock.adjust({productId:ri.productId,variantId:ri.variantId,quantity:ri.qty,reason:defective?`Retour défectueux ${avoirNumber}`:`Retour ${avoirNumber}`,defective});}
+        try{await API.stock.adjust({productId:ri.productId,variantId:ri.variantId,quantity:ri.qty,reason:defective?`Retour defectueux ${avoirNumber}`:`Retour ${avoirNumber}`,defective});}
         catch(e){
           setProducts(prev=>prev.map(p=>{if(p.id!==ri.productId)return p;
             return{...p,variants:p.variants.map(v=>v.id===ri.variantId?{...v,stock:defective?v.stock:v.stock+ri.qty,defectiveStock:(v.defectiveStock||0)+(defective?ri.qty:0)}:v)};}));
         }
       }
-      // Refresh stock from API
       try{const prods=await API.products.list();setProducts(norm.products(prods));}catch(e){console.error(e);}
+    }
+
+    // Auto-print avoir si configuré
+    if(rp.printAvoir===true&&printerConnected){
+      try{await thermalPrint("avoir",avoir);}catch(e){console.warn("Auto-print avoir echoue:",e);}
     }
 
     if(ticket.customerId){const pts=Math.floor(totalTTC);
       setCustomers(prev=>prev.map(c=>c.id===ticket.customerId?{...c,points:Math.max(0,c.points-pts),totalSpent:Math.max(0,c.totalSpent-totalTTC)}:c));}
-    addAudit("AVOIR",`${avoirNumber} — Réf: ${ticket.ticketNumber} — ${totalTTC.toFixed(2)}€ — ${refundMethod}`,avoirNumber);
-    addJET("AVOIR",`Avoir ${avoirNumber} émis pour ${totalTTC.toFixed(2)}€`);
-    notify(`Avoir ${avoirNumber} — ${totalTTC.toFixed(2)}€`,"success");
+    addAudit("AVOIR",`${avoirNumber} -- Ref: ${ticket.ticketNumber} -- ${totalTTC.toFixed(2)}EUR -- ${refundMethod}`,avoirNumber);
+    addJET("AVOIR",`Avoir ${avoirNumber} emis pour ${totalTTC.toFixed(2)}EUR`);
+    notify(`Avoir ${avoirNumber} -- ${totalTTC.toFixed(2)}EUR`,"success");
     return avoir;
-  },[avoirSeq,avoirs,lastHash,currentUser,addAudit,addJET,notify,addPendingSync]);
+  },[avoirSeq,avoirs,lastHash,currentUser,addAudit,addJET,notify,addPendingSync,settings,printerConnected,thermalPrint]);
 
   // ══ CONSUME AVOIR (deduct amount when used as payment) ══
-  const consumeAvoir=useCallback((avoirNumber,amount)=>{
+  const consumeAvoir=useCallback(async(avoirNumber,amount)=>{
     setAvoirs(p=>p.map(a=>{if(a.avoirNumber!==avoirNumber)return a;
       const rem=Math.max(0,(a.remaining??a.totalTTC)-amount);
       return{...a,remaining:rem,used:rem<=0};}));
-    addAudit("AVOIR_USE",`Avoir ${avoirNumber} utilisé: ${amount.toFixed(2)}€`);
-  },[addAudit]);
+    addAudit("AVOIR_USE",`Avoir ${avoirNumber} utilise: ${amount.toFixed(2)}EUR`);
+    // Sync consumption to server
+    try{await API.returns.consume(avoirNumber,amount);}
+    catch(e){addPendingSync({type:"consumeAvoir",data:{avoirNumber,amount}});}
+  },[addAudit,addPendingSync]);
+
+  // Avoir expiry check
+  const isAvoirExpired=useCallback((avoir)=>{
+    const expiryMonths=settings.returnPolicy?.avoirExpiryMonths||12;
+    const created=new Date(avoir.date);const expiry=new Date(created);
+    expiry.setMonth(expiry.getMonth()+expiryMonths);
+    return new Date()>expiry;
+  },[settings.returnPolicy?.avoirExpiryMonths]);
 
   // ══ FOOTFALL COUNTER ══
   const[footfall,setFootfall]=useState(()=>{try{const s=localStorage.getItem("caissepro_footfall");return s?JSON.parse(s):[];}catch(e){return[];}});
@@ -1243,7 +1282,7 @@ function AppProvider({children}){
     products,setProducts,addProduct,customers,setCustomers,addCustomer,openCustomerDisplay,footfall,addFootfall,
     cart,addToCart,addCustomItem,removeFromCart,voidSale,updateQty,updateItemDisc,clearCart,gDisc,gDiscType,setCartGD,
     promoCode,setPromoCode,calcPromoDiscount,
-    cashReg,openReg,closeReg,isOnline,tickets,setTickets,tSeq,lastHash,gt,audit,jet,closures,avoirs,consumeAvoir,
+    cashReg,openReg,closeReg,isOnline,tickets,setTickets,tSeq,lastHash,gt,audit,jet,closures,avoirs,consumeAvoir,isAvoirExpired,
     checkout,createClosure,exportArchive,exportFEC,exportCSVReport,exportCustomerRGPD,addAudit,addJET,
     promos,setPromos,activePromos,parked,parkCart,restoreCart,selCust,setSelCust,
     stockAlerts,stockMoves,addStockMove,receiveStock,

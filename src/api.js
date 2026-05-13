@@ -104,6 +104,16 @@ export const sales = {
   byDay: () => api('/api/sales/stats/by-day'),
 };
 
+// ══ Returns / Avoirs ══
+export const returns = {
+  create: (data) => api('/api/returns', { method: 'POST', body: JSON.stringify(data) }),
+  list: (params) => api('/api/returns?' + new URLSearchParams(params || {})),
+  get: (avoirNumber) => api(`/api/returns/${avoirNumber}`),
+  consume: (avoirNumber, amount) => api(`/api/returns/${encodeURIComponent(avoirNumber)}/consume`, { method: 'POST', body: JSON.stringify({ amount }) }),
+  search: (query) => api('/api/returns/search?' + new URLSearchParams({ q: query })),
+  counter: () => api('/api/returns/counter'),
+};
+
 // ══ Customers ══
 export const customers = {
   list: (search) => api('/api/customers?' + new URLSearchParams(search ? { search } : {})),
