@@ -3275,6 +3275,111 @@ function DebugPanel(){
   };
 
   // ══════════════════════════════════════════════
+  // TEST TICKET FORMATE (avec bold/size/align)
+  // ══════════════════════════════════════════════
+  const testFormattedPrint=async()=>{
+    setRunning(true);clearLogs();
+    addLog("=== TEST IMPRESSION FORMATEE ===","title");
+    const sp=window.Capacitor?.Plugins?.SunmiPrinter;
+    if(!sp){addLog("Plugin absent","error");setRunning(false);return;}
+
+    // Test A: text-only ticket (no bold/size/align)
+    addLog("--- Test A: Ticket TEXTE SEUL (sans formatage) ---","title");
+    try{
+      const r=await sp.printBatch({commands:[
+        {cmd:"text",text:"================================\n"},
+        {cmd:"text",text:"       MA BOUTIQUE TEST\n"},
+        {cmd:"text",text:"   123 Rue du Commerce\n"},
+        {cmd:"text",text:"================================\n"},
+        {cmd:"text",text:"N: TK-999  13/05/2026 14:30\n"},
+        {cmd:"text",text:"Caissier: Admin\n"},
+        {cmd:"text",text:"--------------------------------\n"},
+        {cmd:"text",text:"Pantalon Jean (Bleu/M)\n"},
+        {cmd:"text",text:"  x1  49.90 EUR\n"},
+        {cmd:"text",text:"T-Shirt Coton (Noir/L)\n"},
+        {cmd:"text",text:"  x2  39.80 EUR\n"},
+        {cmd:"text",text:"--------------------------------\n"},
+        {cmd:"text",text:"Total HT     74.75 EUR\n"},
+        {cmd:"text",text:"TVA          14.95 EUR\n"},
+        {cmd:"text",text:"TOTAL TTC    89.70 EUR\n"},
+        {cmd:"text",text:"Paiement: CB 89.70 EUR\n"},
+        {cmd:"text",text:"================================\n"},
+        {cmd:"feed",lines:4},{cmd:"cut"}
+      ]});
+      addLog(`OK: ${JSON.stringify(r)}`,"success");
+    }catch(e){addLog(`ERREUR: ${e.message}`,"error");}
+
+    // Test B: with align + size (no bold)
+    addLog("--- Test B: Avec ALIGN + SIZE (sans bold) ---","title");
+    try{
+      const r=await sp.printBatch({commands:[
+        {cmd:"align",value:1},{cmd:"size",value:28},
+        {cmd:"text",text:"MA BOUTIQUE\n"},
+        {cmd:"size",value:20},
+        {cmd:"text",text:"Rue du Commerce\n"},
+        {cmd:"align",value:0},{cmd:"size",value:20},
+        {cmd:"text",text:"--------------------------------\n"},
+        {cmd:"text",text:"Article test  49.90 EUR\n"},
+        {cmd:"text",text:"TOTAL TTC     49.90 EUR\n"},
+        {cmd:"feed",lines:4},{cmd:"cut"}
+      ]});
+      addLog(`OK: ${JSON.stringify(r)}`,"success");
+    }catch(e){addLog(`ERREUR: ${e.message}`,"error");}
+
+    // Test C: with bold only
+    addLog("--- Test C: Avec BOLD seul ---","title");
+    try{
+      const r=await sp.printBatch({commands:[
+        {cmd:"bold",enabled:true},
+        {cmd:"text",text:"TEXTE EN GRAS\n"},
+        {cmd:"bold",enabled:false},
+        {cmd:"text",text:"Texte normal\n"},
+        {cmd:"feed",lines:4},{cmd:"cut"}
+      ]});
+      addLog(`OK: ${JSON.stringify(r)}`,"success");
+    }catch(e){addLog(`ERREUR: ${e.message}`,"error");}
+
+    // Test D: full formatted (like real ticket)
+    addLog("--- Test D: Ticket COMPLET (align+size+bold+line) ---","title");
+    try{
+      const r=await sp.printBatch({commands:[
+        {cmd:"align",value:1},{cmd:"size",value:28},{cmd:"bold",enabled:true},
+        {cmd:"text",text:"MA BOUTIQUE\n"},
+        {cmd:"size",value:20},{cmd:"bold",enabled:false},
+        {cmd:"text",text:"123 Rue du Commerce\n"},
+        {cmd:"text",text:"75001 Paris\n"},
+        {cmd:"line",char:"=",len:32},
+        {cmd:"align",value:0},{cmd:"bold",enabled:true},
+        {cmd:"text",text:"N: TK-TEST  13/05/2026\n"},
+        {cmd:"bold",enabled:false},
+        {cmd:"text",text:"Caissier: Admin\n"},
+        {cmd:"line",char:"-",len:32},
+        {cmd:"bold",enabled:true},
+        {cmd:"text",text:"Jean Slim (Bleu/38)\n"},
+        {cmd:"bold",enabled:false},
+        {cmd:"text",text:"  x1  59.90 EUR\n"},
+        {cmd:"line",char:"-",len:32},
+        {cmd:"bold",enabled:true},{cmd:"size",value:28},
+        {cmd:"text",text:"TOTAL TTC    59.90 EUR\n"},
+        {cmd:"size",value:20},{cmd:"bold",enabled:false},
+        {cmd:"text",text:"Paiement: CB 59.90 EUR\n"},
+        {cmd:"line",char:"=",len:32},
+        {cmd:"align",value:1},{cmd:"size",value:18},
+        {cmd:"text",text:"EMPREINTE NF525\n"},
+        {cmd:"text",text:"ABC123DEF456\n"},
+        {cmd:"feed",lines:4},{cmd:"cut"}
+      ]});
+      addLog(`OK: ${JSON.stringify(r)}`,"success");
+    }catch(e){addLog(`ERREUR: ${e.message}`,"error");}
+
+    addLog("--- DIAGNOSTIC ---","title");
+    addLog("A sort + B/C/D non = le formatage (bold/size/align) bloque","error");
+    addLog("A+B+C sortent + D non = trop de commandes ou combinaison","error");
+    addLog("Tout sort = enterPrinterBuffer a corrige le probleme!","success");
+    setRunning(false);
+  };
+
+  // ══════════════════════════════════════════════
   // TPE / CONCERT PROTOCOL TESTS
   // ══════════════════════════════════════════════
   const testTpePlugin=async()=>{
@@ -3683,6 +3788,8 @@ function DebugPanel(){
         <Zap size={14}/> Self-check hardware</Btn>
       <Btn onClick={testPrinterPrint} disabled={running} style={{height:44,background:"#059669",fontSize:12,fontWeight:700}}>
         <Printer size={14}/> Tester 5 methodes</Btn>
+      <Btn onClick={testFormattedPrint} disabled={running} style={{height:44,background:"#D97706",fontSize:12,fontWeight:700}}>
+        <Printer size={14}/> Test ticket formate</Btn>
     </div>}
 
     {/* === TPE TAB === */}

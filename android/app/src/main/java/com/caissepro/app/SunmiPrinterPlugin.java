@@ -321,6 +321,13 @@ public class SunmiPrinterPlugin extends Plugin {
             try {
                 printerService.printerInit(null);
 
+                // === CRITICAL FIX: Use printer buffer for atomic batch printing ===
+                // Without this, mixing setFontSize/setAlignment/sendRAWData with
+                // printText causes commands to be processed out of order, resulting
+                // in the printer reacting (motor spin) but producing no output.
+                // enterPrinterBuffer(true) = clean buffer before starting
+                printerService.enterPrinterBuffer(true);
+
                 for (int i = 0; i < commands.length(); i++) {
                     JSONObject cmd;
                     try {
@@ -340,6 +347,8 @@ public class SunmiPrinterPlugin extends Plugin {
                             break;
 
                         case "bold":
+                            // Use ESC E n command for bold
+                            // This works inside the printer buffer
                             boolean enabled = cmd.optBoolean("enabled", false);
                             byte[] boldCmd = enabled
                                 ? new byte[]{0x1B, 0x45, 0x01}
@@ -396,6 +405,9 @@ public class SunmiPrinterPlugin extends Plugin {
                             break;
                     }
                 }
+
+                // === Flush the buffer — this triggers the actual print ===
+                printerService.commitPrinterBuffer();
 
                 Log.i(TAG, "printBatch completed successfully");
                 JSObject ret = new JSObject();
