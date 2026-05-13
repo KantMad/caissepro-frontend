@@ -3326,12 +3326,12 @@ function DebugPanel(){
       addLog(`OK: ${JSON.stringify(r)}`,"success");
     }catch(e){addLog(`ERREUR: ${e.message}`,"error");}
 
-    // Test C: with bold only
-    addLog("--- Test C: Avec BOLD seul ---","title");
+    // Test C: with bold (now simulated via size bump, no sendRAWData)
+    addLog("--- Test C: Avec BOLD (simule par taille+2) ---","title");
     try{
       const r=await sp.printBatch({commands:[
         {cmd:"bold",enabled:true},
-        {cmd:"text",text:"TEXTE EN GRAS\n"},
+        {cmd:"text",text:"TEXTE EN GRAS (taille+2)\n"},
         {cmd:"bold",enabled:false},
         {cmd:"text",text:"Texte normal\n"},
         {cmd:"feed",lines:4},{cmd:"cut"}
@@ -3373,9 +3373,9 @@ function DebugPanel(){
     }catch(e){addLog(`ERREUR: ${e.message}`,"error");}
 
     addLog("--- DIAGNOSTIC ---","title");
-    addLog("A sort + B/C/D non = le formatage (bold/size/align) bloque","error");
+    addLog("A sort + B/C/D non = le formatage (size/align) bloque","error");
     addLog("A+B+C sortent + D non = trop de commandes ou combinaison","error");
-    addLog("Tout sort = enterPrinterBuffer a corrige le probleme!","success");
+    addLog("Tout sort = suppression sendRAWData a corrige le probleme!","success");
     setRunning(false);
   };
 

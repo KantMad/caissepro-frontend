@@ -321,12 +321,8 @@ public class SunmiPrinterPlugin extends Plugin {
             try {
                 printerService.printerInit(null);
 
-                // === CRITICAL FIX: Use printer buffer for atomic batch printing ===
-                // Without this, mixing setFontSize/setAlignment/sendRAWData with
-                // printText causes commands to be processed out of order, resulting
-                // in the printer reacting (motor spin) but producing no output.
-                // enterPrinterBuffer(true) = clean buffer before starting
-                printerService.enterPrinterBuffer(true);
+                // Track current font size so "bold" can bump it up slightly
+                float currentSize = 20f;
 
                 for (int i = 0; i < commands.length(); i++) {
                     JSONObject cmd;
@@ -347,17 +343,21 @@ public class SunmiPrinterPlugin extends Plugin {
                             break;
 
                         case "bold":
-                            // Use ESC E n command for bold
-                            // This works inside the printer buffer
+                            // === FIX: Do NOT use sendRAWData (ESC/POS) mixed with AIDL ===
+                            // sendRAWData corrupts the print pipeline when mixed with
+                            // setFontSize/setAlignment/printText AIDL calls.
+                            // Instead, simulate bold by bumping font size +2.
                             boolean enabled = cmd.optBoolean("enabled", false);
-                            byte[] boldCmd = enabled
-                                ? new byte[]{0x1B, 0x45, 0x01}
-                                : new byte[]{0x1B, 0x45, 0x00};
-                            printerService.sendRAWData(boldCmd, null);
+                            if (enabled) {
+                                printerService.setFontSize(currentSize + 2f, null);
+                            } else {
+                                printerService.setFontSize(currentSize, null);
+                            }
                             break;
 
                         case "size":
                             float size = (float) cmd.optDouble("value", 20);
+                            currentSize = size;
                             printerService.setFontSize(size, null);
                             break;
 
@@ -405,9 +405,6 @@ public class SunmiPrinterPlugin extends Plugin {
                             break;
                     }
                 }
-
-                // === Flush the buffer — this triggers the actual print ===
-                printerService.commitPrinterBuffer();
 
                 Log.i(TAG, "printBatch completed successfully");
                 JSObject ret = new JSObject();
