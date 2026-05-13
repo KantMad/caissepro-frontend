@@ -50,6 +50,9 @@ public class SunmiPrinterPlugin extends Plugin {
         @Override public void onRaiseException(int code, String msg) {
             Log.e(TAG, "Callback EXCEPTION code=" + code + " msg=" + msg);
         }
+        @Override public void onPrintResult(int code, String msg) {
+            Log.d(TAG, "Callback onPrintResult: code=" + code + " msg=" + msg);
+        }
     };
 
     @Override
@@ -309,7 +312,7 @@ public class SunmiPrinterPlugin extends Plugin {
                 printerService.setFontSize(20f, defaultCallback);
                 printerService.printText("Ligne 3 - Fin du test\n", defaultCallback);
                 printerService.lineWrap(4, defaultCallback);
-                try { printerService.cutPaper(defaultCallback); } catch (Exception e) {}
+                try { printerService.sendRAWData(new byte[]{0x1D, 0x56, 0x01}, defaultCallback); } catch (Exception e) {}
 
                 JSObject ret = new JSObject();
                 ret.put("success", true);
@@ -418,7 +421,7 @@ public class SunmiPrinterPlugin extends Plugin {
                             break;
 
                         case "cut":
-                            try { printerService.cutPaper(defaultCallback); } catch (Exception e) {}
+                            try { printerService.sendRAWData(new byte[]{0x1D, 0x56, 0x01}, defaultCallback); } catch (Exception e) {}
                             break;
 
                         case "qr":
@@ -475,10 +478,10 @@ public class SunmiPrinterPlugin extends Plugin {
             JSObject ret = new JSObject();
             StringBuilder log = new StringBuilder();
 
-            // Test 1: feedPaper — does the motor work at all?
+            // Test 1: lineWrap — does the motor work at all?
             try {
-                log.append("feedPaper(30mm): ");
-                printerService.feedPaper(30, defaultCallback);
+                log.append("lineWrap(5): ");
+                printerService.lineWrap(5, defaultCallback);
                 log.append("OK\n");
             } catch (Exception e) {
                 log.append("ERR: ").append(e.getMessage()).append("\n");
@@ -599,7 +602,7 @@ public class SunmiPrinterPlugin extends Plugin {
                     printerService.printText("Pas de JSON, pas de boucle\n", defaultCallback);
                     printerService.printText("================================\n", defaultCallback);
                     printerService.lineWrap(4, defaultCallback);
-                    try { printerService.cutPaper(defaultCallback); } catch (Exception e) {}
+                    try { printerService.sendRAWData(new byte[]{0x1D, 0x56, 0x01}, defaultCallback); } catch (Exception e) {}
 
                 } else if ("formatted".equals(mode)) {
                     printerService.setAlignment(1, defaultCallback);
@@ -628,7 +631,7 @@ public class SunmiPrinterPlugin extends Plugin {
                     printerService.printText("EMPREINTE NF525\n", defaultCallback);
                     printerService.printText("ABC123DEF456\n", defaultCallback);
                     printerService.lineWrap(4, defaultCallback);
-                    try { printerService.cutPaper(defaultCallback); } catch (Exception e) {}
+                    try { printerService.sendRAWData(new byte[]{0x1D, 0x56, 0x01}, defaultCallback); } catch (Exception e) {}
 
                 } else if ("ticket".equals(mode)) {
                     String shopName = call.getString("shopName", "Ma Boutique");
@@ -659,7 +662,7 @@ public class SunmiPrinterPlugin extends Plugin {
                     printerService.printText("Paiement: " + payment + " " + total + " EUR\n", defaultCallback);
                     printerService.printText("================================\n", defaultCallback);
                     printerService.lineWrap(4, defaultCallback);
-                    try { printerService.cutPaper(defaultCallback); } catch (Exception e) {}
+                    try { printerService.sendRAWData(new byte[]{0x1D, 0x56, 0x01}, defaultCallback); } catch (Exception e) {}
                 }
 
                 JSObject ret = new JSObject();
@@ -850,23 +853,23 @@ public class SunmiPrinterPlugin extends Plugin {
     @PluginMethod
     public void cutPaper(PluginCall call) {
         if (printerService == null) { call.resolve(); return; }
-        try { printerService.cutPaper(defaultCallback); call.resolve(); }
-        catch (RemoteException e) { call.resolve(); }
+        try {
+            // cutPaper is not in the AIDL — use ESC/POS partial cut command
+            byte[] cmd = new byte[]{0x1D, 0x56, 0x01};
+            printerService.sendRAWData(cmd, defaultCallback);
+            call.resolve();
+        } catch (RemoteException e) { call.resolve(); }
     }
 
     @PluginMethod
     public void openDrawer(PluginCall call) {
         if (printerService == null) { call.reject("Printer not connected"); return; }
         try {
-            printerService.openDrawer(defaultCallback);
+            // openDrawer is not in the AIDL — use ESC/POS cash drawer command
+            byte[] cmd = new byte[]{0x1B, 0x70, 0x00, 0x19, (byte) 0xFA};
+            printerService.sendRAWData(cmd, defaultCallback);
             call.resolve();
-        } catch (RemoteException e) {
-            try {
-                byte[] cmd = new byte[]{0x1B, 0x70, 0x00, 0x19, (byte) 0xFA};
-                printerService.sendRAWData(cmd, defaultCallback);
-                call.resolve();
-            } catch (RemoteException e2) { call.reject("openDrawer failed: " + e2.getMessage()); }
-        }
+        } catch (RemoteException e) { call.reject("openDrawer failed: " + e.getMessage()); }
     }
 
     @PluginMethod
