@@ -780,8 +780,8 @@ const PAYMENT_PROFILES = {
       { key: 'tpeHost', label: 'Adresse IP du TPE', placeholder: '192.168.1.100', type: 'text' },
       { key: 'tpePort', label: 'Port', placeholder: '8888', type: 'number' },
       { key: 'tpeProtocol', label: 'Protocole', type: 'select', options: [
-        { value: 'concert_v2', label: 'Concert V2 (standard)' },
-        { value: 'concert_v3', label: 'Concert V3.x (Telium)' },
+        { value: 'concert_v3', label: 'Caisse-AP V3 / Concert V3 (TCP/IP — recommande)' },
+        { value: 'concert_v2', label: 'Concert V2 (ancien, serie/USB)' },
         { value: 'nexo', label: 'NEXO (nouveau standard)' },
       ]},
       { key: 'tpeDeviceId', label: 'ID terminal', placeholder: '01', type: 'text' },
@@ -1170,13 +1170,15 @@ class ConcertPaymentAdapter {
     }
 
     try {
-      console.log(`[Concert] Sale ${amount} EUR to ${host}:${port}`);
+      const protocol = this.config.protocol === 'concert_v2' ? 'v2' : 'v3';
+      console.log(`[Concert] Sale ${amount} EUR to ${host}:${port} (protocol ${protocol})`);
       const result = await bridge.sale({
         host,
         port,
         amount: Math.round(amount * 100),
         currency: options.currency || 'EUR',
         reference: options.reference || `CP-${Date.now()}`,
+        protocol,
       });
       console.log('[Concert] Sale result:', JSON.stringify(result));
 
@@ -1186,19 +1188,20 @@ class ConcertPaymentAdapter {
           status: 'approved',
           authCode: result.authCode || '',
           transactionId: result.rawResponse || '',
-          cardType: 'CB',
-          maskedPan: '',
+          cardType: result.paymentLabel || 'CB',
+          maskedPan: result.maskedPan || '',
+          contactless: result.contactless || false,
         };
       } else {
         return {
           success: false,
           status: result.status || 'declined',
-          error: result.error || 'Transaction refusee',
+          error: result.error || result.errorLabel || 'Transaction refusee',
+          errorCode: result.errorCode || '',
         };
       }
     } catch (e) {
       console.error('[Concert] Sale error:', e.message || e);
-      // If TCP connection fails, offer manual fallback
       return _manualPayment(amount, 'Encaissement', 'TPE Concert (erreur connexion)');
     }
   }
@@ -1213,17 +1216,19 @@ class ConcertPaymentAdapter {
     }
 
     try {
+      const protocol = this.config.protocol === 'concert_v2' ? 'v2' : 'v3';
       const result = await bridge.refund({
         host,
         port,
         amount: Math.round(amount * 100),
         currency: options.currency || 'EUR',
+        protocol,
       });
 
       if (result.success) {
         return { success: true, status: 'refunded', authCode: result.authCode || '' };
       } else {
-        return { success: false, status: result.status || 'error', error: result.error || 'Remboursement refuse' };
+        return { success: false, status: result.status || 'error', error: result.error || result.errorLabel || 'Remboursement refuse' };
       }
     } catch (e) {
       return _manualPayment(amount, 'Remboursement', 'TPE Concert');

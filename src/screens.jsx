@@ -3279,28 +3279,44 @@ function DebugPanel(){
       addLog("Connexion OK","success");
     }catch(e){addLog(`Ping erreur: ${e.message}`,"error");setRunning(false);return;}
 
-    // Step 2: Send sale
-    addLog("Etape 2: Envoi transaction sale()...","title");
-    addLog("En attente de reponse du TPE (jusqu'a 2 min)...");
+    // Step 2: Send sale (V3 by default)
+    addLog("Etape 2: Envoi transaction sale() en Caisse-AP V3...","title");
+    addLog("Format: TLV (Tag-Length-Value) sur TCP/IP — port 8888");
+    addLog("En attente de reponse du TPE (jusqu'a 3 min)...");
     addLog("Presentez la carte sur le terminal...");
     try{
-      const r=await cp.sale({host,port,amount,currency:"EUR",reference:`DBG-${Date.now()}`});
-      addLog(`REPONSE TPE: ${JSON.stringify(r,null,1)}`);
+      const r=await cp.sale({host,port,amount,currency:"EUR",reference:`DBG-${Date.now()}`,protocol:"v3"});
+      addLog(`Protocole: ${r.protocol||"?"}`);
+      addLog(`REPONSE TPE:`,r.success?"success":"error");
+      // Display all fields clearly
       if(r.success){
         addLog("TRANSACTION ACCEPTEE!","success");
         if(r.authCode)addLog(`Code autorisation: ${r.authCode}`,"success");
         if(r.amount)addLog(`Montant confirme: ${r.amount} centimes`,"success");
+        if(r.maskedPan)addLog(`Carte: ${r.maskedPan}`,"success");
+        if(r.paymentLabel)addLog(`Type paiement: ${r.paymentLabel}`,"success");
+        if(r.contactless!==undefined)addLog(`Sans contact: ${r.contactless?"OUI":"NON"}`,"success");
+        if(r.cardExpiry)addLog(`Expiration: ${r.cardExpiry}`);
+        if(r.applicationId)addLog(`AID: ${r.applicationId}`);
+        if(r.contractNumber)addLog(`Contrat: ${r.contractNumber}`);
       }else{
-        addLog(`TRANSACTION REFUSEE: ${r.error||r.status}`,"error");
+        addLog(`TRANSACTION ECHOUEE: ${r.error||r.errorLabel||r.status}`,"error");
         addLog(`Status: ${r.status} | Code: ${r.statusCode}`);
+        if(r.errorCode)addLog(`Code erreur: ${r.errorCode} = ${r.errorLabel}`,"error");
       }
       if(r.rawResponse)addLog(`Reponse brute: ${r.rawResponse}`);
       if(r.privateData)addLog(`Donnees privees: ${r.privateData}`);
+      // Show parsed tags if available
+      if(r.tags){
+        addLog("Tags TLV parses:","title");
+        Object.entries(r.tags).forEach(([k,v])=>addLog(`  ${k} = ${v}`));
+      }
       if(r.lrcValid!==undefined)addLog(`LRC valide: ${r.lrcValid}`,r.lrcValid?"success":"error");
     }catch(e){
       addLog(`ERREUR TRANSACTION: ${e.message}`,"error");
-      addLog("Verifiez que le TPE est en mode attente de paiement","info");
-      addLog("Verifiez le protocole Concert V2 sur le TPE","info");
+      addLog("Verifiez que le TPE est en mode attente (ecran principal)","info");
+      addLog("Verifiez que 'Connexion Caisse' est Active sur le TPE","info");
+      addLog("Verifiez que le port est bien 8888","info");
     }
     setRunning(false);
   };
@@ -3338,43 +3354,104 @@ function DebugPanel(){
     setRunning(false);
   };
 
-  const testTpeRawTcp=async()=>{
+  const testTpeRawV3=async()=>{
     setRunning(true);clearLogs();
     const host=tpeIp.trim();
     const port=parseInt(tpePort)||8888;
     if(!host){addLog("Entrez l'IP du TPE!","error");setRunning(false);return;}
 
-    addLog(`=== TEST TCP BRUT ${host}:${port} ===`,"title");
-    addLog("Ce test envoie un message Concert V2 brut et affiche la reponse...");
+    addLog(`=== TEST CAISSE-AP V3 (TLV) ${host}:${port} ===`,"title");
+    addLog("Protocole: Caisse-AP V3 / Concert V3 over TCP/IP");
+    addLog("Format: TLV (Tag-Length-Value) — ASCII brut, pas de STX/ETX/LRC");
 
     const cp=window.Capacitor?.Plugins?.ConcertProtocol;
     if(!cp){addLog("Plugin absent","error");setRunning(false);return;}
 
-    // Build the Concert message manually and show it
+    // Build V3 TLV message manually for display
     const amount=Math.round(parseFloat(tpeAmount)*100)||100;
-    const msg=`01${String(amount).padStart(8,"0")}110978          A010B010`;
-    addLog(`Message Concert (34 chars): [${msg}]`);
-    addLog(`Longueur: ${msg.length} (attendu: 34)`);
-    addLog(`Decodage:`);
-    addLog(`  posNumber: ${msg.substring(0,2)}`);
-    addLog(`  amount:    ${msg.substring(2,10)} (${parseInt(msg.substring(2,10))/100} EUR)`);
-    addLog(`  answer:    ${msg.substring(10,11)} (1=attente reponse)`);
-    addLog(`  payMode:   ${msg.substring(11,12)} (1=carte)`);
-    addLog(`  transType: ${msg.substring(12,13)} (0=debit)`);
-    addLog(`  currency:  ${msg.substring(13,16)} (978=EUR)`);
-    addLog(`  private:   [${msg.substring(16,26)}]`);
-    addLog(`  delay:     ${msg.substring(26,30)}`);
-    addLog(`  auth:      ${msg.substring(30,34)}`);
+    const amtStr=String(amount);
+    const buildTag=(t,v)=>`${t}${String(v.length).padStart(3,"0")}${v}`;
+    const tlv=buildTag("CZ","0300")+buildTag("CJ","012345678901")+buildTag("CA","01")
+      +buildTag("CB",amtStr)+buildTag("CD","0")+buildTag("CE","978")+buildTag("BA","0");
 
-    addLog("Envoi via sale()...","title");
+    addLog(`Message TLV construit (${tlv.length} chars):`,"title");
+    addLog(`  [${tlv}]`);
+    addLog("");
+    addLog("Decodage des tags:","title");
+    addLog(`  CZ = 0300 (version protocole Caisse-AP V3)`);
+    addLog(`  CJ = 012345678901 (identifiant protocole)`);
+    addLog(`  CA = 01 (numero de caisse)`);
+    addLog(`  CB = ${amtStr} (montant en centimes = ${(amount/100).toFixed(2)} EUR)`);
+    addLog(`  CD = 0 (action: 0=debit, 1=remboursement)`);
+    addLog(`  CE = 978 (devise: EUR)`);
+    addLog(`  BA = 0 (mode reponse: attendre fin transaction)`);
+
+    // Also show what V2 would look like for comparison
+    addLog("");
+    addLog("=== Comparaison Concert V2 (ancien format) ===","title");
+    const v2msg=`01${String(amount).padStart(8,"0")}110978          A010B010`;
+    addLog(`V2 (34 octets): [${v2msg}]`);
+    addLog("Le Desk/5000 en TCP/IP utilise V3 (TLV), PAS V2!");
+
+    addLog("");
+    addLog("=== Envoi test V3 via sale() ===","title");
+    addLog("En attente de reponse du TPE (presentez la carte)...");
     try{
-      const r=await cp.sale({host,port,amount,currency:"EUR",reference:"RAWTEST"});
-      addLog(`Reponse complete:`,r.success?"success":"error");
-      Object.entries(r).forEach(([k,v])=>addLog(`  ${k}: ${v}`));
+      const r=await cp.sale({host,port,amount,currency:"EUR",reference:`DBG-${Date.now()}`,protocol:"v3"});
+      addLog(`Protocole utilise: ${r.protocol||"?"}`);
+      addLog(`Reponse complete:`,"title");
+      Object.entries(r).forEach(([k,v])=>{
+        if(typeof v==="object"&&v!==null){
+          addLog(`  ${k}:`);
+          Object.entries(v).forEach(([k2,v2])=>addLog(`    ${k2}: ${v2}`));
+        }else{
+          addLog(`  ${k}: ${v}`,k==="success"?(v?"success":"error"):"info");
+        }
+      });
+      if(r.success)addLog("TRANSACTION ACCEPTEE!","success");
+      else addLog(`Transaction echouee: ${r.error||r.errorLabel||"?"}`,"error");
     }catch(e){
       addLog(`ERREUR: ${e.message}`,"error");
-      addLog(`Stack: ${e.stack?.substring(0,200)}`,"error");
+      addLog(`Stack: ${e.stack?.substring(0,300)}`,"error");
     }
+
+    addLog("");
+    addLog("=== Test envoi V3 brut (sendRawV3) ===","title");
+    try{
+      if(cp.sendRawV3){
+        const r2=await cp.sendRawV3({host,port,message:tlv});
+        addLog(`Reponse sendRawV3:`,r2.success?"success":"error");
+        Object.entries(r2).forEach(([k,v])=>{
+          if(typeof v==="object"&&v!==null){
+            addLog(`  ${k}:`);
+            Object.entries(v).forEach(([k2,v2])=>addLog(`    ${k2}: ${v2}`));
+          }else addLog(`  ${k}: ${v}`);
+        });
+      }else addLog("sendRawV3 non disponible sur ce plugin","info");
+    }catch(e){addLog(`sendRawV3 erreur: ${e.message}`,"error");}
+
+    setRunning(false);
+  };
+
+  const testTpeRawV2=async()=>{
+    setRunning(true);clearLogs();
+    const host=tpeIp.trim();
+    const port=parseInt(tpePort)||8888;
+    if(!host){addLog("Entrez l'IP du TPE!","error");setRunning(false);return;}
+
+    addLog(`=== TEST CONCERT V2 (ancien format) ${host}:${port} ===`,"title");
+    addLog("ATTENTION: Le Desk/5000 en TCP/IP utilise normalement V3, pas V2!");
+
+    const cp=window.Capacitor?.Plugins?.ConcertProtocol;
+    if(!cp){addLog("Plugin absent","error");setRunning(false);return;}
+
+    const amount=Math.round(parseFloat(tpeAmount)*100)||100;
+    addLog(`Envoi sale() en mode V2 (STX + 34 octets + ETX + LRC)...`);
+    try{
+      const r=await cp.sale({host,port,amount,currency:"EUR",reference:"V2TEST",protocol:"v2"});
+      addLog(`Reponse:`,r.success?"success":"error");
+      Object.entries(r).forEach(([k,v])=>addLog(`  ${k}: ${typeof v==="object"?JSON.stringify(v):v}`));
+    }catch(e){addLog(`ERREUR: ${e.message}`,"error");}
     setRunning(false);
   };
 
@@ -3527,17 +3604,27 @@ function DebugPanel(){
           <RotateCcw size={14}/> Test remboursement</Btn>
         <Btn onClick={testTpeCancel} disabled={running} style={{height:44,background:"#DC2626",fontSize:12,fontWeight:700}}>
           <XCircle size={14}/> Annuler transaction</Btn>
-        <Btn onClick={testTpeRawTcp} disabled={running} style={{height:44,background:"#0F172A",border:"2px solid #7C3AED",fontSize:12,fontWeight:700}}>
-          <Code size={14}/> Message Concert brut</Btn>
+        <Btn onClick={testTpeRawV3} disabled={running} style={{height:44,background:"#0F172A",border:"2px solid #7C3AED",fontSize:12,fontWeight:700}}>
+          <Code size={14}/> Test V3 TLV (recommande)</Btn>
+        <Btn onClick={testTpeRawV2} disabled={running} style={{height:44,background:"#0F172A",border:"2px solid #475569",fontSize:12,fontWeight:700}}>
+          <Code size={14}/> Test V2 (ancien)</Btn>
       </div>
       <div style={{background:"#1E293B",borderRadius:10,padding:12,marginBottom:12,fontSize:10,color:"#94A3B8",lineHeight:1.6}}>
-        <strong style={{color:"#fff"}}>Guide rapide Ingenico Desk/5000:</strong><br/>
-        1. Sur le TPE: Menu &gt; Configuration &gt; Communication &gt; Ethernet &gt; Notez l'IP<br/>
-        2. Le port par defaut Concert est generalement <strong>8888</strong> ou <strong>9100</strong><br/>
-        3. Le TPE doit etre sur le meme reseau WiFi/LAN que la Sunmi T2s<br/>
-        4. Activez le protocole Concert V2 (ou C-TAP) sur le TPE<br/>
-        5. Le TPE doit etre en ecran d'attente (pas dans un menu)<br/>
-        <strong style={{color:"#FBBF24"}}>Le scan de ports va tester les 10 ports les plus courants automatiquement.</strong>
+        <strong style={{color:"#4ADE80",fontSize:12}}>IMPORTANT: Protocole Caisse-AP V3 (Concert V3)</strong><br/>
+        Le Desk/5000 en TCP/IP utilise le protocole <strong style={{color:"#fff"}}>Caisse-AP V3</strong> (format TLV), PAS Concert V2!<br/>
+        <br/>
+        <strong style={{color:"#fff"}}>Configuration Ingenico Desk/5000:</strong><br/>
+        1. Appuyez sur le <strong>bouton rond blanc</strong> pour acceder au menu<br/>
+        2. Allez dans <strong>PARAM</strong> (en bas a gauche)<br/>
+        3. <strong>Panneau de controle</strong> &gt; <strong>Connexion Caisse</strong> &gt; mettre sur <strong>Active</strong><br/>
+        4. Selectionnez <strong>IP/Eth</strong> (Ethernet)<br/>
+        5. Notez l'adresse IP du terminal (Parametres &gt; Communication &gt; Ethernet)<br/>
+        6. Port par defaut: <strong style={{color:"#FBBF24"}}>8888</strong><br/>
+        7. Le TPE et la Sunmi T2s doivent etre sur le <strong>meme reseau local</strong><br/>
+        8. Le TPE doit etre en <strong>ecran d'attente</strong> (pas dans un menu)<br/>
+        <br/>
+        <strong style={{color:"#FBBF24"}}>Astuce: Lancez d'abord "Ping + Scan ports" pour trouver le bon port!</strong><br/>
+        <strong style={{color:"#60A5FA"}}>Ref: github.com/akretion/caisse-ap-ip (Odoo POS, teste avec Desk/5000)</strong>
       </div>
     </>}
 
