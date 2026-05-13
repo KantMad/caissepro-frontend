@@ -288,9 +288,8 @@ public class SunmiPrinterPlugin extends Plugin {
     }
 
     // ══════════════════════════════════════════════════════════════
-    // TEST CODEPAGE — probes which ESC/POS codepages work on this device
-    // Prints a line for each codepage with accented chars.
-    // The one that shows correct accents is the right one.
+    // TEST CODEPAGE — uses SDK printText with various accent approaches
+    // No ESC/POS commands (sendRAWData with ESC t = blank on T2s)
     // ══════════════════════════════════════════════════════════════
 
     @PluginMethod
@@ -298,58 +297,63 @@ public class SunmiPrinterPlugin extends Plugin {
         if (printerService == null) { call.reject("Printer not connected"); return; }
         new Thread(() -> {
             try {
-                ByteArrayOutputStream buf = new ByteArrayOutputStream();
-                buf.write(new byte[]{0x1B, 0x40}); // ESC @ init
+                printerService.printerInit(null);
+                printerService.setAlignment(1, null);
+                printerService.setFontSize(24f, null);
+                printerService.printText("=== TEST ACCENTS ===\n", null);
+                printerService.setFontSize(20f, null);
+                printerService.setAlignment(0, null);
+                printerService.printText("--------------------------------\n", null);
 
-                // Test string with French accents encoded in each candidate codepage
-                // In Windows-1252/CP850/CP858: e=0xE9, e=0xE8, a=0xE0, c=0xE7, EUR=0x80(1252)/0xD5(858)
-                String testLine = "eecaucoie EUR";
+                // Test 1: printText with raw Unicode accents (shows Chinese on T2s)
+                printerService.printText("1) printText Unicode:\n", null);
+                printerService.printText("   éèàùçôîê\n", null);
 
-                // Codepages to test (common thermal printer codepages)
-                int[][] pages = {
-                    {0,  0},   // CP437 (US)
-                    {2,  2},   // CP850 (Multilingual Latin 1)
-                    {3,  3},   // CP860 (Portuguese)
-                    {16, 16},  // WPC1252
-                    {19, 19},  // CP858 (CP850 + EUR)
-                    {21, 21},  // CP862 (Hebrew)
-                    {255, 255}, // UTF-8 (some printers)
-                };
+                // Test 2: printText with normalized (no accents)
+                printerService.printText("2) Normalise (sans accents):\n", null);
+                printerService.printText("   " + normalize("éèàùçôîê") + "\n", null);
 
-                for (int[] page : pages) {
-                    int n = page[0];
-                    // Set codepage
-                    buf.write(new byte[]{0x1B, 0x74, (byte) n});
+                // Test 3: sendRAWData with plain ASCII (no ESC commands)
+                printerService.printText("3) sendRAWData ASCII:\n", null);
+                printerService.sendRAWData("   Hello ASCII test OK\n".getBytes("US-ASCII"), null);
 
-                    // Write label in ASCII (safe)
-                    String label = "CP " + n + ": ";
-                    buf.write(label.getBytes("US-ASCII"));
+                // Test 4: sendRAWData with UTF-8 accents (no ESC commands)
+                printerService.printText("4) sendRAWData UTF-8:\n", null);
+                printerService.sendRAWData("   éèàùçôîê\n".getBytes("UTF-8"), null);
 
-                    // Write test chars as raw bytes for this codepage
-                    // e(0xE9) e(0xE8) a(0xE0) u(0xF9) c(0xE7) o(0xF4) i(0xEE) e(0xEA) EUR(0x80 for cp1252)
-                    buf.write(new byte[]{
-                        (byte)0xE9, ' ', (byte)0xE8, ' ', (byte)0xE0, ' ',
-                        (byte)0xF9, ' ', (byte)0xE7, ' ', (byte)0xF4, ' ',
-                        (byte)0xEE, ' ', (byte)0xEA, '\n'
-                    });
+                // Test 5: sendRAWData with GBK encoding
+                printerService.printText("5) sendRAWData GBK:\n", null);
+                try {
+                    printerService.sendRAWData("   éèàùçôîê\n".getBytes("GBK"), null);
+                } catch (Exception e) {
+                    printerService.printText("   GBK error: " + e.getMessage() + "\n", null);
                 }
 
-                // Also test without any codepage - just UTF-8 bytes via sendRAWData
-                buf.write("\n--- UTF-8 direct ---\n".getBytes("US-ASCII"));
-                buf.write("eecaucoie\n".getBytes("UTF-8"));
+                // Test 6: sendRAWData with raw high bytes (0xE9 etc) no codepage cmd
+                printerService.printText("6) sendRAWData raw 0xE9:\n", null);
+                printerService.sendRAWData(new byte[]{
+                    ' ', ' ', ' ',
+                    (byte)0xE9, ' ', (byte)0xE8, ' ', (byte)0xE0, ' ',
+                    (byte)0xF9, ' ', (byte)0xE7, ' ', (byte)0xF4, ' ',
+                    (byte)0xEE, ' ', (byte)0xEA, '\n'
+                }, null);
 
-                // Also test: no codepage, ASCII only
-                buf.write("--- ASCII only ---\n".getBytes("US-ASCII"));
-                buf.write("ecaucoie (normalized)\n".getBytes("US-ASCII"));
+                // Test 7: sendRAWData with ISO-8859-1
+                printerService.printText("7) sendRAWData ISO-8859-1:\n", null);
+                printerService.sendRAWData("   éèàùçôîê\n".getBytes("ISO-8859-1"), null);
 
-                buf.write(new byte[]{0x1B, 0x64, 0x04}); // feed 4
-                buf.write(new byte[]{0x1D, 0x56, 0x01}); // cut
+                // Test 8: sendRAWData with ISO-8859-15 (has EUR)
+                printerService.printText("8) sendRAWData ISO-8859-15:\n", null);
+                printerService.sendRAWData("   éèàùçôîê\n".getBytes("ISO-8859-15"), null);
 
-                printerService.sendRAWData(buf.toByteArray(), null);
+                printerService.printText("--------------------------------\n", null);
+                printerService.printText("Ligne correcte = bonne methode\n", null);
+                printerService.lineWrap(4, null);
+                try { printerService.sendRAWData(new byte[]{0x1D, 0x56, 0x01}, null); } catch (Exception e) {}
 
                 JSObject ret = new JSObject();
                 ret.put("success", true);
-                ret.put("message", "Codepage test sent - check which line shows correct accents");
+                ret.put("message", "Test accents imprime - verifiez le ticket");
                 getActivity().runOnUiThread(() -> call.resolve(ret));
             } catch (Exception e) {
                 final String err = e.getMessage();
