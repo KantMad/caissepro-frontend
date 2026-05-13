@@ -431,7 +431,7 @@ public class SunmiPrinterPlugin extends Plugin {
                     switch (type) {
                         case "text":
                             String text = cmd.optString("text", "");
-                            if (!text.isEmpty()) printerService.printText(text), null);
+                            if (!text.isEmpty()) printerService.printText(text, null);
                             break;
                         case "bold":
                             boolean enabled = cmd.optBoolean("enabled", false);
