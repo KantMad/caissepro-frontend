@@ -293,29 +293,30 @@ public class ConcertPlugin extends Plugin {
         LinkedHashMap<String, String> tags = new LinkedHashMap<>();
 
         // CZ must be first — protocol version
-        tags.put("CZ", "0300");
+        // Terminal responded with 0301, so we match it
+        tags.put("CZ", "0301");
 
-        // CJ: protocol identifier (12 chars, zero-padded)
-        tags.put("CJ", "012345678901");
+        // NOTE: Do NOT send CJ — it's the terminal's own identifier (e.g. 330538600404).
+        // The POS should not send CJ; the terminal returns its CJ in the response.
 
         // CA: POS/cash register number
         String pos = posNumber != null ? posNumber : "01";
         if (pos.length() < 2) pos = "0" + pos;
         tags.put("CA", pos);
 
-        // CB: amount in cents (variable length, no zero-padding needed but we keep it clean)
-        if (amountCents > 0) {
-            tags.put("CB", String.valueOf(amountCents));
-        }
-
-        // CD: action — "0"=debit, "1"=reimburse/refund
-        tags.put("CD", action);
-
-        // CE: currency ISO 4217 numeric
+        // CE: currency ISO 4217 numeric (send BEFORE amount per spec ordering)
         tags.put("CE", getCurrencyNumeric(currency));
 
         // BA: answer mode — "0"=wait for transaction end (recommended)
         tags.put("BA", "0");
+
+        // CD: action — "0"=debit, "1"=reimburse/refund
+        tags.put("CD", action);
+
+        // CB: amount in cents (variable length)
+        if (amountCents > 0) {
+            tags.put("CB", String.valueOf(amountCents));
+        }
 
         // CF: private/reference data (optional)
         if (reference != null && !reference.isEmpty()) {

@@ -3367,24 +3367,24 @@ function DebugPanel(){
     const cp=window.Capacitor?.Plugins?.ConcertProtocol;
     if(!cp){addLog("Plugin absent","error");setRunning(false);return;}
 
-    // Build V3 TLV message manually for display
+    // Build V3 TLV message manually for display (matching what Java sends)
     const amount=Math.round(parseFloat(tpeAmount)*100)||100;
     const amtStr=String(amount);
     const buildTag=(t,v)=>`${t}${String(v.length).padStart(3,"0")}${v}`;
-    const tlv=buildTag("CZ","0300")+buildTag("CJ","012345678901")+buildTag("CA","01")
-      +buildTag("CB",amtStr)+buildTag("CD","0")+buildTag("CE","978")+buildTag("BA","0");
+    const tlv=buildTag("CZ","0301")+buildTag("CA","01")+buildTag("CE","978")
+      +buildTag("BA","0")+buildTag("CD","0")+buildTag("CB",amtStr);
 
     addLog(`Message TLV construit (${tlv.length} chars):`,"title");
     addLog(`  [${tlv}]`);
     addLog("");
     addLog("Decodage des tags:","title");
-    addLog(`  CZ = 0300 (version protocole Caisse-AP V3)`);
-    addLog(`  CJ = 012345678901 (identifiant protocole)`);
+    addLog(`  CZ = 0301 (version protocole — match le TPE)`);
     addLog(`  CA = 01 (numero de caisse)`);
-    addLog(`  CB = ${amtStr} (montant en centimes = ${(amount/100).toFixed(2)} EUR)`);
-    addLog(`  CD = 0 (action: 0=debit, 1=remboursement)`);
     addLog(`  CE = 978 (devise: EUR)`);
     addLog(`  BA = 0 (mode reponse: attendre fin transaction)`);
+    addLog(`  CD = 0 (action: 0=debit, 1=remboursement)`);
+    addLog(`  CB = ${amtStr} (montant en centimes = ${(amount/100).toFixed(2)} EUR)`);
+    addLog(`  (PAS de CJ — c'est l'identifiant du terminal, pas de la caisse)`);
 
     // Also show what V2 would look like for comparison
     addLog("");
