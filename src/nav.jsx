@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import {
   ShoppingCart, Lock, User as UserIcon, Store, LayoutDashboard, LogOut, Wallet,
-  BarChart3, Package, Receipt, RotateCcw, Users, TrendingUp, DollarSign,
+  BarChart3, Package, Receipt, RotateCcw, Users, TrendingUp, DollarSign, Euro,
   Shield, Download, FileText, Settings, CheckCircle2, AlertTriangle, Save,
   Archive, Activity, Bell, Plus, Trash2, HelpCircle, Grid, Gift, Percent, Zap
 } from "lucide-react";
@@ -15,7 +15,7 @@ import {
   HistoryScreen, ReturnScreen, ClosureScreen, CustomersScreen, FiscalScreen,
   AuditScreen, CSVImportWizard, ProductsScreen, ReturnsHistoryScreen,
   SettingsScreen, GiftCardScreen, PromosScreen, FootfallScreen,
-  HelpCashierScreen, HelpDashboardScreen
+  HelpCashierScreen, HelpDashboardScreen, ExportsScreen
 } from "./screens.jsx";
 
 function CashierNav({active,onNav}){
@@ -155,7 +155,7 @@ function DashboardNav({active,onNav}){
   const{logout,currentUser,stores,viewingStoreId,switchViewingStore,currentStore}=useApp();
   const sections=[
     {title:"",items:[{id:"overview",l:"Dashboard",i:LayoutDashboard}]},
-    {title:"Commerce",items:[{id:"products",l:"Produits",i:Package},{id:"stock",l:"Stock",i:Grid},{id:"stats",l:"Statistiques",i:BarChart3},{id:"returns",l:"Retours & Avoirs",i:RotateCcw}]},
+    {title:"Commerce",items:[{id:"products",l:"Produits",i:Package},{id:"stock",l:"Stock",i:Grid},{id:"stats",l:"Statistiques",i:BarChart3},{id:"returns",l:"Retours & Avoirs",i:RotateCcw},{id:"exports",l:"Exports & Factures",i:Download}]},
     {title:"Relations",items:[{id:"customers",l:"Clients",i:Users},{id:"users",l:"Utilisateurs",i:UserIcon},{id:"giftcards",l:"Cartes cadeaux",i:Gift},{id:"promos",l:"Promotions",i:Zap},{id:"footfall",l:"Entrees",i:Activity}]},
     {title:"Systeme",items:[{id:"storesMgmt",l:"Magasins",i:Store},{id:"tva",l:"Taux de TVA",i:Percent},{id:"settings",l:"Parametres",i:Settings},{id:"fiscal",l:"Fiscal NF525",i:Shield},{id:"audit",l:"Journal d'audit",i:Activity},{id:"help",l:"Aide",i:HelpCircle}]}];
   return(<div style={{width:240,background:"#0F172A",height:"100vh",display:"flex",flexDirection:"column"}}>
@@ -232,7 +232,7 @@ function DashOverview(){
         <div style={{fontSize:26,fontWeight:700,letterSpacing:"-0.5px",color:C.text}}>{todayAvg.toFixed(1)}€</div></div></div>
 
     <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12,marginBottom:20}}>
-      <SC icon={DollarSign} label="CA total (GT)" value={`${totalCA.toFixed(0)}€`} color={C.primary}/>
+      <SC icon={Euro} label="CA total (GT)" value={`${totalCA.toFixed(0)}€`} color={C.primary}/>
       {p().canViewMargin&&<SC icon={TrendingUp} label="Marge" value={`${margin.toFixed(0)}€`} color="#059669"/>}
       <SC icon={Receipt} label="Tickets" value={totalTickets} color={C.info}/>
       <SC icon={AlertTriangle} label="Alertes stock" value={stockAlerts.length} color={stockAlerts.length>0?C.danger:C.textLight}/></div>
@@ -449,7 +449,7 @@ function DashboardInterface(){
   const[sc,setScRaw]=useState(()=>{try{return sessionStorage.getItem("caissepro_dash_screen")||"overview";}catch(e){return"overview";}});
   const setSc=useCallback((v)=>{setScRaw(v);try{sessionStorage.setItem("caissepro_dash_screen",v);}catch(e){}},[]);
   const S={overview:DashOverview,products:ProductsScreen,stock:StockScreen,stats:StatsScreen,returns:ReturnsHistoryScreen,customers:CustomersScreen,
-    users:UsersScreen,storesMgmt:StoresManagementScreen,tva:TVAScreen,giftcards:GiftCardScreen,promos:PromosScreen,footfall:FootfallScreen,settings:SettingsScreen,fiscal:FiscalScreen,audit:AuditScreen,help:HelpDashboardScreen};
+    users:UsersScreen,storesMgmt:StoresManagementScreen,tva:TVAScreen,giftcards:GiftCardScreen,promos:PromosScreen,footfall:FootfallScreen,settings:SettingsScreen,fiscal:FiscalScreen,audit:AuditScreen,help:HelpDashboardScreen,exports:ExportsScreen};
   const Sc=S[sc]||DashOverview;
   return(<div style={{display:"flex",height:"100vh",fontFamily:"'DM Sans',system-ui,sans-serif"}}><DashboardNav active={sc} onNav={setSc}/><div style={{flex:1,overflow:"hidden"}}><ErrorBoundary><Sc/></ErrorBoundary></div></div>);
 }

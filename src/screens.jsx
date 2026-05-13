@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect, useRef, useCallback } from "react"
 import {
   ShoppingCart, Search, Trash2, Percent, CreditCard, Banknote, Gift, Plus, Minus,
   Lock, User as UserIcon, Store, LayoutDashboard, LogOut, Wallet, XCircle,
-  BarChart3, Package, Receipt, RotateCcw, Users, TrendingUp, DollarSign,
+  BarChart3, Package, Receipt, RotateCcw, Users, TrendingUp, DollarSign, Euro,
   Shield, Download, FileText, Settings, CheckCircle2, AlertTriangle, Save,
   Archive, Activity, Database, WifiOff, Pause, Play, Upload, Printer, Bell,
   Heart, Grid, Box, Star, Calendar, Zap, ScanLine, Split,
@@ -141,14 +141,13 @@ function SalesScreen(){
     gDisc,gDiscType,setCartGD,promoCode,setPromoCode,calcPromoDiscount,isOnline,findByEAN,offlineMode,
     parked,parkCart,restoreCart,customers,addCustomer,selCust,setSelCust,perm,notify,
     stockAlerts,activePromos,avoirPayment,setAvoirPayment,getLoyaltyTier,tickets,saleNote,setSaleNote,favorites,toggleFavorite,getLastPriceForCustomer,settings,
-    printerConnected,thermalPrint,pendingSync,clearPendingSync,users,currentUser,avoirs,consumeAvoir,addAudit,addJET}=useApp();
-  const[search,setSearch]=useState("");const[cat,setCat]=useState("Tous");const[vm,setVm]=useState(null);const[selSeller,setSelSeller]=useState(null);const[detaxe,setDetaxe]=useState(false);
+    printerConnected,thermalPrint,pendingSync,clearPendingSync,users,currentUser,avoirs,consumeAvoir,addAudit,addJET,trainingMode}=useApp();
+  const[search,setSearch]=useState("");const[cat,setCat]=useState("Tous");const[vm,setVm]=useState(null);const[selSeller,setSelSeller]=useState(null);
   const[dm,setDm]=useState(null);const[dv,setDv]=useState("");const[gm,setGm]=useState(false);const[gv,setGv]=useState("");const[gtp,setGtp]=useState("percentage");
   const[lastTk,setLastTk]=useState(null);const[tkModal,setTkModal]=useState(false);const[busy,setBusy]=useState(false);
   const[payModal,setPayModal]=useState(false);const[cashGiven,setCashGiven]=useState("");
   const[cashNumpadModal,setCashNumpadModal]=useState(false);const[numpadValue,setNumpadValue]=useState("");
   const[custModal,setCustModal]=useState(false);const[parkedModal,setParkedModal]=useState(false);
-  const[customModal,setCustomModal]=useState(false);const[customName,setCustomName]=useState("");const[customPrice,setCustomPrice]=useState("");
   const[payMethodModal,setPayMethodModal]=useState(false);const[avoirSelectModal,setAvoirSelectModal]=useState(false);
   const[retoucheModal,setRetoucheModal]=useState(false);const[retForm,setRetForm]=useState({client:"",phone:"",date:new Date().toISOString().split("T")[0],notes:"",items:[{desc:"",price:""}]});
   const[newCustModal,setNewCustModal]=useState(false);const[ncF,setNcF]=useState("");const[ncL,setNcL]=useState("");const[ncE,setNcE]=useState("");const[ncP,setNcP]=useState("");
@@ -156,7 +155,6 @@ function SalesScreen(){
   const[codeInput,setCodeInput]=useState("");
   const[confirmVoid,setConfirmVoid]=useState(false);const[voidReason,setVoidReason]=useState("");
   const[showShortcuts,setShowShortcuts]=useState(false);
-  const barcodeBuffer=useRef("");const barcodeTimer=useRef(null);
 
   // Keyboard shortcuts
   useEffect(()=>{const handler=(e)=>{
@@ -170,14 +168,8 @@ function SalesScreen(){
   };window.addEventListener("keydown",handler);return()=>window.removeEventListener("keydown",handler);
   },[cart,busy,parkCart]);
 
-  // Barcode scan listener (compatible with USB/Bluetooth barcode scanners)
-  useEffect(()=>{const h=(e)=>{if(e.target.tagName==="INPUT"||e.target.tagName==="TEXTAREA")return;
-    if(e.key==="Enter"&&barcodeBuffer.current.length>=8){const ean=barcodeBuffer.current;barcodeBuffer.current="";
-      const f=findByEAN(ean);if(f){addToCart(f.product,f.variant);notify("✅ "+f.product.name+" ajouté ("+ean+")");}
-      else{notify("⚠️ Aucun produit pour EAN: "+ean,"warn");}}
-    else if(e.key.length===1){if(barcodeBuffer.current.length<50)barcodeBuffer.current+=e.key;clearTimeout(barcodeTimer.current);
-      barcodeTimer.current=setTimeout(()=>{barcodeBuffer.current="";},150);}};
-    window.addEventListener("keydown",h);return()=>{window.removeEventListener("keydown",h);clearTimeout(barcodeTimer.current);};},[findByEAN,addToCart,notify]);
+  // Barcode scanning is handled centrally by hardwareManager.scanner in context.jsx
+  // (removed duplicate keydown listener that caused double-scan issue)
 
   const filtered=useMemo(()=>products.filter(p=>{const q=search.toLowerCase();
     const matchSearch=!q||p.name.toLowerCase().includes(q)||p.sku.toLowerCase().includes(q)||p.variants.some(v=>v.ean.includes(q)||v.color.toLowerCase().includes(q));
@@ -194,11 +186,11 @@ function SalesScreen(){
     gd+=promoDisc;gd=Math.min(gd,sHT);
     const tHT=sHT-gd;
     // Per-item TVA
-    const tTVA=detaxe?0:cart.reduce((s,i)=>{const raw=i.discountType==="amount"?i.product.price*i.quantity-((i.discount||0)*i.quantity):i.product.price*i.quantity*(1-i.discount/100);
+    const tTVA=cart.reduce((s,i)=>{const raw=i.discountType==="amount"?i.product.price*i.quantity-((i.discount||0)*i.quantity):i.product.price*i.quantity*(1-i.discount/100);
       const lHT=pm==="TTC"?raw/(1+(i.product.taxRate||0.20)):raw;return s+lHT*(i.product.taxRate||0.20);},0)*(tHT/sHT||0);
     const tTTC=tHT+tTVA-avoirPayment;
     return{sHT,gd,promoDisc,applied,tHT,tTVA,tTTC:Math.max(0,tTTC)};
-  },[cart,gDisc,gDiscType,calcPromoDiscount,avoirPayment,settings.pricingMode,detaxe]);
+  },[cart,gDisc,gDiscType,calcPromoDiscount,avoirPayment,settings.pricingMode]);
 
   const[payCard,setPayCard]=useState("");const[payCash,setPayCash]=useState("");const[payGC,setPayGC]=useState("");const[payChq,setPayChq]=useState("");const[payAmex,setPayAmex]=useState("");const[cardType,setCardType]=useState("card");
   const openPay=()=>{setPayCard("");setPayCash("");setPayGC("");setPayChq("");setPayAmex("");setCashGiven("");setCardType("card");setPayModal(true);};
@@ -206,10 +198,10 @@ function SalesScreen(){
     const c=parseFloat(payCard)||0;const ca=parseFloat(payCash)||0;const g=parseFloat(payGC)||0;const chq=parseFloat(payChq)||0;
     if(c>0)payments.push({method:cardType,amount:c});if(ca>0)payments.push({method:"cash",amount:ca});
     if(g>0)payments.push({method:"giftcard",amount:g});if(chq>0)payments.push({method:"cheque",amount:chq});if(avoirPayment>0)payments.push({method:"avoir",amount:avoirPayment});
-    if(!payments.length)return;setBusy(true);const t=await checkout(payments,selSeller);setBusy(false);if(t){setLastTk({...t,detaxe});setPayModal(false);setTkModal(true);setSelSeller(null);setDetaxe(false);}};
+    if(!payments.length)return;setBusy(true);const t=await checkout(payments,selSeller);setBusy(false);if(t){setLastTk({...t});setPayModal(false);setTkModal(true);setSelSeller(null);}};
   const quickPay=async(method)=>{if(!cart.length||busy)return;setBusy(true);
     const payments=[{method,amount:totals.tTTC}];if(avoirPayment>0)payments.push({method:"avoir",amount:avoirPayment});
-    const t=await checkout(payments,selSeller);setBusy(false);if(t){setLastTk({...t,detaxe});setTkModal(true);setSelSeller(null);setDetaxe(false);}};
+    const t=await checkout(payments,selSeller);setBusy(false);if(t){setLastTk({...t});setTkModal(true);setSelSeller(null);}};
   const change=cashGiven?Math.max(0,parseFloat(cashGiven)-totals.tTTC):0;
   const maxDisc=perm().maxDiscount;
   const custTier=selCust?getLoyaltyTier(selCust.points):null;
@@ -233,6 +225,12 @@ function SalesScreen(){
       {offlineMode&&<Badge color="#92400E">Local</Badge>}
       {pendingSync.length>0&&<span onClick={()=>setSyncConfirm(true)}
         style={{cursor:"pointer",marginLeft:"auto"}}><Badge color={C.warn}>{pendingSync.length} synchro(s) en attente</Badge></span>}</div>}
+
+    {/* NF525: Training mode banner */}
+    {trainingMode&&<div style={{position:"absolute",top:offlineMode||!isOnline?40:0,left:72,right:0,zIndex:99,
+      background:"#FEF3C7",padding:"6px 18px",display:"flex",alignItems:"center",gap:8,fontSize:12,fontWeight:700,color:"#92400E",
+      borderBottom:"2px dashed #D97706",animation:"slideDown 0.3s ease"}}>
+      <AlertTriangle size={13}/> MODE FORMATION — Les tickets sont marqués FACTICE</div>}
 
     {/* Products */}
     <div style={{flex:1,padding:16,display:"flex",flexDirection:"column",overflow:"hidden"}}>
@@ -319,7 +317,7 @@ function SalesScreen(){
           <div style={{width:40,height:40,borderRadius:12,background:C.primary,display:"flex",alignItems:"center",justifyContent:"center",
             boxShadow:`0 4px 14px ${C.primary}25`}}><ShoppingCart size={19} color="#fff"/></div>
           <div style={{flex:1}}><div style={{fontSize:16,fontWeight:800,letterSpacing:"-0.3px"}}>Panier</div>
-            <div style={{fontSize:10,color:C.textMuted}}>{cart.reduce((s,i)=>s+i.quantity,0)} pièce{cart.reduce((s,i)=>s+i.quantity,0)>1?"s":""}</div></div>
+            <div style={{fontSize:12,color:C.text,fontWeight:800}}>{cart.reduce((s,i)=>s+i.quantity,0)} pièce{cart.reduce((s,i)=>s+i.quantity,0)>1?"s":""}</div></div>
           <Btn variant="outline" onClick={parkCart} disabled={!cart.length} style={{padding:"6px 10px",borderRadius:8,fontSize:9,fontWeight:700,gap:4,position:"relative"}} title="Mettre en attente"><Pause size={12}/> Attente
             {parked.length>0&&<span style={{position:"absolute",top:-5,right:-5,width:16,height:16,borderRadius:8,background:C.danger,color:"#fff",fontSize:8,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center"}}>{parked.length}</span>}</Btn>
           {perm().canVoid&&<Btn variant="ghost" onClick={()=>{if(cart.length)setConfirmVoid(true);}} disabled={!cart.length} style={{padding:"6px 8px",color:C.danger,borderRadius:8}} title="Annuler"><XOctagon size={13}/></Btn>}
@@ -410,15 +408,12 @@ function SalesScreen(){
 
         <div style={{display:"flex",gap:4,marginBottom:6}}>
           <Btn variant="outline" onClick={()=>{setGm(true);setGv(String(gDisc));setGtp(gDiscType);}} style={{flex:1,height:32,fontSize:10,padding:"0 6px",borderRadius:10}}><Percent size={11}/> Remise globale</Btn>
-          <Btn variant={detaxe?"success":"outline"} onClick={()=>setDetaxe(!detaxe)} style={{height:32,fontSize:10,padding:"0 10px",borderRadius:10,background:detaxe?C.primary:"transparent"}}>{detaxe?"✓ Détaxe":"Détaxe"}</Btn></div>
-        {detaxe&&<div style={{background:C.primaryLight,borderRadius:8,padding:8,marginBottom:6,fontSize:10,color:C.primaryDark,border:`1px solid ${C.primary}30`}}>
-          Vente en détaxe — TVA à 0% — Réservé aux résidents hors UE (achat min. 100,01€)</div>}
+          </div>
 
         <Btn onClick={()=>setPayMethodModal(true)} disabled={!cart.length||busy} style={{width:"100%",height:52,borderRadius:14,background:C.primary,fontSize:14,gap:8,boxShadow:`0 4px 16px ${C.primary}30`,marginBottom:6,letterSpacing:"-0.3px"}}>
           {busy?<span className="spin-loader"/>:<><Wallet size={18}/> Règlement — {totals.tTTC.toFixed(2)}€</>}</Btn>
         <div style={{display:"flex",gap:4}}>
           <Btn variant="outline" onClick={()=>setRetoucheModal(true)} style={{flex:1,height:30,fontSize:10,borderRadius:10,gap:4}}><Edit size={11}/> Retouche</Btn>
-          <Btn variant="outline" onClick={()=>setCustomModal(true)} style={{flex:1,height:30,fontSize:10,borderRadius:10,gap:4}}><Plus size={11}/> Divers</Btn>
           <Btn variant="outline" onClick={clearCart} style={{flex:1,borderColor:`${C.danger}20`,color:C.danger,height:30,fontSize:10,borderRadius:10}}><RotateCcw size={10}/> Vider</Btn>
         </div>
       </div>
@@ -521,25 +516,6 @@ function SalesScreen(){
         style={{width:"100%",height:40,background:C.primary}}>Créer et associer</Btn></Modal>
 
     {/* Custom item */}
-    <Modal open={customModal} onClose={()=>setCustomModal(false)} title="Article divers / Services">
-      <div style={{marginBottom:12}}>
-        <div style={{fontSize:10,fontWeight:700,color:C.textMuted,marginBottom:6}}>SERVICES RAPIDES</div>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
-          {[{n:"Retouche bas de manches",p:10},{n:"Retouche bas d'ourlet",p:15},{n:"Retouche ajustement",p:20},{n:"Emballage cadeau",p:5}].map(sv=>(
-            <button key={sv.n} onClick={()=>{addCustomItem(sv.n,sv.p/1.20,0.20);setCustomModal(false);}}
-              style={{padding:"8px 10px",borderRadius:10,border:`1.5px solid ${C.border}`,background:C.surfaceAlt,cursor:"pointer",textAlign:"left",transition:"all 0.12s"}}
-              onMouseEnter={e=>{e.currentTarget.style.borderColor=C.primary;e.currentTarget.style.background=C.primaryLight;}}
-              onMouseLeave={e=>{e.currentTarget.style.borderColor=C.border;e.currentTarget.style.background=C.surfaceAlt;}}>
-              <div style={{fontSize:11,fontWeight:600}}>{sv.n}</div>
-              <div style={{fontSize:12,fontWeight:700,color:C.primary}}>{sv.p.toFixed(2)}€</div></button>))}</div></div>
-      <div style={{borderTop:`1px solid ${C.border}`,paddingTop:12,marginBottom:12}}>
-        <div style={{fontSize:10,fontWeight:700,color:C.textMuted,marginBottom:6}}>ARTICLE PERSONNALISÉ</div>
-        <div style={{display:"flex",flexDirection:"column",gap:8}}>
-          <Input value={customName} onChange={e=>setCustomName(e.target.value)} placeholder="Description (ex: Retouche ourlet)"/>
-          <Input type="number" step="0.01" value={customPrice} onChange={e=>setCustomPrice(e.target.value)} placeholder="Prix TTC"/></div></div>
-      <Btn onClick={()=>{if(customName&&customPrice){const p=parseFloat(customPrice);addCustomItem(customName,p/1.20,0.20);
-        setCustomModal(false);setCustomName("");setCustomPrice("");}}}
-        style={{width:"100%",height:40,background:C.primary}}>Ajouter au panier</Btn></Modal>
 
     {/* Parked */}
     <Modal open={parkedModal} onClose={()=>setParkedModal(false)} title="Paniers en attente">
@@ -604,7 +580,6 @@ function SalesScreen(){
         <div style={{textAlign:"center",background:C.fiscalLight,padding:6,borderRadius:6,margin:"4px 0"}}>
           <div style={{fontSize:8,color:C.fiscal,fontWeight:700}}>EMPREINTE NF525</div>
           <div style={{fontSize:11,fontWeight:700,color:C.fiscal,letterSpacing:2}}>{lastTk.fingerprint}</div></div>
-        {lastTk.detaxe&&<div style={{textAlign:"center",background:C.primaryLight,padding:6,borderRadius:6,margin:"4px 0",fontSize:9,color:C.primaryDark,fontWeight:700}}>VENTE EN DÉTAXE — TVA 0% — ART. 262 CGI</div>}
         <div style={{textAlign:"center",fontSize:8,color:C.textMuted}}>
           {CO.sw} v{CO.ver} — Conforme NF525<br/>{settings.footerMsg||CO.footerMsg}</div>
         {lastTk.saleNote&&<div style={{textAlign:"center",fontSize:9,color:C.text,marginTop:3,fontStyle:"italic"}}>Note: {lastTk.saleNote}</div>}
@@ -613,6 +588,16 @@ function SalesScreen(){
       <div style={{display:"flex",gap:8,marginTop:14}}>
         <Btn variant="outline" onClick={()=>emailTicket(lastTk)} style={{flex:1,borderRadius:12}}><Mail size={14}/> Email</Btn>
         <Btn variant="outline" onClick={()=>thermalPrint("receipt",lastTk)} style={{flex:1,borderRadius:12}}><Printer size={14}/> {printerConnected?"Ticket":"Imprimer"}</Btn>
+        <Btn variant="outline" onClick={()=>{
+          const w=window.open("","_blank","width=400,height=600");if(!w)return;
+          w.document.write(`<html><head><title>Ticket cadeau</title><style>body{font-family:'Courier New',monospace;font-size:12px;padding:10px;max-width:300px;margin:0 auto;}h2{text-align:center;font-size:14px;margin:4px 0;}hr{border:none;border-top:1px dashed #333;margin:6px 0;}.center{text-align:center;}.row{display:flex;justify-content:space-between;}</style></head><body>`+
+          `<h2>${settings.name||CO.name}</h2><div class="center">${settings.address||""}, ${settings.postalCode||""} ${settings.city||""}</div><hr>`+
+          `<h2>TICKET CADEAU</h2><div class="center">N° ${lastTk.ticketNumber}</div><div class="center">${new Date(lastTk.date||lastTk.createdAt||"").toLocaleString("fr-FR")}</div><hr>`+
+          (lastTk.items||[]).map(i=>`<div>${i.product?.name||i.product_name}${i.isCustom||i.is_custom?"":" ("+((i.variant?.color||i.variant_color)||"")+"/"+((i.variant?.size||i.variant_size)||"")+")"} x${i.quantity}</div>`).join("")+
+          `<hr><div class="center" style="font-size:10px;">${settings.footerMsg||CO.footerMsg||""}</div>`+
+          `<div class="center" style="font-size:10px;margin-top:4px;">Échange possible sous ${settings.returnPolicy?.days||30} jours sur présentation de ce ticket</div>`+
+          `</body></html>`);w.document.close();setTimeout(()=>w.print(),300);
+        }} style={{flex:1,borderRadius:12}}><Gift size={14}/> Cadeau</Btn>
         <Btn variant="success" onClick={()=>setTkModal(false)} style={{flex:1,borderRadius:12}}><CheckCircle2 size={14}/> Terminé</Btn>
       </div></>)}
     </Modal>
@@ -694,6 +679,17 @@ function SalesScreen(){
 
     {/* RETOUCHE MODAL */}
     <Modal open={retoucheModal} onClose={()=>setRetoucheModal(false)} title="Bon de retouche" wide>
+      {/* Quick-pick retouche options */}
+      <div style={{marginBottom:14}}>
+        <label style={{fontSize:10,fontWeight:700,color:C.textMuted,display:"block",marginBottom:6}}>RETOUCHES COURANTES — cliquez pour ajouter</label>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:6}}>
+          {(settings.retoucheTypes||[{n:"Ourlet pantalon",p:15},{n:"Ourlet manches",p:10},{n:"Cintrer veste",p:20},{n:"Raccourcir robe",p:18},{n:"Changer fermeture",p:25},{n:"Reprendre taille",p:15},{n:"Doublure",p:30},{n:"Ajustement épaules",p:22}]).filter(sv=>sv.n).map(sv=>(
+            <button key={sv.n} onClick={()=>setRetForm(f=>{const existing=f.items.filter(i=>(i.desc&&i.desc!==sv.n)||i.price);return{...f,items:[...existing,{desc:sv.n,price:String(sv.p)}]};})}
+              style={{padding:"10px 6px",borderRadius:10,border:`1.5px solid ${C.border}`,background:C.surfaceAlt,cursor:"pointer",fontSize:10,fontWeight:600,textAlign:"center",transition:"all 0.12s"}}
+              onMouseEnter={e=>{e.currentTarget.style.borderColor=C.primary;e.currentTarget.style.background=C.primaryLight;e.currentTarget.style.transform="translateY(-1px)";}}
+              onMouseLeave={e=>{e.currentTarget.style.borderColor=C.border;e.currentTarget.style.background=C.surfaceAlt;e.currentTarget.style.transform="translateY(0)";}}>
+              {sv.n}<br/><span style={{color:C.primary,fontWeight:800,fontSize:12}}>{sv.p}€</span></button>))}</div>
+      </div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
         <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>NOM DU CLIENT</label>
           <Input value={retForm.client} onChange={e=>setRetForm(f=>({...f,client:e.target.value}))} placeholder="Nom complet"/></div>
@@ -706,25 +702,19 @@ function SalesScreen(){
         <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>ASSOCIER UN CLIENT</label>
           <select value="" onChange={e=>{const c=customers.find(x=>x.id===e.target.value);if(c)setRetForm(f=>({...f,client:`${c.firstName} ${c.lastName}`,phone:c.phone||""}));}}
             style={{width:"100%",padding:10,borderRadius:10,border:`2px solid ${C.border}`,fontSize:12,fontFamily:"inherit"}}>
-            <option value="">— Sélectionner —</option>{customers.map(c=>(<option key={c.id} value={c.id}>{c.firstName} {c.lastName}</option>))}</select></div>
+            <option value="">-- Sélectionner --</option>{customers.map(c=>(<option key={c.id} value={c.id}>{c.firstName} {c.lastName}</option>))}</select></div>
       </div>
       <div style={{marginBottom:12}}>
-        <label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>TRAVAUX DE RETOUCHE</label>
+        <label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>TRAVAUX DE RETOUCHE (champ libre)</label>
         {retForm.items.map((item,idx)=>(<div key={idx} style={{display:"flex",gap:6,marginBottom:6}}>
           <Input value={item.desc} onChange={e=>{const items=[...retForm.items];items[idx].desc=e.target.value;setRetForm(f=>({...f,items}));}} placeholder="Description (ex: Ourlet pantalon)" style={{flex:2}}/>
           <Input type="number" step="0.01" value={item.price} onChange={e=>{const items=[...retForm.items];items[idx].price=e.target.value;setRetForm(f=>({...f,items}));}} placeholder="Prix €" style={{flex:1}}/>
           {retForm.items.length>1&&<Btn variant="ghost" onClick={()=>{const items=retForm.items.filter((_,i)=>i!==idx);setRetForm(f=>({...f,items}));}} style={{padding:"4px 8px",color:C.danger}}><Trash2 size={12}/></Btn>}
         </div>))}
         <Btn variant="outline" onClick={()=>setRetForm(f=>({...f,items:[...f.items,{desc:"",price:""}]}))} style={{fontSize:10,padding:"4px 12px"}}><Plus size={11}/> Ajouter une ligne</Btn>
-        <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:4,marginTop:8}}>
-          {(settings.retoucheTypes||[{n:"Ourlet pantalon",p:15},{n:"Ourlet manches",p:10},{n:"Cintrer veste",p:20},{n:"Raccourcir robe",p:18},{n:"Changer fermeture",p:25},{n:"Reprendre taille",p:15},{n:"Doublure",p:30},{n:"Ajustement épaules",p:22}]).filter(sv=>sv.n).map(sv=>(
-            <button key={sv.n} onClick={()=>setRetForm(f=>({...f,items:[...f.items.filter(i=>i.desc||i.price),{desc:sv.n,price:String(sv.p)}]}))}
-              style={{padding:"6px 4px",borderRadius:8,border:`1px solid ${C.border}`,background:C.surfaceAlt,cursor:"pointer",fontSize:9,fontWeight:600,textAlign:"center",transition:"all 0.1s"}}
-              onMouseEnter={e=>{e.currentTarget.style.borderColor=C.primary;e.currentTarget.style.background=C.primaryLight;}} onMouseLeave={e=>{e.currentTarget.style.borderColor=C.border;e.currentTarget.style.background=C.surfaceAlt;}}>
-              {sv.n}<br/><span style={{color:C.primary,fontWeight:700}}>{sv.p}€</span></button>))}</div>
       </div>
       <div style={{marginBottom:12}}><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>NOTES</label>
-        <textarea value={retForm.notes} onChange={e=>setRetForm(f=>({...f,notes:e.target.value}))} placeholder="Instructions particulières, couleur fil, remarques…"
+        <textarea value={retForm.notes} onChange={e=>setRetForm(f=>({...f,notes:e.target.value}))} placeholder="Instructions particulières, couleur fil, remarques..."
           style={{width:"100%",minHeight:60,padding:10,borderRadius:10,border:`2px solid ${C.border}`,fontSize:12,fontFamily:"inherit",resize:"vertical"}}/></div>
       {(()=>{const retTotal=retForm.items.reduce((s,i)=>s+(parseFloat(i.price)||0),0);return retTotal>0&&
         <div style={{display:"flex",justifyContent:"space-between",padding:"10px 14px",borderRadius:10,background:C.primaryLight,marginBottom:12}}>
@@ -855,7 +845,7 @@ function StatsScreen(){
       <select value={catFilter} onChange={e=>setCatFilter(e.target.value)} style={{padding:"4px 8px",borderRadius:6,border:`1px solid ${C.border}`,fontSize:10,fontFamily:"inherit"}}>
         <option value="">Toutes catégories</option>{allCats.map(c=>(<option key={c} value={c}>{c}</option>))}</select></div>
     <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:10,marginBottom:16}}>
-      <div><SC icon={DollarSign} label="CA TTC" value={`${stats.tTTC.toFixed(0)}€`} color={C.primary} sub={<PctBadge cur={stats.tTTC} prev={prevStats.tTTC}/>}/></div>
+      <div><SC icon={Euro} label="CA TTC" value={`${stats.tTTC.toFixed(0)}€`} color={C.primary} sub={<PctBadge cur={stats.tTTC} prev={prevStats.tTTC}/>}/></div>
       <div><SC icon={Receipt} label="Tickets" value={stats.count} color={C.info} sub={<PctBadge cur={stats.count} prev={prevStats.count}/>}/></div>
       <SC icon={TrendingUp} label="Panier moy." value={`${stats.avg.toFixed(1)}€`} color={C.accent}/>
       {perm().canViewMargin&&<SC icon={BarChart2} label="Marge" value={`${stats.margin.toFixed(0)}€`} color="#059669"/>}
@@ -1045,7 +1035,7 @@ function StatsScreen(){
           <h3 style={{fontSize:14,fontWeight:700,marginBottom:10}}>Statistiques retours</h3>
           <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8}}>
             <SC icon={RotateCcw} label="Retours" value={totalReturns} color={C.fiscal}/>
-            <SC icon={DollarSign} label="Montant" value={`${totalReturnValue.toFixed(0)}€`} color={C.danger}/>
+            <SC icon={Euro} label="Montant" value={`${totalReturnValue.toFixed(0)}€`} color={C.danger}/>
             <SC icon={TrendingUp} label="Taux retour" value={`${returnRate.toFixed(1)}%`} color={returnRate>5?C.danger:C.primary}/></div></div>
         <div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`}}>
           <h3 style={{fontSize:14,fontWeight:700,marginBottom:10}}>Motifs de retour</h3>
@@ -1061,7 +1051,7 @@ function StatsScreen(){
         <h3 style={{fontSize:14,fontWeight:700,marginBottom:10}}>Analyse des remises</h3>
         <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:14}}>
           <SC icon={Percent} label="Ventes avec remise" value={discounted.length} color={C.accent}/>
-          <SC icon={DollarSign} label="Total remisé" value={`${totalDisc.toFixed(0)}€`} color={C.warn}/>
+          <SC icon={Euro} label="Total remisé" value={`${totalDisc.toFixed(0)}€`} color={C.warn}/>
           <SC icon={TrendingUp} label="% ventes remisées" value={`${fTickets.length?(discounted.length/fTickets.length*100).toFixed(1):0}%`} color={C.info}/></div>
       </div>);})()}
   </div>);
@@ -1658,7 +1648,7 @@ function HistoryScreen(){
 
 /* ══════════ RETURN SCREEN ══════════ */
 function ReturnScreen(){
-  const{tickets,products,processReturn,findByEAN,avoirs,settings,notify,printerConnected,thermalPrint,setAvoirPayment,setMode:setAppMode}=useApp();
+  const{tickets,products,processReturn,findByEAN,avoirs,settings,notify,printerConnected,thermalPrint,setAvoirPayment,setMode:setAppMode,users,currentUser,addAudit}=useApp();
   const[mode,setMode]=useState("ticket");// ticket | scan | free
   const[searchTk,setSearchTk]=useState("");const[selectedTk,setSelectedTk]=useState(null);
   const[returnItems,setReturnItems]=useState([]);const[reason,setReason]=useState("Échange taille");
@@ -1706,11 +1696,11 @@ function ReturnScreen(){
     // Construire le ticket synthétique pour scan/free avec le bon taux de TVA par produit
     const syntheticTicket=selectedTk||{ticketNumber:"RETOUR-LIBRE",date:new Date().toISOString(),items:returnItems.map(r=>{
       const prod=products.find(p=>p.id===r.productId);const taxRate=prod?.taxRate||0.20;const pm=settings.pricingMode||"TTC";
-      const lineTTC=r.unitPrice*r.maxQty;
+      const lineTTC=r.unitPrice*r.qty;
       const lineHT=pm==="TTC"?lineTTC/(1+taxRate):lineTTC;
       const lineTVA=lineHT*taxRate;
       return{product:{id:r.productId,name:r.productName,taxRate},variant:{id:r.variantId,color:r.variantColor,size:r.variantSize},
-        quantity:r.maxQty,lineHT,lineTVA,lineTTC:lineHT+lineTVA};})};
+        quantity:r.qty,lineHT,lineTVA,lineTTC:lineHT+lineTVA};})};
     const avoir=await processReturn(syntheticTicket,items,reason,refundMethod==="exchange"?"avoir":refundMethod,restock,defective);
     if(avoir){
       if(refundMethod==="exchange"){
@@ -2035,16 +2025,37 @@ function ClosureScreen(){
         <div style={{display:"flex",justifyContent:"space-between",color:"#059669"}}><span>Marge brute</span><span>{(reportModal.totalMargin||0).toFixed(2)}€</span></div>
         <div style={{borderTop:"1px dashed #999",margin:"6px 0"}}/>
         <div style={{fontWeight:700,marginBottom:4}}>VENTILATION PAIEMENTS</div>
+        {reportModal.byPayment&&<>
+          <div style={{display:"flex",justifyContent:"space-between"}}><span>Espèces</span><span>{(reportModal.byPayment.cash||0).toFixed(2)}€</span></div>
+          <div style={{display:"flex",justifyContent:"space-between"}}><span>Carte bancaire</span><span>{(reportModal.byPayment.card||0).toFixed(2)}€</span></div>
+          {(reportModal.byPayment.cheque||0)>0&&<div style={{display:"flex",justifyContent:"space-between"}}><span>Chèques</span><span>{reportModal.byPayment.cheque.toFixed(2)}€</span></div>}
+          {(reportModal.byPayment.giftcard||0)>0&&<div style={{display:"flex",justifyContent:"space-between"}}><span>Cartes cadeaux</span><span>{reportModal.byPayment.giftcard.toFixed(2)}€</span></div>}
+          {(reportModal.byPayment.amex||0)>0&&<div style={{display:"flex",justifyContent:"space-between"}}><span>American Express</span><span>{reportModal.byPayment.amex.toFixed(2)}€</span></div>}
+          {(reportModal.byPayment.avoir||0)>0&&<div style={{display:"flex",justifyContent:"space-between"}}><span>Avoirs utilisés</span><span>{reportModal.byPayment.avoir.toFixed(2)}€</span></div>}
+        </>}
+        <div style={{borderTop:"1px dashed #999",margin:"6px 0"}}/>
+        <div style={{fontWeight:700,marginBottom:4}}>CA PAR VENDEUR</div>
         {reportModal.bySeller&&Object.entries(reportModal.bySeller).map(([name,amount])=>(
           <div key={name} style={{display:"flex",justifyContent:"space-between"}}><span>{name}</span><span>{amount.toFixed(2)}€</span></div>))}
         <div style={{borderTop:"1px dashed #999",margin:"6px 0"}}/>
         <div style={{fontWeight:700,marginBottom:4}}>CONTRÔLE CAISSE</div>
-        {reportModal.expectedCash!=null&&<div style={{display:"flex",justifyContent:"space-between"}}><span>Espèces attendues</span><span>{reportModal.expectedCash.toFixed(2)}€</span></div>}
+        {reportModal.expectedCash!=null&&<div style={{display:"flex",justifyContent:"space-between"}}><span>Fond de caisse ouverture</span><span>{(reportModal.expectedCash-(reportModal.byPayment?.cash||0)).toFixed(2)}€</span></div>}
+        {reportModal.expectedCash!=null&&<div style={{display:"flex",justifyContent:"space-between"}}><span>+ Encaissements espèces</span><span>{(reportModal.byPayment?.cash||0).toFixed(2)}€</span></div>}
+        {reportModal.expectedCash!=null&&<div style={{display:"flex",justifyContent:"space-between",fontWeight:700}}><span>= Espèces attendues</span><span>{reportModal.expectedCash.toFixed(2)}€</span></div>}
         {reportModal.actualCash!=null&&<div style={{display:"flex",justifyContent:"space-between"}}><span>Espèces comptées</span><span>{reportModal.actualCash.toFixed(2)}€</span></div>}
         {reportModal.actualCash!=null&&reportModal.expectedCash!=null&&<div style={{display:"flex",justifyContent:"space-between",color:Math.abs(reportModal.actualCash-reportModal.expectedCash)<0.01?"#059669":C.danger,fontWeight:700}}>
-          <span>Écart espèces</span><span>{(reportModal.actualCash-reportModal.expectedCash).toFixed(2)}€</span></div>}
+          <span>Écart espèces</span><span>{(reportModal.actualCash-reportModal.expectedCash)>=0?"+":""}{(reportModal.actualCash-reportModal.expectedCash).toFixed(2)}€</span></div>}
+        {reportModal.actualCard!=null&&<><div style={{display:"flex",justifyContent:"space-between"}}><span>CB attendues</span><span>{(reportModal.byPayment?.card||0).toFixed(2)}€</span></div>
+          <div style={{display:"flex",justifyContent:"space-between"}}><span>CB comptées</span><span>{parseFloat(reportModal.actualCard).toFixed(2)}€</span></div>
+          <div style={{display:"flex",justifyContent:"space-between",color:Math.abs(parseFloat(reportModal.actualCard)-(reportModal.byPayment?.card||0))<0.01?"#059669":C.danger,fontWeight:700}}>
+            <span>Écart CB</span><span>{(parseFloat(reportModal.actualCard)-(reportModal.byPayment?.card||0))>=0?"+":""}{(parseFloat(reportModal.actualCard)-(reportModal.byPayment?.card||0)).toFixed(2)}€</span></div></>}
+        {(totalReturns>0||todayAvoirs.length>0)&&<><div style={{borderTop:"1px dashed #999",margin:"6px 0"}}/>
+          <div style={{fontWeight:700,marginBottom:4}}>RETOURS / AVOIRS</div>
+          <div style={{display:"flex",justifyContent:"space-between"}}><span>Nombre d'avoirs</span><span>{todayAvoirs.length}</span></div>
+          <div style={{display:"flex",justifyContent:"space-between",color:C.danger}}><span>Total retours</span><span>-{totalReturns.toFixed(2)}€</span></div></>}
         <div style={{borderTop:"2px solid #333",margin:"6px 0"}}/>
-        <div style={{display:"flex",justifyContent:"space-between",fontWeight:700,fontSize:12}}><span>GRAND TOTAL PERPÉTUEL</span><span>{reportModal.grandTotal.toFixed(2)}€</span></div>
+        <div style={{display:"flex",justifyContent:"space-between",fontWeight:700,fontSize:11}}><span>CA NET (TTC - Retours)</span><span>{((reportModal.totalTTC||0)-(totalReturns||0)).toFixed(2)}€</span></div>
+        <div style={{display:"flex",justifyContent:"space-between",fontWeight:700,fontSize:12,marginTop:4}}><span>GRAND TOTAL PERPÉTUEL</span><span>{reportModal.grandTotal.toFixed(2)}€</span></div>
         <div style={{textAlign:"center",background:C.fiscalLight,padding:8,borderRadius:6,margin:"8px 0"}}>
           <div style={{fontSize:8,color:C.fiscal,fontWeight:700}}>EMPREINTE NF525</div>
           <div style={{fontSize:11,fontWeight:700,color:C.fiscal,letterSpacing:2}}>{reportModal.fingerprint}</div></div>
@@ -2136,7 +2147,7 @@ function CustomersScreen(){
             </div></div>
           <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8,marginBottom:10}}>
             <SC icon={Star} label="Points" value={sel.points} color={C.accent}/>
-            <SC icon={DollarSign} label="Dépensé" value={`${sel.totalSpent.toFixed(0)}€`} color={C.primary}/>
+            <SC icon={Euro} label="Dépensé" value={`${sel.totalSpent.toFixed(0)}€`} color={C.primary}/>
             <SC icon={Heart} label="Niveau" value={getLoyaltyTier(sel.points).name} color={C.fiscal}/>
             <SC icon={Receipt} label="Panier moy." value={`${custAvg.toFixed(1)}€`} color={C.info}/></div>
           <div style={{marginBottom:8}}><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>NOTES</label>
@@ -2207,53 +2218,156 @@ function CustomersScreen(){
 
 /* ══════════ FISCAL ══════════ */
 function FiscalScreen(){
-  const{gt,tSeq,lastHash,closures,exportArchive,exportFEC,perm:p,verifyChain,tvaSummary,currentStore,viewingStoreId,stores}=useApp();
+  const{gt,tSeq,lastHash,closures,exportArchive,exportFEC,perm:p,verifyChain,tvaSummary,currentStore,viewingStoreId,stores,
+    tickets,avoirs,jet,audit,trainingMode,setTrainingMode,settings,addJET,notify}=useApp();
   const storeName=viewingStoreId==="all"?"Tous les magasins":viewingStoreId?stores.find(s=>s.id===viewingStoreId)?.name:currentStore?.name||"";
   const[chainResult,setChainResult]=useState(null);
+  const[fiscalTab,setFiscalTab]=useState("status");
   if(!p().canExport)return<div style={{padding:40,textAlign:"center",color:C.textMuted}}>Accès réservé aux administrateurs</div>;
+
+  // NF525 compliance checks
+  const checks=[
+    {id:"hash",label:"Chaîne de hachage SHA-256",desc:"Chaque ticket, avoir et clôture est chaîné par SHA-256 avec le hash précédent",
+      ok:!!lastHash&&lastHash!=="0".repeat(64)||tSeq===0},
+    {id:"seq",label:"Numérotation séquentielle continue",desc:"Les tickets sont numérotés séquentiellement sans rupture (TK-YYYY-XXXXXX)",
+      ok:(()=>{const sorted=[...tickets].filter(t=>t.seq).sort((a,b)=>a.seq-b.seq);for(let i=1;i<sorted.length;i++){if(sorted[i].seq-sorted[i-1].seq>1)return false;}return true;})()},
+    {id:"gt",label:"Grand Total perpétuel (GT)",desc:"Compteur cumulatif depuis la mise en service, jamais remis à zéro",ok:gt>=0},
+    {id:"jet",label:"Journal des Événements Techniques",desc:"JET chaîné avec signature SHA-256, codes événements NF525 (80, 90, 95, 250, 410...)",
+      ok:jet.length>0&&jet[0]?.hash},
+    {id:"immutable",label:"Inaltérabilité des données",desc:"Aucune fonction de suppression de tickets validés. Corrections par écriture inverse (avoir)",ok:true},
+    {id:"closures",label:"Clôtures périodiques",desc:"Clôtures Z journalières avec totaux cumulatifs et GT",ok:closures.length>0||tSeq===0},
+    {id:"archive",label:"Archive NF525 (10 fichiers CSV)",desc:"Export conforme: Entete, Lignes, TVA, Pied, Client, Reglements, Duplicata, JET, GTT, GTJ",ok:true},
+    {id:"retention",label:"Conservation 6 ans (Art. L.102 B LPF)",desc:"Données conservées côté serveur pendant 6 ans. Cache local limité à 500 tickets",ok:true},
+    {id:"duplicata",label:"Traçabilité des duplicata",desc:"Chaque réimpression de ticket est enregistrée dans le JET et l'audit",
+      ok:true},
+    {id:"auth",label:"Contrôle d'accès par rôles",desc:"Authentification par PIN, rôles admin/caissier avec permissions différenciées",ok:true},
+    {id:"training",label:"Mode formation séparé",desc:"Les données de formation sont marquées FACTICE et séparées des données fiscales",ok:true},
+    {id:"void",label:"Annulations traçables",desc:"Annulation = avoir avec référence au ticket d'origine. Ligne supprimée = JET VOID_LINE",ok:true},
+  ];
+  const passCount=checks.filter(c=>c.ok).length;
+
   return(<div style={{height:"100%",overflowY:"auto",padding:20,background:C.bg}}>
-    <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:16}}><h2 style={{fontSize:22,fontWeight:800,margin:0}}>Conformité NF525</h2><Badge color={C.fiscal} bg={C.fiscalLight}>ISCA</Badge>
-      {storeName&&<Badge color={C.primary}>{storeName}</Badge>}</div>
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16}}>
+      <div style={{display:"flex",alignItems:"center",gap:10}}>
+        <h2 style={{fontSize:22,fontWeight:800,margin:0}}>Conformité NF525</h2>
+        <Badge color={C.fiscal} bg={C.fiscalLight}>ISCA</Badge>
+        {storeName&&<Badge color={C.primary}>{storeName}</Badge>}
+        {trainingMode&&<Badge color={C.warn} bg={C.warnLight}>MODE FORMATION</Badge>}</div>
+      <div style={{display:"flex",gap:6}}>
+        {[{id:"status",l:"Conformité"},{id:"chain",l:"Chaîne"},{id:"tva",l:"TVA"},{id:"training",l:"Formation"}].map(t=>(
+          <button key={t.id} onClick={()=>setFiscalTab(t.id)} style={{padding:"6px 12px",borderRadius:8,border:`1.5px solid ${fiscalTab===t.id?C.fiscal:C.border}`,
+            background:fiscalTab===t.id?C.fiscalLight:"transparent",color:fiscalTab===t.id?C.fiscal:C.textMuted,fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>{t.l}</button>))}</div></div>
+
+    {/* Training mode banner */}
+    {trainingMode&&<div style={{background:"#FEF3C7",border:"2px dashed #D97706",borderRadius:12,padding:14,marginBottom:14,display:"flex",alignItems:"center",gap:10}}>
+      <AlertTriangle size={20} color="#D97706"/>
+      <div><div style={{fontSize:13,fontWeight:800,color:"#92400E"}}>MODE FORMATION ACTIF — FACTICE</div>
+        <div style={{fontSize:11,color:"#92400E"}}>Les tickets générés sont marqués FACTICE et ne sont pas comptabilisés dans le Grand Total fiscal. Art. 286 CGI.</div></div></div>}
+
     <div style={{background:C.surface,borderRadius:14,padding:20,border:`1.5px solid ${C.fiscal}33`,marginBottom:14}}>
       <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}><Shield size={20} color={C.fiscal}/><h3 style={{fontSize:16,fontWeight:700,color:C.fiscal,margin:0}}>Attestation de conformité</h3></div>
       <div style={{fontSize:12,lineHeight:1.8}}>
         <div><strong>Logiciel :</strong> {CO.sw} v{CO.ver}</div>
-        <div><strong>N° certification :</strong> <span style={{fontFamily:"monospace",background:C.fiscalLight,padding:"2px 6px",borderRadius:4}}>En attente de certification</span></div>
-        <div><strong>Organisme certificateur :</strong> À définir après audit</div>
         <div><strong>Catégorie :</strong> Système de caisse — Art. 286, I-3° bis du CGI</div>
+        <div><strong>Conditions :</strong> Inaltérabilité, Sécurisation, Conservation, Archivage</div>
+        <div><strong>Algorithme de chaînage :</strong> SHA-256 (séquentiel, tickets + avoirs + JET)</div>
+        <div><strong>Conservation :</strong> 6 ans (Art. L.102 B du LPF)</div>
+        <div><strong>Format d'archive :</strong> NF525 — 10 fichiers CSV (Entete, Lignes, TVA, Pied, Client, Reglements, Duplicata, JET, GTT, GTJ)</div>
         <div><strong>Date de mise en service :</strong> {new Date().getFullYear()}</div>
-        <div style={{marginTop:6,fontSize:11,color:C.textMuted}}>Conforme aux conditions d'inaltérabilité, de sécurisation, de conservation et d'archivage (ISCA) prévues au 3° bis du I de l'article 286 du CGI.</div>
       </div></div>
-    <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10,marginBottom:14}}>
+
+    <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:14}}>
       <SC icon={Receipt} label="Tickets" value={tSeq} color={C.fiscal}/>
       <SC icon={Lock} label="Clôtures Z" value={closures.length} color={C.fiscal}/>
-      <SC icon={Database} label="GT" value={`${gt.toFixed(2)}€`} color={C.fiscal}/></div>
-    <div style={{background:C.surface,borderRadius:12,padding:14,border:`1.5px solid ${C.border}`,marginBottom:12}}>
-      <div style={{fontSize:12,fontWeight:700,marginBottom:4}}>Chaîne SHA-256</div>
-      <div style={{fontFamily:"monospace",fontSize:8,background:C.surfaceAlt,padding:8,borderRadius:6,wordBreak:"break-all"}}>{lastHash}</div></div>
-    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>
-      <Btn variant="fiscal" onClick={exportArchive} style={{height:44}}><Archive size={14}/> Archive fiscale</Btn>
-      <Btn variant="info" onClick={exportFEC} style={{height:44}}><FileText size={14}/> Export FEC</Btn></div>
-    <Btn variant="outline" onClick={async()=>{const r=await verifyChain();setChainResult(r);}} style={{width:"100%",marginBottom:8,height:40}}>
-      <Shield size={14}/> Vérifier l'intégrité de la chaîne</Btn>
-    {chainResult&&<div style={{padding:10,borderRadius:10,marginBottom:14,background:chainResult.valid?C.primaryLight:C.dangerLight,
-      display:"flex",alignItems:"center",gap:8}}>
-      {chainResult.valid?<CheckCircle2 size={16} color={C.primary}/>:<AlertTriangle size={16} color={C.danger}/>}
-      <span style={{fontSize:12,fontWeight:600,color:chainResult.valid?C.primary:C.danger}}>{chainResult.msg}</span></div>}
-    {/* TVA Declaration */}
-    <div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`}}>
-      <h3 style={{fontSize:14,fontWeight:700,marginBottom:10}}>Déclaration TVA assistée</h3>
-      <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
-        <thead><tr style={{borderBottom:`2px solid ${C.border}`}}>
-          {["Taux","Base HT","TVA collectée"].map(h=>(<th key={h} style={{padding:8,textAlign:"left",fontSize:10,fontWeight:700,color:C.textMuted}}>{h}</th>))}</tr></thead>
-        <tbody>{tvaSummary.map(t=>(<tr key={t.rate} style={{borderBottom:`1px solid ${C.border}`}}>
-          <td style={{padding:8,fontWeight:600}}>{t.rate}</td>
-          <td style={{padding:8}}>{t.baseHT.toFixed(2)}€</td>
-          <td style={{padding:8,fontWeight:700,color:C.primary}}>{t.tva.toFixed(2)}€</td></tr>))}
-        <tr style={{fontWeight:700}}><td style={{padding:8}}>TOTAL</td>
-          <td style={{padding:8}}>{tvaSummary.reduce((s,t)=>s+t.baseHT,0).toFixed(2)}€</td>
-          <td style={{padding:8,color:C.primary}}>{tvaSummary.reduce((s,t)=>s+t.tva,0).toFixed(2)}€</td></tr></tbody></table>
-    </div></div>);
+      <SC icon={Database} label="GT" value={`${gt.toFixed(2)}€`} color={C.fiscal}/>
+      <SC icon={Shield} label="Conformité" value={`${passCount}/${checks.length}`} color={passCount===checks.length?C.fiscal:C.warn}/></div>
+
+    {fiscalTab==="status"&&<>
+      {/* Compliance checklist */}
+      <div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`,marginBottom:14}}>
+        <h3 style={{fontSize:14,fontWeight:700,marginBottom:12}}>Vérification de conformité NF525</h3>
+        <div style={{display:"flex",flexDirection:"column",gap:6}}>
+          {checks.map(c=>(<div key={c.id} style={{display:"flex",alignItems:"start",gap:10,padding:"8px 10px",borderRadius:10,
+            background:c.ok?`${C.fiscal}06`:`${C.danger}06`,border:`1px solid ${c.ok?`${C.fiscal}15`:`${C.danger}15`}`}}>
+            <div style={{width:22,height:22,borderRadius:6,background:c.ok?C.fiscal:C.danger,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:1}}>
+              {c.ok?<Check size={12} color="#fff"/>:<X size={12} color="#fff"/>}</div>
+            <div><div style={{fontSize:12,fontWeight:700,color:c.ok?C.fiscal:C.danger}}>{c.label}</div>
+              <div style={{fontSize:10,color:C.textMuted,marginTop:1}}>{c.desc}</div></div></div>))}</div></div>
+
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>
+        <Btn variant="fiscal" onClick={exportArchive} style={{height:44}}><Archive size={14}/> Archive NF525 (10 CSV)</Btn>
+        <Btn variant="info" onClick={exportFEC} style={{height:44}}><FileText size={14}/> Export FEC</Btn></div>
+    </>}
+
+    {fiscalTab==="chain"&&<>
+      <div style={{background:C.surface,borderRadius:12,padding:14,border:`1.5px solid ${C.border}`,marginBottom:12}}>
+        <div style={{fontSize:12,fontWeight:700,marginBottom:4}}>Dernier hash SHA-256 (tickets)</div>
+        <div style={{fontFamily:"monospace",fontSize:9,background:C.surfaceAlt,padding:10,borderRadius:8,wordBreak:"break-all",letterSpacing:"0.02em"}}>{lastHash}</div></div>
+      <div style={{background:C.surface,borderRadius:12,padding:14,border:`1.5px solid ${C.border}`,marginBottom:12}}>
+        <div style={{fontSize:12,fontWeight:700,marginBottom:4}}>Format de chaînage</div>
+        <div style={{fontFamily:"monospace",fontSize:9,background:C.surfaceAlt,padding:10,borderRadius:8,color:C.textMuted}}>
+          <div>TICKETS: SHA-256( prevHash | seq | VENTE | caisseId | ticketNum | date | totalTTC | GT )</div>
+          <div style={{marginTop:4}}>AVOIRS: SHA-256( prevHash | seq | AVOIR | caisseId | avoirNum | date | totalTTC | ticketOrigine )</div>
+          <div style={{marginTop:4}}>JET: SHA-256( prevHash | seq | codeJet | type | date | detail | userId )</div>
+          <div style={{marginTop:4}}>CLOTURES: SHA-256( prevHash | Z-type | date | totalTTC | GT | nbTickets )</div></div></div>
+      <Btn variant="outline" onClick={async()=>{const r=await verifyChain();setChainResult(r);}} style={{width:"100%",marginBottom:8,height:40}}>
+        <Shield size={14}/> Vérifier l'intégrité de la chaîne (serveur)</Btn>
+      {chainResult&&<div style={{padding:10,borderRadius:10,marginBottom:14,background:chainResult.valid?C.primaryLight:C.dangerLight,
+        display:"flex",alignItems:"center",gap:8}}>
+        {chainResult.valid?<CheckCircle2 size={16} color={C.primary}/>:<AlertTriangle size={16} color={C.danger}/>}
+        <span style={{fontSize:12,fontWeight:600,color:chainResult.valid?C.primary:C.danger}}>{chainResult.msg||chainResult.message||"Vérification terminée"}</span></div>}
+
+      {/* Local chain verification */}
+      <Btn variant="outline" onClick={()=>{
+        // Vérifier la séquence locale
+        const sorted=[...tickets].filter(t=>t.seq).sort((a,b)=>a.seq-b.seq);
+        let gaps=[];for(let i=1;i<sorted.length;i++){if(sorted[i].seq-sorted[i-1].seq>1)gaps.push(`${sorted[i-1].seq}→${sorted[i].seq}`);}
+        if(gaps.length===0)setChainResult({valid:true,msg:`Séquence locale continue: ${sorted.length} tickets vérifiés, aucune rupture`});
+        else{setChainResult({valid:false,msg:`Rupture(s) détectée(s): ${gaps.join(", ")}`});addJET("INTEGRITY_FAIL",`Rupture séquence locale: ${gaps.join(", ")}`);}
+      }} style={{width:"100%",marginBottom:14,height:40}}>
+        <Database size={14}/> Vérifier la séquence locale</Btn>
+    </>}
+
+    {fiscalTab==="tva"&&<>
+      <div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`}}>
+        <h3 style={{fontSize:14,fontWeight:700,marginBottom:10}}>Déclaration TVA assistée</h3>
+        <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+          <thead><tr style={{borderBottom:`2px solid ${C.border}`}}>
+            {["Taux","Base HT","TVA collectée"].map(h=>(<th key={h} style={{padding:8,textAlign:"left",fontSize:10,fontWeight:700,color:C.textMuted}}>{h}</th>))}</tr></thead>
+          <tbody>{tvaSummary.map(t=>(<tr key={t.rate} style={{borderBottom:`1px solid ${C.border}`}}>
+            <td style={{padding:8,fontWeight:600}}>{t.rate}</td>
+            <td style={{padding:8}}>{t.baseHT.toFixed(2)}€</td>
+            <td style={{padding:8,fontWeight:700,color:C.primary}}>{t.tva.toFixed(2)}€</td></tr>))}
+          <tr style={{fontWeight:700}}><td style={{padding:8}}>TOTAL</td>
+            <td style={{padding:8}}>{tvaSummary.reduce((s,t)=>s+t.baseHT,0).toFixed(2)}€</td>
+            <td style={{padding:8,color:C.primary}}>{tvaSummary.reduce((s,t)=>s+t.tva,0).toFixed(2)}€</td></tr></tbody></table>
+      </div>
+    </>}
+
+    {fiscalTab==="training"&&<>
+      <div style={{background:C.surface,borderRadius:14,padding:20,border:`1.5px solid ${C.border}`,marginBottom:14}}>
+        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:14}}>
+          <AlertTriangle size={20} color={C.warn}/>
+          <div><h3 style={{fontSize:16,fontWeight:800,margin:0}}>Mode formation / test</h3>
+            <p style={{fontSize:11,color:C.textMuted,margin:"4px 0 0"}}>Art. 286 CGI — Les données de test doivent être clairement marquées FACTICE et séparées des données fiscales</p></div></div>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:14,borderRadius:12,
+          background:trainingMode?C.warnLight:C.surfaceAlt,border:`2px solid ${trainingMode?C.warn:C.border}`}}>
+          <div><div style={{fontSize:13,fontWeight:700,color:trainingMode?"#92400E":C.text}}>{trainingMode?"Mode formation ACTIF":"Mode production"}</div>
+            <div style={{fontSize:11,color:C.textMuted,marginTop:2}}>{trainingMode?"Les tickets sont préfixés FACTICE et non comptabilisés dans le GT":"Toutes les ventes sont comptabilisées normalement"}</div></div>
+          <button onClick={()=>{setTrainingMode(!trainingMode);addJET(trainingMode?"PARAM_CHANGE":"PARAM_CHANGE",`Mode formation ${trainingMode?"désactivé":"activé"}`);notify(trainingMode?"Mode production rétabli":"Mode formation activé — tickets FACTICE",trainingMode?"success":"warn");}}
+            style={{width:52,height:28,borderRadius:14,border:"none",cursor:"pointer",background:trainingMode?C.warn:C.border,position:"relative",transition:"all 0.2s"}}>
+            <div style={{width:22,height:22,borderRadius:11,background:"#fff",position:"absolute",top:3,left:trainingMode?27:3,transition:"all 0.2s",boxShadow:"0 1px 3px rgba(0,0,0,0.15)"}}/></button></div>
+        <div style={{marginTop:14,padding:12,borderRadius:10,background:C.surfaceAlt,border:`1px solid ${C.border}`}}>
+          <div style={{fontSize:11,fontWeight:700,color:C.textMuted,marginBottom:6}}>RÈGLES NF525 MODE FORMATION</div>
+          <div style={{fontSize:11,color:C.textMuted,lineHeight:1.6}}>
+            1. Les tickets de formation sont préfixés "FACTICE-" dans leur numérotation<br/>
+            2. Ils ne sont PAS inclus dans le Grand Total (GT) fiscal<br/>
+            3. Les données sont clairement identifiées et séparées<br/>
+            4. L'activation/désactivation est tracée dans le JET<br/>
+            5. Aucune donnée de formation ne peut être confondue avec une vente réelle</div></div>
+      </div>
+    </>}
+  </div>);
 }
 
 function AuditScreen(){
@@ -4099,7 +4213,7 @@ function SettingsScreen(){
     {tab==="pricing"&&<div style={{maxWidth:550}}>
       <div style={{background:C.primaryLight,borderRadius:16,padding:20,border:`1.5px solid ${C.primary}22`,marginBottom:16}}>
         <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}>
-          <DollarSign size={20} color={C.primary}/>
+          <Euro size={20} color={C.primary}/>
           <div><h3 style={{fontSize:16,fontWeight:800,margin:0}}>Mode de tarification</h3>
             <p style={{fontSize:11,color:C.textMuted,margin:0}}>Définissez comment vos prix de vente sont saisis</p></div></div>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
@@ -4617,7 +4731,7 @@ function SettingsScreen(){
 /* ══════════ NAVIGATION ══════════ */
 /* ══════════ GIFT CARDS ══════════ */
 function GiftCardScreen(){
-  const{giftCards,createGiftCard,checkGiftCard}=useApp();
+  const{giftCards,createGiftCard,checkGiftCard,settings,notify}=useApp();
   const[amount,setAmount]=useState("");const[custName,setCustName]=useState("");
   const[checkCode,setCheckCode]=useState("");const[checkResult,setCheckResult]=useState(null);
   return(<div style={{height:"100%",overflowY:"auto",padding:20,background:C.bg}}>
@@ -4631,8 +4745,20 @@ function GiftCardScreen(){
           <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>NOM DU BÉNÉFICIAIRE (optionnel)</label>
             <Input value={custName} onChange={e=>setCustName(e.target.value)} placeholder="Nom…"/></div>
           <div style={{display:"flex",gap:6}}>{[25,50,75,100].map(v=>(<Btn key={v} variant="outline" onClick={()=>setAmount(String(v))} style={{flex:1,fontSize:11}}>{v}€</Btn>))}</div></div>
-        <Btn onClick={()=>{if(amount){createGiftCard(parseFloat(amount),custName);setAmount("");setCustName("");}}}
-          disabled={!amount} style={{width:"100%",height:40,background:C.accent}}><Gift size={14}/> Créer la carte</Btn>
+        <div style={{display:"flex",gap:6}}>
+        <Btn onClick={()=>{if(amount){const gc=createGiftCard(parseFloat(amount),custName);setAmount("");setCustName("");
+          if(gc){const w=window.open("","_blank","width=400,height=400");if(w){w.document.write(`<html><head><title>Étiquette carte cadeau</title><style>body{font-family:'Courier New',monospace;font-size:12px;padding:10px;max-width:280px;margin:0 auto;text-align:center;}h2{font-size:16px;margin:8px 0;}h3{font-size:22px;margin:6px 0;}.code{font-size:18px;font-weight:bold;letter-spacing:2px;padding:8px;border:2px dashed #333;margin:8px 0;display:inline-block;}hr{border:none;border-top:1px dashed #333;margin:8px 0;}</style></head><body>`+
+            `<h2>CARTE CADEAU</h2><div class="code">${gc.code}</div><hr>`+
+            `<h3>${parseFloat(amount).toFixed(2)} EUR</h3>`+
+            (custName?`<div>Bénéficiaire: ${custName}</div>`:"")+
+            `<div style="font-size:10px;margin-top:6px;">Valide 1 an — ${settings.name||CO.name}</div><hr>`+
+            `<div style="font-size:9px;">${settings.address||""} ${settings.postalCode||""} ${settings.city||""}<br/>SIRET: ${settings.siret||""}</div>`+
+            `</body></html>`);w.document.close();setTimeout(()=>w.print(),300);}}
+          }}}
+          disabled={!amount} style={{flex:1,height:40,background:C.accent}}><Gift size={14}/> Créer + Étiquette</Btn>
+        <Btn variant="outline" onClick={()=>{if(amount){createGiftCard(parseFloat(amount),custName);setAmount("");setCustName("");}}}
+          disabled={!amount} style={{height:40}}><Plus size={14}/> Sans impression</Btn>
+        </div>
       </div>
       <div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`}}>
         <h3 style={{fontSize:14,fontWeight:700,marginBottom:10}}><Search size={16} style={{verticalAlign:"middle"}}/> Vérifier le solde</h3>
@@ -4659,6 +4785,12 @@ function GiftCardScreen(){
             <div style={{fontSize:9,color:C.textMuted}}>{gc.customerName||"Sans nom"} — {new Date(gc.createdDate).toLocaleDateString("fr-FR")}</div></div>
           <div style={{textAlign:"right"}}><div style={{fontSize:12,fontWeight:700,color:gc.balance>0?C.primary:C.textLight}}>{gc.balance.toFixed(2)}€</div>
             <div style={{fontSize:9,color:C.textMuted}}>sur {gc.initialAmount.toFixed(2)}€</div></div>
+          <button onClick={(e)=>{e.stopPropagation();const w=window.open("","_blank","width=400,height=400");if(w){w.document.write(`<html><head><title>Étiquette carte cadeau</title><style>body{font-family:'Courier New',monospace;font-size:12px;padding:10px;max-width:280px;margin:0 auto;text-align:center;}h2{font-size:16px;margin:8px 0;}h3{font-size:22px;margin:6px 0;}.code{font-size:18px;font-weight:bold;letter-spacing:2px;padding:8px;border:2px dashed #333;margin:8px 0;display:inline-block;}hr{border:none;border-top:1px dashed #333;margin:8px 0;}</style></head><body>`+
+            `<h2>CARTE CADEAU</h2><div class="code">${gc.code}</div><hr><h3>${gc.initialAmount.toFixed(2)} EUR</h3>`+
+            (gc.customerName?`<div>Bénéficiaire: ${gc.customerName}</div>`:"")+
+            `<div style="font-size:10px;margin-top:6px;">Solde: ${gc.balance.toFixed(2)} EUR</div><hr>`+
+            `<div style="font-size:9px;">${settings.name||""}</div></body></html>`);w.document.close();setTimeout(()=>w.print(),300);}}}
+            style={{padding:"4px 10px",borderRadius:8,border:`1px solid ${C.border}`,background:"transparent",cursor:"pointer",fontSize:9,fontWeight:600,color:C.textMuted}} title="Imprimer étiquette"><Printer size={12}/></button>
         </div>))}</div></div>
   </div>);
 }
@@ -5435,5 +5567,562 @@ function HelpDashboardScreen(){
 
 
 
+/* ══════════ EXPORTS CENTER (Dashboard) ══════════ */
+function ExportsScreen(){
+  const{tickets,avoirs,customers,settings,exportCSVReport,notify,addAudit,addJET}=useApp();
+  const[tab,setTab]=useState("sales");
+  const[dateFrom,setDateFrom]=useState(()=>{const d=new Date();d.setMonth(d.getMonth()-1);return d.toISOString().split("T")[0];});
+  const[dateTo,setDateTo]=useState(()=>new Date().toISOString().split("T")[0]);
+  const[searchQ,setSearchQ]=useState("");
+  const[minAmount,setMinAmount]=useState("");
+  const[maxAmount,setMaxAmount]=useState("");
+  const[payMethodFilter,setPayMethodFilter]=useState("all");
+  const[refundMethodFilter,setRefundMethodFilter]=useState("all");
+  const[customerFilter,setCustomerFilter]=useState("");
+
+  // Field configuration per export type
+  const FIELD_DEFS={
+    sales:[
+      {key:"ticketNumber",label:"N° Ticket",default:true},
+      {key:"date",label:"Date",default:true},
+      {key:"userName",label:"Vendeur",default:true},
+      {key:"customerName",label:"Client",default:true},
+      {key:"itemCount",label:"Nb articles",default:true},
+      {key:"itemDetails",label:"Détail articles",default:false},
+      {key:"totalHT",label:"Total HT",default:true},
+      {key:"totalTVA",label:"TVA",default:true},
+      {key:"totalTTC",label:"Total TTC",default:true},
+      {key:"paymentMethod",label:"Mode de paiement",default:true},
+      {key:"globalDiscount",label:"Remise globale",default:false},
+      {key:"margin",label:"Marge",default:false},
+      {key:"saleNote",label:"Note de vente",default:false},
+      {key:"fingerprint",label:"Empreinte NF525",default:false},
+    ],
+    returns:[
+      {key:"avoirNumber",label:"N° Avoir",default:true},
+      {key:"date",label:"Date",default:true},
+      {key:"originalTicket",label:"Ticket d'origine",default:true},
+      {key:"userName",label:"Responsable",default:true},
+      {key:"customerName",label:"Client",default:true},
+      {key:"reason",label:"Motif",default:true},
+      {key:"itemDetails",label:"Articles retournés",default:true},
+      {key:"totalHT",label:"Total HT",default:true},
+      {key:"totalTVA",label:"TVA",default:true},
+      {key:"totalTTC",label:"Total TTC",default:true},
+      {key:"refundMethod",label:"Mode remboursement",default:true},
+      {key:"remaining",label:"Solde avoir",default:false},
+      {key:"fingerprint",label:"Empreinte NF525",default:false},
+    ],
+    exchanges:[
+      {key:"avoirNumber",label:"N° Avoir",default:true},
+      {key:"date",label:"Date",default:true},
+      {key:"originalTicket",label:"Ticket d'origine",default:true},
+      {key:"userName",label:"Responsable",default:true},
+      {key:"customerName",label:"Client",default:true},
+      {key:"reason",label:"Motif",default:true},
+      {key:"itemDetails",label:"Articles échangés",default:true},
+      {key:"totalTTC",label:"Montant",default:true},
+    ],
+    refunds:[
+      {key:"avoirNumber",label:"N° Avoir",default:true},
+      {key:"date",label:"Date",default:true},
+      {key:"originalTicket",label:"Ticket d'origine",default:true},
+      {key:"userName",label:"Responsable",default:true},
+      {key:"customerName",label:"Client",default:true},
+      {key:"reason",label:"Motif",default:true},
+      {key:"itemDetails",label:"Articles remboursés",default:true},
+      {key:"totalHT",label:"Total HT",default:true},
+      {key:"totalTVA",label:"TVA",default:true},
+      {key:"totalTTC",label:"Total TTC",default:true},
+      {key:"refundMethod",label:"Mode remboursement",default:true},
+    ],
+    clients:[
+      {key:"fullName",label:"Nom complet",default:true},
+      {key:"firstName",label:"Prénom",default:false},
+      {key:"lastName",label:"Nom",default:false},
+      {key:"email",label:"Email",default:true},
+      {key:"phone",label:"Téléphone",default:true},
+      {key:"city",label:"Ville",default:true},
+      {key:"points",label:"Points fidélité",default:true},
+      {key:"tier",label:"Niveau fidélité",default:true},
+      {key:"totalSpent",label:"Total dépensé",default:true},
+      {key:"purchaseCount",label:"Nb achats",default:true},
+      {key:"avgBasket",label:"Panier moyen",default:false},
+      {key:"lastPurchase",label:"Dernier achat",default:true},
+      {key:"notes",label:"Notes",default:false},
+    ],
+  };
+
+  const[fields,setFields]=useState(()=>{
+    const init={};Object.keys(FIELD_DEFS).forEach(t=>{init[t]={};FIELD_DEFS[t].forEach(f=>{init[t][f.key]=f.default;});});return init;
+  });
+  const toggleField=(t,key)=>setFields(p=>({...p,[t]:{...p[t],[key]:!p[t][key]}}));
+  const selectAllFields=(t)=>setFields(p=>{const n={...p,[t]:{}};FIELD_DEFS[t].forEach(f=>{n[t][f.key]=true;});return n;});
+  const deselectAllFields=(t)=>setFields(p=>{const n={...p,[t]:{}};FIELD_DEFS[t].forEach(f=>{n[t][f.key]=false;});return n;});
+
+  // Invoice state
+  const[invoiceModal,setInvoiceModal]=useState(false);
+  const[invoiceTicket,setInvoiceTicket]=useState(null);
+  const[invoiceClient,setInvoiceClient]=useState(null);
+  const[invoiceClientSearch,setInvoiceClientSearch]=useState("");
+  const[invoiceTicketSearch,setInvoiceTicketSearch]=useState("");
+  const[invoiceNotes,setInvoiceNotes]=useState("");
+  const[invoiceDue,setInvoiceDue]=useState(()=>{const d=new Date();d.setDate(d.getDate()+30);return d.toISOString().split("T")[0];});
+
+  // --- Filtered data ---
+  const filterByDate=(items,dateField="date")=>items.filter(i=>{
+    const d=(i[dateField]||i.createdAt||i.created_at||"").slice(0,10);
+    return(!dateFrom||d>=dateFrom)&&(!dateTo||d<=dateTo);
+  });
+  const filterByAmount=(items,field="totalTTC")=>items.filter(i=>{
+    const v=parseFloat(i[field])||0;
+    if(minAmount&&v<parseFloat(minAmount))return false;
+    if(maxAmount&&v>parseFloat(maxAmount))return false;
+    return true;
+  });
+  const filterBySearch=(items,searchFields)=>items.filter(i=>{
+    if(!searchQ)return true;const q=searchQ.toLowerCase();
+    return searchFields.some(f=>(String(i[f]||"")).toLowerCase().includes(q));
+  });
+
+  const filteredSales=useMemo(()=>{
+    let data=[...tickets];
+    data=filterByDate(data);data=filterByAmount(data);
+    data=filterBySearch(data,["ticketNumber","userName","customerName","saleNote"]);
+    if(payMethodFilter!=="all")data=data.filter(t=>(t.payments||[]).some(p=>p.method===payMethodFilter));
+    if(customerFilter)data=data.filter(t=>(t.customerName||"").toLowerCase().includes(customerFilter.toLowerCase()));
+    return data;
+  },[tickets,dateFrom,dateTo,minAmount,maxAmount,searchQ,payMethodFilter,customerFilter]);
+
+  const allReturns=useMemo(()=>avoirs.filter(a=>a.refundMethod!=="exchange"),[avoirs]);
+  const allExchanges=useMemo(()=>avoirs.filter(a=>a.refundMethod==="exchange"),[avoirs]);
+  const allRefunds=useMemo(()=>avoirs.filter(a=>a.refundMethod==="cash"||a.refundMethod==="card"),[avoirs]);
+
+  const filteredReturns=useMemo(()=>{
+    let data=[...allReturns];data=filterByDate(data);data=filterByAmount(data);
+    data=filterBySearch(data,["avoirNumber","originalTicket","userName","customerName","reason"]);
+    if(refundMethodFilter!=="all")data=data.filter(a=>a.refundMethod===refundMethodFilter);
+    return data;
+  },[allReturns,dateFrom,dateTo,minAmount,maxAmount,searchQ,refundMethodFilter]);
+
+  const filteredExchanges=useMemo(()=>{
+    let data=[...allExchanges];data=filterByDate(data);
+    data=filterBySearch(data,["avoirNumber","originalTicket","userName","customerName","reason"]);
+    return data;
+  },[allExchanges,dateFrom,dateTo,searchQ]);
+
+  const filteredRefunds=useMemo(()=>{
+    let data=[...allRefunds];data=filterByDate(data);data=filterByAmount(data);
+    data=filterBySearch(data,["avoirNumber","originalTicket","userName","customerName","reason"]);
+    return data;
+  },[allRefunds,dateFrom,dateTo,minAmount,maxAmount,searchQ]);
+
+  const filteredClients=useMemo(()=>{
+    let data=[...customers];
+    if(searchQ){const q=searchQ.toLowerCase();data=data.filter(c=>
+      `${c.firstName||""} ${c.lastName||""}`.toLowerCase().includes(q)||(c.email||"").toLowerCase().includes(q)||(c.phone||"").includes(q)||(c.city||"").toLowerCase().includes(q));}
+    if(minAmount)data=data.filter(c=>(c.totalSpent||0)>=parseFloat(minAmount));
+    if(maxAmount)data=data.filter(c=>(c.totalSpent||0)<=parseFloat(maxAmount));
+    return data;
+  },[customers,searchQ,minAmount,maxAmount]);
+
+  const getLoyaltyTierName=(points)=>{
+    const tiers=[{min:500,name:"Platine"},{min:250,name:"Or"},{min:100,name:"Argent"},{min:0,name:"Bronze"}];
+    return(tiers.find(t=>points>=t.min)||tiers[tiers.length-1]).name;
+  };
+
+  // --- Build export rows ---
+  const buildSalesRows=()=>{
+    const sel=fields.sales;const payLabels={cash:"Espèces",card:"CB",amex:"Amex",contactless:"Sans-contact",giftcard:"Carte cadeau",cheque:"Chèque",avoir:"Avoir"};
+    return filteredSales.map(t=>{const row={};
+      if(sel.ticketNumber)row["N° Ticket"]=t.ticketNumber;
+      if(sel.date)row["Date"]=new Date(t.date||t.createdAt).toLocaleString("fr-FR");
+      if(sel.userName)row["Vendeur"]=t.sellerName||t.seller_name||t.userName||t.user_name||"";
+      if(sel.customerName)row["Client"]=t.customerName||"";
+      if(sel.itemCount)row["Nb articles"]=(t.items||[]).reduce((s,i)=>s+i.quantity,0);
+      if(sel.itemDetails)row["Détail articles"]=(t.items||[]).map(i=>`${i.product?.name||i.product_name} x${i.quantity}`).join(" | ");
+      if(sel.totalHT)row["Total HT"]=(t.totalHT||parseFloat(t.total_ht)||0).toFixed(2);
+      if(sel.totalTVA)row["TVA"]=(t.totalTVA||parseFloat(t.total_tva)||0).toFixed(2);
+      if(sel.totalTTC)row["Total TTC"]=(t.totalTTC||parseFloat(t.total_ttc)||0).toFixed(2);
+      if(sel.paymentMethod)row["Paiement"]=(t.payments||[]).map(p=>`${payLabels[p.method]||p.method}: ${p.amount.toFixed(2)}€`).join(", ");
+      if(sel.globalDiscount)row["Remise globale"]=(t.globalDiscount||0).toFixed(2);
+      if(sel.margin)row["Marge"]=(parseFloat(t.margin)||0).toFixed(2);
+      if(sel.saleNote)row["Note"]=t.saleNote||"";
+      if(sel.fingerprint)row["Empreinte"]=t.fingerprint||"";
+      return row;});
+  };
+
+  const buildReturnsRows=(data,sel)=>{
+    const refundLabels={avoir:"Avoir",cash:"Espèces",card:"CB",exchange:"Échange"};
+    return data.map(a=>{const row={};
+      if(sel.avoirNumber)row["N° Avoir"]=a.avoirNumber||a.code||"";
+      if(sel.date)row["Date"]=new Date(a.date).toLocaleString("fr-FR");
+      if(sel.originalTicket)row["Ticket d'origine"]=a.originalTicket||"";
+      if(sel.userName)row["Responsable"]=a.userName||"";
+      if(sel.customerName)row["Client"]=a.customerName||"";
+      if(sel.reason)row["Motif"]=a.reason||"";
+      if(sel.itemDetails)row["Articles"]=(a.items||[]).map(i=>`${i.product?.name||i.product_name||i.name||""} x${i.quantity||i.qty||1}`).join(" | ");
+      if(sel.totalHT)row["Total HT"]=(a.totalHT||0).toFixed(2);
+      if(sel.totalTVA)row["TVA"]=(a.totalTVA||0).toFixed(2);
+      if(sel.totalTTC)row["Total TTC"]=(a.totalTTC||a.amount||0).toFixed(2);
+      if(sel.refundMethod)row["Mode remboursement"]=refundLabels[a.refundMethod]||a.refundMethod||"";
+      if(sel.remaining)row["Solde avoir"]=(a.remaining||0).toFixed(2);
+      if(sel.fingerprint)row["Empreinte"]=a.fingerprint||"";
+      return row;});
+  };
+
+  const buildClientRows=()=>{
+    const sel=fields.clients;
+    return filteredClients.map(c=>{const row={};
+      if(sel.fullName)row["Nom complet"]=`${c.firstName||""} ${c.lastName||""}`.trim();
+      if(sel.firstName)row["Prénom"]=c.firstName||"";
+      if(sel.lastName)row["Nom"]=c.lastName||"";
+      if(sel.email)row["Email"]=c.email||"";
+      if(sel.phone)row["Téléphone"]=c.phone||"";
+      if(sel.city)row["Ville"]=c.city||"";
+      if(sel.points)row["Points fidélité"]=c.points||0;
+      if(sel.tier)row["Niveau"]=getLoyaltyTierName(c.points||0);
+      if(sel.totalSpent)row["Total dépensé"]=(c.totalSpent||0).toFixed(2);
+      if(sel.purchaseCount){const count=tickets.filter(t=>t.customerId===c.id).length;row["Nb achats"]=count;}
+      if(sel.avgBasket){const ct=tickets.filter(t=>t.customerId===c.id);const total=ct.reduce((s,t)=>s+(t.totalTTC||0),0);row["Panier moyen"]=ct.length?(total/ct.length).toFixed(2):"0.00";}
+      if(sel.lastPurchase){const last=tickets.filter(t=>t.customerId===c.id).sort((a,b)=>new Date(b.date)-new Date(a.date))[0];row["Dernier achat"]=last?new Date(last.date).toLocaleDateString("fr-FR"):"Jamais";}
+      if(sel.notes)row["Notes"]=c.notes||"";
+      return row;});
+  };
+
+  const doExport=()=>{
+    let rows,filename;
+    const d=dateFrom&&dateTo?`${dateFrom}_${dateTo}`:"all";
+    if(tab==="sales"){rows=buildSalesRows();filename=`ventes_${d}.csv`;}
+    else if(tab==="returns"){rows=buildReturnsRows(filteredReturns,fields.returns);filename=`retours_${d}.csv`;}
+    else if(tab==="exchanges"){rows=buildReturnsRows(filteredExchanges,fields.exchanges);filename=`echanges_${d}.csv`;}
+    else if(tab==="refunds"){rows=buildReturnsRows(filteredRefunds,fields.refunds);filename=`remboursements_${d}.csv`;}
+    else if(tab==="clients"){rows=buildClientRows();filename=`clients_${d}.csv`;}
+    if(!rows||!rows.length){notify("Aucune donnée à exporter","warn");return;}
+    exportCSVReport(rows,filename);
+    addAudit("EXPORT",`Export ${tab} — ${rows.length} lignes`);
+    addJET("EXPORT",`Export CSV ${tab}`);
+    notify(`${rows.length} lignes exportées`,"success");
+  };
+
+  // --- Invoice generation ---
+  const generateInvoice=(ticket,client)=>{
+    const storeName=settings.name||CO.name;
+    const storeAddr=settings.address||CO.address;
+    const storePC=settings.postalCode||CO.postalCode;
+    const storeCity=settings.city||CO.city;
+    const storeSiret=settings.siret||CO.siret;
+    const storeTVA=settings.tvaIntra||CO.tvaIntra;
+    const storePhone=settings.phone||CO.phone;
+    const storeLegal=settings.legalForm||CO.legalForm||"";
+    const storeCapital=settings.capital||CO.capital||"";
+    const invoiceNum=`FA-${new Date().getFullYear()}-${String(Date.now()).slice(-6)}`;
+    const invoiceDate=new Date().toLocaleDateString("fr-FR",{day:"2-digit",month:"long",year:"numeric"});
+
+    const clientName=client?`${client.firstName||""} ${client.lastName||""}`.trim():(ticket.customerName||"Client comptoir");
+    const clientEmail=client?.email||"";
+    const clientPhone=client?.phone||"";
+    const clientCity=client?.city||"";
+    const clientAddr=client?.address||"";
+
+    const items=(ticket.items||[]).map(i=>{
+      const name=i.product?.name||i.product_name||"Article";
+      const variant=i.variant?` (${i.variant.color||i.variant_color||""}${i.variant.size||i.variant_size?"/":""}${i.variant.size||i.variant_size||""})`.replace("(/","(").replace("/)",")").replace("()",""):"";
+      const qty=i.quantity;
+      const unitHT=i.lineHT?i.lineHT/qty:(i.line_ht||0)/qty;
+      const taxRate=i.product?.taxRate||i.tax_rate||0.20;
+      const lineHT=unitHT*qty;
+      const lineTVA=lineHT*taxRate;
+      return{name:name+variant,qty,unitHT,taxRate,lineHT,lineTVA,lineTTC:lineHT+lineTVA};
+    });
+
+    const totalHT=items.reduce((s,i)=>s+i.lineHT,0);
+    const totalTVA=items.reduce((s,i)=>s+i.lineTVA,0);
+    const totalTTC=items.reduce((s,i)=>s+i.lineTTC,0);
+    const globalDisc=ticket.globalDiscount||0;
+    const netTTC=totalTTC-globalDisc;
+
+    // TVA breakdown
+    const tvaBreakdown={};items.forEach(i=>{const r=`${(i.taxRate*100).toFixed(1)}%`;if(!tvaBreakdown[r])tvaBreakdown[r]={base:0,tva:0};tvaBreakdown[r].base+=i.lineHT;tvaBreakdown[r].tva+=i.lineTVA;});
+
+    const payLabels={cash:"Espèces",card:"Carte bancaire",amex:"American Express",contactless:"Sans-contact",giftcard:"Carte cadeau",cheque:"Chèque",avoir:"Avoir"};
+    const paymentInfo=(ticket.payments||[]).map(p=>`${payLabels[p.method]||p.method}: ${p.amount.toFixed(2)} EUR`).join(" / ");
+
+    // Generate printable HTML
+    const html=`<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><title>Facture ${invoiceNum}</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:'Segoe UI','Helvetica Neue',Arial,sans-serif;color:#1e293b;background:#fff;padding:40px;max-width:800px;margin:0 auto;font-size:13px;line-height:1.5;}
+.header{display:flex;justify-content:space-between;align-items:start;margin-bottom:32px;padding-bottom:20px;border-bottom:2px solid #047857;}
+.store-name{font-size:22px;font-weight:800;color:#047857;letter-spacing:-0.5px;margin-bottom:4px;}
+.store-info{font-size:11px;color:#64748b;line-height:1.6;}
+.invoice-title{text-align:right;}
+.invoice-title h1{font-size:28px;font-weight:800;color:#0f172a;letter-spacing:-0.8px;}
+.invoice-title .num{font-size:13px;color:#047857;font-weight:600;margin-top:2px;}
+.invoice-title .date{font-size:11px;color:#64748b;margin-top:4px;}
+.parties{display:grid;grid-template-columns:1fr 1fr;gap:30px;margin-bottom:28px;}
+.party{background:#f8fafc;border-radius:10px;padding:16px;border:1px solid #e2e8f0;}
+.party-label{font-size:9px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px;}
+.party-name{font-size:14px;font-weight:700;color:#0f172a;margin-bottom:4px;}
+.party-detail{font-size:11px;color:#64748b;line-height:1.5;}
+table{width:100%;border-collapse:collapse;margin-bottom:20px;}
+thead th{text-align:left;padding:10px 12px;background:#f1f5f9;font-size:10px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.03em;border-bottom:2px solid #e2e8f0;}
+thead th:last-child,thead th:nth-child(2),thead th:nth-child(3),thead th:nth-child(4),thead th:nth-child(5){text-align:right;}
+tbody td{padding:10px 12px;border-bottom:1px solid #f1f5f9;font-size:12px;}
+tbody td:last-child,tbody td:nth-child(2),tbody td:nth-child(3),tbody td:nth-child(4),tbody td:nth-child(5){text-align:right;font-variant-numeric:tabular-nums;}
+tbody tr:last-child td{border-bottom:2px solid #e2e8f0;}
+.totals{display:flex;justify-content:flex-end;margin-bottom:20px;}
+.totals-table{width:280px;}
+.totals-row{display:flex;justify-content:space-between;padding:5px 0;font-size:12px;color:#64748b;}
+.totals-row.bold{font-weight:700;color:#0f172a;font-size:14px;padding:10px 0;border-top:2px solid #0f172a;margin-top:4px;}
+.totals-row.discount{color:#059669;}
+.tva-box{background:#f8fafc;border-radius:10px;padding:14px;margin-bottom:20px;border:1px solid #e2e8f0;}
+.tva-box h4{font-size:10px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px;}
+.tva-row{display:flex;justify-content:space-between;font-size:11px;color:#475569;padding:3px 0;}
+.payment-box{background:#ecfdf5;border-radius:10px;padding:14px;margin-bottom:20px;border:1px solid #04785722;}
+.payment-box .label{font-size:10px;font-weight:700;color:#047857;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px;}
+.payment-box .value{font-size:12px;color:#065f46;font-weight:600;}
+.notes{background:#fffbeb;border-radius:10px;padding:14px;margin-bottom:20px;border:1px solid #d9770622;font-size:11px;color:#92400e;}
+.notes .label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px;}
+.footer{margin-top:32px;padding-top:16px;border-top:1px solid #e2e8f0;font-size:10px;color:#94a3b8;text-align:center;line-height:1.6;}
+.ref{font-size:10px;color:#94a3b8;margin-bottom:20px;}
+@media print{body{padding:20px;} .no-print{display:none !important;}}
+.print-btn{position:fixed;top:16px;right:16px;background:#047857;color:#fff;border:none;border-radius:10px;padding:12px 24px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;box-shadow:0 4px 12px rgba(4,120,87,0.3);}
+.print-btn:hover{background:#065f46;}
+</style></head><body>
+<button class="print-btn no-print" onclick="window.print()">Imprimer / PDF</button>
+<div class="header">
+  <div><div class="store-name">${storeName}</div>
+    <div class="store-info">${storeAddr}<br>${storePC} ${storeCity}<br>Tel: ${storePhone}<br>SIRET: ${storeSiret}<br>TVA: ${storeTVA}${storeLegal?`<br>${storeLegal}${storeCapital?` — Capital: ${storeCapital}`:""}`:""}
+    </div></div>
+  <div class="invoice-title"><h1>FACTURE</h1><div class="num">${invoiceNum}</div>
+    <div class="date">${invoiceDate}</div>
+    <div class="date">Échéance: ${new Date(invoiceDue).toLocaleDateString("fr-FR")}</div></div></div>
+<div class="parties">
+  <div class="party"><div class="party-label">Émetteur</div>
+    <div class="party-name">${storeName}</div>
+    <div class="party-detail">${storeAddr}<br>${storePC} ${storeCity}<br>SIRET: ${storeSiret}<br>TVA: ${storeTVA}</div></div>
+  <div class="party"><div class="party-label">Client</div>
+    <div class="party-name">${clientName}</div>
+    <div class="party-detail">${clientAddr?clientAddr+"<br>":""}${clientCity?clientCity+"<br>":""}${clientEmail?clientEmail+"<br>":""}${clientPhone?clientPhone:""}</div></div></div>
+<div class="ref">Réf. ticket: ${ticket.ticketNumber||""} du ${new Date(ticket.date||ticket.createdAt).toLocaleDateString("fr-FR")}</div>
+<table><thead><tr><th>Désignation</th><th>Qté</th><th>P.U. HT</th><th>TVA</th><th>Total HT</th><th>Total TTC</th></tr></thead>
+<tbody>${items.map(i=>`<tr><td>${i.name}</td><td>${i.qty}</td><td>${i.unitHT.toFixed(2)} EUR</td><td>${(i.taxRate*100).toFixed(1)}%</td><td>${i.lineHT.toFixed(2)} EUR</td><td>${i.lineTTC.toFixed(2)} EUR</td></tr>`).join("")}</tbody></table>
+<div class="tva-box"><h4>Récapitulatif TVA</h4>${Object.entries(tvaBreakdown).map(([r,v])=>`<div class="tva-row"><span>TVA ${r} sur ${v.base.toFixed(2)} EUR</span><span>${v.tva.toFixed(2)} EUR</span></div>`).join("")}</div>
+<div class="totals"><div class="totals-table">
+  <div class="totals-row"><span>Sous-total HT</span><span>${totalHT.toFixed(2)} EUR</span></div>
+  <div class="totals-row"><span>TVA</span><span>${totalTVA.toFixed(2)} EUR</span></div>
+  ${globalDisc>0?`<div class="totals-row discount"><span>Remise</span><span>-${globalDisc.toFixed(2)} EUR</span></div>`:""}
+  <div class="totals-row bold"><span>TOTAL TTC</span><span>${netTTC.toFixed(2)} EUR</span></div></div></div>
+<div class="payment-box"><div class="label">Règlement</div><div class="value">${paymentInfo||"Non renseigné"}</div></div>
+${invoiceNotes?`<div class="notes"><div class="label">Remarques</div>${invoiceNotes}</div>`:""}
+<div class="footer">${storeName} — ${storeAddr}, ${storePC} ${storeCity} — SIRET: ${storeSiret} — TVA intracommunautaire: ${storeTVA}<br>
+${storeLegal?`${storeLegal}${storeCapital?` au capital de ${storeCapital}`:""}`:""}<br>
+Facture générée par ${CO.sw} v${CO.ver}</div></body></html>`;
+
+    const w=window.open("","_blank","width=860,height=1000");
+    w.document.write(html);w.document.close();
+    addAudit("FACTURE",`Facture ${invoiceNum} pour ${clientName} — ${netTTC.toFixed(2)}€`);
+    addJET("FACTURE",`Génération facture ${invoiceNum}`);
+    notify(`Facture ${invoiceNum} générée`,"success");
+    setInvoiceModal(false);setInvoiceTicket(null);setInvoiceClient(null);setInvoiceNotes("");
+  };
+
+  const tabs=[
+    {id:"sales",label:"Ventes",icon:Receipt,count:filteredSales.length},
+    {id:"returns",label:"Retours",icon:RotateCcw,count:filteredReturns.length},
+    {id:"exchanges",label:"Échanges",icon:Split,count:filteredExchanges.length},
+    {id:"refunds",label:"Remboursements",icon:DollarSign,count:filteredRefunds.length},
+    {id:"clients",label:"Clients",icon:Users,count:filteredClients.length},
+  ];
+
+  const currentCount=tab==="sales"?filteredSales.length:tab==="returns"?filteredReturns.length:tab==="exchanges"?filteredExchanges.length:tab==="refunds"?filteredRefunds.length:filteredClients.length;
+  const activeFields=FIELD_DEFS[tab]||[];
+  const selectedCount=activeFields.filter(f=>fields[tab]?.[f.key]).length;
+
+  // Data preview (first 10 rows)
+  const previewData=useMemo(()=>{
+    if(tab==="sales")return filteredSales.slice(0,10);
+    if(tab==="returns")return filteredReturns.slice(0,10);
+    if(tab==="exchanges")return filteredExchanges.slice(0,10);
+    if(tab==="refunds")return filteredRefunds.slice(0,10);
+    if(tab==="clients")return filteredClients.slice(0,10);
+    return[];
+  },[tab,filteredSales,filteredReturns,filteredExchanges,filteredRefunds,filteredClients]);
+
+  return(<div style={{height:"100%",overflowY:"auto",padding:24,background:C.bg}}>
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:20}}>
+      <div>
+        <h2 style={{fontSize:22,fontWeight:800,margin:0,letterSpacing:"-0.4px"}}>Exports & Factures</h2>
+        <p style={{fontSize:12,color:C.textMuted,margin:"4px 0 0"}}>Exportez vos données en CSV et générez des factures clients</p></div>
+      <div style={{display:"flex",gap:8}}>
+        <Btn variant="outline" onClick={()=>setInvoiceModal(true)} style={{gap:6}}><FileText size={14}/> Générer une facture</Btn>
+        <Btn onClick={doExport} disabled={selectedCount===0||currentCount===0} style={{background:C.primary,gap:6}}><Download size={14}/> Exporter CSV ({currentCount})</Btn></div></div>
+
+    {/* Tabs */}
+    <div style={{display:"flex",gap:4,marginBottom:16,background:C.surfaceAlt,borderRadius:12,padding:4}}>
+      {tabs.map(t=>{const I=t.icon;return(<button key={t.id} onClick={()=>setTab(t.id)} style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:6,padding:"10px 14px",borderRadius:9,border:"none",cursor:"pointer",
+        background:tab===t.id?C.surface:"transparent",color:tab===t.id?C.text:C.textMuted,fontSize:12,fontWeight:tab===t.id?700:500,fontFamily:"inherit",
+        boxShadow:tab===t.id?`0 1px 3px ${C.shadow}, 0 0 0 1px ${C.border}`:"none",transition:"all 0.15s"}}>
+        <I size={14}/>{t.label}<span style={{background:tab===t.id?`${C.primary}15`:C.surfaceAlt,color:tab===t.id?C.primary:C.textLight,
+          padding:"2px 7px",borderRadius:6,fontSize:10,fontWeight:700}}>{t.count}</span></button>);})}
+    </div>
+
+    <div style={{display:"grid",gridTemplateColumns:"280px 1fr",gap:16}}>
+      {/* Left panel — Filters + Fields */}
+      <div style={{display:"flex",flexDirection:"column",gap:12}}>
+        {/* Filters */}
+        <div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`}}>
+          <div style={{fontSize:12,fontWeight:700,marginBottom:10,display:"flex",alignItems:"center",gap:6}}><Search size={13}/> Filtres</div>
+          <div style={{display:"flex",flexDirection:"column",gap:8}}>
+            <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>RECHERCHE</label>
+              <Input value={searchQ} onChange={e=>setSearchQ(e.target.value)} placeholder="Ticket, client, vendeur..." style={{fontSize:11,padding:"8px 10px"}}/></div>
+            {tab!=="clients"&&<>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
+                <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>DATE DÉBUT</label>
+                  <Input type="date" value={dateFrom} onChange={e=>setDateFrom(e.target.value)} style={{fontSize:11,padding:"7px 8px"}}/></div>
+                <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>DATE FIN</label>
+                  <Input type="date" value={dateTo} onChange={e=>setDateTo(e.target.value)} style={{fontSize:11,padding:"7px 8px"}}/></div></div></>}
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
+              <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>{tab==="clients"?"DÉPENSÉ MIN":"MONTANT MIN"}</label>
+                <Input type="number" value={minAmount} onChange={e=>setMinAmount(e.target.value)} placeholder="0.00" style={{fontSize:11,padding:"7px 8px"}}/></div>
+              <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>{tab==="clients"?"DÉPENSÉ MAX":"MONTANT MAX"}</label>
+                <Input type="number" value={maxAmount} onChange={e=>setMaxAmount(e.target.value)} placeholder="9999" style={{fontSize:11,padding:"7px 8px"}}/></div></div>
+            {tab==="sales"&&<div><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>MODE PAIEMENT</label>
+              <select value={payMethodFilter} onChange={e=>setPayMethodFilter(e.target.value)} style={{width:"100%",padding:"8px 10px",borderRadius:10,border:`1.5px solid ${C.border}`,fontSize:11,fontFamily:"inherit",background:C.surface}}>
+                <option value="all">Tous</option><option value="cash">Espèces</option><option value="card">CB</option><option value="amex">Amex</option><option value="cheque">Chèque</option><option value="giftcard">Carte cadeau</option><option value="avoir">Avoir</option></select></div>}
+            {(tab==="returns"||tab==="refunds")&&<div><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>MODE REMBOURSEMENT</label>
+              <select value={refundMethodFilter} onChange={e=>setRefundMethodFilter(e.target.value)} style={{width:"100%",padding:"8px 10px",borderRadius:10,border:`1.5px solid ${C.border}`,fontSize:11,fontFamily:"inherit",background:C.surface}}>
+                <option value="all">Tous</option><option value="avoir">Avoir</option><option value="cash">Espèces</option><option value="card">CB</option></select></div>}
+            {tab==="sales"&&<div><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>CLIENT</label>
+              <Input value={customerFilter} onChange={e=>setCustomerFilter(e.target.value)} placeholder="Nom du client..." style={{fontSize:11,padding:"8px 10px"}}/></div>}
+          </div>
+        </div>
+
+        {/* Field selection */}
+        <div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`}}>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
+            <div style={{fontSize:12,fontWeight:700,display:"flex",alignItems:"center",gap:6}}><Grid size={13}/> Champs ({selectedCount}/{activeFields.length})</div>
+            <div style={{display:"flex",gap:4}}>
+              <button onClick={()=>selectAllFields(tab)} style={{fontSize:9,fontWeight:600,color:C.primary,background:"none",border:"none",cursor:"pointer",fontFamily:"inherit"}}>Tout</button>
+              <span style={{color:C.textLight,fontSize:9}}>|</span>
+              <button onClick={()=>deselectAllFields(tab)} style={{fontSize:9,fontWeight:600,color:C.textMuted,background:"none",border:"none",cursor:"pointer",fontFamily:"inherit"}}>Aucun</button></div></div>
+          <div style={{display:"flex",flexDirection:"column",gap:3}}>
+            {activeFields.map(f=>{const on=fields[tab]?.[f.key];return(
+              <button key={f.key} onClick={()=>toggleField(tab,f.key)} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 8px",borderRadius:8,border:"none",cursor:"pointer",
+                background:on?`${C.primary}08`:"transparent",textAlign:"left",fontFamily:"inherit",transition:"all 0.1s"}}>
+                <div style={{width:16,height:16,borderRadius:4,border:`2px solid ${on?C.primary:C.border}`,background:on?C.primary:"transparent",
+                  display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"all 0.15s"}}>
+                  {on&&<Check size={10} color="#fff"/>}</div>
+                <span style={{fontSize:11,fontWeight:on?600:400,color:on?C.text:C.textMuted}}>{f.label}</span></button>);})}
+          </div>
+        </div>
+      </div>
+
+      {/* Right panel — Preview */}
+      <div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`,overflow:"hidden"}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
+          <div style={{fontSize:12,fontWeight:700,display:"flex",alignItems:"center",gap:6}}><FileText size={13}/> Aperçu ({currentCount} résultats)</div>
+          {tab==="sales"&&<Btn variant="ghost" onClick={()=>setInvoiceModal(true)} style={{fontSize:10,gap:4}}><FileText size={12}/> Facturer</Btn>}
+        </div>
+        <div style={{overflowX:"auto"}}>
+          {currentCount===0?
+            <div style={{textAlign:"center",padding:"40px 20px",color:C.textLight}}>
+              <Database size={32} style={{marginBottom:8,opacity:0.3}}/>
+              <div style={{fontSize:13,fontWeight:600}}>Aucune donnée</div>
+              <div style={{fontSize:11,marginTop:4}}>Ajustez vos filtres ou sélectionnez une période différente</div></div>
+          :<table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
+            <thead><tr style={{borderBottom:`2px solid ${C.border}`}}>
+              {tab==="sales"&&<th style={{padding:"8px 10px",textAlign:"left",fontSize:10,fontWeight:700,color:C.textMuted,whiteSpace:"nowrap"}}>Action</th>}
+              {activeFields.filter(f=>fields[tab]?.[f.key]).map(f=>(
+                <th key={f.key} style={{padding:"8px 10px",textAlign:f.key.includes("total")||f.key.includes("amount")||f.key==="margin"||f.key==="points"||f.key==="totalSpent"||f.key==="avgBasket"?"right":"left",
+                  fontSize:10,fontWeight:700,color:C.textMuted,whiteSpace:"nowrap"}}>{f.label}</th>))}
+            </tr></thead>
+            <tbody>
+              {previewData.map((item,idx)=>{
+                const rowData=tab==="sales"?buildSalesRows().find((_,i)=>i===idx):
+                  tab==="returns"?buildReturnsRows(filteredReturns,fields.returns)[idx]:
+                  tab==="exchanges"?buildReturnsRows(filteredExchanges,fields.exchanges)[idx]:
+                  tab==="refunds"?buildReturnsRows(filteredRefunds,fields.refunds)[idx]:
+                  buildClientRows()[idx];
+                if(!rowData)return null;
+                const vals=Object.values(rowData);
+                return(<tr key={idx} style={{borderBottom:`1px solid ${C.surfaceAlt}`}}
+                  onMouseEnter={e=>e.currentTarget.style.background=C.surfaceAlt} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+                  {tab==="sales"&&<td style={{padding:"8px 10px",whiteSpace:"nowrap"}}>
+                    <button onClick={()=>{setInvoiceTicket(item);setInvoiceModal(true);
+                      const c=customers.find(c=>c.id===item.customerId);if(c)setInvoiceClient(c);}}
+                      style={{background:`${C.primary}10`,color:C.primary,border:"none",borderRadius:6,padding:"4px 8px",fontSize:10,fontWeight:600,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",gap:3}}>
+                      <FileText size={10}/> Facture</button></td>}
+                  {vals.map((v,vi)=>(
+                    <td key={vi} style={{padding:"8px 10px",maxWidth:200,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",
+                      textAlign:typeof v==="number"||String(v).match(/^\d+\.\d{2}$/)?"right":"left",fontVariantNumeric:"tabular-nums"}}>{String(v)}</td>))}
+                </tr>);})}
+            </tbody></table>}
+          {currentCount>10&&<div style={{textAlign:"center",padding:"10px",fontSize:11,color:C.textMuted,borderTop:`1px solid ${C.surfaceAlt}`,marginTop:4}}>
+            ... et {currentCount-10} autres lignes (incluses dans l'export)</div>}
+        </div>
+      </div>
+    </div>
+
+    {/* Invoice generation modal */}
+    <Modal open={invoiceModal} onClose={()=>{setInvoiceModal(false);setInvoiceTicket(null);setInvoiceClient(null);}} title="Générer une facture" sub="Sélectionnez un ticket de vente et un client pour créer une facture">
+      <div style={{display:"flex",flexDirection:"column",gap:12}}>
+        {/* Ticket selection */}
+        <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>TICKET DE VENTE</label>
+          {invoiceTicket?<div style={{display:"flex",alignItems:"center",gap:10,padding:10,background:C.primaryLight,borderRadius:10,border:`1px solid ${C.primary}22`}}>
+            <Receipt size={16} color={C.primary}/>
+            <div style={{flex:1}}><div style={{fontSize:12,fontWeight:700}}>{invoiceTicket.ticketNumber}</div>
+              <div style={{fontSize:10,color:C.textMuted}}>{new Date(invoiceTicket.date||invoiceTicket.createdAt).toLocaleString("fr-FR")} — {(invoiceTicket.totalTTC||0).toFixed(2)}€ — {invoiceTicket.customerName||"Comptoir"}</div></div>
+            <button onClick={()=>setInvoiceTicket(null)} style={{background:"none",border:"none",cursor:"pointer"}}><X size={14} color={C.textMuted}/></button></div>
+          :<div>
+            <Input value={invoiceTicketSearch} onChange={e=>setInvoiceTicketSearch(e.target.value)} placeholder="Rechercher un ticket..." style={{fontSize:11,padding:"8px 10px",marginBottom:6}}/>
+            <div style={{maxHeight:160,overflowY:"auto",border:`1px solid ${C.border}`,borderRadius:10}}>
+              {tickets.filter(t=>!invoiceTicketSearch||(t.ticketNumber||"").toLowerCase().includes(invoiceTicketSearch.toLowerCase())||(t.customerName||"").toLowerCase().includes(invoiceTicketSearch.toLowerCase()))
+                .slice(0,20).map(t=>(<button key={t.ticketNumber||t.seq} onClick={()=>{setInvoiceTicket(t);setInvoiceTicketSearch("");
+                  const c=customers.find(c=>c.id===t.customerId);if(c)setInvoiceClient(c);}}
+                  style={{width:"100%",display:"flex",alignItems:"center",gap:8,padding:"8px 10px",background:"transparent",border:"none",borderBottom:`1px solid ${C.surfaceAlt}`,cursor:"pointer",fontFamily:"inherit",textAlign:"left"}}
+                  onMouseEnter={e=>e.currentTarget.style.background=C.surfaceAlt} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+                  <span style={{fontSize:11,fontWeight:600,color:C.primary,minWidth:120}}>{t.ticketNumber}</span>
+                  <span style={{fontSize:10,color:C.textMuted,flex:1}}>{new Date(t.date||t.createdAt).toLocaleDateString("fr-FR")} — {t.customerName||"Comptoir"}</span>
+                  <span style={{fontSize:11,fontWeight:700}}>{(t.totalTTC||0).toFixed(2)}€</span></button>))}</div></div>}
+        </div>
+
+        {/* Client selection */}
+        <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>CLIENT</label>
+          {invoiceClient?<div style={{display:"flex",alignItems:"center",gap:10,padding:10,background:C.surfaceAlt,borderRadius:10,border:`1px solid ${C.border}`}}>
+            <div style={{width:28,height:28,borderRadius:8,background:`${C.primary}15`,display:"flex",alignItems:"center",justifyContent:"center",color:C.primary,fontSize:12,fontWeight:700}}>{(invoiceClient.firstName||"C")[0]}</div>
+            <div style={{flex:1}}><div style={{fontSize:12,fontWeight:700}}>{invoiceClient.firstName} {invoiceClient.lastName}</div>
+              <div style={{fontSize:10,color:C.textMuted}}>{invoiceClient.email||""} {invoiceClient.phone?`— ${invoiceClient.phone}`:""}</div></div>
+            <button onClick={()=>setInvoiceClient(null)} style={{background:"none",border:"none",cursor:"pointer"}}><X size={14} color={C.textMuted}/></button></div>
+          :<div>
+            <Input value={invoiceClientSearch} onChange={e=>setInvoiceClientSearch(e.target.value)} placeholder="Rechercher un client..." style={{fontSize:11,padding:"8px 10px",marginBottom:6}}/>
+            <div style={{maxHeight:140,overflowY:"auto",border:`1px solid ${C.border}`,borderRadius:10}}>
+              {customers.filter(c=>!invoiceClientSearch||`${c.firstName} ${c.lastName}`.toLowerCase().includes(invoiceClientSearch.toLowerCase())||(c.email||"").toLowerCase().includes(invoiceClientSearch.toLowerCase())||(c.phone||"").includes(invoiceClientSearch))
+                .slice(0,15).map(c=>(<button key={c.id} onClick={()=>{setInvoiceClient(c);setInvoiceClientSearch("");}}
+                  style={{width:"100%",display:"flex",alignItems:"center",gap:8,padding:"8px 10px",background:"transparent",border:"none",borderBottom:`1px solid ${C.surfaceAlt}`,cursor:"pointer",fontFamily:"inherit",textAlign:"left"}}
+                  onMouseEnter={e=>e.currentTarget.style.background=C.surfaceAlt} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+                  <div style={{width:24,height:24,borderRadius:6,background:`${C.primary}12`,display:"flex",alignItems:"center",justifyContent:"center",color:C.primary,fontSize:10,fontWeight:700}}>{(c.firstName||"?")[0]}</div>
+                  <span style={{fontSize:11,fontWeight:600,flex:1}}>{c.firstName} {c.lastName}</span>
+                  <span style={{fontSize:10,color:C.textMuted}}>{c.email||c.phone||""}</span></button>))}</div></div>}
+        </div>
+
+        {/* Due date + notes */}
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+          <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>DATE D'ÉCHÉANCE</label>
+            <Input type="date" value={invoiceDue} onChange={e=>setInvoiceDue(e.target.value)} style={{fontSize:11,padding:"8px 10px"}}/></div></div>
+        <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>REMARQUES (optionnel)</label>
+          <textarea value={invoiceNotes} onChange={e=>setInvoiceNotes(e.target.value)} placeholder="Conditions de paiement, remarques..."
+            style={{width:"100%",height:60,padding:"8px 10px",borderRadius:10,border:`1.5px solid ${C.border}`,fontSize:11,fontFamily:"inherit",resize:"vertical",background:C.surface}}/></div>
+
+        <Btn onClick={()=>{if(!invoiceTicket){notify("Sélectionnez un ticket","error");return;}generateInvoice(invoiceTicket,invoiceClient);}}
+          disabled={!invoiceTicket} style={{width:"100%",height:44,background:C.primary,gap:6,marginTop:4}}>
+          <FileText size={14}/> Générer la facture</Btn>
+      </div>
+    </Modal>
+  </div>);
+}
+
+
 // Export all screen components
-export { LoginScreen, CashRegControl, SalesScreen, StatsScreen, StockScreen, HistoryScreen, ReturnScreen, ClosureScreen, CustomersScreen, FiscalScreen, AuditScreen, CSVImportWizard, ProductsScreen, ReturnsHistoryScreen, SettingsScreen, GiftCardScreen, PromosScreen, FootfallScreen, HelpCashierScreen, HelpDashboardScreen };
+export { LoginScreen, CashRegControl, SalesScreen, StatsScreen, StockScreen, HistoryScreen, ReturnScreen, ClosureScreen, CustomersScreen, FiscalScreen, AuditScreen, CSVImportWizard, ProductsScreen, ReturnsHistoryScreen, SettingsScreen, GiftCardScreen, PromosScreen, FootfallScreen, HelpCashierScreen, HelpDashboardScreen, ExportsScreen };

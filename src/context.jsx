@@ -223,26 +223,73 @@ function AppProvider({children}){
     return()=>clearTimeout(timer);
   },[isOnline,pendingSync.length]);// eslint-disable-line react-hooks/exhaustive-deps
 
-  const addJET=useCallback((t,d)=>{
-    setJet(p=>[{id:Date.now(),date:new Date().toISOString(),type:t,detail:d,user:currentUser?.name||"Sys"},...p]);
-    // Pousser au backend (fire & forget)
+  // NF525: JET — Journal des Événements Techniques conforme
+  // Champs requis: ID, ID_SOC, ID_CAISSE, NUMERO_JET, CODE_JET, DESCRIPTIF, CODE_UTIL, TYPE_JET, DATETIME, INFO, SIGNATURE
+  const jetSeqRef=useRef(()=>{try{return parseInt(localStorage.getItem("caissepro_jetseq"))||0;}catch(e){return 0;}});
+  const lastJetHashRef=useRef(()=>{try{return localStorage.getItem("caissepro_lastjethash")||"0".repeat(64);}catch(e){return"0".repeat(64);}});
+  // NF525 JET event codes mapping
+  const JET_CODES={SYS_START:80,SYS_STOP:81,LOGIN:100,LOGOUT:101,VENTE:200,VOID_LINE:210,VOID_SALE:220,AVOIR:230,
+    PARAM_CHANGE:410,PRICE_CHANGE:411,EXPORT:20,ARCHIVE:30,CLOTURE:50,CLOTURE_ANNUELLE:60,
+    INTEGRITY_FAIL:90,SEQ_BREAK:95,VERSION_CHANGE:250,FISCAL_CONTROL:280,COMPANY_CHANGE:410,
+    DUPLICATA:300,FACTURE:310,RETOUCHE:320,IMPORT:330,CAISSE:340,CLOCK_IN:350,CLOCK_OUT:351,
+    LOGIN_OFFLINE:102,ERROR:900};
+  const addJET=useCallback(async(t,d)=>{
+    const seqVal=typeof jetSeqRef.current==="function"?jetSeqRef.current():jetSeqRef.current;
+    const lastH=typeof lastJetHashRef.current==="function"?lastJetHashRef.current():lastJetHashRef.current;
+    const seq=seqVal+1;
+    const dt=new Date().toISOString();
+    const codeJet=JET_CODES[t]||999;
+    const socId=settings.siret||CO.siret||"000000000";
+    const caisseId=currentStore?.id||cashReg?.id||"CAISSE-01";
+    const userId=currentUser?.id||currentUser?.name||"SYS";
+    // NF525: signature SHA-256 chaînée pour le JET
+    const hashInput=`${lastH}|${seq}|${codeJet}|${t}|${dt}|${d}|${userId}`;
+    const hash=await sha256(hashInput);
+    const fingerprint=hash.slice(0,8).toUpperCase();
+    jetSeqRef.current=seq;lastJetHashRef.current=hash;
+    try{localStorage.setItem("caissepro_jetseq",String(seq));localStorage.setItem("caissepro_lastjethash",hash);}catch(e){}
+    const entry={id:Date.now(),seq,date:dt,type:t,codeJet,detail:d,
+      user:userId,userName:currentUser?.name||"Sys",
+      socId,caisseId,hash,fingerprint};
+    setJet(p=>[entry,...p]);
     if(API.getToken())API.audit.createJet(t,d).catch(()=>{});
-  },[currentUser]);
+  },[currentUser,currentStore,cashReg,settings.siret]);
   const addAudit=useCallback((a,d,r)=>{
     setAudit(p=>[{id:Date.now(),date:new Date().toISOString(),action:a,detail:d,ref:r,user:currentUser?.name||"—"},...p]);
-    // Pousser au backend (fire & forget)
     if(API.getToken())API.audit.create(a,d,r).catch(()=>{});
   },[currentUser]);
   const perm=useCallback(()=>currentUser?PERMS[currentUser.role]||PERMS.cashier:PERMS.cashier,[currentUser]);
-  // NF525: JET — événement de démarrage système
-  useEffect(()=>{addJET("SYS_START",`Démarrage CaissePro v${CO.ver}`);},[]);// eslint-disable-line react-hooks/exhaustive-deps
+  // NF525: JET — événement de démarrage système + vérification séquence
+  useEffect(()=>{
+    addJET("SYS_START",`Démarrage CaissePro v${CO.ver}`);
+    // NF525: Vérification intégrité séquence tickets au démarrage (code 95)
+    if(tickets.length>1){
+      const sorted=[...tickets].sort((a,b)=>(a.seq||0)-(b.seq||0)).filter(t=>t.seq);
+      for(let i=1;i<sorted.length;i++){
+        if(sorted[i].seq-sorted[i-1].seq>1){
+          addJET("SEQ_BREAK",`Rupture séquence détectée: ticket seq ${sorted[i-1].seq} → ${sorted[i].seq} (manque ${sorted[i].seq-sorted[i-1].seq-1} entrée(s))`);
+          break;// Log une seule fois au démarrage
+        }
+      }
+    }
+    // NF525: Détection changement de version logicielle (code 250)
+    try{const lastVer=localStorage.getItem("caissepro_last_version");
+      if(lastVer&&lastVer!==CO.ver)addJET("VERSION_CHANGE",`Version ${lastVer} → ${CO.ver}`);
+      localStorage.setItem("caissepro_last_version",CO.ver);}catch(e){}
+  },[]);// eslint-disable-line react-hooks/exhaustive-deps
   // saveSettingsToAPI with JET logging (addJET must be declared first)
   const saveSettingsToAPI=useCallback(async(newSettings)=>{
-    addJET("PARAM_CHANGE",`Modification paramètres: ${Object.keys(newSettings).join(", ")}`);
+    // NF525: détecter les modifications de données société (code 410)
+    const companyFields=["name","address","postalCode","city","siret","tvaIntra","phone","legalForm","capital"];
+    const changed=companyFields.filter(f=>newSettings[f]!==undefined&&newSettings[f]!==settings[f]);
+    if(changed.length>0)addJET("COMPANY_CHANGE",`Modification données société: ${changed.map(f=>`${f}: ${settings[f]||"(vide)"} → ${newSettings[f]}`).join(", ")}`);
+    else addJET("PARAM_CHANGE",`Modification paramètres: ${Object.keys(newSettings).join(", ")}`);
     return saveSettingsToAPI_base(newSettings);
-  },[addJET,saveSettingsToAPI_base]);
+  },[addJET,saveSettingsToAPI_base,settings]);
 
   const[offlineMode,setOfflineMode]=useState(false);
+  // NF525: Mode formation/test — les données sont marquées FACTICE
+  const[trainingMode,setTrainingMode]=useState(false);
 
   // ══ Load store data after selecting a store ══
   const loadStoreData=useCallback(async()=>{
@@ -508,19 +555,24 @@ function AppProvider({children}){
           return cv?{...v,stock:v.stock-cv.quantity}:v;})};}));
       // Fidélité
       if(selCust){setCustomers(prev=>prev.map(c=>c.id===selCust.id?{...c,points:(c.points||0)+Math.floor(tTTC),totalSpent:(c.totalSpent||0)+tTTC}:c));}
-      // NF525: SHA-256 hash chain (même en mode offline)
-      const hashInput=`${lastHash}|${ticketNumber}|${date}|${tTTC.toFixed(2)}|${(gt+tTTC).toFixed(2)}`;
+      // NF525: SHA-256 hash chain conforme — inclut ID caisse, type entrée, N° séquence
+      const caisseId=currentStore?.id||cashReg?.id||"CAISSE-01";
+      const hashInput=`${lastHash}|${seq}|VENTE|${caisseId}|${ticketNumber}|${date}|${tTTC.toFixed(2)}|${(gt+tTTC).toFixed(2)}`;
       const hash=await sha256(hashInput);
       const fingerprint=hash.slice(0,8).toUpperCase();
       const ticket={ticketNumber,seq,date,items,payments,paymentMethod,
         totalHT:tHT,totalTVA:tTVA,totalTTC:tTTC,globalDiscount:gd,margin,
         hash,fingerprint,grandTotal:gt+tTTC,promosApplied:applied,
         saleNote:saleNote||null,userName:currentUser?.name,sellerName:sellerName||currentUser?.name,
-        customerId:selCust?.id,customerName:selCust?`${selCust.firstName} ${selCust.lastName}`:null};
-      setTSeq(seq);setLastHash(hash);setGt(g=>g+tTTC);
+        customerId:selCust?.id,customerName:selCust?`${selCust.firstName} ${selCust.lastName}`:null,
+        // NF525: marqueur mode formation
+        ...(trainingMode?{trainingMode:true,ticketNumber:`FACTICE-${ticketNumber}`}:{})};
+      setTSeq(seq);setLastHash(hash);
+      // NF525: ne PAS incrémenter le GT en mode formation
+      if(!trainingMode)setGt(g=>g+tTTC);
       setTickets(prev=>[ticket,...prev]);
       setCart([]);setGDisc(0);setSelCust(null);setPromoCode("");setAvoirPayment(0);setSaleNote("");
-      addStockMove("VENTE",{name:"Panier",sku:"—"},{color:"—",size:"—"},-cart.reduce((s,i)=>s+i.quantity,0),ticketNumber);
+      addStockMove("VENTE",{name:"Panier",sku:"—"},{color:"—",size:"—"},-cart.reduce((s,i)=>s+i.quantity,0),ticket.ticketNumber);
       // Queue offline sale for sync when back online
       addPendingSync({type:"offlineSale",data:{
         items:items.map(({product,variant,...rest})=>rest),payments,customerId:selCust?.id||null,
@@ -687,12 +739,14 @@ function AppProvider({children}){
       // Paiements par méthode
       const chequeLocal=pt.reduce((s,t)=>s+(t.payments?.filter(p=>p.method==="cheque").reduce((a,p)=>a+p.amount,0)||0),0);
       const giftcardLocal=pt.reduce((s,t)=>s+(t.payments?.filter(p=>p.method==="giftcard").reduce((a,p)=>a+p.amount,0)||0),0);
+      const amexLocal=pt.reduce((s,t)=>s+(t.payments?.filter(p=>p.method==="amex").reduce((a,p)=>a+p.amount,0)||0),0);
+      const avoirLocal=pt.reduce((s,t)=>s+(t.payments?.filter(p=>p.method==="avoir").reduce((a,p)=>a+p.amount,0)||0),0);
       const cl={id:`cl-${Date.now()}`,type,period:today,date:clDate,
         ticketCount:pt.length,totalHT,totalTVA,totalTTC,totalMargin,
         expectedCash:(cashReg?.openingAmount||0)+cash,actualCash:aCash,actualCard:aCard,
         grandTotal:newGt,userName:currentUser?.name,
         hash:clHash,fingerprint:clFingerprint,
-        byPayment:{cash,card,cheque:chequeLocal,giftcard:giftcardLocal},
+        byPayment:{cash,card,cheque:chequeLocal,giftcard:giftcardLocal,amex:amexLocal,avoir:avoirLocal},
         bySeller:pt.reduce((m,t)=>{const n=t.userName||"?";m[n]=(m[n]||0)+(t.totalTTC||0);return m;},{})};
       setClosures(p=>[cl,...p]);setGt(newGt);addAudit("CLOTURE",`Z ${type} (local)`);
       addPendingSync({type:"offlineClosure",data:{type,actualCash:aCash,actualCard:aCard,offlineId:cl.id,offlineDate:clDate}});
@@ -703,7 +757,92 @@ function AppProvider({children}){
   // Exports — via API
   const exportFEC=useCallback(async()=>{try{await API.fiscal.fec();addJET("EXPORT","Export FEC");addAudit("FEC","Export fichier FEC");}catch(e){notify("Erreur: "+e.message,"error");}},[notify,addJET,addAudit]);
 
-  const exportArchive=useCallback(async()=>{try{await API.fiscal.archive();addJET("EXPORT","Export archive fiscale");addAudit("EXPORT","Export archive fiscale");}catch(e){notify("Erreur: "+e.message,"error");}},[notify,addJET,addAudit]);
+  const exportArchive=useCallback(async()=>{
+    // Tenter l'export via API d'abord
+    try{await API.fiscal.archive();addJET("ARCHIVE","Export archive fiscale NF525 (serveur)");addAudit("EXPORT","Export archive fiscale NF525");return;}catch(e){console.warn("Archive API échoué, export local NF525:",e.message);}
+    // Fallback: archive locale NF525 conforme — 10 fichiers CSV dans un ZIP
+    const socId=(settings.siret||CO.siret||"").replace(/\s/g,"");
+    const caisseId=currentStore?.id||cashReg?.id||"01";
+    const today=new Date().toISOString().split("T")[0].replace(/-/g,"");
+    const period="J";// Journalier
+    const prefix=`Archive_NF525_${socId}_${caisseId}_${period}_${today}`;
+    // 1. Entete (ticket headers)
+    const entete=tickets.map(t=>({
+      NUM_TICKET:t.ticketNumber||t.ticket_number,SEQ:t.seq,DATE:t.date||t.createdAt,
+      TYPE:"VENTE",ID_CAISSE:caisseId,ID_SOC:socId,
+      TOTAL_HT:(t.totalHT||parseFloat(t.total_ht)||0).toFixed(2),
+      TOTAL_TVA:(t.totalTVA||parseFloat(t.total_tva)||0).toFixed(2),
+      TOTAL_TTC:(t.totalTTC||parseFloat(t.total_ttc)||0).toFixed(2),
+      REMISE_GLOBALE:(t.globalDiscount||0).toFixed(2),
+      MODE_PAIEMENT:t.paymentMethod||"",VENDEUR:t.sellerName||t.seller_name||t.userName||"",
+      CLIENT:t.customerName||"",CLIENT_ID:t.customerId||"",
+      NOTE:t.saleNote||"",HASH:t.hash||"",EMPREINTE:t.fingerprint||"",GT:(t.grandTotal||0).toFixed(2)}));
+    // 2. Lignes (line items)
+    const lignes=[];tickets.forEach(t=>(t.items||[]).forEach((i,idx)=>{
+      lignes.push({NUM_TICKET:t.ticketNumber||t.ticket_number,LIGNE:idx+1,
+        PRODUIT:i.product?.name||i.product_name||"",SKU:i.product?.sku||i.product_sku||"",
+        VARIANTE_COULEUR:i.variant?.color||i.variant_color||"",VARIANTE_TAILLE:i.variant?.size||i.variant_size||"",
+        EAN:i.variant?.ean||"",QUANTITE:i.quantity,
+        PU_HT:((i.lineHT||i.line_ht||0)/i.quantity).toFixed(4),TAUX_TVA:((i.tax_rate||i.product?.taxRate||0.20)*100).toFixed(2),
+        REMISE_LIGNE:(i.discount_amount||0).toFixed(2),REMISE_PCT:(i.discount_percent||0).toFixed(2),
+        TOTAL_HT:(i.lineHT||i.line_ht||0).toFixed(2),TOTAL_TVA:(i.lineTVA||i.line_tva||0).toFixed(2),
+        TOTAL_TTC:(i.lineTTC||i.line_ttc||0).toFixed(2)});}));
+    // 3. TVA (breakdown par taux)
+    const tvaRows=[];tickets.forEach(t=>{const byRate={};(t.items||[]).forEach(i=>{
+      const r=((i.tax_rate||i.product?.taxRate||0.20)*100).toFixed(1);
+      if(!byRate[r])byRate[r]={ht:0,tva:0};byRate[r].ht+=(i.lineHT||i.line_ht||0);byRate[r].tva+=(i.lineTVA||i.line_tva||0);});
+      Object.entries(byRate).forEach(([rate,v])=>{tvaRows.push({NUM_TICKET:t.ticketNumber||t.ticket_number,TAUX:rate,BASE_HT:v.ht.toFixed(2),MONTANT_TVA:v.tva.toFixed(2)});});});
+    // 4. Pied (ticket footers/totals)
+    const pieds=tickets.map(t=>({
+      NUM_TICKET:t.ticketNumber||t.ticket_number,TOTAL_HT:(t.totalHT||0).toFixed(2),TOTAL_TVA:(t.totalTVA||0).toFixed(2),
+      TOTAL_TTC:(t.totalTTC||0).toFixed(2),REMISE:(t.globalDiscount||0).toFixed(2),
+      NB_ARTICLES:(t.items||[]).reduce((s,i)=>s+i.quantity,0),GT:(t.grandTotal||0).toFixed(2),
+      HASH:t.hash||"",EMPREINTE:t.fingerprint||""}));
+    // 5. Clients
+    const clientRows=customers.map(c=>({ID:c.id,NOM:`${c.firstName||""} ${c.lastName||""}`.trim(),
+      EMAIL:c.email||"",TELEPHONE:c.phone||"",VILLE:c.city||"",POINTS:c.points||0,TOTAL_DEPENSE:(c.totalSpent||0).toFixed(2)}));
+    // 6. Règlements (payments)
+    const reglements=[];tickets.forEach(t=>(t.payments||[]).forEach((p,idx)=>{
+      reglements.push({NUM_TICKET:t.ticketNumber||t.ticket_number,LIGNE:idx+1,MODE:p.method,MONTANT:p.amount.toFixed(2),
+        CODE_AUTH:p.authCode||"",REF_TRANSACTION:p.transactionId||"",TYPE_CARTE:p.cardType||"",PAN_MASQUE:p.maskedPan||""});}));
+    // 7. Duplicata (reprints)
+    const duplicata=audit.filter(a=>a.action==="DUPLICATA").map(a=>({DATE:a.date,DETAIL:a.detail,UTILISATEUR:a.user}));
+    // 8. JET
+    const jetRows=jet.map(j=>({ID:j.id,SEQ:j.seq||"",DATE:j.date,CODE_JET:j.codeJet||"",TYPE:j.type,
+      DESCRIPTIF:j.detail,UTILISATEUR:j.userName||j.user||"",ID_SOC:j.socId||socId,ID_CAISSE:j.caisseId||caisseId,
+      HASH:j.hash||"",EMPREINTE:j.fingerprint||""}));
+    // 9. GTT (grand ticket totals — cumul par ticket)
+    const gttRows=tickets.map(t=>({NUM_TICKET:t.ticketNumber||t.ticket_number,SEQ:t.seq,DATE:t.date||t.createdAt,
+      TOTAL_TTC:(t.totalTTC||0).toFixed(2),GT_CUMULE:(t.grandTotal||0).toFixed(2)}));
+    // 10. GTJ (grand total journalier)
+    const byDay={};tickets.forEach(t=>{const d=(t.date||t.createdAt||"").slice(0,10);if(!byDay[d])byDay[d]={ttc:0,count:0};
+      byDay[d].ttc+=(t.totalTTC||parseFloat(t.total_ttc)||0);byDay[d].count++;});
+    const gtjRows=Object.entries(byDay).sort().map(([d,v])=>({DATE:d,NB_TICKETS:v.count,TOTAL_TTC:v.ttc.toFixed(2)}));
+
+    // Générer les CSVs et empaqueter
+    const files=[
+      {name:`Entete_${period}_${today}.csv`,data:entete},
+      {name:`Lignes_${period}_${today}.csv`,data:lignes},
+      {name:`TVA_${period}_${today}.csv`,data:tvaRows},
+      {name:`Pied_${period}_${today}.csv`,data:pieds},
+      {name:`Client_${period}_${today}.csv`,data:clientRows},
+      {name:`Reglements_${period}_${today}.csv`,data:reglements},
+      {name:`Duplicata_${period}_${today}.csv`,data:duplicata},
+      {name:`JET_${period}_${today}.csv`,data:jetRows},
+      {name:`GTT_${period}_${today}.csv`,data:gttRows},
+      {name:`GTJ_${period}_${today}.csv`,data:gtjRows},
+    ];
+    // Sans librairie ZIP, on crée un fichier JSON contenant tous les CSV
+    const archiveData={meta:{format:"NF525_ARCHIVE",version:CO.ver,socId,caisseId,period,date:today,
+      generatedAt:new Date().toISOString(),ticketCount:tickets.length,gt:gt.toFixed(2)},files:{}};
+    files.forEach(f=>{archiveData.files[f.name]=Papa.unparse(f.data);});
+    const blob=new Blob([JSON.stringify(archiveData,null,2)],{type:"application/json"});
+    const url=URL.createObjectURL(blob);const a=document.createElement("a");
+    a.href=url;a.download=`${prefix}.json`;a.click();
+    addJET("ARCHIVE",`Archive NF525 locale — ${tickets.length} tickets — GT: ${gt.toFixed(2)}€`);
+    addAudit("EXPORT","Export archive NF525 locale");
+    notify(`Archive NF525 exportée (${tickets.length} tickets)`,"success");
+  },[tickets,customers,audit,jet,closures,gt,settings,currentStore,cashReg,notify,addJET,addAudit]);
 
   // Customer RGPD export — via API
   const exportCustomerRGPD=useCallback(async(custId)=>{
@@ -731,7 +870,7 @@ function AppProvider({children}){
   const findByEANRef=useRef(findByEAN);findByEANRef.current=findByEAN;
   const notifyRef=useRef(notify);notifyRef.current=notify;
   useEffect(()=>{const s=hardwareManager.scanner;if(!s)return;s.start();
-    const off=s.onScan(code=>{const found=findByEANRef.current(code);if(found)addToCartRef.current(found.product,found.variant);else notifyRef.current("Code-barres inconnu: "+code,"warn");});
+    const off=s.onScan(code=>{const found=findByEANRef.current(code);if(found){addToCartRef.current(found.product,found.variant);notifyRef.current(found.product.name+" ajouté ("+code+")");}else notifyRef.current("Code-barres inconnu: "+code,"warn");});
     return()=>{s.stop();off();};},[]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ══ THERMAL PRINTER ══
@@ -764,8 +903,12 @@ function AppProvider({children}){
   },[]);
 
   const thermalPrint=useCallback(async(type,data)=>{
+    // NF525: tracer les duplicata (réimpressions de tickets validés)
+    if(type==="receipt"&&data?.ticketNumber){
+      addAudit("DUPLICATA",`Réimpression ticket ${data.ticketNumber}`,data.ticketNumber);
+      addJET("DUPLICATA",`Duplicata ticket ${data.ticketNumber} — ${(data.totalTTC||0).toFixed(2)}€`);
+    }
     const halPrinter=hardwareManager.printer;
-    // Auto-connect printer if not yet connected
     if(halPrinter&&!halPrinter.connected){
       try{await halPrinter.connect();if(halPrinter.connected){setPrinterConnected(true);setPrinterType(hwId);}}catch(e){console.warn('[HAL] printer auto-connect:',e);}
     }
@@ -891,9 +1034,10 @@ function AppProvider({children}){
     }).filter(Boolean);
     const totalTTC=totalHT+totalTVA;
 
-    // NF525: SHA-256 hash chain pour avoirs
+    // NF525: SHA-256 hash chain pour avoirs — inclut ID caisse, type, séquence
+    const caisseId=currentStore?.id||cashReg?.id||"CAISSE-01";
     const lastAvoirHash=avoirs.length>0?(avoirs[0].hash||""):lastHash;
-    const hashInput=`${lastAvoirHash}|${avoirNumber}|${date}|${totalTTC.toFixed(2)}|AVOIR`;
+    const hashInput=`${lastAvoirHash}|${seq}|AVOIR|${caisseId}|${avoirNumber}|${date}|${totalTTC.toFixed(2)}|${ticket.ticketNumber}`;
     const hash=await sha256(hashInput);
     const fingerprint=hash.slice(0,8).toUpperCase();
 
@@ -1117,6 +1261,7 @@ function AppProvider({children}){
     paymentId,paymentConfig,switchPayment,updatePaymentConfig,chargePayment,refundPayment,
     paymentProfiles:hardwareManager.paymentProfiles,
     users,setUsers,tvaRates,setTvaRates,addPendingSync,pendingSync,clearPendingSync,
+    trainingMode,setTrainingMode,
   }}>{children}</AppCtx.Provider>;
 }
 
