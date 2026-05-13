@@ -1437,40 +1437,72 @@ function HistoryScreen(){
     )):<div style={{textAlign:"center",padding:30,color:C.textLight}}>Aucun avoir</div>)}
 
     {/* Ticket detail/reprint modal */}
-    <Modal open={!!reprintTk} onClose={()=>setReprintTk(null)} title={`Ticket ${reprintTk?.ticketNumber}`} wide>
-      {reprintTk&&<div data-print-receipt style={{fontFamily:"'Courier New',monospace",fontSize:10,background:"#FAFAF8",borderRadius:10,padding:16,border:`1px solid ${C.border}`}}>
+    <Modal open={!!reprintTk} onClose={()=>setReprintTk(null)} title={`Ticket ${reprintTk?.ticketNumber||reprintTk?.ticket_number||"?"}`} wide>
+      {reprintTk&&(()=>{try{
+        const tk=reprintTk;
+        const tkNum=tk.ticketNumber||tk.ticket_number||"?";
+        const tkDate=tk.date||tk.createdAt||tk.created_at||"";
+        const tkDateStr=tkDate?new Date(tkDate).toLocaleString("fr-FR"):"?";
+        const tkUser=tk.userName||tk.user_name||"?";
+        const tkCust=tk.customerName||tk.customer_name||"";
+        const tkTTC=Number(tk.totalTTC||tk.total_ttc)||0;
+        const tkHT=Number(tk.totalHT||tk.total_ht)||0;
+        const tkTVA=Number(tk.totalTVA||tk.total_tva)||0;
+        const tkDisc=Number(tk.globalDiscount||tk.global_discount)||0;
+        const tkItems=tk.items||[];
+        const tkPayments=tk.payments||[];
+        const tkFp=tk.fingerprint||tk.fiscal_fingerprint||"";
+        const tkPayMethod=tk.paymentMethod||tk.payment_method||"?";
+        return(<>
+        <div data-print-receipt style={{fontFamily:"'Courier New',monospace",fontSize:10,background:"#FAFAF8",borderRadius:10,padding:16,border:`1px solid ${C.border}`}}>
         <div style={{textAlign:"center",marginBottom:6}}><div style={{fontSize:12,fontWeight:700}}>{settings.name||CO.name}</div>
           <div>{settings.address}, {settings.postalCode} {settings.city}</div>
           <div>SIRET: {settings.siret||CO.siret} — TVA: {settings.tvaIntra||CO.tvaIntra}</div></div>
         <div style={{borderTop:"1px dashed #999",margin:"4px 0"}}/>
-        <div style={{display:"flex",justifyContent:"space-between"}}><span>N° {reprintTk.ticketNumber}</span><span>{new Date(reprintTk.date||reprintTk.createdAt||"").toLocaleString("fr-FR")}</span></div>
-        <div>Caissier: {reprintTk.userName}{reprintTk.customerName?` — Client: ${reprintTk.customerName}`:""}</div>
+        <div style={{display:"flex",justifyContent:"space-between"}}><span>N° {tkNum}</span><span>{tkDateStr}</span></div>
+        <div>Caissier: {tkUser}{tkCust?` — Client: ${tkCust}`:""}</div>
         <div style={{borderTop:"1px dashed #999",margin:"4px 0"}}/>
-        {(reprintTk.items||[]).map((i,k)=>{const sku=i.product?.sku||i.product_sku||"";const ean=i.variant?.ean||i.variant_ean||"";return(<div key={k}>
-          <div style={{display:"flex",justifyContent:"space-between",gap:8}}><span style={{flex:1,wordBreak:"break-word",lineHeight:1.3}}>{i.product?.name||i.product_name}{!(i.isCustom||i.is_custom)?` (${i.variant?.color||i.variant_color}/${i.variant?.size||i.variant_size})`:""} x{i.quantity}{i.discount>0?` -${i.discount}${i.discountType==="amount"?"€":"%"}`:""}</span>
-          <span style={{whiteSpace:"nowrap",fontWeight:600}}>{(i.lineTTC||i.line_ttc||(i.unit_price*i.quantity)).toFixed(2)}€</span></div>
+        {tkItems.map((i,k)=>{const sku=i.product?.sku||i.product_sku||i.sku||"";const ean=i.variant?.ean||i.variant_ean||i.ean||"";
+          const name=i.product?.name||i.product_name||i.name||"Article";
+          const color=i.variant?.color||i.variant_color||i.color||"";
+          const size=i.variant?.size||i.variant_size||i.size||"";
+          const isCustom=i.isCustom||i.is_custom;
+          const lineAmt=Number(i.lineTTC||i.line_ttc)||(Number(i.unit_price||i.unitTTC||0)*Number(i.quantity||1));
+          const disc=Number(i.discount)||0;
+          return(<div key={k}>
+          <div style={{display:"flex",justifyContent:"space-between",gap:8}}><span style={{flex:1,wordBreak:"break-word",lineHeight:1.3}}>{name}{!isCustom&&(color||size)?` (${color}/${size})`:""} x{i.quantity||1}{disc>0?` -${disc}${i.discountType==="amount"||i.discount_type==="amount"?"€":"%"}`:""}</span>
+          <span style={{whiteSpace:"nowrap",fontWeight:600}}>{lineAmt.toFixed(2)}€</span></div>
           {(sku||ean)&&<div style={{fontSize:8,color:"#999"}}>{sku?`Réf: ${sku}`:""}{sku&&ean?" — ":""}{ean?`EAN: ${ean}`:""}</div>}
         </div>);})}
         <div style={{borderTop:"1px dashed #999",margin:"4px 0"}}/>
-        {reprintTk.globalDiscount>0&&<div style={{display:"flex",justifyContent:"space-between",color:"#059669"}}><span>Remise</span><span>-{(reprintTk.globalDiscount||0).toFixed(2)}€</span></div>}
-        <div style={{display:"flex",justifyContent:"space-between"}}><span>Total HT</span><span>{(reprintTk.totalHT||0).toFixed(2)}€</span></div>
-        <div style={{display:"flex",justifyContent:"space-between"}}><span>TVA</span><span>{(reprintTk.totalTVA||0).toFixed(2)}€</span></div>
-        <div style={{display:"flex",justifyContent:"space-between",fontSize:13,fontWeight:700,marginTop:3}}><span>TOTAL TTC</span><span>{(reprintTk.totalTTC||0).toFixed(2)}€</span></div>
+        {tkDisc>0&&<div style={{display:"flex",justifyContent:"space-between",color:"#059669"}}><span>Remise</span><span>-{tkDisc.toFixed(2)}€</span></div>}
+        <div style={{display:"flex",justifyContent:"space-between"}}><span>Total HT</span><span>{tkHT.toFixed(2)}€</span></div>
+        <div style={{display:"flex",justifyContent:"space-between"}}><span>TVA</span><span>{tkTVA.toFixed(2)}€</span></div>
+        <div style={{display:"flex",justifyContent:"space-between",fontSize:13,fontWeight:700,marginTop:3}}><span>TOTAL TTC</span><span>{tkTTC.toFixed(2)}€</span></div>
         <div style={{borderTop:"1px dashed #999",margin:"4px 0"}}/>
-        <div>Paiement: {(reprintTk.payments||[]).map(pm=>`${({cash:"ESP",card:"CB",amex:"AMEX",giftcard:"CAD",cheque:"CHQ",avoir:"AVOIR"})[pm.method]||pm.method} ${(pm.amount||0).toFixed(2)}€`).join(" + ")||(reprintTk.paymentMethod||"?")}</div>
-        <div style={{textAlign:"center",background:C.fiscalLight,padding:6,borderRadius:6,margin:"6px 0"}}>
+        <div>Paiement: {tkPayments.map(pm=>`${({cash:"ESP",card:"CB",amex:"AMEX",giftcard:"CAD",cheque:"CHQ",avoir:"AVOIR"})[pm.method]||pm.method} ${(Number(pm.amount)||0).toFixed(2)}€`).join(" + ")||tkPayMethod}</div>
+        {tkFp&&<div style={{textAlign:"center",background:C.fiscalLight,padding:6,borderRadius:6,margin:"6px 0"}}>
           <div style={{fontSize:8,color:C.fiscal,fontWeight:700}}>EMPREINTE NF525</div>
-          <div style={{fontSize:11,fontWeight:700,color:C.fiscal,letterSpacing:2}}>{reprintTk.fingerprint}</div></div>
+          <div style={{fontSize:11,fontWeight:700,color:C.fiscal,letterSpacing:2}}>{tkFp}</div></div>}
         <div style={{textAlign:"center",fontSize:8,color:C.textMuted}}>{CO.sw} v{CO.ver} — Conforme NF525<br/>{settings.footerMsg||CO.footerMsg}</div>
-      </div>}
-      {reprintTk&&<div style={{display:"flex",gap:8,marginTop:10}}>
-        <Btn variant="outline" onClick={()=>thermalPrint("receipt",reprintTk)} style={{flex:1}}><Printer size={14}/> {printerConnected?"Ticket":"Réimprimer"}</Btn>
-        <Btn variant="outline" onClick={()=>{setReassignModal(reprintTk);setReassignCust(null);}} style={{flex:1}}><UserIcon size={14}/> Client</Btn>
-        <Btn variant="outline" onClick={()=>{const s=encodeURIComponent(`Ticket ${reprintTk.ticketNumber} — ${settings.name||CO.name}`);
-          const b=encodeURIComponent(`Bonjour,\n\nTicket N°${reprintTk.ticketNumber}\nDate: ${new Date(reprintTk.date||reprintTk.createdAt||"").toLocaleString("fr-FR")}\nTotal: ${(reprintTk.totalTTC||0).toFixed(2)}€\n\n${settings.name||CO.name}\nSIRET: ${settings.siret||CO.siret}`);
-          window.open(`mailto:${reprintTk.customerName?"":""}?subject=${s}&body=${b}`);}} style={{flex:1}}><Mail size={14}/> Email</Btn>
-        {p().canVoid&&<Btn variant="danger" onClick={()=>{setReprintTk(null);openReturn(reprintTk);}} style={{flex:1}}><RotateCcw size={14}/> Retour</Btn>}
-      </div>}
+      </div>
+      <div style={{display:"flex",gap:8,marginTop:10}}>
+        <Btn variant="outline" onClick={()=>thermalPrint("receipt",tk)} style={{flex:1}}><Printer size={14}/> {printerConnected?"Ticket":"Réimprimer"}</Btn>
+        <Btn variant="outline" onClick={()=>{setReassignModal(tk);setReassignCust(null);}} style={{flex:1}}><UserIcon size={14}/> Client</Btn>
+        <Btn variant="outline" onClick={()=>{const s=encodeURIComponent(`Ticket ${tkNum} — ${settings.name||CO.name}`);
+          const b=encodeURIComponent(`Bonjour,\n\nTicket N°${tkNum}\nDate: ${tkDateStr}\nTotal: ${tkTTC.toFixed(2)}€\n\n${settings.name||CO.name}\nSIRET: ${settings.siret||CO.siret}`);
+          window.open(`mailto:?subject=${s}&body=${b}`);}} style={{flex:1}}><Mail size={14}/> Email</Btn>
+        {p().canVoid&&<Btn variant="danger" onClick={()=>{setReprintTk(null);openReturn(tk);}} style={{flex:1}}><RotateCcw size={14}/> Retour</Btn>}
+      </div></>);
+      }catch(err){
+        console.error("[TicketModal] Render crash:",err);
+        window.__CAISSEPRO_ERRORS?.push({ts:new Date().toLocaleTimeString("fr-FR"),msg:`[TICKET MODAL] ${err.message}`,stack:err.stack||""});
+        return(<div style={{padding:20,color:C.danger}}>
+          <div style={{fontWeight:700,marginBottom:8}}>Erreur d affichage du ticket</div>
+          <div style={{fontSize:11,fontFamily:"monospace",background:"#FEE2E2",padding:10,borderRadius:8,wordBreak:"break-all"}}>{err.message}<br/>{err.stack?.substring(0,500)}</div>
+          <Btn variant="danger" onClick={()=>setReprintTk(null)} style={{marginTop:10}}>Fermer</Btn>
+        </div>);
+      }})()}
     </Modal>
 
     {/* Return modal */}
@@ -1521,31 +1553,59 @@ function HistoryScreen(){
     </Modal>
 
     {/* Avoir detail modal */}
-    <Modal open={!!avoirDetail} onClose={()=>setAvoirDetail(null)} title={`Avoir ${avoirDetail?.avoirNumber}`} wide>
-      {avoirDetail&&<div data-print-receipt style={{fontFamily:"'Courier New',monospace",fontSize:10,background:C.dangerLight,borderRadius:10,padding:16,border:`1px solid ${C.danger}33`}}>
+    <Modal open={!!avoirDetail} onClose={()=>setAvoirDetail(null)} title={`Avoir ${avoirDetail?.avoirNumber||avoirDetail?.avoir_number||"?"}`} wide>
+      {avoirDetail&&(()=>{try{
+        const av=avoirDetail;
+        const avNum=av.avoirNumber||av.avoir_number||"?";
+        const avOrigTk=av.originalTicket||av.original_ticket||"?";
+        const avOrigDate=av.originalDate||av.original_date||"";
+        const avDate=av.date||av.created_at||"";
+        const avUser=av.userName||av.user_name||"?";
+        const avCust=av.customerName||av.customer_name||"";
+        const avReason=av.reason||"";
+        const avTTC=Number(av.totalTTC||av.total_ttc)||0;
+        const avItems=av.items||[];
+        const avRefund=av.refundMethod||av.refund_method||"?";
+        const avFp=av.fingerprint||av.fiscal_fingerprint||"";
+        return(<>
+        <div data-print-receipt style={{fontFamily:"'Courier New',monospace",fontSize:10,background:C.dangerLight,borderRadius:10,padding:16,border:`1px solid ${C.danger}33`}}>
         <div style={{textAlign:"center",marginBottom:6,color:C.danger,fontWeight:700,fontSize:12}}>AVOIR / NOTE DE CRÉDIT</div>
         <div style={{textAlign:"center",marginBottom:6}}><div style={{fontSize:12,fontWeight:700}}>{settings.name||CO.name}</div>
           <div>SIRET: {settings.siret||CO.siret}</div></div>
         <div style={{borderTop:`1px dashed ${C.danger}`,margin:"4px 0"}}/>
-        <div>N° {avoirDetail.avoirNumber}</div>
-        <div>Ticket original: {avoirDetail.originalTicket} du {new Date(avoirDetail.originalDate).toLocaleDateString("fr-FR")}</div>
-        <div>Date: {new Date(avoirDetail.date).toLocaleString("fr-FR")} — {avoirDetail.userName}</div>
-        {avoirDetail.customerName&&<div>Client: {avoirDetail.customerName}</div>}
-        <div>Motif: {avoirDetail.reason}</div>
+        <div>N° {avNum}</div>
+        <div>Ticket original: {avOrigTk}{avOrigDate?` du ${new Date(avOrigDate).toLocaleDateString("fr-FR")}`:""}</div>
+        <div>Date: {avDate?new Date(avDate).toLocaleString("fr-FR"):"?"} — {avUser}</div>
+        {avCust&&<div>Client: {avCust}</div>}
+        <div>Motif: {avReason}</div>
         <div style={{borderTop:`1px dashed ${C.danger}`,margin:"4px 0"}}/>
-        {(avoirDetail.items||[]).map((i,k)=>{const sku=i.product?.sku||"";const ean=i.variant?.ean||"";return(<div key={k}>
-          <div style={{display:"flex",justifyContent:"space-between"}}><span>{i.product?.name||i.product_name||"?"}{i.variant?` (${i.variant.color||""}/${i.variant.size||""})`:""} x{i.quantity||1}</span>
-          <span>-{(i.lineTTC||i.line_ttc||0).toFixed(2)}€</span></div>
+        {avItems.map((i,k)=>{const sku=i.product?.sku||i.product_sku||i.sku||"";const ean=i.variant?.ean||i.variant_ean||i.ean||"";
+          const name=i.product?.name||i.product_name||i.name||"?";
+          const color=i.variant?.color||i.variant_color||i.color||"";
+          const size=i.variant?.size||i.variant_size||i.size||"";
+          const lineAmt=Number(i.lineTTC||i.line_ttc)||0;
+          return(<div key={k}>
+          <div style={{display:"flex",justifyContent:"space-between"}}><span>{name}{(color||size)?` (${color}/${size})`:""} x{i.quantity||1}</span>
+          <span>-{lineAmt.toFixed(2)}€</span></div>
           {(sku||ean)&&<div style={{fontSize:8,color:`${C.danger}99`}}>{sku?`Réf: ${sku}`:""}{sku&&ean?" — ":""}{ean?`EAN: ${ean}`:""}</div>}
         </div>);})}
         <div style={{borderTop:`1px dashed ${C.danger}`,margin:"4px 0"}}/>
-        <div style={{display:"flex",justifyContent:"space-between",fontWeight:700,color:C.danger}}><span>TOTAL AVOIR</span><span>-{(avoirDetail.totalTTC||0).toFixed(2)}€</span></div>
-        <div>Remboursement: {({cash:"Espèces",card:"Carte bancaire",avoir:"Avoir client"})[avoirDetail.refundMethod]||avoirDetail.refundMethod}</div>
-        <div style={{textAlign:"center",background:C.dangerLight,padding:6,borderRadius:6,margin:"6px 0"}}>
+        <div style={{display:"flex",justifyContent:"space-between",fontWeight:700,color:C.danger}}><span>TOTAL AVOIR</span><span>-{avTTC.toFixed(2)}€</span></div>
+        <div>Remboursement: {({cash:"Espèces",card:"Carte bancaire",avoir:"Avoir client"})[avRefund]||avRefund}</div>
+        {avFp&&<div style={{textAlign:"center",background:C.dangerLight,padding:6,borderRadius:6,margin:"6px 0"}}>
           <div style={{fontSize:8,color:C.danger,fontWeight:700}}>EMPREINTE NF525</div>
-          <div style={{fontSize:11,fontWeight:700,color:C.danger,letterSpacing:2}}>{avoirDetail.fingerprint}</div></div>
-      </div>}
-      {avoirDetail&&<Btn variant="outline" onClick={()=>thermalPrint("avoir",avoirDetail)} style={{width:"100%",marginTop:10}}><Printer size={14}/> {printerConnected?"Ticket":"Imprimer"}</Btn>}
+          <div style={{fontSize:11,fontWeight:700,color:C.danger,letterSpacing:2}}>{avFp}</div></div>}
+      </div>
+      <Btn variant="outline" onClick={()=>thermalPrint("avoir",av)} style={{width:"100%",marginTop:10}}><Printer size={14}/> {printerConnected?"Ticket":"Imprimer"}</Btn>
+      </>);
+      }catch(err){
+        console.error("[AvoirModal] Render crash:",err);
+        return(<div style={{padding:20,color:C.danger}}>
+          <div style={{fontWeight:700,marginBottom:8}}>Erreur d affichage de l avoir</div>
+          <div style={{fontSize:11,fontFamily:"monospace",background:"#FEE2E2",padding:10,borderRadius:8,wordBreak:"break-all"}}>{err.message}</div>
+          <Btn variant="danger" onClick={()=>setAvoirDetail(null)} style={{marginTop:10}}>Fermer</Btn>
+        </div>);
+      }})()}
     </Modal>
 
     <Modal open={!!reassignModal} onClose={()=>setReassignModal(null)} title="Changer le client">
