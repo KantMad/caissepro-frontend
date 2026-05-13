@@ -3888,6 +3888,26 @@ function DebugPanel(){
         <Zap size={14}/> Print DIRECT (AIDL)</Btn>
       <Btn onClick={async()=>{
         setRunning(true);clearLogs();
+        addLog("=== TEST MINIMAL (7 methodes AIDL) ===","title");
+        addLog("Pas de printerInit, pas de exitPrinterBuffer","info");
+        addLog("Teste feedPaper, printText, printOriginalText,","info");
+        addLog("printTextWithFont, sendRAWData, lineWrap, init+print","info");
+        const sp=window.Capacitor?.Plugins?.SunmiPrinter;
+        if(!sp||!sp.printMinimal){addLog("printMinimal absent — APK pas a jour?","error");setRunning(false);return;}
+        try{
+          const r=await sp.printMinimal({});
+          addLog("Resultat:","success");
+          (r.log||"").split("\n").forEach(l=>{if(l.trim())addLog(l,l.includes("ERR")?"error":"info");});
+          addLog("--- VERDICT ---","title");
+          addLog("Si feedPaper fait bouger le papier = moteur OK","info");
+          addLog("Si printText/printOriginalText sortent du texte = AIDL OK","success");
+          addLog("Si RIEN ne sort = service imprimante bloque, REBOOTER LE T2s","error");
+        }catch(e){addLog(`ERREUR: ${e.message}`,"error");}
+        setRunning(false);
+      }} disabled={running} style={{height:44,background:"#0891B2",fontSize:12,fontWeight:700}}>
+        <Activity size={14}/> Test MINIMAL (7 methodes)</Btn>
+      <Btn onClick={async()=>{
+        setRunning(true);clearLogs();
         addLog("=== RESET IMPRIMANTE ===","title");
         const sp=window.Capacitor?.Plugins?.SunmiPrinter;
         if(!sp){addLog("Plugin absent","error");setRunning(false);return;}

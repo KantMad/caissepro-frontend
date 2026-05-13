@@ -457,6 +457,121 @@ public class SunmiPrinterPlugin extends Plugin {
     }
 
     // ══════════════════════════════════════════════════════════════
+    // ══════════════════════════════════════════════════════════════
+    // PRINT MINIMAL — Ultimate diagnostic: try every AIDL method
+    // No printerInit, no exitPrinterBuffer, just raw calls
+    // ══════════════════════════════════════════════════════════════
+
+    @PluginMethod
+    public void printMinimal(PluginCall call) {
+        if (printerService == null) {
+            call.reject("Printer not connected");
+            return;
+        }
+
+        Log.i(TAG, "printMinimal — trying every possible print method");
+
+        new Thread(() -> {
+            JSObject ret = new JSObject();
+            StringBuilder log = new StringBuilder();
+
+            // Test 1: feedPaper — does the motor work at all?
+            try {
+                log.append("feedPaper(30mm): ");
+                printerService.feedPaper(30, defaultCallback);
+                log.append("OK\n");
+            } catch (Exception e) {
+                log.append("ERR: ").append(e.getMessage()).append("\n");
+            }
+
+            // Small pause
+            try { Thread.sleep(500); } catch (Exception e) {}
+
+            // Test 2: printText WITHOUT any printerInit
+            try {
+                log.append("printText (no init): ");
+                printerService.printText("TEST MINIMAL printText\n", defaultCallback);
+                log.append("OK\n");
+            } catch (Exception e) {
+                log.append("ERR: ").append(e.getMessage()).append("\n");
+            }
+
+            try { Thread.sleep(300); } catch (Exception e) {}
+
+            // Test 3: printOriginalText — different code path
+            try {
+                log.append("printOriginalText: ");
+                printerService.printOriginalText("TEST MINIMAL printOriginalText\n", defaultCallback);
+                log.append("OK\n");
+            } catch (Exception e) {
+                log.append("ERR: ").append(e.getMessage()).append("\n");
+            }
+
+            try { Thread.sleep(300); } catch (Exception e) {}
+
+            // Test 4: printTextWithFont — with explicit font
+            try {
+                log.append("printTextWithFont: ");
+                printerService.printTextWithFont("TEST MINIMAL withFont\n", "", 24f, defaultCallback);
+                log.append("OK\n");
+            } catch (Exception e) {
+                log.append("ERR: ").append(e.getMessage()).append("\n");
+            }
+
+            try { Thread.sleep(300); } catch (Exception e) {}
+
+            // Test 5: sendRAWData — raw ESC/POS
+            try {
+                log.append("sendRAWData (ESC @, text, LF): ");
+                String rawText = "TEST MINIMAL sendRAWData\n";
+                byte[] rawBytes = new byte[2 + rawText.length()];
+                rawBytes[0] = 0x1B; rawBytes[1] = 0x40; // ESC @
+                System.arraycopy(rawText.getBytes("UTF-8"), 0, rawBytes, 2, rawText.length());
+                printerService.sendRAWData(rawBytes, defaultCallback);
+                log.append("OK\n");
+            } catch (Exception e) {
+                log.append("ERR: ").append(e.getMessage()).append("\n");
+            }
+
+            try { Thread.sleep(300); } catch (Exception e) {}
+
+            // Test 6: lineWrap — feed lines
+            try {
+                log.append("lineWrap(5): ");
+                printerService.lineWrap(5, defaultCallback);
+                log.append("OK\n");
+            } catch (Exception e) {
+                log.append("ERR: ").append(e.getMessage()).append("\n");
+            }
+
+            try { Thread.sleep(300); } catch (Exception e) {}
+
+            // Test 7: printerInit THEN printText
+            try {
+                log.append("printerInit + printText: ");
+                printerService.printerInit(defaultCallback);
+                Thread.sleep(200);
+                printerService.printText("TEST APRES INIT\n", defaultCallback);
+                printerService.lineWrap(4, defaultCallback);
+                log.append("OK\n");
+            } catch (Exception e) {
+                log.append("ERR: ").append(e.getMessage()).append("\n");
+            }
+
+            // Check state
+            try {
+                int state = printerService.updatePrinterState();
+                log.append("printerState: ").append(state).append("\n");
+            } catch (Exception e) {
+                log.append("state ERR: ").append(e.getMessage()).append("\n");
+            }
+
+            ret.put("success", true);
+            ret.put("log", log.toString());
+            getActivity().runOnUiThread(() -> call.resolve(ret));
+        }).start();
+    }
+
     // PRINT DIRECT — Bypass JSON parsing, hardcoded AIDL calls
     // Used to diagnose if printBatch JSON parsing is the problem
     // ══════════════════════════════════════════════════════════════
