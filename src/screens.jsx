@@ -1367,6 +1367,8 @@ function HistoryScreen(){
   const[returnItems,setReturnItems]=useState([]);const[returnReason,setReturnReason]=useState("");const[returnMethod,setReturnMethod]=useState("cash");
   const[avoirDetail,setAvoirDetail]=useState(null);
   const[page,setPage]=useState(0);const PAGE_SIZE=25;
+  const[debugClick,setDebugClick]=useState(null);
+  const[testModal,setTestModal]=useState(false);
 
   useEffect(()=>{setPage(0);},[search,dateFilter]);
   const filteredTickets=useMemo(()=>tickets.filter(t=>{
@@ -1401,13 +1403,24 @@ function HistoryScreen(){
       <Btn variant={tab==="avoirs"?"danger":"outline"} onClick={()=>setTab("avoirs")} style={{fontSize:11}}>Avoirs ({avoirs.length})</Btn>
       <div style={{flex:1}}/>
       <Input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Rechercher N°, client, caissier…" style={{width:220,height:32,fontSize:11,padding:"4px 10px"}}/>
-      <Input type="date" value={dateFilter} onChange={e=>setDateFilter(e.target.value)} style={{width:140,height:32,fontSize:11,padding:"4px 10px"}}/></div>
+      <Input type="date" value={dateFilter} onChange={e=>setDateFilter(e.target.value)} style={{width:140,height:32,fontSize:11,padding:"4px 10px"}}/>
+      <Btn variant="outline" onClick={()=>setTestModal(true)} style={{fontSize:10,padding:"4px 10px",background:"#7C3AED",color:"#fff"}}>Test Modal</Btn></div>
+    {debugClick&&<div style={{background:"#DCFCE7",border:"2px solid #16A34A",borderRadius:8,padding:8,marginBottom:8,fontSize:10,fontFamily:"monospace"}}>
+      <strong>CLIC DETECTE:</strong> {debugClick} <button onClick={()=>setDebugClick(null)} style={{marginLeft:8,fontSize:10}}>X</button></div>}
 
     {tab==="tickets"&&(<>{pagedTickets.length?pagedTickets.map((t,idx)=>(
       <div key={t.ticketNumber||t.id||idx} style={{display:"flex",alignItems:"center",gap:10,padding:10,borderRadius:12,background:C.surface,border:`1.5px solid ${C.border}`,marginBottom:5,transition:"all 0.12s"}}
         onMouseEnter={e=>e.currentTarget.style.borderColor=C.primary+"44"} onMouseLeave={e=>e.currentTarget.style.borderColor=C.border}>
         <Receipt size={14} color={C.textMuted}/>
-        <div style={{flex:1,cursor:"pointer"}} onClick={()=>setReprintTk(t)}>
+        <div style={{flex:1,cursor:"pointer"}} onClick={()=>{
+          const tkId=t.ticketNumber||t.ticket_number||"?";
+          const keys=Object.keys(t).join(",");
+          setDebugClick(`Ticket #${tkId} | keys: ${keys.substring(0,80)}`);
+          console.log("[TICKET CLICK]",tkId,keys);
+          try{setReprintTk({...t});}catch(e){
+            setDebugClick(`CRASH: ${e.message}`);
+          }
+        }}>
           <div style={{fontSize:11,fontWeight:700}}>N° {t.ticketNumber} <Badge color={C.info}>{t.paymentMethod}</Badge>
           {t.customerName&&<Badge color={C.accent}>{t.customerName}</Badge>}</div>
           <div style={{fontSize:9,color:C.textMuted}}>{new Date(t.date||t.createdAt||t.created_at).toLocaleString("fr-FR")} — {t.userName||t.user_name||"?"} — {(t.items||[]).length} art.</div></div>
@@ -1435,6 +1448,18 @@ function HistoryScreen(){
           <div style={{fontSize:7,color:C.fiscal,fontFamily:"monospace"}}>{a.fingerprint}</div></div>
       </div>
     )):<div style={{textAlign:"center",padding:30,color:C.textLight}}>Aucun avoir</div>)}
+
+    {/* TEST MODAL — ultra simple, to verify Modal works on Capacitor */}
+    <Modal open={testModal} onClose={()=>setTestModal(false)} title="Test Modal">
+      <div style={{padding:10}}>
+        <div style={{fontSize:14,fontWeight:700,marginBottom:10}}>Si tu vois ce message, le Modal fonctionne!</div>
+        <div style={{fontSize:11,color:"#666",marginBottom:10}}>reprintTk = {reprintTk?"OUI ("+Object.keys(reprintTk).length+" keys)":"null"}</div>
+        {reprintTk&&<div style={{fontSize:10,fontFamily:"monospace",background:"#F1F5F9",padding:8,borderRadius:6,maxHeight:200,overflow:"auto",wordBreak:"break-all"}}>
+          {JSON.stringify(reprintTk,null,1).substring(0,1000)}
+        </div>}
+        <Btn onClick={()=>setTestModal(false)} style={{marginTop:10,width:"100%"}}>Fermer</Btn>
+      </div>
+    </Modal>
 
     {/* Ticket detail/reprint modal */}
     <Modal open={!!reprintTk} onClose={()=>setReprintTk(null)} title={`Ticket ${reprintTk?.ticketNumber||reprintTk?.ticket_number||"?"}`} wide>
