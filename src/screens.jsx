@@ -1746,7 +1746,7 @@ function ReturnScreen(){
       return[...prev,{key,productId:item.product?.id||item.productId,variantId:variant?.id||item.variantId,
         productName:item.product?.name||item.product_name,variantColor:variant?.color||item.variant_color,variantSize:variant?.size||item.variant_size,
         qty:1,maxQty:mode==="ticket"?effectiveMax:(maxQty||item.quantity),
-        unitPrice:mode==="ticket"?(item.lineTTC?(item.lineTTC/(item.quantity||1)):item.unit_price||0)
+        unitPrice:mode==="ticket"?((Number(item.lineTTC||item.line_ttc)||0)/(item.quantity||1)||Number(item.unit_price)||0)
           :(()=>{const pr=item.product||{};const pm=settings.pricingMode||"TTC";const base=pr.price||item.unit_price||0;
             return pm==="TTC"?base:base*(1+(pr.taxRate||0.20));})()}];});};
   const updateReturnQty=(key,qty)=>setReturnItems(prev=>prev.map(r=>r.key===key?{...r,qty:Math.min(Math.max(1,qty),r.maxQty)}:r));

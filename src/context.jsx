@@ -1040,35 +1040,36 @@ function AppProvider({children}){
     const rp=settings.returnPolicy||{};
     if(rp.requireReason===true&&!reason?.trim()){notify("Motif de retour obligatoire","error");return null;}
 
-    // Calcul des montants depuis les données originales du ticket (arrondi au centime)
-    let totalHT=0,totalTVA=0;
+    // Calcul des montants — TTC = reference (prix paye par le client)
+    // On part du TTC et on derive HT/TVA pour que le montant de l'avoir = montant du ticket
+    let totalTTC=0,totalHT=0,totalTVA=0;
     const items=returnItems.map(ri=>{
       const origItem=ticket.items?.find(i=>(i.product?.id||i.product_id)===ri.productId&&(i.variant?.id||i.variant_id)===ri.variantId);
-      // Utiliser le prix unitaire original si disponible, sinon ri.unitPrice
-      let lHT,lTVA,lTTC;
-      if(origItem&&origItem.lineHT!=null&&origItem.quantity){
-        const unitHT=origItem.lineHT/origItem.quantity;const unitTVA=(origItem.lineTVA||0)/origItem.quantity;
-        lHT=Math.round(unitHT*ri.qty*100)/100;
-        lTVA=Math.round(unitTVA*ri.qty*100)/100;
-        lTTC=Math.round((lHT+lTVA)*100)/100;
+      const taxRate=origItem?.tax_rate||origItem?.product?.taxRate||ri.taxRate||0.20;
+      let lTTC;
+      if(origItem){
+        // Depuis le ticket original: prix TTC unitaire = lineTTC / quantity
+        const origTTC=Number(origItem.lineTTC||origItem.line_ttc)||0;
+        const unitTTC=origTTC/(origItem.quantity||1);
+        lTTC=Math.round(unitTTC*ri.qty*100)/100;
       }else{
-        // Retour libre ou données manquantes — calcul depuis unitPrice
-        const taxRate=ri.taxRate||origItem?.tax_rate||origItem?.product?.taxRate||0.20;
-        const pm=settings.pricingMode||"TTC";
-        const rawTTC=Math.round((ri.unitPrice||0)*ri.qty*100)/100;
-        lHT=pm==="TTC"?Math.round(rawTTC/(1+taxRate)*100)/100:rawTTC;
-        lTVA=Math.round(lHT*taxRate*100)/100;
-        lTTC=Math.round((lHT+lTVA)*100)/100;
+        // Retour libre: unitPrice est deja TTC
+        lTTC=Math.round((ri.unitPrice||0)*ri.qty*100)/100;
       }
-      totalHT+=lHT;totalTVA+=lTVA;
+      // Deriver HT et TVA depuis le TTC
+      const lHT=Math.round(lTTC/(1+taxRate)*100)/100;
+      const lTVA=Math.round((lTTC-lHT)*100)/100;
+      totalTTC+=lTTC;totalHT+=lHT;totalTVA+=lTVA;
       return{product_id:ri.productId,variant_id:ri.variantId,
         product_name:origItem?.product_name||origItem?.product?.name||ri.productName||"Article",
         variant_color:origItem?.variant_color||origItem?.variant?.color||ri.variantColor||"",
         variant_size:origItem?.variant_size||origItem?.variant?.size||ri.variantSize||"",
         quantity:ri.qty,lineHT:lHT,lineTVA:lTVA,lineTTC:lTTC,
-        taxRate:origItem?.tax_rate||origItem?.product?.taxRate||ri.taxRate||0.20};
+        taxRate};
     });
-    const totalTTC=Math.round((totalHT+totalTVA)*100)/100;
+    totalTTC=Math.round(totalTTC*100)/100;
+    totalHT=Math.round(totalHT*100)/100;
+    totalTVA=Math.round(totalTVA*100)/100;
 
     if(totalTTC<=0){notify("Montant de retour invalide (0 EUR)","error");return null;}
     if(rp.maxNoApproval&&totalTTC>rp.maxNoApproval&&currentUser?.role!=="admin"){
