@@ -198,10 +198,10 @@ function SalesScreen(){
     const c=parseFloat(payCard)||0;const ca=parseFloat(payCash)||0;const g=parseFloat(payGC)||0;const chq=parseFloat(payChq)||0;
     if(c>0)payments.push({method:cardType,amount:c});if(ca>0)payments.push({method:"cash",amount:ca});
     if(g>0)payments.push({method:"giftcard",amount:g});if(chq>0)payments.push({method:"cheque",amount:chq});if(avoirPayment>0)payments.push({method:"avoir",amount:avoirPayment});
-    if(!payments.length)return;setBusy(true);const t=await checkout(payments,selSeller);setBusy(false);if(t){setLastTk({...t});setPayModal(false);setTkModal(true);setSelSeller(null);}};
+    if(!payments.length)return;setBusy(true);const t=await checkout(payments,selSeller);setBusy(false);if(t){setLastTk({...t});setPayModal(false);setTkModal(true);setSelSeller(null);setCashGiven("");}};
   const quickPay=async(method)=>{if(!cart.length||busy)return;setBusy(true);
     const payments=[{method,amount:totals.tTTC}];if(avoirPayment>0)payments.push({method:"avoir",amount:avoirPayment});
-    const t=await checkout(payments,selSeller);setBusy(false);if(t){setLastTk({...t});setTkModal(true);setSelSeller(null);}};
+    const t=await checkout(payments,selSeller);setBusy(false);if(t){setLastTk({...t});setTkModal(true);setSelSeller(null);setCashGiven("");}};
   const change=cashGiven?Math.max(0,parseFloat(cashGiven)-totals.tTTC):0;
   const maxDisc=perm().maxDiscount;
   const custTier=selCust?getLoyaltyTier(selCust.points):null;
