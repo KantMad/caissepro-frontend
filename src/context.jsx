@@ -391,7 +391,7 @@ function AppProvider({children}){
   const voidSale=(reason)=>{if(cart.length){addAudit("VOID_SALE",`Annulation panier: ${cart.length} articles — Motif: ${reason||"Non spécifié"}`);addJET("VOID_SALE",`Annulation panier ${cart.length} art. — ${reason||"Non spécifié"}`);setCart([]);setGDisc(0);setSelCust(null);}};
   const updateQty=(pid,vid,q)=>{if(q<1)return removeFromCart(pid,vid);setCart(p=>p.map(c=>c.product.id===pid&&c.variant?.id===vid?{...c,quantity:q}:c));};
   const updateItemDisc=(pid,vid,d,dt)=>setCart(p=>p.map(c=>c.product.id===pid&&c.variant?.id===vid?{...c,discount:d,discountType:dt||"percent"}:c));
-  const clearCart=()=>{setCart([]);setGDisc(0);setSelCust(null);setPromoCode("");};
+  const clearCart=()=>{setCart([]);setGDisc(0);setSelCust(null);setPromoCode("");setSelectedAvoir(null);};
   const setCartGD=(v,t)=>{setGDisc(v);setGDiscType(t);};
 
   // Park
@@ -451,7 +451,9 @@ function AppProvider({children}){
   },[activePromos,promoCode,settings.pricingMode]);
 
   // ══ AVOIR AS PAYMENT ══
-  const[avoirPayment,setAvoirPayment]=useState(0);
+  // selectedAvoir: { avoirNumber, totalTTC, remaining, applied } or null
+  const[selectedAvoir,setSelectedAvoir]=useState(null);
+  const avoirPayment=selectedAvoir?.applied||0;
 
   // Stock movements (déclaré avant checkout pour éviter use-before-declaration)
   const addStockMove=useCallback((type,product,variant,qty,ref)=>{
@@ -527,23 +529,32 @@ function AppProvider({children}){
       }
     }
 
+    // ── Consume avoir NOW (after TPE success, before finalizing sale) ──
+    let avoirRemainingAfterSale=null;
+    if(selectedAvoir&&selectedAvoir.applied>0){
+      await consumeAvoir(selectedAvoir.avoirNumber,selectedAvoir.applied);
+      avoirRemainingAfterSale=Math.max(0,(selectedAvoir.remaining||0)-selectedAvoir.applied);
+    }
+
     // Essai API d'abord
     try{
       const ticket=await API.sales.checkout({
         items:items.map(({product,variant,...rest})=>rest),payments,customerId:selCust?.id||null,
         globalDiscount:gd,saleNote:saleNote||null,
         promosApplied:applied,sessionId:cashReg?.id||null,
-        sellerName:sellerName||null
+        sellerName:sellerName||null,
+        avoirUsed:selectedAvoir?{avoirNumber:selectedAvoir.avoirNumber,amount:selectedAvoir.applied,remainingAfter:avoirRemainingAfterSale}:null
       });
       const prods=await API.products.list();setProducts(norm.products(prods));
       if(selCust){setCustomers(prev=>prev.map(c=>c.id===selCust.id?{...c,points:(c.points||0)+Math.floor(parseFloat(ticket.totalTTC)),totalSpent:(c.totalSpent||0)+parseFloat(ticket.totalTTC)}:c));}
-      setCart([]);setGDisc(0);setSelCust(null);setPromoCode("");setAvoirPayment(0);setSaleNote("");
+      setCart([]);setGDisc(0);setSelCust(null);setPromoCode("");setSelectedAvoir(null);setSaleNote("");
       setTSeq(ticket.seq);setLastHash(ticket.hash);setGt(parseFloat(ticket.grandTotal));
       const fullTicket={...ticket,items:ticket.items||items,payments:ticket.payments||payments,
         date:ticket.createdAt||ticket.date,userName:currentUser?.name,
         totalHT:ticket.totalHT||parseFloat(ticket.total_ht)||tHT,totalTVA:ticket.totalTVA||parseFloat(ticket.total_tva)||tTVA,
         totalTTC:ticket.totalTTC||parseFloat(ticket.total_ttc)||tTTC,paymentMethod:ticket.paymentMethod||(payments.length===1?payments[0].method:"MIXTE"),
-        customerName:selCust?`${selCust.firstName||selCust.first_name} ${selCust.lastName||selCust.last_name}`:null};
+        customerName:selCust?`${selCust.firstName||selCust.first_name} ${selCust.lastName||selCust.last_name}`:null,
+        avoirUsed:selectedAvoir?{avoirNumber:selectedAvoir.avoirNumber,amount:selectedAvoir.applied,remainingAfter:avoirRemainingAfterSale}:null};
       setTickets(prev=>[fullTicket,...prev]);
       notify("Vente enregistrée","success");return fullTicket;
     }catch(e){
@@ -569,13 +580,14 @@ function AppProvider({children}){
         hash,fingerprint,grandTotal:gt+tTTC,promosApplied:applied,
         saleNote:saleNote||null,userName:currentUser?.name,sellerName:sellerName||currentUser?.name,
         customerId:selCust?.id,customerName:selCust?`${selCust.firstName} ${selCust.lastName}`:null,
+        avoirUsed:selectedAvoir?{avoirNumber:selectedAvoir.avoirNumber,amount:selectedAvoir.applied,remainingAfter:avoirRemainingAfterSale}:null,
         // NF525: marqueur mode formation
         ...(trainingMode?{trainingMode:true,ticketNumber:`FACTICE-${ticketNumber}`}:{})};
       setTSeq(seq);setLastHash(hash);
       // NF525: ne PAS incrémenter le GT en mode formation
       if(!trainingMode)setGt(g=>g+tTTC);
       setTickets(prev=>[ticket,...prev]);
-      setCart([]);setGDisc(0);setSelCust(null);setPromoCode("");setAvoirPayment(0);setSaleNote("");
+      setCart([]);setGDisc(0);setSelCust(null);setPromoCode("");setSelectedAvoir(null);setSaleNote("");
       addStockMove("VENTE",{name:"Panier",sku:"—"},{color:"—",size:"—"},-cart.reduce((s,i)=>s+i.quantity,0),ticket.ticketNumber);
       // Queue offline sale for sync when back online
       addPendingSync({type:"offlineSale",data:{
@@ -585,7 +597,7 @@ function AppProvider({children}){
       }});
       notify("Vente enregistrée (hors-ligne) — synchro en attente","warn");return ticket;
     }
-  },[cart,gDisc,gDiscType,currentUser,selCust,calcPromoDiscount,promoCode,saleNote,cashReg,tSeq,gt,avoirPayment,addStockMove,notify,settings.pricingMode,addPendingSync]);
+  },[cart,gDisc,gDiscType,currentUser,selCust,calcPromoDiscount,promoCode,saleNote,cashReg,tSeq,gt,avoirPayment,selectedAvoir,consumeAvoir,addStockMove,notify,settings.pricingMode,addPendingSync]);
 
   // Stock receipt - via API
   const receiveStock=useCallback(async(productId,variantId,qty,supplier)=>{
@@ -1289,7 +1301,7 @@ function AppProvider({children}){
     checkout,createClosure,exportArchive,exportFEC,exportCSVReport,exportCustomerRGPD,addAudit,addJET,
     promos,setPromos,activePromos,parked,parkCart,restoreCart,selCust,setSelCust,
     stockAlerts,stockMoves,addStockMove,receiveStock,
-    refreshProducts,findByEAN,perm,settings,setSettings,saveSettingsToAPI,getLoyaltyTier,avoirPayment,setAvoirPayment,
+    refreshProducts,findByEAN,perm,settings,setSettings,saveSettingsToAPI,getLoyaltyTier,avoirPayment,selectedAvoir,setSelectedAvoir,
     bestSellers,salesBySeller,salesByVariant,caEvolution,salesByCollection,
     saleNote,setSaleNote,clockIn,clockOut,clockEntries,verifyChain,exportCatalog,
     updateProductPrice,priceHistory,reorderSuggestions,toggleFavorite,favorites,tvaSummary,stockAging,

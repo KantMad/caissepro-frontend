@@ -140,7 +140,7 @@ function SalesScreen(){
   const{products,cart,addToCart,addCustomItem,removeFromCart,voidSale,updateQty,updateItemDisc,clearCart,checkout,
     gDisc,gDiscType,setCartGD,promoCode,setPromoCode,calcPromoDiscount,isOnline,findByEAN,offlineMode,
     parked,parkCart,restoreCart,customers,addCustomer,selCust,setSelCust,perm,notify,
-    stockAlerts,activePromos,avoirPayment,setAvoirPayment,getLoyaltyTier,tickets,saleNote,setSaleNote,favorites,toggleFavorite,getLastPriceForCustomer,settings,
+    stockAlerts,activePromos,avoirPayment,selectedAvoir,setSelectedAvoir,getLoyaltyTier,tickets,saleNote,setSaleNote,favorites,toggleFavorite,getLastPriceForCustomer,settings,
     printerConnected,thermalPrint,pendingSync,clearPendingSync,users,currentUser,avoirs,consumeAvoir,isAvoirExpired,addAudit,addJET,trainingMode}=useApp();
   const[search,setSearch]=useState("");const[cat,setCat]=useState("Tous");const[vm,setVm]=useState(null);const[selSeller,setSelSeller]=useState(null);
   const[dm,setDm]=useState(null);const[dv,setDv]=useState("");const[gm,setGm]=useState(false);const[gv,setGv]=useState("");const[gtp,setGtp]=useState("percentage");
@@ -396,7 +396,12 @@ function SalesScreen(){
           {totals.gd>0&&<div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><span style={{color:"#059669",display:"flex",alignItems:"center",gap:3}}><Percent size={10}/> Remises & promos</span><span style={{fontWeight:700,color:"#059669"}}>-{totals.gd.toFixed(2)}€</span></div>}
           {totals.applied?.length>0&&<div style={{background:`${C.warn}10`,borderRadius:8,padding:"4px 8px",marginBottom:4,border:`1px solid ${C.warn}15`}}>{totals.applied.map((a,i)=><div key={i} style={{fontSize:9,color:"#92720E",fontWeight:600}}>✓ {a}</div>)}</div>}
           <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><span style={{color:C.textMuted}}>TVA</span><span style={{fontWeight:600}}>{totals.tTVA.toFixed(2)}€</span></div>
-          {avoirPayment>0&&<div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><span style={{color:C.fiscal}}>Avoir appliqué</span><span style={{fontWeight:700,color:C.fiscal}}>-{avoirPayment.toFixed(2)}€</span></div>}
+          {selectedAvoir&&avoirPayment>0&&<div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}><span style={{color:C.fiscal,display:"flex",alignItems:"center",gap:4}}>
+            <RotateCcw size={10}/> Avoir {selectedAvoir.avoirNumber}</span>
+            <span style={{display:"flex",alignItems:"center",gap:6}}>
+              <span style={{fontWeight:700,color:C.fiscal}}>-{avoirPayment.toFixed(2)}€</span>
+              <button onClick={()=>setSelectedAvoir(null)} style={{background:"none",border:"none",cursor:"pointer",padding:2,color:C.danger,fontSize:10,fontWeight:700}} title="Annuler l'avoir">X</button>
+            </span></div>}
           <div style={{borderTop:`2px solid ${C.border}`,paddingTop:8,marginTop:6,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
             <span style={{fontSize:16,fontWeight:800}}>Total TTC</span>
             <span style={{fontSize:24,fontWeight:900,color:C.primary,letterSpacing:"-0.8px"}}>{totals.tTTC.toFixed(2)}€</span></div></div>
@@ -410,8 +415,11 @@ function SalesScreen(){
           <Btn variant="outline" onClick={()=>{setGm(true);setGv(String(gDisc));setGtp(gDiscType);}} style={{flex:1,height:32,fontSize:10,padding:"0 6px",borderRadius:10}}><Percent size={11}/> Remise globale</Btn>
           </div>
 
-        <Btn onClick={()=>setPayMethodModal(true)} disabled={!cart.length||busy} style={{width:"100%",height:52,borderRadius:14,background:C.primary,fontSize:14,gap:8,boxShadow:`0 4px 16px ${C.primary}30`,marginBottom:6,letterSpacing:"-0.3px"}}>
-          {busy?<span className="spin-loader"/>:<><Wallet size={18}/> Règlement — {totals.tTTC.toFixed(2)}€</>}</Btn>
+        {selectedAvoir&&totals.tTTC<=0?
+          <Btn onClick={()=>quickPay("avoir")} disabled={!cart.length||busy} style={{width:"100%",height:52,borderRadius:14,background:C.fiscal,fontSize:14,gap:8,boxShadow:`0 4px 16px ${C.fiscal}30`,marginBottom:6,letterSpacing:"-0.3px"}}>
+            {busy?<span className="spin-loader"/>:<><CheckCircle2 size={18}/> Valider (avoir) — 0.00€</>}</Btn>
+        :<Btn onClick={()=>setPayMethodModal(true)} disabled={!cart.length||busy} style={{width:"100%",height:52,borderRadius:14,background:C.primary,fontSize:14,gap:8,boxShadow:`0 4px 16px ${C.primary}30`,marginBottom:6,letterSpacing:"-0.3px"}}>
+          {busy?<span className="spin-loader"/>:<><Wallet size={18}/> Règlement — {totals.tTTC.toFixed(2)}€</>}</Btn>}
         <div style={{display:"flex",gap:4}}>
           <Btn variant="outline" onClick={()=>setRetoucheModal(true)} style={{flex:1,height:30,fontSize:10,borderRadius:10,gap:4}}><Edit size={11}/> Retouche</Btn>
           <Btn variant="outline" onClick={clearCart} style={{flex:1,borderColor:`${C.danger}20`,color:C.danger,height:30,fontSize:10,borderRadius:10}}><RotateCcw size={10}/> Vider</Btn>
@@ -482,8 +490,9 @@ function SalesScreen(){
           <div key={x.l}><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"flex",alignItems:"center",gap:4,marginBottom:3}}><x.i size={11} color={x.c}/>{x.l}
             <button onClick={()=>x.s(String(remaining.toFixed(2)))} style={{marginLeft:"auto",background:"none",border:"none",cursor:"pointer",fontSize:9,color:C.primary,fontWeight:600}}>= Reste</button></label>
             <Input type="number" step="0.01" value={x.v} onChange={e=>x.s(e.target.value)} placeholder="0.00"/></div>))}
-        <div><label style={{fontSize:10,fontWeight:600,color:C.fiscal,display:"block",marginBottom:3}}>AVOIR CLIENT</label>
-          <Input type="number" step="0.01" value={avoirPayment||""} onChange={e=>setAvoirPayment(parseFloat(e.target.value)||0)} placeholder="0.00"/></div>
+        {selectedAvoir&&avoirPayment>0&&<div><label style={{fontSize:10,fontWeight:600,color:C.fiscal,display:"flex",alignItems:"center",gap:4,marginBottom:3}}>
+          <RotateCcw size={11} color={C.fiscal}/> AVOIR {selectedAvoir.avoirNumber}</label>
+          <Input type="number" step="0.01" value={avoirPayment} readOnly style={{background:C.surfaceAlt,opacity:0.7}} placeholder="0.00"/></div>}
       </div>
       <div style={{display:"flex",justifyContent:"space-between",padding:"8px 12px",borderRadius:8,background:remaining>0.01?C.warnLight:C.primaryLight,marginBottom:10}}>
         <span style={{fontSize:11,fontWeight:600,color:remaining>0.01?C.warn:C.primary}}>Reste à payer</span>
@@ -585,6 +594,33 @@ function SalesScreen(){
         {lastTk.saleNote&&<div style={{textAlign:"center",fontSize:9,color:C.text,marginTop:3,fontStyle:"italic"}}>Note: {lastTk.saleNote}</div>}
         {lastTk.customerName&&<div style={{textAlign:"center",fontSize:9,color:C.accent,marginTop:3}}>Fidélité: +{Math.floor(lastTk.totalTTC||0)}pts</div>}
       </div>
+      {/* Avoir remaining balance after sale */}
+      {lastTk.avoirUsed&&lastTk.avoirUsed.remainingAfter>0&&(
+        <div style={{background:C.fiscalLight||"#FFF7ED",border:`2px solid ${C.fiscal}`,borderRadius:12,padding:14,marginTop:12,textAlign:"center"}}>
+          <div style={{fontSize:11,fontWeight:600,color:C.fiscal,marginBottom:4}}>Solde restant sur avoir {lastTk.avoirUsed.avoirNumber}</div>
+          <div style={{fontSize:22,fontWeight:900,color:C.fiscal,letterSpacing:"-0.5px"}}>{lastTk.avoirUsed.remainingAfter.toFixed(2)}EUR</div>
+          <Btn onClick={()=>{
+            const av=lastTk.avoirUsed;
+            const w=window.open("","_blank","width=400,height=400");if(!w)return;
+            w.document.write(`<!DOCTYPE html><html><head><title>Avoir — Solde restant</title>
+              <style>body{font-family:'Courier New',monospace;font-size:12px;padding:20px;max-width:300px;margin:0 auto;text-align:center;}
+              h2{font-size:14px;margin:4px 0;}hr{border:none;border-top:1px dashed #333;margin:8px 0;}
+              .big{font-size:28px;font-weight:900;margin:12px 0;}.no-print{margin-top:16px;}</style></head><body>
+              <h2>${settings.name||"CaissePro"}</h2>
+              <div>${settings.address||""}, ${settings.postalCode||""} ${settings.city||""}</div><hr>
+              <h2>AVOIR — SOLDE RESTANT</h2>
+              <div>N° ${av.avoirNumber}</div>
+              <div class="big">${av.remainingAfter.toFixed(2)} EUR</div>
+              <div>Montant utilise: ${av.amount.toFixed(2)} EUR</div>
+              <div>Ticket: ${lastTk.ticketNumber}</div>
+              <div>${new Date().toLocaleString("fr-FR")}</div><hr>
+              <div style="font-size:10px;">Presentez ce bon lors de votre prochain achat.</div>
+              <div class="no-print"><button onclick="window.print()" style="padding:8px 20px;background:#047857;color:#fff;border:none;border-radius:8px;font-size:13px;cursor:pointer;">Imprimer</button></div>
+              </body></html>`);w.document.close();
+          }} variant="outline" style={{marginTop:8,borderColor:C.fiscal,color:C.fiscal,borderRadius:10,fontSize:12}}>
+            <Printer size={14}/> Imprimer le solde restant</Btn>
+        </div>
+      )}
       <div style={{display:"flex",gap:8,marginTop:14}}>
         <Btn variant="outline" onClick={()=>emailTicket(lastTk)} style={{flex:1,borderRadius:12}}><Mail size={14}/> Email</Btn>
         <Btn variant="outline" onClick={()=>thermalPrint("receipt",lastTk)} style={{flex:1,borderRadius:12}}><Printer size={14}/> {printerConnected?"Ticket":"Imprimer"}</Btn>
@@ -666,7 +702,7 @@ function SalesScreen(){
             <RotateCcw size={28} color={C.border} style={{marginBottom:8}}/>
             <div style={{fontSize:13,fontWeight:700,marginBottom:2}}>Aucun avoir{avoirSearch?" pour cette recherche":" disponible"}</div>
             <div style={{fontSize:11}}>Les avoirs sont generes lors des retours en caisse.</div></div>}
-          {shown.map(a=>{const rem=a.remaining??a.totalTTC??0;const canApply=Math.min(rem,totals.tTTC);
+          {shown.map(a=>{const rem=a.remaining??a.totalTTC??0;const rawTotal=totals.tTTC+avoirPayment;const canApply=Math.min(rem,rawTotal);
             const expiryDate=new Date(new Date(a.date).setMonth(new Date(a.date).getMonth()+(settings.returnPolicy?.avoirExpiryMonths||12)));
             return(<div key={a.avoirNumber} style={{padding:14,borderRadius:14,border:`2px solid ${C.fiscal}25`,background:C.surfaceAlt,display:"flex",alignItems:"center",gap:12}}>
               <div style={{flex:1}}>
@@ -675,8 +711,11 @@ function SalesScreen(){
                 {a.customerName&&<div style={{fontSize:10,color:C.accent}}>Client: {a.customerName}</div>}
                 <div style={{fontSize:10,color:C.textLight}}>Expire: {expiryDate.toLocaleDateString("fr-FR")}</div>
                 <div style={{fontSize:12,fontWeight:700,color:C.fiscal,marginTop:4}}>Solde: {rem.toFixed(2)}EUR</div></div>
-              <Btn onClick={()=>{setAvoirPayment(canApply);consumeAvoir(a.avoirNumber,canApply);setAvoirSelectModal(false);setAvoirSearch("");
-                if(canApply>=totals.tTTC){quickPay("avoir");}else{notify(`Avoir ${a.avoirNumber}: ${canApply.toFixed(2)}EUR applique. Reste ${(totals.tTTC-canApply).toFixed(2)}EUR.`,"info");openPay();}}}
+              <Btn onClick={()=>{
+                setSelectedAvoir({avoirNumber:a.avoirNumber,totalTTC:a.totalTTC||0,remaining:rem,applied:canApply});
+                setAvoirSelectModal(false);setAvoirSearch("");
+                notify(`Avoir ${a.avoirNumber}: ${canApply.toFixed(2)}EUR applique${canApply<rem?`. Solde restant: ${(rem-canApply).toFixed(2)}EUR`:""}${canApply>=totals.tTTC+avoirPayment?". Cliquez sur Valider pour finaliser.":`. Reste a payer: ${(totals.tTTC+avoirPayment-canApply).toFixed(2)}EUR`}`,"info");
+                }}
                 style={{background:C.fiscal,padding:"10px 16px",fontSize:12}}>
                 Appliquer {canApply.toFixed(2)}EUR</Btn>
             </div>);})}
@@ -1356,7 +1395,7 @@ function StockScreen(){
 
 /* ══════════ HISTORY ══════════ */
 function HistoryScreen(){
-  const{tickets,avoirs,settings,processReturn,perm:p,printerConnected,thermalPrint,setAvoirPayment,setMode,notify,customers}=useApp();
+  const{tickets,avoirs,settings,processReturn,perm:p,printerConnected,thermalPrint,setSelectedAvoir,setMode,notify,customers}=useApp();
   const[tab,setTab]=useState("tickets");const[reprintTk,setReprintTk]=useState(null);const[reassignModal,setReassignModal]=useState(null);const[reassignCust,setReassignCust]=useState(null);
   const[search,setSearch]=useState("");const[dateFilter,setDateFilter]=useState("");
   const[returnModal,setReturnModal]=useState(null);
@@ -1563,7 +1602,7 @@ function HistoryScreen(){
           <span style={{fontSize:16,fontWeight:800,color:C.danger}}>{(returnTotal||0).toFixed(2)}€</span></div>
         <Btn variant="danger" disabled={returnTotal===0||!returnReason} onClick={async()=>{
           const avoir=await processReturn(returnModal,returnItems.filter(i=>i.qty>0),returnReason,returnMethod==="exchange"?"avoir":returnMethod);
-          if(avoir&&returnMethod==="exchange"){setAvoirPayment(avoir.totalTTC||0);setMode("cashier");notify(`Avoir ${avoir.avoirNumber} de ${(avoir.totalTTC||0).toFixed(2)}€ appliqué — Scannez les nouveaux articles`,"success");}
+          if(avoir&&returnMethod==="exchange"){setSelectedAvoir({avoirNumber:avoir.avoirNumber,totalTTC:avoir.totalTTC||0,remaining:avoir.remaining||avoir.totalTTC||0,applied:avoir.totalTTC||0});setMode("cashier");notify(`Avoir ${avoir.avoirNumber} de ${(avoir.totalTTC||0).toFixed(2)}€ appliqué — Scannez les nouveaux articles`,"success");}
           setReturnModal(null);}}
           style={{width:"100%",height:44}}><RotateCcw size={16}/> Valider le retour</Btn>
         {!returnReason&&returnTotal>0&&<div style={{marginTop:6,fontSize:10,color:C.warn,textAlign:"center"}}>Veuillez sélectionner un motif de retour</div>}
@@ -1654,7 +1693,7 @@ function HistoryScreen(){
 
 /* ══════════ RETURN SCREEN ══════════ */
 function ReturnScreen(){
-  const{tickets,products,processReturn,findByEAN,avoirs,settings,notify,printerConnected,thermalPrint,setAvoirPayment,setMode:setAppMode,users,currentUser,addAudit,isAvoirExpired}=useApp();
+  const{tickets,products,processReturn,findByEAN,avoirs,settings,notify,printerConnected,thermalPrint,setSelectedAvoir,setMode:setAppMode,users,currentUser,addAudit,isAvoirExpired}=useApp();
   const rp=settings.returnPolicy||{};
   const[mode,setMode]=useState("ticket");// ticket | scan | free
   const[searchTk,setSearchTk]=useState("");const[selectedTk,setSelectedTk]=useState(null);
@@ -1737,7 +1776,7 @@ function ReturnScreen(){
     const avoir=await processReturn(syntheticTicket,items,reason,refundMethod==="exchange"?"avoir":refundMethod,restock,defective);
     if(avoir){
       if(refundMethod==="exchange"){
-        setAvoirPayment(avoir.totalTTC||0);
+        setSelectedAvoir({avoirNumber:avoir.avoirNumber,totalTTC:avoir.totalTTC||0,remaining:avoir.remaining||avoir.totalTTC||0,applied:avoir.totalTTC||0});
         setAppMode("cashier");
         notify(`Avoir ${avoir.avoirNumber} de ${(avoir.totalTTC||0).toFixed(2)}EUR applique -- Scannez les nouveaux articles`,"success");
         setReturnItems([]);setSelectedTk(null);setSearchTk("");setSearchProd("");setFreeItem(null);
