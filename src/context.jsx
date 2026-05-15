@@ -209,7 +209,7 @@ function AppProvider({children}){
           else if(action.type==="closeRegister")await API.settings.closeRegister(action.data.registerId,{closedAt:new Date().toISOString()});
           else if(action.type==="offlineSale")await API.sales.checkout(action.data);
           else if(action.type==="offlineClosure")await API.fiscal.closure(action.data);
-          else if(action.type==="offlineAvoir"){try{await API.returns.create(action.data);}catch(e2){await API.sales.void(action.data.saleId,action.data.reason);}}
+          else if(action.type==="offlineAvoir")await API.returns.create(action.data);
           else if(action.type==="consumeAvoir")await API.returns.consume(action.data.avoirNumber,action.data.amount);
           else{failed.push({...action,retries:(action.retries||0)+1,lastError:"Type inconnu"});continue;}
           synced++;
@@ -1084,27 +1084,22 @@ function AppProvider({children}){
       customerId:ticket.customerId,customerName:ticket.customerName,
       hash,fingerprint};
 
-    // Essai API retours dédié, fallback sur void, puis offline
+    // Essai API retours
     const apiPayload={originalTicket:ticket.ticketNumber||ticket.id,reason,refundMethod,avoirNumber,
       items:items.map(i=>({productId:i.product_id||i.product?.id,variantId:i.variant_id||i.variant?.id,
         qty:i.quantity,lineTTC:i.lineTTC,lineHT:i.lineHT,lineTVA:i.lineTVA})),
       totalHT,totalTVA,totalTTC,restock:doRestock!==undefined?doRestock:(rp.autoRestock!==false),defective};
+    let apiSaved=false;
     try{
       const apiResult=await API.returns.create(apiPayload);
+      apiSaved=true;
       if(apiResult?.seq){avoir.seq=apiResult.seq;setAvoirSeq(apiResult.seq);}
       if(apiResult?.hash)avoir.hash=apiResult.hash;
       if(apiResult?.fingerprint)avoir.fingerprint=apiResult.fingerprint;
       if(apiResult?.avoirNumber)avoir.avoirNumber=apiResult.avoirNumber;
     }catch(e){
-      // Fallback: legacy void endpoint
-      try{const voidResult=await API.sales.void(ticket.ticketNumber||ticket.id,reason);
-        if(voidResult?.seq)avoir.seq=voidResult.seq;
-        if(voidResult?.hash)avoir.hash=voidResult.hash;
-        if(voidResult?.fingerprint)avoir.fingerprint=voidResult.fingerprint;
-      }catch(e2){
-        console.warn("Avoir API echoue, mode local:",e.message);
-        addPendingSync({type:"offlineAvoir",data:{...apiPayload,saleId:ticket.ticketNumber||ticket.id}});
-      }
+      console.warn("Avoir API echoue, mode offline:",e.message);
+      addPendingSync({type:"offlineAvoir",data:{...apiPayload,saleId:ticket.ticketNumber||ticket.id}});
     }
 
     setAvoirSeq(seq);setAvoirs(p=>[avoir,...p]);
