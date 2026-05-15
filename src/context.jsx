@@ -59,7 +59,7 @@ function AppProvider({children}){
   useEffect(()=>{try{localStorage.setItem("caissepro_jet",JSON.stringify(jet.slice(0,1000)));}catch(e){}},[jet]);
   const[closures,setClosures]=useState(()=>{try{const s=localStorage.getItem("caissepro_closures");return s?JSON.parse(s):[];}catch(e){return[];}});
   useEffect(()=>{try{localStorage.setItem("caissepro_closures",JSON.stringify(closures));}catch(e){}},[closures]);
-  const[avoirs,setAvoirs]=useState(()=>{try{const s=localStorage.getItem("caissepro_avoirs");return s?JSON.parse(s):[];}catch(e){return[];}});
+  const[avoirs,setAvoirs]=useState(()=>{try{const s=localStorage.getItem("caissepro_avoirs");return s?norm.avoirs(JSON.parse(s)):[];}catch(e){return[];}});
   useEffect(()=>{try{localStorage.setItem("caissepro_avoirs",JSON.stringify(avoirs));}catch(e){}},[avoirs]);
   const[promos,setPromos]=useState(initPromos);
   const[parked,setParked]=useState(()=>{try{const s=localStorage.getItem("caissepro_parked");return s?JSON.parse(s):[];}catch(e){return[];}});

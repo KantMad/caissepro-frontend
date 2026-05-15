@@ -567,7 +567,7 @@ function SalesScreen(){
         <div>Caissier: {lastTk.userName}{lastTk.customerName?` — Client: ${lastTk.customerName}`:""}</div>
         <div style={{borderTop:"1px dashed #999",margin:"4px 0"}}/>
         {(lastTk.items||[]).map((i,k)=>{const sku=i.product?.sku||i.product_sku||"";const ean=i.variant?.ean||i.variant_ean||"";return(<div key={k}>
-          <div style={{display:"flex",justifyContent:"space-between",gap:8}}><span style={{flex:1,wordBreak:"break-word",lineHeight:1.3}}>{i.product?.name||i.product_name}{i.isCustom||i.is_custom?"":`(${i.variant?.color||i.variant_color}/${i.variant?.size||i.variant_size})`} x{i.quantity}{i.discount>0?` -${i.discount}${i.discountType==="amount"?"€":"%"}`:""}</span><span style={{whiteSpace:"nowrap",fontWeight:600}}>{(i.lineTTC||i.line_ttc||(i.unit_price*i.quantity)).toFixed(2)}€</span></div>
+          <div style={{display:"flex",justifyContent:"space-between",gap:8}}><span style={{flex:1,wordBreak:"break-word",lineHeight:1.3}}>{i.product?.name||i.product_name}{i.isCustom||i.is_custom?"":`(${i.variant?.color||i.variant_color}/${i.variant?.size||i.variant_size})`} x{i.quantity}{i.discount>0?` -${i.discount}${i.discountType==="amount"?"€":"%"}`:""}</span><span style={{whiteSpace:"nowrap",fontWeight:600}}>{(i.lineTTC||i.line_ttc||((i.unit_price||0)*(i.quantity||1))||0).toFixed(2)}€</span></div>
           {(sku||ean)&&<div style={{fontSize:8,color:"#999"}}>{sku?`Réf: ${sku}`:""}{sku&&ean?" — ":""}{ean?`EAN: ${ean}`:""}</div>}
         </div>);})}
         <div style={{borderTop:"1px dashed #999",margin:"4px 0"}}/>
@@ -666,7 +666,7 @@ function SalesScreen(){
             <RotateCcw size={28} color={C.border} style={{marginBottom:8}}/>
             <div style={{fontSize:13,fontWeight:700,marginBottom:2}}>Aucun avoir{avoirSearch?" pour cette recherche":" disponible"}</div>
             <div style={{fontSize:11}}>Les avoirs sont generes lors des retours en caisse.</div></div>}
-          {shown.map(a=>{const rem=a.remaining??a.totalTTC;const canApply=Math.min(rem,totals.tTTC);
+          {shown.map(a=>{const rem=a.remaining??a.totalTTC??0;const canApply=Math.min(rem,totals.tTTC);
             const expiryDate=new Date(new Date(a.date).setMonth(new Date(a.date).getMonth()+(settings.returnPolicy?.avoirExpiryMonths||12)));
             return(<div key={a.avoirNumber} style={{padding:14,borderRadius:14,border:`2px solid ${C.fiscal}25`,background:C.surfaceAlt,display:"flex",alignItems:"center",gap:12}}>
               <div style={{flex:1}}>
@@ -1386,11 +1386,11 @@ function HistoryScreen(){
       const alreadyReturned=returnedQtys[`${pid}-${vid}`]||0;const remaining=Math.max(0,i.quantity-alreadyReturned);
       return{productId:pid,variantId:vid,
       name:i.product?.name||i.product_name,sku:i.product?.sku||i.product_sku||"",ean:i.variant?.ean||i.variant_ean||"",color:i.variant?.color||i.variant_color,size:i.variant?.size||i.variant_size,
-      maxQty:remaining,qty:0,alreadyReturned,unitTTC:(i.lineTTC||i.line_ttc||(i.unit_price*i.quantity))/i.quantity};}).filter(i=>i.maxQty>0);
+      maxQty:remaining,qty:0,alreadyReturned,unitTTC:(Number(i.lineTTC||i.line_ttc)||((Number(i.unit_price)||0)*(i.quantity||1)))/(i.quantity||1)};}).filter(i=>i.maxQty>0);
     setReturnItems(items);
     setReturnReason("");setReturnMethod("cash");
   };
-  const returnTotal=returnItems.reduce((s,i)=>s+i.qty*i.unitTTC,0);
+  const returnTotal=returnItems.reduce((s,i)=>s+(i.qty||0)*(i.unitTTC||0),0);
 
   return(<div style={{height:"100%",overflowY:"auto",padding:20,background:C.bg}}>
     <h2 style={{fontSize:22,fontWeight:800,marginBottom:14}}>Historique fiscal</h2>
@@ -1530,7 +1530,7 @@ function HistoryScreen(){
         <div style={{display:"flex",flexDirection:"column",gap:6,marginBottom:14}}>
           {returnItems.map((ri,idx)=>(<div key={idx} style={{display:"flex",alignItems:"center",gap:8,padding:8,borderRadius:8,border:`1px solid ${ri.qty>0?C.danger+"66":C.border}`,background:ri.qty>0?C.dangerLight:"transparent"}}>
             <div style={{flex:1}}><div style={{fontSize:12,fontWeight:600}}>{ri.name}</div>
-              <div style={{fontSize:10,color:C.textMuted}}>{ri.color}/{ri.size} — {ri.unitTTC.toFixed(2)}€/u — max: {ri.maxQty}{ri.sku?` — Réf: ${ri.sku}`:""}</div></div>
+              <div style={{fontSize:10,color:C.textMuted}}>{ri.color}/{ri.size} — {(ri.unitTTC||0).toFixed(2)}€/u — max: {ri.maxQty}{ri.sku?` — Réf: ${ri.sku}`:""}</div></div>
             <div style={{display:"flex",alignItems:"center",gap:4}}>
               <button onClick={()=>setReturnItems(p=>p.map((x,i)=>i===idx?{...x,qty:Math.max(0,x.qty-1)}:x))}
                 style={{width:26,height:26,borderRadius:13,border:`1px solid ${C.border}`,background:C.surface,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}><Minus size={11}/></button>
@@ -1540,7 +1540,7 @@ function HistoryScreen(){
               <Btn variant="ghost" onClick={()=>setReturnItems(p=>p.map((x,i)=>i===idx?{...x,qty:x.maxQty}:x))} style={{fontSize:9,padding:"2px 6px"}}>Tout</Btn>
             </div>
             <div style={{width:60,textAlign:"right",fontSize:12,fontWeight:700,color:ri.qty>0?C.danger:C.textLight}}>
-              {ri.qty>0?`-${(ri.qty*ri.unitTTC).toFixed(2)}€`:"—"}</div>
+              {ri.qty>0?`-${((ri.qty||0)*(ri.unitTTC||0)).toFixed(2)}€`:"—"}</div>
           </div>))}
         </div>
         <div style={{marginBottom:10}}><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>MOTIF DU RETOUR</label>
@@ -1560,10 +1560,10 @@ function HistoryScreen(){
                 <div style={{fontSize:11,fontWeight:600,color:returnMethod===m.id?C.danger:C.text}}>{m.l}</div></button>))}</div></div>
         <div style={{display:"flex",justifyContent:"space-between",padding:"10px 14px",borderRadius:10,background:C.dangerLight,marginBottom:12}}>
           <span style={{fontSize:13,fontWeight:700,color:C.danger}}>Total remboursement</span>
-          <span style={{fontSize:16,fontWeight:800,color:C.danger}}>{returnTotal.toFixed(2)}€</span></div>
+          <span style={{fontSize:16,fontWeight:800,color:C.danger}}>{(returnTotal||0).toFixed(2)}€</span></div>
         <Btn variant="danger" disabled={returnTotal===0||!returnReason} onClick={async()=>{
           const avoir=await processReturn(returnModal,returnItems.filter(i=>i.qty>0),returnReason,returnMethod==="exchange"?"avoir":returnMethod);
-          if(avoir&&returnMethod==="exchange"){setAvoirPayment(avoir.totalTTC);setMode("cashier");notify(`Avoir ${avoir.avoirNumber} de ${avoir.totalTTC.toFixed(2)}€ appliqué — Scannez les nouveaux articles`,"success");}
+          if(avoir&&returnMethod==="exchange"){setAvoirPayment(avoir.totalTTC||0);setMode("cashier");notify(`Avoir ${avoir.avoirNumber} de ${(avoir.totalTTC||0).toFixed(2)}€ appliqué — Scannez les nouveaux articles`,"success");}
           setReturnModal(null);}}
           style={{width:"100%",height:44}}><RotateCcw size={16}/> Valider le retour</Btn>
         {!returnReason&&returnTotal>0&&<div style={{marginTop:6,fontSize:10,color:C.warn,textAlign:"center"}}>Veuillez sélectionner un motif de retour</div>}
@@ -1737,9 +1737,9 @@ function ReturnScreen(){
     const avoir=await processReturn(syntheticTicket,items,reason,refundMethod==="exchange"?"avoir":refundMethod,restock,defective);
     if(avoir){
       if(refundMethod==="exchange"){
-        setAvoirPayment(avoir.totalTTC);
+        setAvoirPayment(avoir.totalTTC||0);
         setAppMode("cashier");
-        notify(`Avoir ${avoir.avoirNumber} de ${avoir.totalTTC.toFixed(2)}EUR applique -- Scannez les nouveaux articles`,"success");
+        notify(`Avoir ${avoir.avoirNumber} de ${(avoir.totalTTC||0).toFixed(2)}EUR applique -- Scannez les nouveaux articles`,"success");
         setReturnItems([]);setSelectedTk(null);setSearchTk("");setSearchProd("");setFreeItem(null);
       } else {
         setLastAvoir(avoir);setReturnItems([]);setSelectedTk(null);setSearchTk("");setSearchProd("");setFreeItem(null);
@@ -1800,7 +1800,7 @@ function ReturnScreen(){
                 {selected?<CheckCircle2 size={18} color={C.primary}/>:<div style={{width:18,height:18,borderRadius:9,border:`2px solid ${C.border}`}}/>}
                 <div style={{flex:1}}><div style={{fontSize:12,fontWeight:600}}>{item.product?.name||item.product_name}</div>
                   <div style={{fontSize:10,color:C.textMuted}}>{item.variant?.color||item.variant_color}/{item.variant?.size||item.variant_size} — Qté: {item.quantity}</div></div>
-                <span style={{fontSize:13,fontWeight:700,color:C.primary}}>{(item.lineTTC||item.line_ttc||(item.unit_price*item.quantity)).toFixed(2)}€</span>
+                <span style={{fontSize:13,fontWeight:700,color:C.primary}}>{(item.lineTTC||item.line_ttc||((item.unit_price||0)*(item.quantity||1))||0).toFixed(2)}€</span>
               </div>);})}
           </div>}
         </div>}
@@ -1825,7 +1825,7 @@ function ReturnScreen(){
                 {selected?<CheckCircle2 size={16} color={C.primary}/>:<div style={{width:16,height:16,borderRadius:8,border:`2px solid ${C.border}`}}/>}
                 <div style={{flex:1}}><div style={{fontSize:11,fontWeight:600}}>{p.name}</div>
                   <div style={{fontSize:9,color:C.textMuted}}>{v.color}/{v.size} — SKU: {p.sku}{v.ean?` — EAN: ${v.ean}`:""}</div></div>
-                <span style={{fontSize:12,fontWeight:700,color:C.primary}}>{p.price.toFixed(2)}€</span>
+                <span style={{fontSize:12,fontWeight:700,color:C.primary}}>{(p.price||0).toFixed(2)}€</span>
               </div>);})}</div>))}</div>}
 
         {mode==="free"&&(managerApproved||currentUser?.role==="admin")&&<div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`}}>
@@ -1841,7 +1841,7 @@ function ReturnScreen(){
                 {selected?<CheckCircle2 size={16} color={C.primary}/>:<div style={{width:16,height:16,borderRadius:8,border:`2px solid ${C.border}`}}/>}
                 <div style={{flex:1}}><div style={{fontSize:11,fontWeight:600}}>{p.name}</div>
                   <div style={{fontSize:9,color:C.textMuted}}>{v.color}/{v.size}</div></div>
-                <span style={{fontSize:12,fontWeight:700,color:C.primary}}>{p.price.toFixed(2)}€</span>
+                <span style={{fontSize:12,fontWeight:700,color:C.primary}}>{(p.price||0).toFixed(2)}€</span>
               </div>);})}</div>))}</div>}
 
         {/* Historique avoirs — avec recherche */}
@@ -1861,7 +1861,7 @@ function ReturnScreen(){
                 <span style={{fontSize:11,fontWeight:700,fontFamily:"monospace"}}>{a.avoirNumber}</span>
                 <Badge color={a.refundMethod==="avoir"?C.primary:a.refundMethod==="cash"?C.accent:a.refundMethod==="card"?C.info:"#8B5CF6"}>
                   {({avoir:"Avoir",cash:"ESP",card:"CB",exchange:"ECH"})[a.refundMethod]||a.refundMethod}</Badge>
-                {isAvoirType&&!a.used&&!expired&&<Badge color={C.fiscal}>Solde: {(a.remaining??a.totalTTC).toFixed(2)}EUR</Badge>}
+                {isAvoirType&&!a.used&&!expired&&<Badge color={C.fiscal}>Solde: {(a.remaining??a.totalTTC??0).toFixed(2)}EUR</Badge>}
                 {a.used&&<Badge color={C.textMuted}>Utilise</Badge>}
                 {expired&&<Badge color={C.danger}>Expire</Badge>}</div>
               <div style={{fontSize:9,color:C.textMuted,marginTop:1}}>
@@ -1882,7 +1882,7 @@ function ReturnScreen(){
             <button onClick={()=>updateReturnQty(r.key,r.qty-1)} style={{width:22,height:22,borderRadius:6,border:"none",background:C.surface,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}><Minus size={10}/></button>
             <span style={{width:24,textAlign:"center",fontSize:11,fontWeight:700}}>{r.qty}</span>
             <button onClick={()=>updateReturnQty(r.key,r.qty+1)} style={{width:22,height:22,borderRadius:6,border:"none",background:C.surface,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}><Plus size={10}/></button></div>
-          <span style={{fontSize:12,fontWeight:700,color:C.danger,minWidth:60,textAlign:"right"}}>{(r.unitPrice*r.qty).toFixed(2)}€</span>
+          <span style={{fontSize:12,fontWeight:700,color:C.danger,minWidth:60,textAlign:"right"}}>{((r.unitPrice||0)*r.qty).toFixed(2)}€</span>
           <button onClick={()=>setReturnItems(p=>p.filter(x=>x.key!==r.key))} style={{background:C.dangerLight,border:"none",cursor:"pointer",borderRadius:6,width:22,height:22,display:"flex",alignItems:"center",justifyContent:"center"}}>
             <Trash2 size={10} color={C.danger}/></button>
         </div>))}
@@ -1927,7 +1927,7 @@ function ReturnScreen(){
         <div style={{width:64,height:64,borderRadius:32,background:C.fiscal,display:"inline-flex",alignItems:"center",justifyContent:"center",marginBottom:10,
           boxShadow:`0 8px 24px ${C.fiscal}35`}}><CheckCircle2 size={32} color="#fff"/></div>
         <div style={{fontSize:20,fontWeight:900,color:C.fiscal,marginBottom:4}}>{lastAvoir.avoirNumber}</div>
-        <div style={{fontSize:14,color:C.text,marginBottom:4}}>Montant: <strong>{lastAvoir.totalTTC.toFixed(2)}€</strong></div>
+        <div style={{fontSize:14,color:C.text,marginBottom:4}}>Montant: <strong>{(lastAvoir.totalTTC||0).toFixed(2)}€</strong></div>
         <div style={{fontSize:12,color:C.textMuted,marginBottom:4}}>Motif: {lastAvoir.reason} — Mode: {lastAvoir.refundMethod}</div>
         <div style={{fontSize:11,color:C.textMuted,marginBottom:14}}>Réf. ticket: {lastAvoir.originalTicket}</div>
         <div style={{display:"flex",gap:8}}>
@@ -2104,7 +2104,7 @@ function ClosureScreen(){
           <div style={{display:"flex",justifyContent:"space-between",color:C.danger}}><span>Total retours</span><span>-{totalReturns.toFixed(2)}€</span></div></>}
         <div style={{borderTop:"2px solid #333",margin:"6px 0"}}/>
         <div style={{display:"flex",justifyContent:"space-between",fontWeight:700,fontSize:11}}><span>CA NET (TTC - Retours)</span><span>{((reportModal.totalTTC||0)-(totalReturns||0)).toFixed(2)}€</span></div>
-        <div style={{display:"flex",justifyContent:"space-between",fontWeight:700,fontSize:12,marginTop:4}}><span>GRAND TOTAL PERPÉTUEL</span><span>{reportModal.grandTotal.toFixed(2)}€</span></div>
+        <div style={{display:"flex",justifyContent:"space-between",fontWeight:700,fontSize:12,marginTop:4}}><span>GRAND TOTAL PERPÉTUEL</span><span>{(reportModal.grandTotal||0).toFixed(2)}€</span></div>
         <div style={{textAlign:"center",background:C.fiscalLight,padding:8,borderRadius:6,margin:"8px 0"}}>
           <div style={{fontSize:8,color:C.fiscal,fontWeight:700}}>EMPREINTE NF525</div>
           <div style={{fontSize:11,fontWeight:700,color:C.fiscal,letterSpacing:2}}>{reportModal.fingerprint}</div></div>
@@ -3218,7 +3218,7 @@ function ReturnsHistoryScreen(){
             {a.originalTicket&&<span style={{fontSize:10,color:C.textMuted,fontFamily:"monospace"}}>Ticket: {a.originalTicket}</span>}
             {a.customerName&&<span style={{fontSize:10,color:C.accent}}>Client: {a.customerName}</span>}
             {expired&&<Badge color={C.danger}>Expire</Badge>}
-            {a.refundMethod==="avoir"&&!a.used&&!expired&&<Badge color={C.fiscal}>Solde: {(a.remaining??a.totalTTC).toFixed(2)}EUR</Badge>}
+            {a.refundMethod==="avoir"&&!a.used&&!expired&&<Badge color={C.fiscal}>Solde: {(a.remaining??a.totalTTC??0).toFixed(2)}EUR</Badge>}
             {a.used&&<Badge color={C.textMuted}>Utilise</Badge>}</div>
           <div style={{fontSize:11,color:C.textMuted,marginTop:2}}>
             {(a.items||[]).map(it=>`${it.product?.name||it.product_name||"?"}${it.variant?(" ("+((it.variant?.color||it.variant_color||"")+"/"+(it.variant?.size||it.variant_size||""))+")"):""} x${it.quantity||it.qty||1}`).join(", ")}
