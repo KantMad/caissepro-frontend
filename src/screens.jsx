@@ -1416,20 +1416,18 @@ function HistoryScreen(){
   const pagedTickets=filteredTickets.slice(page*PAGE_SIZE,(page+1)*PAGE_SIZE);
 
   const openReturn=(ticket)=>{
+    // Un ticket ne peut etre retourne qu'une seule fois
+    const existingAvoir=avoirs.find(a=>a.originalTicket===ticket.ticketNumber);
+    if(existingAvoir){notify(`Ce ticket a deja ete retourne (avoir ${existingAvoir.avoirNumber})`,"error");return;}
     setReturnModal(ticket);
-    // C4 fix: Check already-returned quantities from existing avoirs for this ticket
-    const existingAvoirs=avoirs.filter(a=>a.originalTicket===ticket.ticketNumber);
-    const returnedQtys={};
-    existingAvoirs.forEach(a=>(a.items||[]).forEach(ai=>{const key=`${ai.productId||ai.product?.id}-${ai.variantId||ai.variant?.id}`;returnedQtys[key]=(returnedQtys[key]||0)+(ai.qty||ai.quantity||0);}));
     const items=(ticket.items||[]).map(i=>{const pid=i.product?.id||i.product_id;const vid=i.variant?.id||i.variant_id;
-      const alreadyReturned=returnedQtys[`${pid}-${vid}`]||0;const remaining=Math.max(0,i.quantity-alreadyReturned);
       const unitTTC=Math.round(((Number(i.lineTTC||i.line_ttc)||((Number(i.unit_price)||0)*(i.quantity||1)))/(i.quantity||1))*100)/100;
       return{productId:pid,variantId:vid,
       productName:i.product?.name||i.product_name,name:i.product?.name||i.product_name,
       sku:i.product?.sku||i.product_sku||"",ean:i.variant?.ean||i.variant_ean||"",
       variantColor:i.variant?.color||i.variant_color,color:i.variant?.color||i.variant_color,
       variantSize:i.variant?.size||i.variant_size,size:i.variant?.size||i.variant_size,
-      maxQty:remaining,qty:0,alreadyReturned,unitTTC,unitPrice:unitTTC};}).filter(i=>i.maxQty>0);
+      maxQty:i.quantity||1,qty:0,unitTTC,unitPrice:unitTTC};});
     setReturnItems(items);
     setReturnReason("");setReturnMethod("cash");
   };
@@ -1757,15 +1755,9 @@ function ReturnScreen(){
     const maxNA=rp.maxNoApproval||Infinity;
     if(returnTotal>maxNA&&currentUser?.role!=="admin"&&!managerApproved){
       notify(`Montant > ${maxNA}EUR -- approbation manager requise`,"error");return;}
-    // Anti-doublon: vérifier qu'on n'a pas déjà fait un avoir identique (même ticket + mêmes articles)
-    if(selectedTk){const existingAvoirs=avoirs.filter(a=>a.originalTicket===selectedTk.ticketNumber);
-      for(const ri of returnItems){const k=`${ri.productId}-${ri.variantId}`;
-        const alreadyRet=existingAvoirs.reduce((s,a)=>(a.items||[]).reduce((ss,ai)=>{
-          const ak=`${ai.product?.id||ai.productId||ai.product_id}-${ai.variant?.id||ai.variantId||ai.variant_id}`;
-          return ak===k?ss+(ai.quantity||ai.qty||0):ss;},s),0);
-        const origItem=(selectedTk.items||[]).find(i=>(i.product?.id||i.product_id)===ri.productId&&(i.variant?.id||i.variant_id)===ri.variantId);
-        const maxQty=(origItem?.quantity||0)-alreadyRet;
-        if(ri.qty>maxQty){notify(`${ri.productName}: deja retourne (max restant: ${Math.max(0,maxQty)})`,"error");return;}}}
+    // Anti-doublon: un ticket ne peut etre retourne qu'une seule fois
+    if(selectedTk){const existingAvoir=avoirs.find(a=>a.originalTicket===selectedTk.ticketNumber);
+      if(existingAvoir){notify(`Ce ticket a deja ete retourne (avoir ${existingAvoir.avoirNumber})`,"error");return;}}
     setReturnBusy(true);
     const items=returnItems.map(r=>({productId:r.productId,variantId:r.variantId,qty:r.qty,
       productName:r.productName,variantColor:r.variantColor,variantSize:r.variantSize,unitPrice:r.unitPrice||0}));

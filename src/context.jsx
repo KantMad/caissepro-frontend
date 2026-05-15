@@ -1100,7 +1100,7 @@ function AppProvider({children}){
       if(apiResult.seq)setAvoirSeq(apiResult.seq);
     }catch(e){
       // Erreur 409 = doublon détecté par le backend
-      if(e.message?.includes("déjà retourné")||e.message?.includes("deja retourne")){
+      if(e.message?.includes("déjà")||e.message?.includes("deja")){
         notify(e.message,"error");return null;}
       // Fallback offline
       console.warn("Avoir API echoue, mode offline:",e.message);
