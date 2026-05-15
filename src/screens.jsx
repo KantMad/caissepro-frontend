@@ -1418,19 +1418,28 @@ function HistoryScreen(){
   const pagedTickets=filteredTickets.slice(page*PAGE_SIZE,(page+1)*PAGE_SIZE);
 
   const openReturn=(ticket)=>{
-    // Un ticket ne peut etre retourne qu'une seule fois
-    const existingAvoir=avoirs.find(a=>a.originalTicket===ticket.ticketNumber);
-    if(existingAvoir){notify(`Ce ticket a deja ete retourne (avoir ${existingAvoir.avoirNumber})`,"error");return;}
-    setReturnModal(ticket);
+    // Calculer les quantites deja retournees par article pour ce ticket
+    const existingAvoirs=avoirs.filter(a=>a.originalTicket===ticket.ticketNumber);
+    const returnedMap={};
+    existingAvoirs.forEach(a=>(a.items||[]).forEach(ai=>{
+      const key=`${ai.productId||ai.product_id||ai.product?.id}-${ai.variantId||ai.variant_id||ai.variant?.id}`;
+      returnedMap[key]=(returnedMap[key]||0)+(ai.qty||ai.quantity||0);
+    }));
     const items=(ticket.items||[]).map(i=>{const pid=i.product?.id||i.product_id;const vid=i.variant?.id||i.variant_id;
       const unitTTC=Math.round(((Number(i.lineTTC||i.line_ttc)||((Number(i.unit_price)||0)*(i.quantity||1)))/(i.quantity||1))*100)/100;
+      const origQty=i.quantity||1;
+      const alreadyReturned=returnedMap[`${pid}-${vid}`]||0;
+      const remainingQty=Math.max(0,origQty-alreadyReturned);
       return{productId:pid,variantId:vid,
       productName:i.product?.name||i.product_name,name:i.product?.name||i.product_name,
       sku:i.product?.sku||i.product_sku||"",ean:i.variant?.ean||i.variant_ean||"",
       variantColor:i.variant?.color||i.variant_color,color:i.variant?.color||i.variant_color,
       variantSize:i.variant?.size||i.variant_size,size:i.variant?.size||i.variant_size,
-      maxQty:i.quantity||1,qty:0,unitTTC,unitPrice:unitTTC};});
-    setReturnItems(items);
+      maxQty:remainingQty,qty:0,unitTTC,unitPrice:unitTTC,alreadyReturned};});
+    // Bloquer seulement si TOUS les articles sont deja entierement retournes
+    if(items.every(i=>i.maxQty<=0)){notify("Tous les articles de ce ticket ont deja ete retournes","error");return;}
+    setReturnModal(ticket);
+    setReturnItems(items.filter(i=>i.maxQty>0));
     setReturnReason("");setReturnMethod("cash");
   };
   const returnTotal=Math.round(returnItems.reduce((s,i)=>s+(i.qty||0)*(i.unitTTC||0),0)*100)/100;
@@ -1757,9 +1766,8 @@ function ReturnScreen(){
     const maxNA=rp.maxNoApproval||Infinity;
     if(returnTotal>maxNA&&currentUser?.role!=="admin"&&!managerApproved){
       notify(`Montant > ${maxNA}EUR -- approbation manager requise`,"error");return;}
-    // Anti-doublon: un ticket ne peut etre retourne qu'une seule fois
-    if(selectedTk){const existingAvoir=avoirs.find(a=>a.originalTicket===selectedTk.ticketNumber);
-      if(existingAvoir){notify(`Ce ticket a deja ete retourne (avoir ${existingAvoir.avoirNumber})`,"error");return;}}
+    // Anti-doublon par article: le backend verifie les quantites deja retournees
+    // Le alreadyReturnedMap + effectiveMax dans toggleItem empechent deja de depasser cote UI
     setReturnBusy(true);
     const items=returnItems.map(r=>({productId:r.productId,variantId:r.variantId,qty:r.qty,
       productName:r.productName,variantColor:r.variantColor,variantSize:r.variantSize,unitPrice:r.unitPrice||0}));

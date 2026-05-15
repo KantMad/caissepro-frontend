@@ -1105,8 +1105,8 @@ function AppProvider({children}){
         hash:apiResult.hash||"",fingerprint:apiResult.fingerprint||""};
       if(apiResult.seq)setAvoirSeq(apiResult.seq);
     }catch(e){
-      // Erreur 409 = doublon détecté par le backend
-      if(e.message?.includes("déjà")||e.message?.includes("deja")){
+      // Erreur 409 = doublon ou depassement quantite détecté par le backend
+      if(e.message?.includes("déjà")||e.message?.includes("deja")||e.message?.includes("dépasse")||e.message?.includes("depasse")){
         notify(e.message,"error");return null;}
       // Fallback offline
       console.warn("Avoir API echoue, mode offline:",e.message);
