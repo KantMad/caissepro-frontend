@@ -1034,88 +1034,93 @@ function AppProvider({children}){
   },[giftCards]);
 
   // ══ RETURNS / AVOIRS ══
-  const[avoirSeq,setAvoirSeq]=useState(()=>{try{return parseInt(localStorage.getItem("caissepro_avoirseq"))||0;}catch(e){return 0;}});
-  useEffect(()=>{try{localStorage.setItem("caissepro_avoirseq",String(avoirSeq));}catch(e){}},[avoirSeq]);
+  const[avoirSeq,setAvoirSeq]=useState(0);
   const processReturn=useCallback(async(ticket,returnItems,reason,refundMethod,doRestock,defective=false)=>{
     if(!returnItems.length)return null;
     const rp=settings.returnPolicy||{};
-    // Enforce settings: motif obligatoire
     if(rp.requireReason===true&&!reason?.trim()){notify("Motif de retour obligatoire","error");return null;}
-    // Validation: empêcher double-retour (vérifier si articles déjà retournés)
-    const existingReturns=avoirs.filter(a=>a.originalTicket===ticket.ticketNumber);
-    const alreadyReturned={};existingReturns.forEach(a=>(a.items||[]).forEach(i=>{
-      const k=`${i.product?.id||i.product_id}-${i.variant?.id||i.variant_id}`;alreadyReturned[k]=(alreadyReturned[k]||0)+i.quantity;}));
-    for(const ri of returnItems){
-      const k=`${ri.productId}-${ri.variantId}`;const returned=alreadyReturned[k]||0;
-      const origItem=ticket.items?.find(i=>(i.product?.id||i.product_id)===ri.productId&&(i.variant?.id||i.variant_id)===ri.variantId);
-      const maxAllowed=(origItem?.quantity||ri.qty)-returned;
-      if(ri.qty>maxAllowed){notify(`Article deja retourne (max: ${maxAllowed})`,"error");return null;}}
 
-    const seq=avoirSeq+1;const avoirNumber=`AV-${new Date().getFullYear()}-${String(seq).padStart(6,"0")}`;
-    const date=new Date().toISOString();
+    // Calcul des montants depuis les données originales du ticket (arrondi au centime)
     let totalHT=0,totalTVA=0;
     const items=returnItems.map(ri=>{
       const origItem=ticket.items?.find(i=>(i.product?.id||i.product_id)===ri.productId&&(i.variant?.id||i.variant_id)===ri.variantId);
-      if(!origItem)return null;
-      const unitHT=origItem.lineHT/origItem.quantity;const unitTVA=origItem.lineTVA/origItem.quantity;
-      const lHT=unitHT*ri.qty;const lTVA=unitTVA*ri.qty;
+      // Utiliser le prix unitaire original si disponible, sinon ri.unitPrice
+      let lHT,lTVA,lTTC;
+      if(origItem&&origItem.lineHT!=null&&origItem.quantity){
+        const unitHT=origItem.lineHT/origItem.quantity;const unitTVA=(origItem.lineTVA||0)/origItem.quantity;
+        lHT=Math.round(unitHT*ri.qty*100)/100;
+        lTVA=Math.round(unitTVA*ri.qty*100)/100;
+        lTTC=Math.round((lHT+lTVA)*100)/100;
+      }else{
+        // Retour libre ou données manquantes — calcul depuis unitPrice
+        const taxRate=ri.taxRate||origItem?.tax_rate||origItem?.product?.taxRate||0.20;
+        const pm=settings.pricingMode||"TTC";
+        const rawTTC=Math.round((ri.unitPrice||0)*ri.qty*100)/100;
+        lHT=pm==="TTC"?Math.round(rawTTC/(1+taxRate)*100)/100:rawTTC;
+        lTVA=Math.round(lHT*taxRate*100)/100;
+        lTTC=Math.round((lHT+lTVA)*100)/100;
+      }
       totalHT+=lHT;totalTVA+=lTVA;
-      return{...origItem,quantity:ri.qty,lineHT:lHT,lineTVA:lTVA,lineTTC:lHT+lTVA};
-    }).filter(Boolean);
-    const totalTTC=totalHT+totalTVA;
+      return{product_id:ri.productId,variant_id:ri.variantId,
+        product_name:origItem?.product_name||origItem?.product?.name||ri.productName||"Article",
+        variant_color:origItem?.variant_color||origItem?.variant?.color||ri.variantColor||"",
+        variant_size:origItem?.variant_size||origItem?.variant?.size||ri.variantSize||"",
+        quantity:ri.qty,lineHT:lHT,lineTVA:lTVA,lineTTC:lTTC,
+        taxRate:origItem?.tax_rate||origItem?.product?.taxRate||ri.taxRate||0.20};
+    });
+    const totalTTC=Math.round((totalHT+totalTVA)*100)/100;
 
-    // Validation: rejeter les avoirs à 0€
     if(totalTTC<=0){notify("Montant de retour invalide (0 EUR)","error");return null;}
-
-    // Enforce settings: montant max sans approbation
     if(rp.maxNoApproval&&totalTTC>rp.maxNoApproval&&currentUser?.role!=="admin"){
       notify(`Montant > ${rp.maxNoApproval}EUR -- approbation manager requise`,"error");return null;}
 
-    // NF525: SHA-256 hash chain pour avoirs — inclut ID caisse, type, séquence
-    const caisseId=currentStore?.id||cashReg?.id||"CAISSE-01";
-    const lastAvoirHash=avoirs.length>0?(avoirs[0].hash||""):lastHash;
-    const hashInput=`${lastAvoirHash}|${seq}|AVOIR|${caisseId}|${avoirNumber}|${date}|${totalTTC.toFixed(2)}|${ticket.ticketNumber}`;
-    const hash=await sha256(hashInput);
-    const fingerprint=hash.slice(0,8).toUpperCase();
+    // Envoi API (le backend gere doublons, stock, hash, sequence)
+    const apiPayload={
+      originalTicket:ticket.ticketNumber||ticket.id||null,
+      reason,refundMethod,
+      items:items.map(i=>({productId:i.product_id,variantId:i.variant_id,
+        productName:i.product_name,variantColor:i.variant_color,variantSize:i.variant_size,
+        qty:i.quantity,lineHT:i.lineHT,lineTVA:i.lineTVA,lineTTC:i.lineTTC,taxRate:i.taxRate})),
+      totalHT,totalTVA,totalTTC,
+      restock:doRestock!==undefined?doRestock:(rp.autoRestock!==false),defective};
 
-    const avoir={avoirNumber,seq,date,originalTicket:ticket.ticketNumber,originalDate:ticket.date,
-      items,totalHT,totalTVA,totalTTC,remaining:totalTTC,used:false,reason:reason||"",refundMethod,
-      userId:currentUser?.id,userName:currentUser?.name,
-      customerId:ticket.customerId,customerName:ticket.customerName,
-      hash,fingerprint};
-
-    // Essai API retours
-    const apiPayload={originalTicket:ticket.ticketNumber||ticket.id,reason,refundMethod,avoirNumber,
-      items:items.map(i=>({productId:i.product_id||i.product?.id,variantId:i.variant_id||i.variant?.id,
-        qty:i.quantity,lineTTC:i.lineTTC,lineHT:i.lineHT,lineTVA:i.lineTVA})),
-      totalHT,totalTVA,totalTTC,restock:doRestock!==undefined?doRestock:(rp.autoRestock!==false),defective};
-    let apiSaved=false;
+    let avoir;
     try{
       const apiResult=await API.returns.create(apiPayload);
-      apiSaved=true;
-      if(apiResult?.seq){avoir.seq=apiResult.seq;setAvoirSeq(apiResult.seq);}
-      if(apiResult?.hash)avoir.hash=apiResult.hash;
-      if(apiResult?.fingerprint)avoir.fingerprint=apiResult.fingerprint;
-      if(apiResult?.avoirNumber)avoir.avoirNumber=apiResult.avoirNumber;
+      avoir={
+        avoirNumber:apiResult.avoirNumber,seq:apiResult.seq,date:apiResult.date||new Date().toISOString(),
+        originalTicket:ticket.ticketNumber,originalDate:ticket.date,
+        items,totalHT:apiResult.totalHT||totalHT,totalTVA:apiResult.totalTVA||totalTVA,
+        totalTTC:apiResult.totalTTC||totalTTC,remaining:apiResult.remaining||totalTTC,
+        used:false,reason:reason||"",refundMethod,
+        userId:currentUser?.id,userName:currentUser?.name,
+        customerId:ticket.customerId,customerName:ticket.customerName,
+        hash:apiResult.hash||"",fingerprint:apiResult.fingerprint||""};
+      if(apiResult.seq)setAvoirSeq(apiResult.seq);
     }catch(e){
+      // Erreur 409 = doublon détecté par le backend
+      if(e.message?.includes("déjà retourné")||e.message?.includes("deja retourne")){
+        notify(e.message,"error");return null;}
+      // Fallback offline
       console.warn("Avoir API echoue, mode offline:",e.message);
+      const seq=avoirSeq+1;const avoirNumber=`AV-${new Date().getFullYear()}-${String(seq).padStart(6,"0")}`;
+      const date=new Date().toISOString();
+      const caisseId=currentStore?.id||cashReg?.id||"CAISSE-01";
+      const lastAvoirHash=avoirs.length>0?(avoirs[0].hash||""):lastHash;
+      const hash=await sha256(`${lastAvoirHash}|${seq}|AVOIR|${caisseId}|${avoirNumber}|${date}|${totalTTC.toFixed(2)}|${ticket.ticketNumber}`);
+      avoir={avoirNumber,seq,date,originalTicket:ticket.ticketNumber,originalDate:ticket.date,
+        items,totalHT,totalTVA,totalTTC,remaining:totalTTC,used:false,reason:reason||"",refundMethod,
+        userId:currentUser?.id,userName:currentUser?.name,
+        customerId:ticket.customerId,customerName:ticket.customerName,
+        hash,fingerprint:hash.slice(0,8).toUpperCase()};
+      setAvoirSeq(seq);
       addPendingSync({type:"offlineAvoir",data:{...apiPayload,saleId:ticket.ticketNumber||ticket.id}});
     }
 
-    setAvoirSeq(seq);setAvoirs(p=>[avoir,...p]);
+    setAvoirs(p=>[avoir,...p]);
 
-    // Restock: remettre en stock les articles retournés
-    const effectiveRestock=doRestock!==undefined?doRestock:(rp.autoRestock!==false);
-    if(effectiveRestock){
-      for(const ri of returnItems){
-        try{await API.stock.adjust({productId:ri.productId,variantId:ri.variantId,quantity:ri.qty,reason:defective?`Retour defectueux ${avoirNumber}`:`Retour ${avoirNumber}`,defective});}
-        catch(e){
-          setProducts(prev=>prev.map(p=>{if(p.id!==ri.productId)return p;
-            return{...p,variants:p.variants.map(v=>v.id===ri.variantId?{...v,stock:defective?v.stock:v.stock+ri.qty,defectiveStock:(v.defectiveStock||0)+(defective?ri.qty:0)}:v)};}));
-        }
-      }
-      try{const prods=await API.products.list();setProducts(norm.products(prods));}catch(e){console.error(e);}
-    }
+    // Rafraichir le stock depuis le backend (le restock est fait cote serveur)
+    try{const prods=await API.products.list();setProducts(norm.products(prods));}catch(e){}
 
     // Auto-print avoir si configuré
     if(rp.printAvoir===true&&printerConnected){
@@ -1124,13 +1129,11 @@ function AppProvider({children}){
 
     if(ticket.customerId){const pts=Math.floor(totalTTC);
       setCustomers(prev=>prev.map(c=>c.id===ticket.customerId?{...c,points:Math.max(0,c.points-pts),totalSpent:Math.max(0,c.totalSpent-totalTTC)}:c));}
-    addAudit("AVOIR",`${avoirNumber} -- Ref: ${ticket.ticketNumber} -- ${totalTTC.toFixed(2)}EUR -- ${refundMethod}`,avoirNumber);
-    addJET("AVOIR",`Avoir ${avoirNumber} emis pour ${totalTTC.toFixed(2)}EUR`);
-    notify(`Avoir ${avoirNumber} -- ${totalTTC.toFixed(2)}EUR`,"success");
+    addAudit("AVOIR",`${avoir.avoirNumber} -- Ref: ${ticket.ticketNumber} -- ${totalTTC.toFixed(2)}EUR -- ${refundMethod}`,avoir.avoirNumber);
+    addJET("AVOIR",`Avoir ${avoir.avoirNumber} emis pour ${totalTTC.toFixed(2)}EUR`);
+    notify(`Avoir ${avoir.avoirNumber} -- ${totalTTC.toFixed(2)}EUR`,"success");
     return avoir;
   },[avoirSeq,avoirs,lastHash,currentUser,addAudit,addJET,notify,addPendingSync,settings,printerConnected,thermalPrint]);
-
-  // (consumeAvoir moved above checkout block)
 
   // Avoir expiry check
   const isAvoirExpired=useCallback((avoir)=>{

@@ -1423,13 +1423,17 @@ function HistoryScreen(){
     existingAvoirs.forEach(a=>(a.items||[]).forEach(ai=>{const key=`${ai.productId||ai.product?.id}-${ai.variantId||ai.variant?.id}`;returnedQtys[key]=(returnedQtys[key]||0)+(ai.qty||ai.quantity||0);}));
     const items=(ticket.items||[]).map(i=>{const pid=i.product?.id||i.product_id;const vid=i.variant?.id||i.variant_id;
       const alreadyReturned=returnedQtys[`${pid}-${vid}`]||0;const remaining=Math.max(0,i.quantity-alreadyReturned);
+      const unitTTC=Math.round(((Number(i.lineTTC||i.line_ttc)||((Number(i.unit_price)||0)*(i.quantity||1)))/(i.quantity||1))*100)/100;
       return{productId:pid,variantId:vid,
-      name:i.product?.name||i.product_name,sku:i.product?.sku||i.product_sku||"",ean:i.variant?.ean||i.variant_ean||"",color:i.variant?.color||i.variant_color,size:i.variant?.size||i.variant_size,
-      maxQty:remaining,qty:0,alreadyReturned,unitTTC:(Number(i.lineTTC||i.line_ttc)||((Number(i.unit_price)||0)*(i.quantity||1)))/(i.quantity||1)};}).filter(i=>i.maxQty>0);
+      productName:i.product?.name||i.product_name,name:i.product?.name||i.product_name,
+      sku:i.product?.sku||i.product_sku||"",ean:i.variant?.ean||i.variant_ean||"",
+      variantColor:i.variant?.color||i.variant_color,color:i.variant?.color||i.variant_color,
+      variantSize:i.variant?.size||i.variant_size,size:i.variant?.size||i.variant_size,
+      maxQty:remaining,qty:0,alreadyReturned,unitTTC,unitPrice:unitTTC};}).filter(i=>i.maxQty>0);
     setReturnItems(items);
     setReturnReason("");setReturnMethod("cash");
   };
-  const returnTotal=returnItems.reduce((s,i)=>s+(i.qty||0)*(i.unitTTC||0),0);
+  const returnTotal=Math.round(returnItems.reduce((s,i)=>s+(i.qty||0)*(i.unitTTC||0),0)*100)/100;
 
   return(<div style={{height:"100%",overflowY:"auto",padding:20,background:C.bg}}>
     <h2 style={{fontSize:22,fontWeight:800,marginBottom:14}}>Historique fiscal</h2>
@@ -1746,7 +1750,7 @@ function ReturnScreen(){
           :(()=>{const pr=item.product||{};const pm=settings.pricingMode||"TTC";const base=pr.price||item.unit_price||0;
             return pm==="TTC"?base:base*(1+(pr.taxRate||0.20));})()}];});};
   const updateReturnQty=(key,qty)=>setReturnItems(prev=>prev.map(r=>r.key===key?{...r,qty:Math.min(Math.max(1,qty),r.maxQty)}:r));
-  const returnTotal=returnItems.reduce((s,r)=>s+r.unitPrice*r.qty,0);
+  const returnTotal=Math.round(returnItems.reduce((s,r)=>s+(r.unitPrice||0)*r.qty,0)*100)/100;
 
   const doReturn=async()=>{if(returnBusy)return;if(!returnItems.length){notify("Selectionnez au moins un article","error");return;}
     // Enforce maxNoApproval
@@ -1763,17 +1767,24 @@ function ReturnScreen(){
         const maxQty=(origItem?.quantity||0)-alreadyRet;
         if(ri.qty>maxQty){notify(`${ri.productName}: deja retourne (max restant: ${Math.max(0,maxQty)})`,"error");return;}}}
     setReturnBusy(true);
-    const items=returnItems.map(r=>({productId:r.productId,variantId:r.variantId,qty:r.qty}));
+    const items=returnItems.map(r=>({productId:r.productId,variantId:r.variantId,qty:r.qty,
+      productName:r.productName,variantColor:r.variantColor,variantSize:r.variantSize,unitPrice:r.unitPrice||0}));
     // Construire le ticket synthétique pour scan/free avec le bon taux de TVA par produit
+    // Arrondi au centime a chaque etape pour eviter les erreurs de precision
     const syntheticTicket=selectedTk||{ticketNumber:`RETOUR-LIBRE-${Date.now()}`,date:new Date().toISOString(),items:returnItems.map(r=>{
       const prod=products.find(p=>p.id===r.productId);const taxRate=prod?.taxRate||0.20;const pm=settings.pricingMode||"TTC";
-      const lineTTC=r.unitPrice*r.qty;
-      const lineHT=pm==="TTC"?lineTTC/(1+taxRate):lineTTC;
-      const lineTVA=lineHT*taxRate;
-      return{product:{id:r.productId,name:r.productName,taxRate},variant:{id:r.variantId,color:r.variantColor,size:r.variantSize},
-        quantity:r.qty,lineHT,lineTVA,lineTTC:lineHT+lineTVA};})};
+      const lineTTC=Math.round((r.unitPrice||0)*r.qty*100)/100;
+      const lineHT=Math.round((pm==="TTC"?lineTTC/(1+taxRate):lineTTC)*100)/100;
+      const lineTVA=Math.round(lineHT*taxRate*100)/100;
+      return{product:{id:r.productId,name:r.productName,taxRate},product_id:r.productId,product_name:r.productName,
+        variant:{id:r.variantId,color:r.variantColor,size:r.variantSize},variant_id:r.variantId,variant_color:r.variantColor,variant_size:r.variantSize,
+        quantity:r.qty,tax_rate:taxRate,lineHT,lineTVA,lineTTC};})};
+    // Enrichir les items avec unitPrice et taxRate pour le processReturn
+    const enrichedItems=returnItems.map(r=>({...r,
+      unitPrice:r.unitPrice||0,
+      taxRate:products.find(p=>p.id===r.productId)?.taxRate||0.20}));
     try{
-    const avoir=await processReturn(syntheticTicket,items,reason,refundMethod==="exchange"?"avoir":refundMethod,restock,defective);
+    const avoir=await processReturn(syntheticTicket,enrichedItems,reason,refundMethod==="exchange"?"avoir":refundMethod,restock,defective);
     if(avoir){
       if(refundMethod==="exchange"){
         setSelectedAvoir({avoirNumber:avoir.avoirNumber,totalTTC:avoir.totalTTC||0,remaining:avoir.remaining||avoir.totalTTC||0,applied:avoir.totalTTC||0});
