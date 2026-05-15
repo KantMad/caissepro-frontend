@@ -461,6 +461,17 @@ function AppProvider({children}){
       variantColor:variant?.color,variantSize:variant?.size,qty,ref,user:currentUser?.name||"Sys"},...p]);
   },[currentUser]);
 
+  // ══ CONSUME AVOIR (deduct amount when used as payment) ══
+  const consumeAvoir=useCallback(async(avoirNumber,amount)=>{
+    setAvoirs(p=>p.map(a=>{if(a.avoirNumber!==avoirNumber)return a;
+      const rem=Math.max(0,(a.remaining??a.totalTTC)-amount);
+      return{...a,remaining:rem,used:rem<=0};}));
+    addAudit("AVOIR_USE",`Avoir ${avoirNumber} utilise: ${amount.toFixed(2)}EUR`);
+    // Sync consumption to server
+    try{await API.returns.consume(avoirNumber,amount);}
+    catch(e){addPendingSync({type:"consumeAvoir",data:{avoirNumber,amount}});}
+  },[addAudit,addPendingSync]);
+
   // ══ CHECKOUT — API ou fallback local ══
   // H3 fix: mutex to prevent race conditions in offline checkout
   const checkoutLock=useRef(false);
@@ -1124,16 +1135,7 @@ function AppProvider({children}){
     return avoir;
   },[avoirSeq,avoirs,lastHash,currentUser,addAudit,addJET,notify,addPendingSync,settings,printerConnected,thermalPrint]);
 
-  // ══ CONSUME AVOIR (deduct amount when used as payment) ══
-  const consumeAvoir=useCallback(async(avoirNumber,amount)=>{
-    setAvoirs(p=>p.map(a=>{if(a.avoirNumber!==avoirNumber)return a;
-      const rem=Math.max(0,(a.remaining??a.totalTTC)-amount);
-      return{...a,remaining:rem,used:rem<=0};}));
-    addAudit("AVOIR_USE",`Avoir ${avoirNumber} utilise: ${amount.toFixed(2)}EUR`);
-    // Sync consumption to server
-    try{await API.returns.consume(avoirNumber,amount);}
-    catch(e){addPendingSync({type:"consumeAvoir",data:{avoirNumber,amount}});}
-  },[addAudit,addPendingSync]);
+  // (consumeAvoir moved above checkout block)
 
   // Avoir expiry check
   const isAvoirExpired=useCallback((avoir)=>{
