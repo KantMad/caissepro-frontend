@@ -1669,7 +1669,7 @@ function ReturnScreen(){
   const[refundMethod,setRefundMethod]=useState(()=>REFUND_METHODS[0]?.id||"avoir");
   const[restock,setRestock]=useState(rp.autoRestock!==false);const[defective,setDefective]=useState(false);
   const[searchProd,setSearchProd]=useState("");const[freeItem,setFreeItem]=useState(null);const[freeQty,setFreeQty]=useState(1);
-  const[lastAvoir,setLastAvoir]=useState(null);
+  const[lastAvoir,setLastAvoir]=useState(null);const[returnBusy,setReturnBusy]=useState(false);
   const[avoirLookup,setAvoirLookup]=useState("");
   // C5 fix: Manager approval required for free/scan returns
   const[managerApproved,setManagerApproved]=useState(false);const[managerPinInput,setManagerPinInput]=useState("");const[managerPinError,setManagerPinError]=useState("");
@@ -1702,35 +1702,49 @@ function ReturnScreen(){
       if(existing)return prev.filter(r=>r.key!==key);
       return[...prev,{key,productId:item.product?.id||item.productId,variantId:variant?.id||item.variantId,
         productName:item.product?.name||item.product_name,variantColor:variant?.color||item.variant_color,variantSize:variant?.size||item.variant_size,
-        qty:1,maxQty:mode==="ticket"?effectiveMax:(maxQty||item.quantity),unitPrice:item.lineTTC?item.lineTTC/item.quantity:(item.unit_price||0)}];});};
+        qty:1,maxQty:mode==="ticket"?effectiveMax:(maxQty||item.quantity),
+        unitPrice:mode==="ticket"?(item.lineTTC?(item.lineTTC/(item.quantity||1)):item.unit_price||0)
+          :(()=>{const pr=item.product||{};const pm=settings.pricingMode||"TTC";const base=pr.price||item.unit_price||0;
+            return pm==="TTC"?base:base*(1+(pr.taxRate||0.20));})()}];});};
   const updateReturnQty=(key,qty)=>setReturnItems(prev=>prev.map(r=>r.key===key?{...r,qty:Math.min(Math.max(1,qty),r.maxQty)}:r));
   const returnTotal=returnItems.reduce((s,r)=>s+r.unitPrice*r.qty,0);
 
-  const doReturn=async()=>{if(!returnItems.length){notify("Selectionnez au moins un article","error");return;}
+  const doReturn=async()=>{if(returnBusy)return;if(!returnItems.length){notify("Selectionnez au moins un article","error");return;}
     // Enforce maxNoApproval
     const maxNA=rp.maxNoApproval||Infinity;
     if(returnTotal>maxNA&&currentUser?.role!=="admin"&&!managerApproved){
       notify(`Montant > ${maxNA}EUR -- approbation manager requise`,"error");return;}
+    // Anti-doublon: vérifier qu'on n'a pas déjà fait un avoir identique (même ticket + mêmes articles)
+    if(selectedTk){const existingAvoirs=avoirs.filter(a=>a.originalTicket===selectedTk.ticketNumber);
+      for(const ri of returnItems){const k=`${ri.productId}-${ri.variantId}`;
+        const alreadyRet=existingAvoirs.reduce((s,a)=>(a.items||[]).reduce((ss,ai)=>{
+          const ak=`${ai.product?.id||ai.productId||ai.product_id}-${ai.variant?.id||ai.variantId||ai.variant_id}`;
+          return ak===k?ss+(ai.quantity||ai.qty||0):ss;},s),0);
+        const origItem=(selectedTk.items||[]).find(i=>(i.product?.id||i.product_id)===ri.productId&&(i.variant?.id||i.variant_id)===ri.variantId);
+        const maxQty=(origItem?.quantity||0)-alreadyRet;
+        if(ri.qty>maxQty){notify(`${ri.productName}: deja retourne (max restant: ${Math.max(0,maxQty)})`,"error");return;}}}
+    setReturnBusy(true);
     const items=returnItems.map(r=>({productId:r.productId,variantId:r.variantId,qty:r.qty}));
     // Construire le ticket synthétique pour scan/free avec le bon taux de TVA par produit
-    const syntheticTicket=selectedTk||{ticketNumber:"RETOUR-LIBRE",date:new Date().toISOString(),items:returnItems.map(r=>{
+    const syntheticTicket=selectedTk||{ticketNumber:`RETOUR-LIBRE-${Date.now()}`,date:new Date().toISOString(),items:returnItems.map(r=>{
       const prod=products.find(p=>p.id===r.productId);const taxRate=prod?.taxRate||0.20;const pm=settings.pricingMode||"TTC";
       const lineTTC=r.unitPrice*r.qty;
       const lineHT=pm==="TTC"?lineTTC/(1+taxRate):lineTTC;
       const lineTVA=lineHT*taxRate;
       return{product:{id:r.productId,name:r.productName,taxRate},variant:{id:r.variantId,color:r.variantColor,size:r.variantSize},
         quantity:r.qty,lineHT,lineTVA,lineTTC:lineHT+lineTVA};})};
+    try{
     const avoir=await processReturn(syntheticTicket,items,reason,refundMethod==="exchange"?"avoir":refundMethod,restock,defective);
     if(avoir){
       if(refundMethod==="exchange"){
         setAvoirPayment(avoir.totalTTC);
         setAppMode("cashier");
-        notify(`Avoir ${avoir.avoirNumber} de ${avoir.totalTTC.toFixed(2)}€ appliqué — Scannez les nouveaux articles`,"success");
+        notify(`Avoir ${avoir.avoirNumber} de ${avoir.totalTTC.toFixed(2)}EUR applique -- Scannez les nouveaux articles`,"success");
         setReturnItems([]);setSelectedTk(null);setSearchTk("");setSearchProd("");setFreeItem(null);
       } else {
         setLastAvoir(avoir);setReturnItems([]);setSelectedTk(null);setSearchTk("");setSearchProd("");setFreeItem(null);
       }
-    }};
+    }}finally{setReturnBusy(false);}};
 
   const returnWindow=settings.returnPolicy?.days||30;
   const isExpired=(tk)=>{if(!tk)return false;const d=new Date(tk.date||tk.createdAt||tk.created_at);
@@ -1805,7 +1819,7 @@ function ReturnScreen(){
           <Input value={searchProd} onChange={e=>setSearchProd(e.target.value)} placeholder="Nom, SKU ou scanner code-barres…" style={{marginBottom:8,height:40}}/>
           {foundProducts.map(p=>(<div key={p.id}>
             {p.variants.map(v=>{const key=`${p.id}-${v.id}`;const selected=returnItems.find(r=>r.key===key);
-              return(<div key={v.id} onClick={()=>toggleItem({product:p,variant:v,quantity:99,lineTTC:p.price,unit_price:p.price},v,99)}
+              return(<div key={v.id} onClick={()=>toggleItem({product:p,variant:v,quantity:1,lineTTC:p.price,unit_price:p.price},v,99)}
                 style={{display:"flex",alignItems:"center",gap:10,padding:8,borderRadius:8,border:`1.5px solid ${selected?C.primary:C.border}`,
                   marginBottom:3,cursor:"pointer",background:selected?C.primaryLight+"50":"transparent"}}>
                 {selected?<CheckCircle2 size={16} color={C.primary}/>:<div style={{width:16,height:16,borderRadius:8,border:`2px solid ${C.border}`}}/>}
@@ -1821,7 +1835,7 @@ function ReturnScreen(){
             <AlertTriangle size={12} style={{verticalAlign:"middle",marginRight:4}}/> Retour sans ticket — approbation manager recommandée</div>
           {foundProducts.map(p=>(<div key={p.id}>
             {p.variants.map(v=>{const key=`${p.id}-${v.id}`;const selected=returnItems.find(r=>r.key===key);
-              return(<div key={v.id} onClick={()=>toggleItem({product:p,variant:v,quantity:99,lineTTC:p.price,unit_price:p.price},v,99)}
+              return(<div key={v.id} onClick={()=>toggleItem({product:p,variant:v,quantity:1,lineTTC:p.price,unit_price:p.price},v,99)}
                 style={{display:"flex",alignItems:"center",gap:10,padding:8,borderRadius:8,border:`1.5px solid ${selected?C.primary:C.border}`,
                   marginBottom:3,cursor:"pointer",background:selected?C.primaryLight+"50":"transparent"}}>
                 {selected?<CheckCircle2 size={16} color={C.primary}/>:<div style={{width:16,height:16,borderRadius:8,border:`2px solid ${C.border}`}}/>}
@@ -1902,8 +1916,8 @@ function ReturnScreen(){
             style={{width:16,height:16,accentColor:C.danger}}/> Produit défectueux (stock défectueux)</label>}
         {!restock&&<div style={{marginBottom:12}}/>}
 
-        <Btn onClick={doReturn} style={{width:"100%",height:44,background:C.fiscal,fontSize:13}}>
-          <RotateCcw size={16}/> Valider le retour — {returnTotal.toFixed(2)}€</Btn>
+        <Btn onClick={doReturn} disabled={returnBusy||!returnItems.length} style={{width:"100%",height:44,background:C.fiscal,fontSize:13,opacity:returnBusy?0.6:1}}>
+          {returnBusy?<span className="spin-loader"/>:<RotateCcw size={16}/>} {returnBusy?"Traitement...":"Valider le retour"} — {returnTotal.toFixed(2)}EUR</Btn>
       </div>}
     </div>
 

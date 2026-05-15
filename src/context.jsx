@@ -1041,6 +1041,9 @@ function AppProvider({children}){
     }).filter(Boolean);
     const totalTTC=totalHT+totalTVA;
 
+    // Validation: rejeter les avoirs à 0€
+    if(totalTTC<=0){notify("Montant de retour invalide (0 EUR)","error");return null;}
+
     // Enforce settings: montant max sans approbation
     if(rp.maxNoApproval&&totalTTC>rp.maxNoApproval&&currentUser?.role!=="admin"){
       notify(`Montant > ${rp.maxNoApproval}EUR -- approbation manager requise`,"error");return null;}
