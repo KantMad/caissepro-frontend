@@ -562,6 +562,7 @@ function AppProvider({children}){
       setTSeq(ticket.seq);setLastHash(ticket.hash);setGt(parseFloat(ticket.grandTotal));
       const fullTicket={...ticket,items:ticket.items||items,payments:ticket.payments||payments,
         date:ticket.createdAt||ticket.date,userName:currentUser?.name,
+        storeName:currentStore?.name||null,storeId:currentStore?.id||null,
         totalHT:ticket.totalHT||parseFloat(ticket.total_ht)||tHT,totalTVA:ticket.totalTVA||parseFloat(ticket.total_tva)||tTVA,
         totalTTC:ticket.totalTTC||parseFloat(ticket.total_ttc)||tTTC,paymentMethod:ticket.paymentMethod||(payments.length===1?payments[0].method:"MIXTE"),
         customerName:selCust?`${selCust.firstName||selCust.first_name} ${selCust.lastName||selCust.last_name}`:null,
@@ -590,6 +591,7 @@ function AppProvider({children}){
         totalHT:tHT,totalTVA:tTVA,totalTTC:tTTC,globalDiscount:gd,margin,
         hash,fingerprint,grandTotal:gt+tTTC,promosApplied:applied,
         saleNote:saleNote||null,userName:currentUser?.name,sellerName:sellerName||currentUser?.name,
+        storeName:currentStore?.name||null,storeId:currentStore?.id||null,
         customerId:selCust?.id,customerName:selCust?`${selCust.firstName} ${selCust.lastName}`:null,
         avoirUsed:selectedAvoir?{avoirNumber:selectedAvoir.avoirNumber,amount:selectedAvoir.applied,remainingAfter:avoirRemainingAfterSale}:null,
         // NF525: marqueur mode formation
