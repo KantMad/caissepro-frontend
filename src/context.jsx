@@ -221,7 +221,11 @@ function AppProvider({children}){
         }
       }
       setPendingSync(failed);
-      if(synced>0)notify(`${synced} modification(s) synchronisée(s) avec le serveur`,"success");
+      if(synced>0){
+        notify(`${synced} modification(s) synchronisée(s) avec le serveur`,"success");
+        // Rafraichir les produits (stock) apres sync d'avoirs ou ventes
+        try{const prods=await API.products.list();setProducts(norm.products(prods));}catch(e){}
+      }
       if(failed.length>0&&failed.some(f=>f.retries<3))notify(`${failed.length} synchro(s) en attente — nouvelle tentative prochainement`,"warn");
     },2000);// 2s debounce
     return()=>clearTimeout(timer);
@@ -1118,12 +1122,22 @@ function AppProvider({children}){
         hash,fingerprint:hash.slice(0,8).toUpperCase()};
       setAvoirSeq(seq);
       addPendingSync({type:"offlineAvoir",data:{...apiPayload,saleId:ticket.ticketNumber||ticket.id}});
+      // Restock local en attendant la synchro backend
+      if(apiPayload.restock!==false){
+        setProducts(prev=>prev.map(p=>{
+          const matchItems=returnItems.filter(ri=>ri.productId===p.id);
+          if(!matchItems.length)return p;
+          return{...p,variants:(p.variants||[]).map(v=>{
+            const mi=matchItems.find(ri=>ri.variantId===v.id);
+            return mi?{...v,stock:(v.stock||0)+mi.qty}:v;})};
+        }));
+      }
     }
 
     setAvoirs(p=>[avoir,...p]);
 
     // Rafraichir le stock depuis le backend (le restock est fait cote serveur)
-    try{const prods=await API.products.list();setProducts(norm.products(prods));}catch(e){}
+    try{const prods=await API.products.list();setProducts(norm.products(prods));}catch(e){console.warn("Refresh stock apres retour echoue:",e.message);}
 
     // Auto-print avoir si configuré
     if(rp.printAvoir===true&&printerConnected){
