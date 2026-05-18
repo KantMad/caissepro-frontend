@@ -182,6 +182,11 @@ function AppProvider({children}){
       // Load avoirs from server
       try{const avoirsData=await API.returns.list({limit:500});if(avoirsData?.length)setAvoirs(norm.avoirs(avoirsData));}catch(e){/* keep localStorage avoirs */}
       try{const ctr=await API.returns.counter();if(ctr?.seq)setAvoirSeq(ctr.seq);}catch(e){}
+      // LS-04/05/06/07: reload audit, JET, stock movements, clock from API
+      try{const auditData=await API.audit.list({limit:1000});if(auditData?.length)setAudit(auditData);}catch(e){/* keep localStorage audit */}
+      try{const jetData=await API.audit.jet();if(jetData?.length)setJet(jetData);}catch(e){/* keep localStorage jet */}
+      try{const movesData=await API.stock.movements({limit:500});if(movesData?.length)setStockMoves(movesData);}catch(e){/* keep localStorage stockMoves */}
+      try{const clockData=await API.audit.clock();if(clockData?.length)setClockEntries(clockData);}catch(e){/* keep localStorage clock */}
     }catch(e){
       console.warn("Chargement données échoué:",e.message);
       if(e.message?.includes("401")||e.message?.includes("Unauthorized")){setCurrentUser(null);API.clearToken();}
@@ -209,7 +214,7 @@ function AppProvider({children}){
           else if(action.type==="closeRegister")await API.settings.closeRegister(action.data.registerId,{closedAt:new Date().toISOString()});
           else if(action.type==="offlineSale")await API.sales.checkout(action.data);
           else if(action.type==="offlineClosure")await API.fiscal.closure(action.data);
-          else if(action.type==="offlineAvoir")await API.returns.create(action.data);
+          else if(action.type==="offlineAvoir"){await API.returns.create(action.data);/* FE-08: backend handles restock — no local increment here */}
           else if(action.type==="consumeAvoir")await API.returns.consume(action.data.avoirNumber,action.data.amount);
           else if(action.type==="createGiftCard")await API.giftcards.create(action.data);
           else if(action.type==="useGiftCard")await API.giftcards.use(action.data.code,action.data.amount);
@@ -490,6 +495,29 @@ function AppProvider({children}){
     catch(e){addPendingSync({type:"consumeAvoir",data:{avoirNumber,amount}});}
   },[addAudit,addPendingSync]);
 
+  // ══ FE-05: Single source of truth for cart totals (used by both context and screens) ══
+  const cartTotals=useMemo(()=>{
+    if(!cart.length)return{sHT:0,gd:0,promoDisc:0,applied:[],tHT:0,tTVA:0,tTTC:0};
+    const pm=settings.pricingMode||"TTC";
+    const sHT=Math.round(cart.reduce((s,i)=>{const raw=i.discountType==="amount"?i.product.price*i.quantity-((i.discount||0)*i.quantity):i.product.price*i.quantity*(1-i.discount/100);
+      return s+(pm==="TTC"?raw/(1+(i.product.taxRate||0.20)):raw);},0)*100)/100;
+    let gd=gDiscType==="percentage"?Math.round(sHT*(gDisc/100)*100)/100:Math.min(gDisc,sHT);
+    const{promoDisc,applied}=calcPromoDiscount(cart);
+    gd=Math.round((gd+promoDisc)*100)/100;gd=Math.min(gd,sHT);
+    const tHT=Math.round((sHT-gd)*100)/100;
+    const discountRatio=sHT>0?(gd/sHT):0;
+    let tTVA=0;
+    cart.forEach(i=>{
+      const raw=i.discountType==="amount"?i.product.price*i.quantity-((i.discount||0)*i.quantity):i.product.price*i.quantity*(1-i.discount/100);
+      const lHT=pm==="TTC"?raw/(1+(i.product.taxRate||0.20)):raw;
+      const adjHT=lHT*(1-discountRatio);
+      tTVA+=Math.round(adjHT*(i.product.taxRate||0.20)*100)/100;
+    });
+    tTVA=Math.round(tTVA*100)/100;
+    const tTTC=Math.max(0,Math.round((tHT+tTVA-avoirPayment)*100)/100);
+    return{sHT,gd,promoDisc,applied,tHT,tTVA,tTTC};
+  },[cart,gDisc,gDiscType,calcPromoDiscount,avoirPayment,settings.pricingMode]);
+
   // ══ CHECKOUT — API ou fallback local ══
   // H3 fix: mutex to prevent race conditions in offline checkout
   const checkoutLock=useRef(false);
@@ -576,7 +604,8 @@ function AppProvider({children}){
         avoirUsed:selectedAvoir?{avoirNumber:selectedAvoir.avoirNumber,amount:selectedAvoir.applied,remainingAfter:avoirRemainingAfterSale}:null
       });
       const prods=await API.products.list();setProducts(norm.products(prods));
-      if(selCust){setCustomers(prev=>prev.map(c=>c.id===selCust.id?{...c,points:(c.points||0)+Math.floor(parseFloat(ticket.totalTTC)),totalSpent:(c.totalSpent||0)+parseFloat(ticket.totalTTC)}:c));}
+      // FE-12: use Math.round for consistency between add (checkout) and deduct (return)
+      if(selCust){setCustomers(prev=>prev.map(c=>c.id===selCust.id?{...c,points:(c.points||0)+Math.round(parseFloat(ticket.totalTTC)),totalSpent:(c.totalSpent||0)+parseFloat(ticket.totalTTC)}:c));}
       setCart([]);setGDisc(0);setSelCust(null);setPromoCode("");setSelectedAvoir(null);setSaleNote("");
       setTSeq(ticket.seq);setLastHash(ticket.hash);setGt(parseFloat(ticket.grandTotal));
       const fullTicket={...ticket,items:ticket.items||items,payments:ticket.payments||payments,
@@ -600,7 +629,8 @@ function AppProvider({children}){
         return{...p,variants:p.variants.map(v=>{const cv=cart.find(c=>c.product.id===p.id&&c.variant?.id===v.id);
           return cv?{...v,stock:v.stock-cv.quantity}:v;})};}));
       // Fidélité
-      if(selCust){setCustomers(prev=>prev.map(c=>c.id===selCust.id?{...c,points:(c.points||0)+Math.floor(tTTC),totalSpent:(c.totalSpent||0)+tTTC}:c));}
+      // FE-12: use Math.round for consistency between add (checkout) and deduct (return)
+      if(selCust){setCustomers(prev=>prev.map(c=>c.id===selCust.id?{...c,points:(c.points||0)+Math.round(tTTC),totalSpent:(c.totalSpent||0)+tTTC}:c));}
       // NF525: SHA-256 hash chain conforme — inclut ID caisse, type entrée, N° séquence
       const caisseId=currentStore?.id||cashReg?.id||"CAISSE-01";
       const hashInput=`${lastHash}|${seq}|VENTE|${caisseId}|${ticketNumber}|${date}|${tTTC.toFixed(2)}|${(gt+tTTC).toFixed(2)}`;
@@ -620,7 +650,8 @@ function AppProvider({children}){
       if(!trainingMode)setGt(g=>g+tTTC);
       setTickets(prev=>[ticket,...prev]);
       setCart([]);setGDisc(0);setSelCust(null);setPromoCode("");setSelectedAvoir(null);setSaleNote("");
-      addStockMove("VENTE",{name:"Panier",sku:"—"},{color:"—",size:"—"},-cart.reduce((s,i)=>s+i.quantity,0),ticket.ticketNumber);
+      // FE-10: per-article stock movements instead of 1 global entry
+      cart.forEach(i=>{if(!i.isCustom)addStockMove("VENTE",{name:i.product.name,sku:i.product.sku||"—"},{color:i.variant?.color||"—",size:i.variant?.size||"—"},-i.quantity,ticket.ticketNumber);});
       // Queue offline sale for sync when back online
       addPendingSync({type:"offlineSale",data:{
         items:items.map(({product,variant,...rest})=>rest),payments,customerId:selCust?.id||null,
@@ -1084,7 +1115,15 @@ function AppProvider({children}){
 
   // ══ RETURNS / AVOIRS ══
   const[avoirSeq,setAvoirSeq]=useState(0);
+  const returnLock=useRef(false); // FE-06: prevent double-click on processReturn
+  const _processReturnRef=useRef(null);
   const processReturn=useCallback(async(ticket,returnItems,reason,refundMethod,doRestock,defective=false)=>{
+    if(!returnItems.length)return null;
+    if(returnLock.current){notify("Retour en cours, veuillez patienter...","warn");return null;}
+    returnLock.current=true;
+    try{return await _processReturnRef.current(ticket,returnItems,reason,refundMethod,doRestock,defective);
+    }finally{returnLock.current=false;}},[notify]);
+  const _processReturnInner=async(ticket,returnItems,reason,refundMethod,doRestock,defective=false)=>{
     if(!returnItems.length)return null;
     const rp=settings.returnPolicy||{};
     if(rp.requireReason===true&&!reason?.trim()){notify("Motif de retour obligatoire","error");return null;}
@@ -1187,13 +1226,15 @@ function AppProvider({children}){
       try{await thermalPrint("avoir",avoir);}catch(e){console.warn("Auto-print avoir echoue:",e);}
     }
 
-    if(ticket.customerId){const pts=Math.floor(totalTTC);
+    // FE-12: use Math.round (same as checkout) for consistent loyalty points
+    if(ticket.customerId){const pts=Math.round(totalTTC);
       setCustomers(prev=>prev.map(c=>c.id===ticket.customerId?{...c,points:Math.max(0,c.points-pts),totalSpent:Math.max(0,c.totalSpent-totalTTC)}:c));}
     addAudit("AVOIR",`${avoir.avoirNumber} -- Ref: ${ticket.ticketNumber} -- ${totalTTC.toFixed(2)}EUR -- ${refundMethod}`,avoir.avoirNumber);
     addJET("AVOIR",`Avoir ${avoir.avoirNumber} emis pour ${totalTTC.toFixed(2)}EUR`);
     notify(`Avoir ${avoir.avoirNumber} -- ${totalTTC.toFixed(2)}EUR`,"success");
     return avoir;
-  },[avoirSeq,avoirs,lastHash,currentUser,addAudit,addJET,notify,addPendingSync,settings,printerConnected,thermalPrint]);
+  };
+  _processReturnRef.current=_processReturnInner;
 
   // Avoir expiry check
   const isAvoirExpired=useCallback((avoir)=>{
@@ -1376,6 +1417,7 @@ function AppProvider({children}){
     paymentProfiles:hardwareManager.paymentProfiles,
     users,setUsers,tvaRates,setTvaRates,addPendingSync,pendingSync,clearPendingSync,
     trainingMode,setTrainingMode,
+    cartTotals,
   }}>{children}</AppCtx.Provider>;
 }
 

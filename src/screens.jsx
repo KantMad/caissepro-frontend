@@ -141,7 +141,7 @@ function SalesScreen(){
     gDisc,gDiscType,setCartGD,promoCode,setPromoCode,calcPromoDiscount,isOnline,findByEAN,offlineMode,
     parked,parkCart,restoreCart,customers,addCustomer,selCust,setSelCust,perm,notify,
     stockAlerts,activePromos,avoirPayment,selectedAvoir,setSelectedAvoir,getLoyaltyTier,tickets,saleNote,setSaleNote,favorites,toggleFavorite,getLastPriceForCustomer,settings,
-    printerConnected,thermalPrint,pendingSync,clearPendingSync,users,currentUser,currentStore,avoirs,consumeAvoir,isAvoirExpired,addAudit,addJET,trainingMode}=useApp();
+    printerConnected,thermalPrint,pendingSync,clearPendingSync,users,currentUser,currentStore,avoirs,consumeAvoir,isAvoirExpired,addAudit,addJET,trainingMode,cartTotals}=useApp();
   const[search,setSearch]=useState("");const[cat,setCat]=useState("Tous");const[vm,setVm]=useState(null);const[selSeller,setSelSeller]=useState(null);
   const[dm,setDm]=useState(null);const[dv,setDv]=useState("");const[gm,setGm]=useState(false);const[gv,setGv]=useState("");const[gtp,setGtp]=useState("percentage");
   const[lastTk,setLastTk]=useState(null);const[tkModal,setTkModal]=useState(false);const[busy,setBusy]=useState(false);
@@ -177,20 +177,18 @@ function SalesScreen(){
     const matchFav=cat==="Favoris"?favorites.includes(p.id):true;
     return matchSearch&&matchCat&&matchFav;}),[products,search,cat,favorites]);
 
+  // FE-05: use single source of truth from context (cartTotals) — no local recalculation
+  // FE-03: when avoirPayment > 0, proportionally reduce displayed HT and TVA so HT+TVA === TTC
+  // FE-11: all intermediate values are pre-rounded in cartTotals
   const totals=useMemo(()=>{
-    const pm=settings.pricingMode||"TTC";
-    const sHT=cart.reduce((s,i)=>{const raw=i.discountType==="amount"?i.product.price*i.quantity-((i.discount||0)*i.quantity):i.product.price*i.quantity*(1-i.discount/100);
-      return s+(pm==="TTC"?raw/(1+(i.product.taxRate||0.20)):raw);},0);
-    let gd=gDiscType==="percentage"?sHT*(gDisc/100):Math.min(gDisc,sHT);
-    const{promoDisc,applied}=calcPromoDiscount(cart);
-    gd+=promoDisc;gd=Math.min(gd,sHT);
-    const tHT=sHT-gd;
-    // Per-item TVA
-    const tTVA=cart.reduce((s,i)=>{const raw=i.discountType==="amount"?i.product.price*i.quantity-((i.discount||0)*i.quantity):i.product.price*i.quantity*(1-i.discount/100);
-      const lHT=pm==="TTC"?raw/(1+(i.product.taxRate||0.20)):raw;return s+lHT*(i.product.taxRate||0.20);},0)*(tHT/sHT||0);
-    const tTTC=tHT+tTVA-avoirPayment;
-    return{sHT,gd,promoDisc,applied,tHT,tTVA,tTTC:Math.max(0,tTTC)};
-  },[cart,gDisc,gDiscType,calcPromoDiscount,avoirPayment,settings.pricingMode]);
+    const{sHT,gd,promoDisc,applied,tHT,tTVA,tTTC}=cartTotals;
+    if(avoirPayment>0&&(tHT+tTVA)>0){
+      const grossTTC=Math.round((tHT+tTVA)*100)/100;
+      const ratio=grossTTC>0?(tTTC/grossTTC):1;
+      return{sHT,gd,promoDisc,applied,tHT:Math.round(tHT*ratio*100)/100,tTVA:Math.round(tTVA*ratio*100)/100,tTTC};
+    }
+    return cartTotals;
+  },[cartTotals,avoirPayment]);
 
   const[payCard,setPayCard]=useState("");const[payCash,setPayCash]=useState("");const[payGC,setPayGC]=useState("");const[payChq,setPayChq]=useState("");const[payAmex,setPayAmex]=useState("");const[cardType,setCardType]=useState("card");
   const openPay=()=>{setPayCard("");setPayCash("");setPayGC("");setPayChq("");setPayAmex("");setCashGiven("");setCardType("card");setPayModal(true);};
@@ -477,6 +475,13 @@ function SalesScreen(){
     <Modal open={payModal} onClose={()=>setPayModal(false)} title="Paiement fractionné" sub={`Total: ${totals.tTTC.toFixed(2)}€`}>
       {(()=>{const paid=(parseFloat(payCard)||0)+(parseFloat(payCash)||0)+(parseFloat(payGC)||0)+(parseFloat(payChq)||0)+(avoirPayment||0);
         const remaining=Math.max(0,totals.tTTC-paid);
+        const overpaid=paid>totals.tTTC+0.01;
+        // FE-04: helper to cap a payment field so total does not exceed tTTC
+        const capPay=(val,setter,otherTotal)=>{const v=parseFloat(val)||0;const max=Math.max(0,Math.round((totals.tTTC-otherTotal)*100)/100);if(v>max){setter(String(max.toFixed(2)));}else{setter(val);}};
+        const othersExceptCard=(parseFloat(payCash)||0)+(parseFloat(payGC)||0)+(parseFloat(payChq)||0)+(avoirPayment||0);
+        const othersExceptCash=(parseFloat(payCard)||0)+(parseFloat(payGC)||0)+(parseFloat(payChq)||0)+(avoirPayment||0);
+        const othersExceptGC=(parseFloat(payCard)||0)+(parseFloat(payCash)||0)+(parseFloat(payChq)||0)+(avoirPayment||0);
+        const othersExceptChq=(parseFloat(payCard)||0)+(parseFloat(payCash)||0)+(parseFloat(payGC)||0)+(avoirPayment||0);
         return(<>
       <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:12}}>
         <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"flex",alignItems:"center",gap:4,marginBottom:3}}>
@@ -485,19 +490,21 @@ function SalesScreen(){
             <button onClick={()=>setCardType("card")} style={{padding:"1px 6px",borderRadius:4,border:`1px solid ${cardType==="card"?C.info:C.border}`,background:cardType==="card"?C.info:"transparent",color:cardType==="card"?"#fff":C.textMuted,fontSize:9,fontWeight:700,cursor:"pointer"}}>CB</button>
             <button onClick={()=>setCardType("amex")} style={{padding:"1px 6px",borderRadius:4,border:`1px solid ${cardType==="amex"?"#006FCF":C.border}`,background:cardType==="amex"?"#006FCF":"transparent",color:cardType==="amex"?"#fff":C.textMuted,fontSize:9,fontWeight:700,cursor:"pointer"}}>AMEX</button></span>
           <button onClick={()=>setPayCard(String(remaining.toFixed(2)))} style={{marginLeft:"auto",background:"none",border:"none",cursor:"pointer",fontSize:9,color:C.primary,fontWeight:600}}>= Reste</button></label>
-          <Input type="number" step="0.01" value={payCard} onChange={e=>setPayCard(e.target.value)} placeholder="0.00"/></div>
-        {[{l:"ESPÈCES",v:payCash,s:setPayCash,i:Banknote,c:C.primary},{l:"CARTE CADEAU",v:payGC,s:setPayGC,i:Gift,c:C.accent},{l:"CHÈQUE",v:payChq||"",s:v=>setPayChq(v),i:FileText,c:"#7B8794"}].map(x=>(
+          <Input type="number" step="0.01" value={payCard} onChange={e=>capPay(e.target.value,setPayCard,othersExceptCard)} placeholder="0.00"/></div>
+        {[{l:"ESPÈCES",v:payCash,s:setPayCash,i:Banknote,c:C.primary,oth:othersExceptCash},{l:"CARTE CADEAU",v:payGC,s:setPayGC,i:Gift,c:C.accent,oth:othersExceptGC},{l:"CHÈQUE",v:payChq||"",s:v=>setPayChq(v),i:FileText,c:"#7B8794",oth:othersExceptChq}].map(x=>(
           <div key={x.l}><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"flex",alignItems:"center",gap:4,marginBottom:3}}><x.i size={11} color={x.c}/>{x.l}
             <button onClick={()=>x.s(String(remaining.toFixed(2)))} style={{marginLeft:"auto",background:"none",border:"none",cursor:"pointer",fontSize:9,color:C.primary,fontWeight:600}}>= Reste</button></label>
-            <Input type="number" step="0.01" value={x.v} onChange={e=>x.s(e.target.value)} placeholder="0.00"/></div>))}
+            <Input type="number" step="0.01" value={x.v} onChange={e=>capPay(e.target.value,x.s,x.oth)} placeholder="0.00"/></div>))}
         {selectedAvoir&&avoirPayment>0&&<div><label style={{fontSize:10,fontWeight:600,color:C.fiscal,display:"flex",alignItems:"center",gap:4,marginBottom:3}}>
           <RotateCcw size={11} color={C.fiscal}/> AVOIR {selectedAvoir.avoirNumber}</label>
           <Input type="number" step="0.01" value={avoirPayment} readOnly style={{background:C.surfaceAlt,opacity:0.7}} placeholder="0.00"/></div>}
       </div>
+      {overpaid&&<div style={{padding:"6px 12px",borderRadius:8,background:C.dangerLight||"#fee",marginBottom:8,textAlign:"center"}}>
+        <span style={{fontSize:11,fontWeight:600,color:C.danger}}>Le total des paiements depasse le montant du</span></div>}
       <div style={{display:"flex",justifyContent:"space-between",padding:"8px 12px",borderRadius:8,background:remaining>0.01?C.warnLight:C.primaryLight,marginBottom:10}}>
         <span style={{fontSize:11,fontWeight:600,color:remaining>0.01?C.warn:C.primary}}>Reste à payer</span>
         <span style={{fontSize:13,fontWeight:800,color:remaining>0.01?C.warn:C.primary}}>{remaining.toFixed(2)}€</span></div>
-      <Btn onClick={doSplitPay} disabled={busy||remaining>0.01} style={{width:"100%",height:44,background:C.fiscal}}><Split size={16}/> Valider</Btn>
+      <Btn onClick={doSplitPay} disabled={busy||remaining>0.01||overpaid} style={{width:"100%",height:44,background:C.fiscal}}><Split size={16}/> Valider</Btn>
       </>);})()}</Modal>
 
     <Modal open={custModal} onClose={()=>setCustModal(false)} title="Client">
