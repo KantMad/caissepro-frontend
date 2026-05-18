@@ -78,8 +78,9 @@ function AppProvider({children}){
   useEffect(()=>{try{localStorage.setItem("caissepro_clock",JSON.stringify(clockEntries.slice(0,500)));}catch(e){}},[clockEntries]);
   const[priceHistory,setPriceHistory]=useState(()=>{try{const s=localStorage.getItem("caissepro_pricehistory");return s?JSON.parse(s):[];}catch(e){return[];}});
   useEffect(()=>{try{localStorage.setItem("caissepro_pricehistory",JSON.stringify(priceHistory.slice(0,500)));}catch(e){}},[priceHistory]);
-  const[favorites,setFavorites]=useState(()=>{try{const s=localStorage.getItem("caissepro_favorites");return s?JSON.parse(s):[];}catch(e){return[];}});
-  useEffect(()=>{try{localStorage.setItem("caissepro_favorites",JSON.stringify(favorites));}catch(e){}},[favorites]);
+  const[favorites,setFavoritesRaw]=useState(()=>{try{const s=localStorage.getItem("caissepro_favorites");return s?JSON.parse(s):[];}catch(e){return[];}});
+  const setFavorites=useCallback((v)=>{setFavoritesRaw(prev=>{const next=typeof v==="function"?v(prev):v;try{localStorage.setItem("caissepro_favorites",JSON.stringify(next));}catch(e){}
+    API.favorites.save(next).catch(()=>{});return next;});},[]);
   const[notifications,setNotifications]=useState([]);
   const[printerConnected,setPrinterConnected]=useState(false);
   const[printerType,setPrinterType]=useState(null);
@@ -317,15 +318,18 @@ function AppProvider({children}){
       if(setts?.csvColumnMapping){try{localStorage.setItem("caissepro_csv_column_mapping",JSON.stringify(setts.csvColumnMapping));}catch(e){}}
       autoImportSizesFromProducts(prods);
       setProducts(norm.products(prods));setCustomers(norm.customers(custs));setPromos(prms);setSettings(s=>({...s,...setts}));
-      if(apiSales&&Array.isArray(apiSales)){const mapped=apiSales.map(s=>({...s,ticketNumber:s.ticketNumber||s.ticket_number,totalHT:parseFloat(s.total_ht||s.totalHT)||0,totalTVA:parseFloat(s.total_tva||s.totalTVA)||0,totalTTC:parseFloat(s.total_ttc||s.totalTTC)||0,date:s.date||s.created_at,userName:s.userName||s.user_name,paymentMethod:s.paymentMethod||s.payment_method,customerName:s.customerName||s.customer_name,fingerprint:s.fingerprint}));const localOnly=tickets.filter(lt=>lt.hash==="LOCAL"||!mapped.find(as=>as.ticketNumber===lt.ticketNumber));
-        setTickets([...localOnly,...mapped].sort((a,b)=>new Date(b.date||b.createdAt||0)-new Date(a.date||a.createdAt||0)).slice(0,500));}
+      // MED-13: Use functional state updates to avoid stale closure on tickets/users
+      if(apiSales&&Array.isArray(apiSales)){const mapped=apiSales.map(s=>({...s,ticketNumber:s.ticketNumber||s.ticket_number,totalHT:parseFloat(s.total_ht||s.totalHT)||0,totalTVA:parseFloat(s.total_tva||s.totalTVA)||0,totalTTC:parseFloat(s.total_ttc||s.totalTTC)||0,date:s.date||s.created_at,userName:s.userName||s.user_name,paymentMethod:s.paymentMethod||s.payment_method,customerName:s.customerName||s.customer_name,fingerprint:s.fingerprint}));
+        setTickets(prev=>{const localOnly=prev.filter(lt=>lt.hash==="LOCAL"||!mapped.find(as=>as.ticketNumber===lt.ticketNumber));return[...localOnly,...mapped].sort((a,b)=>new Date(b.date||b.createdAt||0)-new Date(a.date||a.createdAt||0)).slice(0,500);});}
       if(apiCounter&&!Array.isArray(apiCounter)){const seq=apiCounter.ticket_seq??apiCounter.seq??0;setTSeq(seq);if(apiCounter.last_hash||apiCounter.lastHash)setLastHash(apiCounter.last_hash||apiCounter.lastHash);if(apiCounter.grand_total!=null||apiCounter.grandTotal!=null)setGt(parseFloat(apiCounter.grand_total??apiCounter.grandTotal));}
       if(apiUsers&&apiUsers.length){const merged=[...apiUsers.map(u=>({id:u.id,name:u.name,role:u.role,pin:"****",apiSynced:true}))];
-        const localOnly=users.filter(lu=>!apiUsers.find(au=>au.name===lu.name));
-        setUsers([...merged,...localOnly]);}
-      // Charger gift cards et paniers suspendus depuis le backend
+        setUsers(prev=>{const localOnly=prev.filter(lu=>!apiUsers.find(au=>au.name===lu.name));return[...merged,...localOnly];});}
+      // Charger gift cards, paniers suspendus, favoris et footfall depuis le backend
       try{const gcs=await API.giftcards.list();if(gcs&&Array.isArray(gcs))setGiftCards(gcs.map(g=>({id:g.id,code:g.code,initialAmount:parseFloat(g.initial_amount||0),balance:parseFloat(g.remaining||0),createdDate:g.created_at,customerName:g.customer_name||"",transactions:g.transactions||[]})));}catch(e){}
       try{const pks=await API.parked.list();if(pks&&Array.isArray(pks))setParked(pks.map(p=>({id:p.id,date:p.created_at,items:p.items||[],customer:null,gDisc:0,gDiscType:"percentage",name:p.name})));}catch(e){}
+      // LOW-4: Load favorites and footfall from API
+      try{const favs=await API.favorites.list();if(Array.isArray(favs))setFavorites(favs);}catch(e){}
+      try{const ff=await API.footfall.list();if(Array.isArray(ff))setFootfall(ff);}catch(e){}
     }catch(e){console.warn("Chargement données magasin échoué:",e.message);}
   },[]);
 
@@ -1252,7 +1256,7 @@ function AppProvider({children}){
     return new Date()>expiry;
   },[settings.returnPolicy?.avoirExpiryMonths]);
 
-  // ══ FOOTFALL COUNTER ══
+  // ══ FOOTFALL COUNTER — LOW-4: backend-first ══
   const[footfall,setFootfall]=useState(()=>{try{const s=localStorage.getItem("caissepro_footfall");return s?JSON.parse(s):[];}catch(e){return[];}});
   useEffect(()=>{try{localStorage.setItem("caissepro_footfall",JSON.stringify(footfall));}catch(e){}},[footfall]);
   const addFootfall=useCallback((count,date)=>{
@@ -1260,6 +1264,8 @@ function AppProvider({children}){
     setFootfall(prev=>{const existing=prev.find(f=>f.date===d);
       if(existing)return prev.map(f=>f.date===d?{...f,count}:f);
       return[...prev,{date:d,count}].sort((a,b)=>b.date.localeCompare(a.date));});
+    // LOW-4: Persist to backend
+    API.footfall.save(d,count).catch(()=>{});
   },[]);
 
   // ══ PRODUCT EDIT — via API ══

@@ -211,5 +211,17 @@ export const pricehistory = {
   create: (data) => api('/api/pricehistory', { method: 'POST', body: JSON.stringify(data) }),
 };
 
+// ══ Favorites (LOW-4: backend-first) ══
+export const favorites = {
+  list: () => api('/api/settings/favorites'),
+  save: (productIds) => api('/api/settings/favorites', { method: 'PUT', body: JSON.stringify({ favorites: productIds }) }),
+};
+
+// ══ Footfall (LOW-4: backend-first) ══
+export const footfall = {
+  list: (params) => api('/api/settings/footfall?' + new URLSearchParams(params || {})),
+  save: (date, count) => api('/api/settings/footfall', { method: 'POST', body: JSON.stringify({ date, count }) }),
+};
+
 // ══ Health ══
 export const health = () => api('/api/health');
