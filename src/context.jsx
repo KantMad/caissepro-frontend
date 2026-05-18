@@ -187,6 +187,7 @@ function AppProvider({children}){
       try{const jetData=await API.audit.jet();if(jetData?.length)setJet(jetData);}catch(e){/* keep localStorage jet */}
       try{const movesData=await API.stock.movements({limit:500});if(movesData?.length)setStockMoves(movesData);}catch(e){/* keep localStorage stockMoves */}
       try{const clockData=await API.audit.clock();if(clockData?.length)setClockEntries(clockData);}catch(e){/* keep localStorage clock */}
+      try{const phData=await API.pricehistory.list({limit:500});if(phData?.length)setPriceHistory(phData);}catch(e){/* keep localStorage */}
     }catch(e){
       console.warn("Chargement données échoué:",e.message);
       if(e.message?.includes("401")||e.message?.includes("Unauthorized")){setCurrentUser(null);API.clearToken();}
@@ -404,7 +405,7 @@ function AppProvider({children}){
     if(i>=0){const n=[...prev];n[i]={...n[i],quantity:n[i].quantity+1};return n;}return[...prev,{product:p,variant:v,quantity:1,discount:0,isCustom:false}];});
   const addCustomItem=(name,price,taxRate)=>setCart(p=>[...p,{product:{id:`custom-${Date.now()}`,name,sku:"DIVERS",price,costPrice:0,taxRate,category:"Divers"},variant:{id:`cv-${Date.now()}`,color:"—",size:"—",ean:""},quantity:1,discount:0,isCustom:true}]);
   const removeFromCart=(pid,vid,reason)=>{addAudit("VOID_LINE",`Suppression: ${pid}${reason?` — Motif: ${reason}`:""}`,pid);addJET("VOID_LINE",`Suppression ligne produit ${pid}${reason?` — ${reason}`:""}`);setCart(p=>p.filter(c=>!(c.product.id===pid&&(c.variant?.id===vid||!vid))));};
-  const voidSale=(reason)=>{if(cart.length){addAudit("VOID_SALE",`Annulation panier: ${cart.length} articles — Motif: ${reason||"Non spécifié"}`);addJET("VOID_SALE",`Annulation panier ${cart.length} art. — ${reason||"Non spécifié"}`);setCart([]);setGDisc(0);setSelCust(null);}};
+  const voidSale=(reason)=>{if(cart.length){addAudit("VOID_SALE",`Annulation panier: ${cart.length} articles — Motif: ${reason||"Non spécifié"}`);addJET("VOID_SALE",`Annulation panier ${cart.length} art. — ${reason||"Non spécifié"}`);setCart([]);setGDisc(0);setSelCust(null);setSelectedAvoir(null);setPromoCode("");setSaleNote("");}};
   const updateQty=(pid,vid,q)=>{if(q<1)return removeFromCart(pid,vid);setCart(p=>p.map(c=>c.product.id===pid&&c.variant?.id===vid?{...c,quantity:q}:c));};
   const updateItemDisc=(pid,vid,d,dt)=>setCart(p=>p.map(c=>c.product.id===pid&&c.variant?.id===vid?{...c,discount:d,discountType:dt||"percent"}:c));
   const clearCart=()=>{setCart([]);setGDisc(0);setSelCust(null);setPromoCode("");setSelectedAvoir(null);};
@@ -601,6 +602,7 @@ function AppProvider({children}){
         globalDiscount:gd,saleNote:saleNote||null,
         promosApplied:applied,sessionId:cashReg?.id||null,
         sellerName:sellerName||null,
+        trainingMode:trainingMode||false,
         avoirUsed:selectedAvoir?{avoirNumber:selectedAvoir.avoirNumber,amount:selectedAvoir.applied,remainingAfter:avoirRemainingAfterSale}:null
       });
       const prods=await API.products.list();setProducts(norm.products(prods));
@@ -1072,7 +1074,10 @@ function AppProvider({children}){
   // ══ Gift Cards — backend-first avec cache localStorage ══
   const[giftCards,setGiftCards]=useState(()=>{try{const s=localStorage.getItem("caissepro_giftcards");return s?JSON.parse(s):[];}catch(e){return[];}});
   useEffect(()=>{try{localStorage.setItem("caissepro_giftcards",JSON.stringify(giftCards));}catch(e){}},[giftCards]);
+  const giftcardLock=useRef(false);
   const createGiftCard=useCallback(async(amount,customerName)=>{
+    if(giftcardLock.current)return null;
+    giftcardLock.current=true;
     const code=`GC-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2,6).toUpperCase()}`;
     try{
       const gc=await API.giftcards.create({code,initialAmount:amount,customerName:customerName||""});
@@ -1089,9 +1094,12 @@ function AppProvider({children}){
       setGiftCards(p=>[gc,...p]);addAudit("GIFT_CARD",`Carte cadeau ${code} creee (offline): ${amount.toFixed(2)}EUR`);
       addPendingSync({type:"createGiftCard",data:{code,initialAmount:amount,customerName:customerName||""}});
       notify(`Carte cadeau creee (offline): ${code}`,"warn");return gc;
-    }
+    }finally{giftcardLock.current=false;}
   },[addAudit,notify,addPendingSync]);
+  const useGiftcardLock=useRef(false);
   const useGiftCard=useCallback(async(code,amount)=>{
+    if(useGiftcardLock.current)return{ok:false,msg:"Opération en cours..."};
+    useGiftcardLock.current=true;
     try{
       const result=await API.giftcards.use(code,amount);
       setGiftCards(p=>p.map(g=>g.code.toUpperCase()===code.toUpperCase()?{...g,balance:parseFloat(result.remaining||0),
@@ -1106,7 +1114,7 @@ function AppProvider({children}){
         transactions:[...(g.transactions||[]),{date:new Date().toISOString(),amount:-amount,type:"DEBIT"}]}:g));
       addPendingSync({type:"useGiftCard",data:{code,amount}});
       return{ok:true,remaining:gc.balance-amount};
-    }
+    }finally{useGiftcardLock.current=false;}
   },[giftCards,addPendingSync]);
   const checkGiftCard=useCallback(async(code)=>{
     try{const gc=await API.giftcards.get(code);return gc||null;}
