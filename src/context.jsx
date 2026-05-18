@@ -211,6 +211,10 @@ function AppProvider({children}){
           else if(action.type==="offlineClosure")await API.fiscal.closure(action.data);
           else if(action.type==="offlineAvoir")await API.returns.create(action.data);
           else if(action.type==="consumeAvoir")await API.returns.consume(action.data.avoirNumber,action.data.amount);
+          else if(action.type==="createGiftCard")await API.giftcards.create(action.data);
+          else if(action.type==="useGiftCard")await API.giftcards.use(action.data.code,action.data.amount);
+          else if(action.type==="parkCart")await API.parked.save(action.data);
+          else if(action.type==="priceChange")await API.pricehistory.create(action.data);
           else{failed.push({...action,retries:(action.retries||0)+1,lastError:"Type inconnu"});continue;}
           synced++;
         }catch(e){
@@ -313,6 +317,9 @@ function AppProvider({children}){
       if(apiUsers&&apiUsers.length){const merged=[...apiUsers.map(u=>({id:u.id,name:u.name,role:u.role,pin:"****",apiSynced:true}))];
         const localOnly=users.filter(lu=>!apiUsers.find(au=>au.name===lu.name));
         setUsers([...merged,...localOnly]);}
+      // Charger gift cards et paniers suspendus depuis le backend
+      try{const gcs=await API.giftcards.list();if(gcs&&Array.isArray(gcs))setGiftCards(gcs.map(g=>({id:g.id,code:g.code,initialAmount:parseFloat(g.initial_amount||0),balance:parseFloat(g.remaining||0),createdDate:g.created_at,customerName:g.customer_name||"",transactions:g.transactions||[]})));}catch(e){}
+      try{const pks=await API.parked.list();if(pks&&Array.isArray(pks))setParked(pks.map(p=>({id:p.id,date:p.created_at,items:p.items||[],customer:null,gDisc:0,gDiscType:"percentage",name:p.name})));}catch(e){}
     }catch(e){console.warn("Chargement données magasin échoué:",e.message);}
   },[]);
 
@@ -398,12 +405,19 @@ function AppProvider({children}){
   const clearCart=()=>{setCart([]);setGDisc(0);setSelCust(null);setPromoCode("");setSelectedAvoir(null);};
   const setCartGD=(v,t)=>{setGDisc(v);setGDiscType(t);};
 
-  // Park
-  const parkCart=useCallback(()=>{if(!cart.length)return;setParked(p=>[...p,{id:Date.now(),date:new Date().toISOString(),items:[...cart],customer:selCust,gDisc,gDiscType}]);
-    setCart([]);setGDisc(0);setSelCust(null);addAudit("PARK","Panier mis en attente");},[cart,selCust,gDisc,gDiscType,addAudit]);
-  const restoreCart=useCallback((id)=>{const pk=parked.find(p=>p.id===id);if(!pk)return;if(cart.length)parkCart();
+  // Park — backend-first avec cache localStorage
+  const parkCart=useCallback(async()=>{if(!cart.length)return;
+    const parkedData={name:`Panier ${new Date().toLocaleString("fr-FR")}`,items:cart.map(i=>({productId:i.product?.id,variantId:i.variant?.id,productName:i.product?.name,variantColor:i.variant?.color,variantSize:i.variant?.size,quantity:i.quantity,price:i.product?.price,discount:i.discount,discountType:i.discountType})),customerId:selCust?.id||null};
+    let newParked;
+    try{const saved=await API.parked.save(parkedData);newParked={id:saved.id,date:saved.created_at||new Date().toISOString(),items:[...cart],customer:selCust,gDisc,gDiscType};}
+    catch(e){newParked={id:Date.now(),date:new Date().toISOString(),items:[...cart],customer:selCust,gDisc,gDiscType};addPendingSync({type:"parkCart",data:parkedData});}
+    setParked(p=>[...p,newParked]);setCart([]);setGDisc(0);setSelCust(null);addAudit("PARK","Panier mis en attente");
+  },[cart,selCust,gDisc,gDiscType,addAudit,addPendingSync]);
+  const restoreCart=useCallback(async(id)=>{const pk=parked.find(p=>p.id===id);if(!pk)return;if(cart.length)await parkCart();
     setCart(pk.items);setGDisc(pk.gDisc||0);setGDiscType(pk.gDiscType||"percentage");setSelCust(pk.customer);
-    setParked(p=>p.filter(x=>x.id!==id));addAudit("RESTORE","Panier restauré");},[parked,cart,parkCart,addAudit]);
+    setParked(p=>p.filter(x=>x.id!==id));
+    try{await API.parked.remove(id);}catch(e){/* Le panier etait peut-etre local seulement */}
+    addAudit("RESTORE","Panier restaure");},[parked,cart,parkCart,addAudit]);
 
   // ══ PROMO ENGINE ══
   const activePromos=useMemo(()=>{const now=new Date().toISOString().split("T")[0];
@@ -479,12 +493,13 @@ function AppProvider({children}){
   // ══ CHECKOUT — API ou fallback local ══
   // H3 fix: mutex to prevent race conditions in offline checkout
   const checkoutLock=useRef(false);
+  const _doCheckoutRef=useRef(null);
   const checkout=useCallback(async(payments,sellerName)=>{
     if(!cart.length)return null;
     if(checkoutLock.current){notify("Vente en cours de traitement...","warn");return null;}
     checkoutLock.current=true;
-    try{return await _doCheckout(payments,sellerName);}finally{checkoutLock.current=false;}
-  },[cart]);
+    try{return await _doCheckoutRef.current(payments,sellerName);}finally{checkoutLock.current=false;}
+  },[cart,notify]);
   const _doCheckout=useCallback(async(payments,sellerName)=>{
     if(!cart.length)return null;
     const pm=settings.pricingMode||"TTC";
@@ -615,6 +630,7 @@ function AppProvider({children}){
       notify("Vente enregistrée (hors-ligne) — synchro en attente","warn");return ticket;
     }
   },[cart,gDisc,gDiscType,currentUser,selCust,calcPromoDiscount,promoCode,saleNote,cashReg,tSeq,gt,avoirPayment,selectedAvoir,consumeAvoir,addStockMove,notify,settings.pricingMode,addPendingSync]);
+  _doCheckoutRef.current=_doCheckout;
 
   // Stock receipt - via API
   const receiveStock=useCallback(async(productId,variantId,qty,supplier)=>{
@@ -645,12 +661,16 @@ function AppProvider({children}){
   },[products,exportCSVReport]);
 
   // ══ P2: Update product price with history ══
-  const updateProductPrice=useCallback((productId,newPrice)=>{
+  const updateProductPrice=useCallback(async(productId,newPrice)=>{
     const p=products.find(x=>x.id===productId);if(!p)return;
-    setPriceHistory(prev=>[{id:Date.now(),date:new Date().toISOString(),productId,productName:p.name,oldPrice:p.price,newPrice,user:currentUser?.name},...prev]);
+    const entry={productId,productName:p.name,oldPrice:p.price,newPrice,user:currentUser?.name};
+    // Persister en backend d'abord
+    try{await API.pricehistory.create({productId,oldPrice:p.price,newPrice,reason:`Changement manuel par ${currentUser?.name||"?"}`});}
+    catch(e){addPendingSync({type:"priceChange",data:{productId,oldPrice:p.price,newPrice,reason:`Changement manuel par ${currentUser?.name||"?"}`}});}
+    setPriceHistory(prev=>[{id:Date.now(),date:new Date().toISOString(),...entry},...prev]);
     setProducts(prev=>prev.map(x=>x.id===productId?{...x,price:newPrice}:x));
-    addAudit("PRICE_CHANGE",`${p.name}: ${p.price.toFixed(2)}€ → ${newPrice.toFixed(2)}€`);
-  },[products,currentUser,addAudit]);
+    addAudit("PRICE_CHANGE",`${p.name}: ${p.price.toFixed(2)}EUR -> ${newPrice.toFixed(2)}EUR`);
+  },[products,currentUser,addAudit,addPendingSync]);
 
   // ══ P2: Reorder suggestions ══
   const reorderSuggestions=useMemo(()=>{const suggestions=[];
@@ -1018,25 +1038,48 @@ function AppProvider({children}){
   };
 
   // ══ GIFT CARDS ══
+  // ══ Gift Cards — backend-first avec cache localStorage ══
   const[giftCards,setGiftCards]=useState(()=>{try{const s=localStorage.getItem("caissepro_giftcards");return s?JSON.parse(s):[];}catch(e){return[];}});
   useEffect(()=>{try{localStorage.setItem("caissepro_giftcards",JSON.stringify(giftCards));}catch(e){}},[giftCards]);
-  const createGiftCard=useCallback((amount,customerName)=>{
+  const createGiftCard=useCallback(async(amount,customerName)=>{
     const code=`GC-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2,6).toUpperCase()}`;
-    const gc={id:Date.now(),code,initialAmount:amount,balance:amount,createdDate:new Date().toISOString(),
-      customerName:customerName||"",transactions:[]};
-    setGiftCards(p=>[gc,...p]);addAudit("GIFT_CARD",`Carte cadeau ${code} créée: ${amount.toFixed(2)}€`);
-    notify(`Carte cadeau créée: ${code}`,"success");return gc;
-  },[addAudit,notify]);
-  const useGiftCard=useCallback((code,amount)=>{
-    const gc=giftCards.find(g=>g.code.toUpperCase()===code.toUpperCase());
-    if(!gc)return{ok:false,msg:"Carte introuvable"};
-    if(gc.balance<amount)return{ok:false,msg:`Solde insuffisant: ${gc.balance.toFixed(2)}€`};
-    setGiftCards(p=>p.map(g=>g.id===gc.id?{...g,balance:g.balance-amount,
-      transactions:[...g.transactions,{date:new Date().toISOString(),amount:-amount,type:"DEBIT"}]}:g));
-    return{ok:true,remaining:gc.balance-amount};
-  },[giftCards]);
-  const checkGiftCard=useCallback((code)=>{
-    return giftCards.find(g=>g.code.toUpperCase()===code.toUpperCase())||null;
+    try{
+      const gc=await API.giftcards.create({code,initialAmount:amount,customerName:customerName||""});
+      const mapped={id:gc.id,code:gc.code,initialAmount:parseFloat(gc.initial_amount||gc.initialAmount||amount),
+        balance:parseFloat(gc.remaining||gc.balance||amount),createdDate:gc.created_at||new Date().toISOString(),
+        customerName:customerName||"",transactions:[]};
+      setGiftCards(p=>[mapped,...p]);
+      addAudit("GIFT_CARD",`Carte cadeau ${code} creee: ${amount.toFixed(2)}EUR`);
+      notify(`Carte cadeau creee: ${code}`,"success");return mapped;
+    }catch(e){
+      // Fallback local si API indisponible
+      const gc={id:Date.now(),code,initialAmount:amount,balance:amount,createdDate:new Date().toISOString(),
+        customerName:customerName||"",transactions:[]};
+      setGiftCards(p=>[gc,...p]);addAudit("GIFT_CARD",`Carte cadeau ${code} creee (offline): ${amount.toFixed(2)}EUR`);
+      addPendingSync({type:"createGiftCard",data:{code,initialAmount:amount,customerName:customerName||""}});
+      notify(`Carte cadeau creee (offline): ${code}`,"warn");return gc;
+    }
+  },[addAudit,notify,addPendingSync]);
+  const useGiftCard=useCallback(async(code,amount)=>{
+    try{
+      const result=await API.giftcards.use(code,amount);
+      setGiftCards(p=>p.map(g=>g.code.toUpperCase()===code.toUpperCase()?{...g,balance:parseFloat(result.remaining||0),
+        transactions:[...(g.transactions||[]),{date:new Date().toISOString(),amount:-amount,type:"DEBIT"}]}:g));
+      return{ok:true,remaining:parseFloat(result.remaining||0)};
+    }catch(e){
+      // Fallback local
+      const gc=giftCards.find(g=>g.code.toUpperCase()===code.toUpperCase());
+      if(!gc)return{ok:false,msg:"Carte introuvable"};
+      if(gc.balance<amount)return{ok:false,msg:`Solde insuffisant: ${gc.balance.toFixed(2)}EUR`};
+      setGiftCards(p=>p.map(g=>g.id===gc.id?{...g,balance:g.balance-amount,
+        transactions:[...(g.transactions||[]),{date:new Date().toISOString(),amount:-amount,type:"DEBIT"}]}:g));
+      addPendingSync({type:"useGiftCard",data:{code,amount}});
+      return{ok:true,remaining:gc.balance-amount};
+    }
+  },[giftCards,addPendingSync]);
+  const checkGiftCard=useCallback(async(code)=>{
+    try{const gc=await API.giftcards.get(code);return gc||null;}
+    catch(e){return giftCards.find(g=>g.code.toUpperCase()===code.toUpperCase())||null;}
   },[giftCards]);
 
   // ══ RETURNS / AVOIRS ══

@@ -187,5 +187,29 @@ export const stores = {
   removeUser: (id, userId) => api(`/api/stores/${id}/users/${userId}`, { method: 'DELETE' }),
 };
 
+// ══ Gift Cards ══
+export const giftcards = {
+  list: () => api('/api/giftcards'),
+  get: (code) => api(`/api/giftcards/${encodeURIComponent(code)}`),
+  create: (data) => api('/api/giftcards', { method: 'POST', body: JSON.stringify(data) }),
+  use: (code, amount, reference) => api(`/api/giftcards/${encodeURIComponent(code)}/use`, { method: 'POST', body: JSON.stringify({ amount, reference }) }),
+  reload: (code, amount) => api(`/api/giftcards/${encodeURIComponent(code)}/reload`, { method: 'POST', body: JSON.stringify({ amount }) }),
+};
+
+// ══ Parked Carts ══
+export const parked = {
+  list: () => api('/api/parked'),
+  get: (id) => api(`/api/parked/${id}`),
+  save: (data) => api('/api/parked', { method: 'POST', body: JSON.stringify(data) }),
+  remove: (id) => api(`/api/parked/${id}`, { method: 'DELETE' }),
+};
+
+// ══ Price History ══
+export const pricehistory = {
+  list: (params) => api('/api/pricehistory?' + new URLSearchParams(params || {})),
+  forProduct: (productId) => api(`/api/pricehistory/${productId}`),
+  create: (data) => api('/api/pricehistory', { method: 'POST', body: JSON.stringify(data) }),
+};
+
 // ══ Health ══
 export const health = () => api('/api/health');
