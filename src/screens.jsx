@@ -196,10 +196,10 @@ function SalesScreen(){
     const c=parseFloat(payCard)||0;const ca=parseFloat(payCash)||0;const g=parseFloat(payGC)||0;const chq=parseFloat(payChq)||0;
     if(c>0)payments.push({method:cardType,amount:c});if(ca>0)payments.push({method:"cash",amount:ca});
     if(g>0)payments.push({method:"giftcard",amount:g});if(chq>0)payments.push({method:"cheque",amount:chq});if(avoirPayment>0)payments.push({method:"avoir",amount:avoirPayment});
-    if(!payments.length)return;setBusy(true);const t=await checkout(payments,selSeller);setBusy(false);setCashGiven("");if(t){setLastTk({...t});setPayModal(false);setTkModal(true);setSelSeller(null);}};
+    if(!payments.length)return;setBusy(true);try{const t=await checkout(payments,selSeller);if(t){setLastTk({...t});setPayModal(false);setTkModal(true);setSelSeller(null);}}finally{setBusy(false);setCashGiven("");}};
   const quickPay=async(method)=>{if(!cart.length||busy)return;setBusy(true);
     const payments=[{method,amount:totals.tTTC}];if(avoirPayment>0)payments.push({method:"avoir",amount:avoirPayment});
-    const t=await checkout(payments,selSeller);setBusy(false);setCashGiven("");if(t){setLastTk({...t});setTkModal(true);setSelSeller(null);}};
+    try{const t=await checkout(payments,selSeller);if(t){setLastTk({...t});setTkModal(true);setSelSeller(null);}}finally{setBusy(false);setCashGiven("");}};
   const change=cashGiven?Math.max(0,parseFloat(cashGiven)-totals.tTTC):0;
   const maxDisc=perm().maxDiscount;
   const custTier=selCust?getLoyaltyTier(selCust.points):null;
@@ -4266,7 +4266,8 @@ function DebugPanel(){
 }
 
 function SettingsScreen(){
-  const{settings,setSettings,saveSettingsToAPI,addAudit,theme,setTheme,clockEntries,priceHistory,printerConnected,printerType,connectPrinter,disconnectPrinter,thermalPrint,notify,users,hwId,hwProfile,switchHardware,hardwareProfiles,paymentId,paymentConfig,switchPayment,updatePaymentConfig,paymentProfiles}=useApp();
+  const{settings,setSettings,saveSettingsToAPI,addAudit,theme,setTheme,clockEntries,priceHistory,printerConnected,printerType,connectPrinter,disconnectPrinter,thermalPrint,notify,users,hwId,hwProfile,switchHardware,hardwareProfiles,paymentId,paymentConfig,switchPayment,updatePaymentConfig,paymentProfiles,perm}=useApp();
+  if(!perm().canSettings) return <div style={{padding:40,textAlign:"center",color:C.textMuted,fontSize:16,fontWeight:600}}>Accès refusé</div>;
   const[tab,setTab]=useState("general");
   const[printerBaud,setPrinterBaud]=useState("9600");
   const[printerWidth,setPrinterWidth]=useState("48");
@@ -4856,7 +4857,8 @@ function SettingsScreen(){
 /* ══════════ NAVIGATION ══════════ */
 /* ══════════ GIFT CARDS ══════════ */
 function GiftCardScreen(){
-  const{giftCards,createGiftCard,checkGiftCard,settings,notify}=useApp();
+  const{giftCards,createGiftCard,checkGiftCard,settings,notify,perm}=useApp();
+  if(!perm().canCreateProduct) return <div style={{padding:40,textAlign:"center",color:C.textMuted,fontSize:16,fontWeight:600}}>Accès refusé</div>;
   const[amount,setAmount]=useState("");const[custName,setCustName]=useState("");
   const[checkCode,setCheckCode]=useState("");const[checkResult,setCheckResult]=useState(null);
   return(<div style={{height:"100%",overflowY:"auto",padding:20,background:C.bg}}>
@@ -4871,7 +4873,7 @@ function GiftCardScreen(){
             <Input value={custName} onChange={e=>setCustName(e.target.value)} placeholder="Nom…"/></div>
           <div style={{display:"flex",gap:6}}>{[25,50,75,100].map(v=>(<Btn key={v} variant="outline" onClick={()=>setAmount(String(v))} style={{flex:1,fontSize:11}}>{v}€</Btn>))}</div></div>
         <div style={{display:"flex",gap:6}}>
-        <Btn onClick={()=>{if(amount){const gc=createGiftCard(parseFloat(amount),custName);setAmount("");setCustName("");
+        <Btn onClick={async()=>{if(amount){const gc=await createGiftCard(parseFloat(amount),custName);setAmount("");setCustName("");
           if(gc){const w=window.open("","_blank","width=400,height=400");if(w){w.document.write(`<html><head><title>Étiquette carte cadeau</title><style>body{font-family:'Courier New',monospace;font-size:12px;padding:10px;max-width:280px;margin:0 auto;text-align:center;}h2{font-size:16px;margin:8px 0;}h3{font-size:22px;margin:6px 0;}.code{font-size:18px;font-weight:bold;letter-spacing:2px;padding:8px;border:2px dashed #333;margin:8px 0;display:inline-block;}hr{border:none;border-top:1px dashed #333;margin:8px 0;}</style></head><body>`+
             `<h2>CARTE CADEAU</h2><div class="code">${gc.code}</div><hr>`+
             `<h3>${parseFloat(amount).toFixed(2)} EUR</h3>`+
@@ -4881,7 +4883,7 @@ function GiftCardScreen(){
             `</body></html>`);w.document.close();setTimeout(()=>w.print(),300);}}
           }}}
           disabled={!amount} style={{flex:1,height:40,background:C.accent}}><Gift size={14}/> Créer + Étiquette</Btn>
-        <Btn variant="outline" onClick={()=>{if(amount){createGiftCard(parseFloat(amount),custName);setAmount("");setCustName("");}}}
+        <Btn variant="outline" onClick={async()=>{if(amount){await createGiftCard(parseFloat(amount),custName);setAmount("");setCustName("");}}}
           disabled={!amount} style={{height:40}}><Plus size={14}/> Sans impression</Btn>
         </div>
       </div>
@@ -4889,7 +4891,7 @@ function GiftCardScreen(){
         <h3 style={{fontSize:14,fontWeight:700,marginBottom:10}}><Search size={16} style={{verticalAlign:"middle"}}/> Vérifier le solde</h3>
         <div style={{display:"flex",gap:6,marginBottom:10}}>
           <Input value={checkCode} onChange={e=>setCheckCode(e.target.value)} placeholder="Code carte (ex: GC-…)" style={{flex:1}}/>
-          <Btn variant="info" onClick={()=>{const gc=checkGiftCard(checkCode);setCheckResult(gc?{found:true,gc}:{found:false});}} style={{height:42}}>Vérifier</Btn></div>
+          <Btn variant="info" onClick={async()=>{const gc=await checkGiftCard(checkCode);setCheckResult(gc?{found:true,gc}:{found:false});}} style={{height:42}}>Vérifier</Btn></div>
         {checkResult&&(checkResult.found?
           <div style={{padding:12,borderRadius:10,background:C.primaryLight,border:`1.5px solid ${C.primary}33`}}>
             <div style={{fontSize:12,fontWeight:700,marginBottom:4}}>Carte: {checkResult.gc.code}</div>

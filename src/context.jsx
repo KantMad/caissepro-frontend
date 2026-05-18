@@ -222,6 +222,8 @@ function AppProvider({children}){
           else if(action.type==="useGiftCard")await API.giftcards.use(action.data.code,action.data.amount);
           else if(action.type==="parkCart")await API.parked.save(action.data);
           else if(action.type==="priceChange")await API.pricehistory.create(action.data);
+          else if(action.type==="audit")await API.audit.create(action.data.action,action.data.detail,action.data.reference);
+          else if(action.type==="jet")await API.audit.createJet(action.data.eventType,action.data.detail);
           else{failed.push({...action,retries:(action.retries||0)+1,lastError:"Type inconnu"});continue;}
           synced++;
         }catch(e){
@@ -271,12 +273,12 @@ function AppProvider({children}){
       user:userId,userName:currentUser?.name||"Sys",
       socId,caisseId,hash,fingerprint};
     setJet(p=>[entry,...p]);
-    if(API.getToken())API.audit.createJet(t,d).catch(()=>{});
-  },[currentUser,currentStore,cashReg,settings.siret]);
+    if(API.getToken())API.audit.createJet(t,d).catch(()=>{addPendingSync({type:"jet",data:{eventType:t,detail:d}});});
+  },[currentUser,currentStore,cashReg,settings.siret,addPendingSync]);
   const addAudit=useCallback((a,d,r)=>{
     setAudit(p=>[{id:Date.now(),date:new Date().toISOString(),action:a,detail:d,ref:r,user:currentUser?.name||"—"},...p]);
-    if(API.getToken())API.audit.create(a,d,r).catch(()=>{});
-  },[currentUser]);
+    if(API.getToken())API.audit.create(a,d,r).catch(()=>{addPendingSync({type:"audit",data:{action:a,detail:d,reference:r}});});
+  },[currentUser,addPendingSync]);
   const perm=useCallback(()=>currentUser?PERMS[currentUser.role]||PERMS.cashier:PERMS.cashier,[currentUser]);
   // NF525: JET — événement de démarrage système + vérification séquence
   useEffect(()=>{
@@ -592,10 +594,9 @@ function AppProvider({children}){
       }
     }
 
-    // ── Consume avoir NOW (after TPE success, before finalizing sale) ──
+    // ── Avoir: compute remaining but consume AFTER API success ──
     let avoirRemainingAfterSale=null;
     if(selectedAvoir&&selectedAvoir.applied>0){
-      await consumeAvoir(selectedAvoir.avoirNumber,selectedAvoir.applied);
       avoirRemainingAfterSale=Math.max(0,(selectedAvoir.remaining||0)-selectedAvoir.applied);
     }
 
@@ -609,6 +610,8 @@ function AppProvider({children}){
         trainingMode:trainingMode||false,
         avoirUsed:selectedAvoir?{avoirNumber:selectedAvoir.avoirNumber,amount:selectedAvoir.applied,remainingAfter:avoirRemainingAfterSale}:null
       });
+      // Consume avoir AFTER API success
+      if(selectedAvoir&&selectedAvoir.applied>0){await consumeAvoir(selectedAvoir.avoirNumber,selectedAvoir.applied);}
       const prods=await API.products.list();setProducts(norm.products(prods));
       // FE-12: use Math.round for consistency between add (checkout) and deduct (return)
       if(selCust){setCustomers(prev=>prev.map(c=>c.id===selCust.id?{...c,points:(c.points||0)+Math.round(parseFloat(ticket.totalTTC)),totalSpent:(c.totalSpent||0)+parseFloat(ticket.totalTTC)}:c));}
@@ -664,6 +667,8 @@ function AppProvider({children}){
         globalDiscount:gd,saleNote:saleNote||null,promosApplied:applied,sessionId:cashReg?.id||null,
         offlineTicketNumber:ticketNumber,offlineDate:date
       }});
+      // Consume avoir locally + queue for sync (avoir not consumed yet in offline mode)
+      if(selectedAvoir&&selectedAvoir.applied>0){await consumeAvoir(selectedAvoir.avoirNumber,selectedAvoir.applied);}
       notify("Vente enregistrée (hors-ligne) — synchro en attente","warn");return ticket;
     }
   },[cart,gDisc,gDiscType,currentUser,selCust,calcPromoDiscount,promoCode,saleNote,cashReg,tSeq,gt,avoirPayment,selectedAvoir,consumeAvoir,addStockMove,notify,settings.pricingMode,addPendingSync]);
