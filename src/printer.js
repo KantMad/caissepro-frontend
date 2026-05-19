@@ -262,11 +262,24 @@ class ThermalPrinter {
 
   async barcode(data) {
     if (data && data.length === 13) {
-      await this.send(CMD.BARCODE_HEIGHT(50));
+      // ESC/POS EAN-13 barcode
+      await this.send(CMD.BARCODE_HEIGHT(60));
       await this.send(CMD.BARCODE_WIDTH(2));
       await this.send(CMD.BARCODE_TEXT_BELOW);
       await this.send(CMD.ALIGN_CENTER);
-      await this.send([...CMD.BARCODE_EAN13, ...this._encode(data), 0x00]);
+      // Try Format B first (GS k 67 n d1..dn) — more widely supported
+      const digits = data.split('').map(c => c.charCodeAt(0)); // ASCII digits 0x30-0x39
+      try {
+        await this.send([GS, 0x6B, 67, 13, ...digits]); // Format B: type 67 = EAN13, length 13
+      } catch (e) {
+        // Fallback Format A (GS k 2 d1..dk NUL)
+        try {
+          await this.send([GS, 0x6B, 0x02, ...digits, 0x00]);
+        } catch (e2) {
+          // Last fallback: print as text
+          await this.text(data);
+        }
+      }
       await this.newline();
     }
   }
