@@ -224,6 +224,14 @@ export const footfall = {
   save: (date, count) => api('/api/settings/footfall', { method: 'POST', body: JSON.stringify({ date, count }) }),
 };
 
+// ══ Retouches ══
+export const retouches = {
+  list: (params) => api('/api/retouches?' + new URLSearchParams(params || {})),
+  get: (id) => api(`/api/retouches/${id}`),
+  create: (data) => api('/api/retouches', { method: 'POST', body: JSON.stringify(data) }),
+  updateStatus: (id, status) => api(`/api/retouches/${id}/status`, { method: 'PUT', body: JSON.stringify({ status }) }),
+};
+
 // ══ Barcodes ══
 export const barcodes = {
   lookup: (code) => api(`/api/barcodes/${encodeURIComponent(code)}`),

@@ -66,7 +66,19 @@ function AppProvider({children}){
   useEffect(()=>{try{localStorage.setItem("caissepro_parked",JSON.stringify(parked));}catch(e){}},[parked]);
   const[retoucheBons,setRetoucheBons]=useState(()=>{try{const s=localStorage.getItem("caissepro_retouches");return s?JSON.parse(s):[];}catch(e){return[];}});
   useEffect(()=>{try{localStorage.setItem("caissepro_retouches",JSON.stringify(retoucheBons.slice(0,500)));}catch(e){}},[retoucheBons]);
-  const addRetoucheBon=useCallback((bon)=>setRetoucheBons(p=>[bon,...p]),[]);
+  const addRetoucheBon=useCallback(async(bon)=>{
+    try{
+      const saved=await API.retouches.create({client:bon.client||"",phone:bon.phone||"",seller:bon.seller||"",items:(bon.items||[]).filter(i=>i.desc),dateRetrait:bon.dateRetrait||null,notes:bon.notes||"",total:bon.total||0});
+      const mapped={num:saved.retouche_number||saved.num,client:saved.client_name||bon.client,phone:saved.client_phone||bon.phone,seller:saved.seller_name||bon.seller,items:saved.items||(bon.items||[]).filter(i=>i.desc),dateRetrait:saved.pickup_date||bon.dateRetrait,total:parseFloat(saved.total)||bon.total,barcode:saved.barcode||bon.barcode,date:saved.created_at||bon.date,id:saved.id,status:saved.status||"pending"};
+      setRetoucheBons(prev=>{const next=[mapped,...prev].slice(0,500);try{localStorage.setItem("caissepro_retouches",JSON.stringify(next));}catch(e){}return next;});
+      return mapped;
+    }catch(e){
+      console.warn("Retouche API failed, saving locally:",e.message);
+      setRetoucheBons(prev=>{const next=[bon,...prev].slice(0,500);try{localStorage.setItem("caissepro_retouches",JSON.stringify(next));}catch(e){}return next;});
+      addPendingSync({type:"createRetouche",data:bon});
+      return bon;
+    }
+  },[addPendingSync]);
   const[selCust,setSelCust]=useState(null);
   const[stockMoves,setStockMoves]=useState(()=>{try{const s=localStorage.getItem("caissepro_stockmoves");return s?JSON.parse(s):[];}catch(e){return[];}});
   useEffect(()=>{try{localStorage.setItem("caissepro_stockmoves",JSON.stringify(stockMoves.slice(0,500)));}catch(e){}},[stockMoves]);
@@ -192,6 +204,7 @@ function AppProvider({children}){
       try{const movesData=await API.stock.movements({limit:500});if(movesData?.length)setStockMoves(movesData);}catch(e){/* keep localStorage stockMoves */}
       try{const clockData=await API.audit.clock();if(clockData?.length)setClockEntries(clockData);}catch(e){/* keep localStorage clock */}
       try{const phData=await API.pricehistory.list({limit:500});if(phData?.length)setPriceHistory(phData);}catch(e){/* keep localStorage */}
+      try{const retData=await API.retouches.list();if(retData?.length)setRetoucheBons(retData.map(r=>({id:r.id,num:r.retouche_number,client:r.client_name,phone:r.client_phone,seller:r.seller_name,items:r.items||[],dateRetrait:r.pickup_date,total:parseFloat(r.total),barcode:r.barcode,date:r.created_at,status:r.status})));}catch(e){/* keep localStorage retouches */}
     }catch(e){
       console.warn("Chargement données échoué:",e.message);
       if(e.message?.includes("401")||e.message?.includes("Unauthorized")){setCurrentUser(null);API.clearToken();}
@@ -225,6 +238,7 @@ function AppProvider({children}){
           else if(action.type==="useGiftCard")await API.giftcards.use(action.data.code,action.data.amount);
           else if(action.type==="parkCart")await API.parked.save(action.data);
           else if(action.type==="priceChange")await API.pricehistory.create(action.data);
+          else if(action.type==="createRetouche")await API.retouches.create(action.data);
           else if(action.type==="audit")await API.audit.create(action.data.action,action.data.detail,action.data.reference);
           else if(action.type==="jet")await API.audit.createJet(action.data.eventType,action.data.detail);
           else{failed.push({...action,retries:(action.retries||0)+1,lastError:"Type inconnu"});continue;}

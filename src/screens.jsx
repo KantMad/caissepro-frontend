@@ -812,7 +812,7 @@ function SalesScreen(){
               (bon.notes?`<div><strong>Notes:</strong> ${bon.notes}</div><hr>`:"")+
               `<div class="center" style="font-size:10px;">Vendeur: ${bon.seller}<br>${new Date().toLocaleString("fr-FR")}<br>${settings.name||"CaissePro"} — ${settings.siret||""}</div>`+
               `</body></html>`);w.document.close();setTimeout(()=>{w.print();},300);}}
-          addRetoucheBon(bon);
+          await addRetoucheBon(bon);
           setRetoucheModal(false);setRetForm({client:"",phone:"",date:new Date().toISOString().split("T")[0],notes:"",items:[{desc:"",price:""}]});
           notify(`Bon de retouche ${bonNum} créé et ajouté au panier`);
           addAudit("RETOUCHE",`Bon ${bonNum} — ${bon.client} — ${retTotal.toFixed(2)}€`);
