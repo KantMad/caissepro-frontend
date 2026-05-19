@@ -130,7 +130,7 @@ function CashRegControl({onSkip,onDone}){
 
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
         <Btn variant="outline" onClick={onSkip} style={{height:48,borderRadius:12}}><XCircle size={14}/> Passer</Btn>
-        <Btn onClick={()=>{const amt=denomMode?denomTotal:parseFloat(a);if(amt){openReg(amt);onDone();}}} disabled={denomMode?denomTotal===0:!a}
+        <Btn onClick={()=>{const amt=denomMode?denomTotal:parseFloat(a);if(amt){openReg(amt,denomMode?denom:null);onDone();}}} disabled={denomMode?denomTotal===0:!a}
           style={{height:48,borderRadius:12,background:C.accent,boxShadow:(denomMode?denomTotal>0:a)?`0 4px 16px ${C.accent}33`:"none"}}><Wallet size={14}/> Ouvrir la caisse</Btn>
       </div></div></div>);
 }
@@ -2102,7 +2102,7 @@ function ClosureScreen(){
           if(serverClosures?.some(c=>c.closure_type==="daily"&&(c.period||c.created_at||"").startsWith(todayStr))){
             notify("Une clôture Z existe déjà sur le serveur pour aujourd'hui","error");return;}
         }catch(e){/* offline — local check is our best guard */}
-        const cl=await createClosure("daily",aCash?parseFloat(aCash):null,aCard?parseFloat(aCard):null);if(cl){closeReg(aCash?parseFloat(aCash):null,aCard?parseFloat(aCard):null);setReportModal(cl);}else{notify("Erreur lors de la clôture","danger");}}}
+        const cl=await createClosure("daily",aCash?parseFloat(aCash):null,aCard?parseFloat(aCard):null);if(cl){closeReg(aCash?parseFloat(aCash):null,aCard?parseFloat(aCard):null,{ticketCount:cl.ticketCount,totalHT:cl.totalHT,totalTVA:cl.totalTVA,totalTTC:cl.totalTTC,byPayment:cl.byPayment,expectedCash:cl.expectedCash,returnCount:todayAvoirs.length,totalReturns,netRevenue:(cl.totalTTC||0)-totalReturns,grandTotal:cl.grandTotal});setReportModal(cl);}else{notify("Erreur lors de la clôture","danger");}}}
         style={{width:"100%",height:44,marginBottom:8}}><Lock size={16}/> Clôture journalière (Z)</Btn>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
         <Btn variant="outline" onClick={async()=>{const cl=await createClosure("monthly",null,null);if(cl)setReportModal(cl);}} style={{height:36,fontSize:11}}><Calendar size={14}/> Clôture mensuelle</Btn>

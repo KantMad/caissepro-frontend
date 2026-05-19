@@ -1018,6 +1018,8 @@ function AppProvider({children}){
         else if(type==="avoir")await halPrinter.printAvoir(data,settings,CO);
         else if(type==="giftcard")await halPrinter.printGiftCard(data,settings,CO);
         else if(type==="retouche")await halPrinter.printRetouche(data,settings,CO);
+        else if(type==="register-open")await halPrinter.printRegisterOpen(data,settings,CO);
+        else if(type==="register-close")await halPrinter.printRegisterClose(data,settings,CO);
         else if(type==="closure")await halPrinter.printClosure(data,settings,CO);
         else if(type==="test")await halPrinter.testPrint();
         else if(type==="drawer")await halPrinter.openDrawer();
@@ -1031,6 +1033,8 @@ function AppProvider({children}){
         else if(type==="avoir")await printer.printAvoir(data,settings,CO);
         else if(type==="giftcard")await printer.printGiftCard(data,settings,CO);
         else if(type==="retouche")await printer.printRetouche(data,settings,CO);
+        else if(type==="register-open")await printer.printRegisterOpen(data,settings,CO);
+        else if(type==="register-close")await printer.printRegisterClose(data,settings,CO);
         else if(type==="closure")await printer.printClosure(data,settings,CO);
         else if(type==="test")await printer.testPrint();
         else if(type==="drawer")await printer.openDrawer();
@@ -1075,15 +1079,19 @@ function AppProvider({children}){
       setCustomers(p=>[...p,nc]);notify("Client créé","success");return nc;
     }},[notify]);
 
-  const openReg=async(a)=>{
-    const reg={openingAmount:a,openDate:new Date().toISOString()};
+  const openReg=async(a,denominations)=>{
+    const reg={openingAmount:a,openDate:new Date().toISOString(),denominations:denominations||null};
     setCashReg(reg);addAudit("CAISSE","Ouverture "+a+"€");
     try{const res=await API.settings.openRegister(a);if(res?.id)setCashReg(prev=>({...prev,id:res.id}));
     }catch(e){addPendingSync({type:"openRegister",data:{openingAmount:a}});console.warn("Ouverture caisse locale:",e.message);}
+    // Print opening ticket
+    try{await thermalPrint("register-open",{openingAmount:a,openDate:reg.openDate,userName:currentUser?.name,storeName:currentStore?.name,denominations:denominations||null});}catch(e){console.warn("Impression ouverture:",e.message);}
   };
-  const closeReg=async(closingCash,closingCard)=>{
+  const closeReg=async(closingCash,closingCard,closeData)=>{
     if(cashReg?.id){try{await API.settings.closeRegister(cashReg.id,{closingCash:closingCash||null,closingCard:closingCard||null});
     }catch(e){addPendingSync({type:"closeRegister",data:{registerId:cashReg.id}});console.warn("Fermeture caisse locale:",e.message);}}
+    // Print closing ticket
+    if(closeData){try{await thermalPrint("register-close",{...closeData,openDate:cashReg?.openDate,closeDate:new Date().toISOString(),openingAmount:cashReg?.openingAmount||0,userName:currentUser?.name,storeName:currentStore?.name,actualCash:closingCash,actualCard:closingCard});}catch(e){console.warn("Impression fermeture:",e.message);}}
     setCashReg(null);
   };
 

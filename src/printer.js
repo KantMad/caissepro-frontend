@@ -634,6 +634,263 @@ class ThermalPrinter {
     }
   }
 
+  // ── Print register opening ticket ──
+  async printRegisterOpen(data, settings, companyInfo) {
+    if (!this.connected) throw new Error("Imprimante non connectee");
+
+    const s = settings || {};
+    const co = companyInfo || {};
+
+    try {
+      await this.send(CMD.INIT);
+      await this.send(CHARSET_FRENCH);
+      await this.send(CODEPAGE_PC858);
+
+      // Header
+      await this.alignCenter();
+      await this.doubleSize();
+      await this.bold(true);
+      await this.text(s.name || co.name || 'Ma Boutique');
+      await this.newline();
+      await this.normalSize();
+      await this.bold(false);
+
+      if (s.address) { await this.text(s.address); await this.newline(); }
+      if (s.postalCode || s.city) {
+        await this.text(`${s.postalCode || ''} ${s.city || ''}`);
+        await this.newline();
+      }
+      if (s.phone) { await this.text(`Tel: ${s.phone}`); await this.newline(); }
+      if (s.siret) { await this.text(`SIRET: ${s.siret}`); await this.newline(); }
+      if (s.tvaIntra) { await this.text(`TVA: ${s.tvaIntra}`); await this.newline(); }
+
+      await this.separator('=');
+
+      await this.alignCenter();
+      await this.doubleSize();
+      await this.bold(true);
+      await this.text('OUVERTURE DE CAISSE');
+      await this.newline();
+      await this.normalSize();
+      await this.bold(false);
+
+      await this.separator('=');
+
+      // Session info
+      await this.alignLeft();
+      await this.line('Date', new Date(data.openDate || '').toLocaleString('fr-FR'));
+      await this.line('Caissier', data.userName || '?');
+      if (data.storeName) await this.line('Magasin', data.storeName);
+
+      await this.separator('-');
+
+      // Opening amount
+      await this.alignCenter();
+      await this.bold(true);
+      await this.text('FOND DE CAISSE');
+      await this.newline();
+      await this.doubleSize();
+      await this.text(`${(data.openingAmount || 0).toFixed(2)} EUR`);
+      await this.newline();
+      await this.normalSize();
+      await this.bold(false);
+
+      // Denomination detail if available
+      if (data.denominations && Object.keys(data.denominations).length > 0) {
+        await this.separator('-');
+        await this.alignLeft();
+        await this.fontSmall();
+        await this.bold(true);
+        await this.text('DETAIL DES COUPURES');
+        await this.newline();
+        await this.bold(false);
+        const denoms = Object.entries(data.denominations)
+          .filter(([, count]) => count > 0)
+          .sort(([a], [b]) => parseFloat(b) - parseFloat(a));
+        for (const [value, count] of denoms) {
+          const v = parseFloat(value);
+          const label = v >= 1 ? `${v.toFixed(0)} EUR` : `${(v * 100).toFixed(0)} cts`;
+          await this.line(`  ${label} x ${count}`, `${(v * count).toFixed(2)} EUR`);
+        }
+        await this.fontNormal();
+      }
+
+      await this.separator('=');
+
+      // Footer
+      await this.alignCenter();
+      await this.fontSmall();
+      await this.text(`${co.sw || 'CaissePro'} v${co.ver || '5.0.0'}`);
+      await this.newline();
+      await this.text('Document obligatoire — A conserver');
+      await this.newline();
+      await this.fontNormal();
+
+      await this.feed(4);
+      await this.cut();
+
+      this._emit('printed', { type: 'register-open' });
+      return true;
+    } catch (e) {
+      this._emit('error', { message: e.message });
+      throw new Error(`Erreur impression ouverture caisse: ${e.message}`);
+    }
+  }
+
+  // ── Print register closing ticket ──
+  async printRegisterClose(data, settings, companyInfo) {
+    if (!this.connected) throw new Error("Imprimante non connectee");
+
+    const s = settings || {};
+    const co = companyInfo || {};
+
+    try {
+      await this.send(CMD.INIT);
+      await this.send(CHARSET_FRENCH);
+      await this.send(CODEPAGE_PC858);
+
+      // Header
+      await this.alignCenter();
+      await this.doubleSize();
+      await this.bold(true);
+      await this.text(s.name || co.name || 'Ma Boutique');
+      await this.newline();
+      await this.normalSize();
+      await this.bold(false);
+
+      if (s.address) { await this.text(s.address); await this.newline(); }
+      if (s.postalCode || s.city) {
+        await this.text(`${s.postalCode || ''} ${s.city || ''}`);
+        await this.newline();
+      }
+      if (s.phone) { await this.text(`Tel: ${s.phone}`); await this.newline(); }
+      if (s.siret) { await this.text(`SIRET: ${s.siret}`); await this.newline(); }
+      if (s.tvaIntra) { await this.text(`TVA: ${s.tvaIntra}`); await this.newline(); }
+
+      await this.separator('=');
+
+      await this.alignCenter();
+      await this.doubleSize();
+      await this.bold(true);
+      await this.text('FERMETURE DE CAISSE');
+      await this.newline();
+      await this.normalSize();
+      await this.bold(false);
+
+      await this.separator('=');
+
+      // Session info
+      await this.alignLeft();
+      await this.line('Date ouverture', new Date(data.openDate || '').toLocaleString('fr-FR'));
+      await this.line('Date fermeture', new Date(data.closeDate || '').toLocaleString('fr-FR'));
+      await this.line('Caissier', data.userName || '?');
+      if (data.storeName) await this.line('Magasin', data.storeName);
+
+      await this.separator('-');
+
+      // Activity summary
+      await this.bold(true);
+      await this.text('ACTIVITE');
+      await this.newline();
+      await this.bold(false);
+      await this.line('Nombre de tickets', String(data.ticketCount || 0));
+      await this.line('Total HT', `${(data.totalHT || 0).toFixed(2)} EUR`);
+      await this.line('Total TVA', `${(data.totalTVA || 0).toFixed(2)} EUR`);
+      await this.bold(true);
+      await this.line('Total TTC', `${(data.totalTTC || 0).toFixed(2)} EUR`);
+      await this.bold(false);
+
+      await this.separator('-');
+
+      // Payment breakdown
+      await this.bold(true);
+      await this.text('VENTILATION PAIEMENTS');
+      await this.newline();
+      await this.bold(false);
+      if (data.byPayment) {
+        await this.line('Especes', `${(data.byPayment.cash || 0).toFixed(2)} EUR`);
+        await this.line('Carte bancaire', `${(data.byPayment.card || 0).toFixed(2)} EUR`);
+        if ((data.byPayment.cheque || 0) > 0) await this.line('Cheques', `${data.byPayment.cheque.toFixed(2)} EUR`);
+        if ((data.byPayment.giftcard || 0) > 0) await this.line('Cartes cadeaux', `${data.byPayment.giftcard.toFixed(2)} EUR`);
+        if ((data.byPayment.amex || 0) > 0) await this.line('American Express', `${data.byPayment.amex.toFixed(2)} EUR`);
+        if ((data.byPayment.avoir || 0) > 0) await this.line('Avoirs utilises', `${data.byPayment.avoir.toFixed(2)} EUR`);
+      }
+
+      await this.separator('-');
+
+      // Cash control
+      await this.bold(true);
+      await this.text('CONTROLE CAISSE');
+      await this.newline();
+      await this.bold(false);
+      await this.line('Fond ouverture', `${(data.openingAmount || 0).toFixed(2)} EUR`);
+      await this.line('+ Encaissements ESP', `${(data.byPayment?.cash || 0).toFixed(2)} EUR`);
+      await this.bold(true);
+      await this.line('= Especes attendues', `${(data.expectedCash || 0).toFixed(2)} EUR`);
+      await this.bold(false);
+
+      if (data.actualCash != null) {
+        await this.line('Especes comptees', `${parseFloat(data.actualCash).toFixed(2)} EUR`);
+        const cashDiff = parseFloat(data.actualCash) - (data.expectedCash || 0);
+        await this.bold(true);
+        await this.line('Ecart especes', `${cashDiff >= 0 ? '+' : ''}${cashDiff.toFixed(2)} EUR`);
+        await this.bold(false);
+      }
+
+      if (data.actualCard != null) {
+        await this.line('CB attendues', `${(data.byPayment?.card || 0).toFixed(2)} EUR`);
+        await this.line('CB comptees', `${parseFloat(data.actualCard).toFixed(2)} EUR`);
+        const cardDiff = parseFloat(data.actualCard) - (data.byPayment?.card || 0);
+        await this.bold(true);
+        await this.line('Ecart CB', `${cardDiff >= 0 ? '+' : ''}${cardDiff.toFixed(2)} EUR`);
+        await this.bold(false);
+      }
+
+      // Returns
+      if ((data.returnCount || 0) > 0 || (data.totalReturns || 0) > 0) {
+        await this.separator('-');
+        await this.bold(true);
+        await this.text('RETOURS / AVOIRS');
+        await this.newline();
+        await this.bold(false);
+        await this.line('Nombre d\'avoirs', String(data.returnCount || 0));
+        await this.line('Total retours', `-${(data.totalReturns || 0).toFixed(2)} EUR`);
+      }
+
+      await this.separator('=');
+
+      // Grand total
+      await this.bold(true);
+      await this.line('CA NET', `${(data.netRevenue || 0).toFixed(2)} EUR`);
+      await this.doubleSize();
+      await this.alignCenter();
+      await this.text(`GT: ${(data.grandTotal || 0).toFixed(2)} EUR`);
+      await this.newline();
+      await this.normalSize();
+      await this.bold(false);
+
+      await this.separator('=');
+
+      // Footer
+      await this.alignCenter();
+      await this.fontSmall();
+      await this.text(`${co.sw || 'CaissePro'} v${co.ver || '5.0.0'}`);
+      await this.newline();
+      await this.text('Document obligatoire — A conserver');
+      await this.newline();
+      await this.fontNormal();
+
+      await this.feed(4);
+      await this.cut();
+
+      this._emit('printed', { type: 'register-close' });
+      return true;
+    } catch (e) {
+      this._emit('error', { message: e.message });
+      throw new Error(`Erreur impression fermeture caisse: ${e.message}`);
+    }
+  }
+
   // ── Print retouche receipt (same format as sales receipt) ──
   async printRetouche(bon, settings, companyInfo) {
     if (!this.connected) throw new Error("Imprimante non connectee");
