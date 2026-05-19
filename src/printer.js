@@ -263,7 +263,7 @@ class ThermalPrinter {
   async barcode(data) {
     if (!data || data.length !== 13) return;
 
-    // ── Generate EAN-13 barcode as raster bitmap (universal, no firmware dependency) ──
+    // ── Generate EAN-13 barcode as raster bitmap ──
     const EAN_L = ['0001101','0011001','0010011','0111101','0100011','0110001','0101111','0111011','0110111','0001011'];
     const EAN_G = ['0100111','0110011','0011011','0100001','0011101','0111001','0000101','0010001','0001001','0010111'];
     const EAN_R = ['1110010','1100110','1101100','1000010','1011100','1001110','1010000','1000100','1001000','1110100'];
@@ -284,41 +284,41 @@ class ThermalPrinter {
     }
     modules.push(1,0,1); // end guard
 
-    // Scale: each module = 2 pixels wide; barcode height = 50 dots
+    // Scale: each module = 2 pixels wide
     const scale = 2;
-    const barcodeW = modules.length * scale; // 95 * 2 = 190 pixels
-    const barcodeH = 50;
-    // Center in 384-pixel (48mm * 8 dots/mm) print width
-    const printW = 384;
-    const bytesPerRow = Math.ceil(printW / 8);
-    const offsetX = Math.floor((printW - barcodeW) / 2);
+    const barcodePixelW = modules.length * scale; // 95 * 2 = 190 pixels
 
-    // Build row bitmap (1 row, then repeat for height)
-    const row = new Uint8Array(bytesPerRow);
-    for (let m = 0; m < modules.length; m++) {
-      if (modules[m] === 1) {
-        for (let s = 0; s < scale; s++) {
-          const px = offsetX + m * scale + s;
-          row[Math.floor(px / 8)] |= (0x80 >> (px % 8));
-        }
-      }
-    }
-
-    // Build raster data (all rows identical)
-    const rasterData = new Uint8Array(bytesPerRow * barcodeH);
-    for (let y = 0; y < barcodeH; y++) {
-      rasterData.set(row, y * bytesPerRow);
-    }
-
-    // Send: GS v 0 (raster bit image)
-    // GS v 0 m xL xH yL yH d1...dk
-    const xL = bytesPerRow & 0xFF;
-    const xH = (bytesPerRow >> 8) & 0xFF;
-    const yL = barcodeH & 0xFF;
-    const yH = (barcodeH >> 8) & 0xFF;
+    // Use ESC * mode 33 (24-dot double-density): prints 24 dots high per pass
+    // Each column = 3 bytes (24 vertical dots), width up to 65535 columns
+    const barcodeH = 48; // 48 dots = 2 passes of 24 dots
+    const passH = 24;
+    const numPasses = barcodeH / passH; // 2
 
     await this.send(CMD.ALIGN_CENTER);
-    await this.send([GS, 0x76, 0x30, 0x00, xL, xH, yL, yH, ...rasterData]);
+    // Set line spacing to 24 dots (so passes don't have gaps)
+    await this.send([ESC, 0x33, passH]);
+
+    for (let pass = 0; pass < numPasses; pass++) {
+      // ESC * m nL nH d1...dk
+      // m=33 (24-dot double-density), nL/nH = number of columns
+      const nL = barcodePixelW & 0xFF;
+      const nH = (barcodePixelW >> 8) & 0xFF;
+      // Build as Uint8Array to avoid large array spread
+      const buf = new Uint8Array(5 + barcodePixelW * 3);
+      buf[0] = ESC; buf[1] = 0x2A; buf[2] = 33; buf[3] = nL; buf[4] = nH;
+      for (let x = 0; x < barcodePixelW; x++) {
+        const moduleIdx = Math.floor(x / scale);
+        const isBar = modules[moduleIdx] === 1;
+        const off = 5 + x * 3;
+        // Each column: 3 bytes = 24 vertical dots (all black or all white)
+        buf[off] = buf[off + 1] = buf[off + 2] = isBar ? 0xFF : 0x00;
+      }
+      await this.send(buf);
+      await this.send([LF]); // advance to next pass
+    }
+
+    // Restore default line spacing
+    await this.send([ESC, 0x32]);
 
     // Print barcode number below
     await this.send(CMD.ALIGN_CENTER);

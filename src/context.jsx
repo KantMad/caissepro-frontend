@@ -1011,20 +1011,15 @@ function AppProvider({children}){
     if(halPrinter&&!halPrinter.connected){
       try{await halPrinter.connect();if(halPrinter.connected){setPrinterConnected(true);setPrinterType(hwId);}}catch(e){console.warn('[HAL] printer auto-connect:',e);}
     }
-    // Try HAL native printer first (Sunmi/PAX/iMin)
+    // Try HAL native printer first (Sunmi/PAX/iMin) — only for methods the HAL supports
     if(halPrinter&&halPrinter.connected){
-      try{
-        if(type==="receipt")await halPrinter.printReceipt(data,settings,CO);
-        else if(type==="avoir")await halPrinter.printAvoir(data,settings,CO);
-        else if(type==="giftcard")await halPrinter.printGiftCard(data,settings,CO);
-        else if(type==="retouche")await halPrinter.printRetouche(data,settings,CO);
-        else if(type==="register-open")await halPrinter.printRegisterOpen(data,settings,CO);
-        else if(type==="register-close")await halPrinter.printRegisterClose(data,settings,CO);
-        else if(type==="closure")await halPrinter.printClosure(data,settings,CO);
-        else if(type==="test")await halPrinter.testPrint();
-        else if(type==="drawer")await halPrinter.openDrawer();
-        notify("Impression envoyee","success");return true;
-      }catch(e){console.error("[HAL] print failed, falling back:",e.message||e);notify("Erreur impression: "+(e.message||"inconnue"),"warn");}
+      const halMethod=type==="receipt"?"printReceipt":type==="avoir"?"printAvoir":type==="giftcard"?"printGiftCard":type==="retouche"?"printRetouche":type==="register-open"?"printRegisterOpen":type==="register-close"?"printRegisterClose":type==="closure"?"printClosure":type==="test"?"testPrint":type==="drawer"?"openDrawer":null;
+      if(halMethod&&typeof halPrinter[halMethod]==="function"){
+        try{
+          await halPrinter[halMethod](data,settings,CO);
+          notify("Impression envoyee","success");return true;
+        }catch(e){console.error("[HAL] print failed, falling back:",e.message||e);}
+      }
     }
     // Try ESC/POS Web Serial/USB printer
     if(printer.connected){
