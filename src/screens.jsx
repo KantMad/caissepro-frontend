@@ -636,16 +636,18 @@ function SalesScreen(){
       <div style={{display:"flex",gap:8,marginTop:14}}>
         <Btn variant="outline" onClick={()=>emailTicket(lastTk)} style={{flex:1,borderRadius:12}}><Mail size={14}/> Email</Btn>
         <Btn variant="outline" onClick={()=>thermalPrint("receipt",lastTk)} style={{flex:1,borderRadius:12}}><Printer size={14}/> {printerConnected?"Ticket":"Imprimer"}</Btn>
-        <Btn variant="outline" onClick={()=>{
-          const w=window.open("","_blank","width=400,height=600");if(!w)return;
-          w.document.write(`<html><head><title>Ticket cadeau</title><style>body{font-family:'Courier New',monospace;font-size:12px;padding:10px;max-width:300px;margin:0 auto;}h2{text-align:center;font-size:14px;margin:4px 0;}hr{border:none;border-top:1px dashed #333;margin:6px 0;}.center{text-align:center;}.row{display:flex;justify-content:space-between;}</style></head><body>`+
-          `<h2>${settings.name||CO.name}</h2><div class="center">${settings.address||""}, ${settings.postalCode||""} ${settings.city||""}</div><hr>`+
-          `<h2>TICKET CADEAU</h2><div class="center">N° ${lastTk.ticketNumber}</div><div class="center">${new Date(lastTk.date||lastTk.createdAt||"").toLocaleString("fr-FR")}</div><hr>`+
-          (lastTk.items||[]).map(i=>`<div>${i.product?.name||i.product_name}${i.isCustom||i.is_custom?"":" ("+((i.variant?.color||i.variant_color)||"")+"/"+((i.variant?.size||i.variant_size)||"")+")"} x${i.quantity}</div>`).join("")+
-          `<hr><div class="center" style="font-size:10px;">${settings.footerMsg||CO.footerMsg||""}</div>`+
-          `<div class="center" style="font-size:10px;margin-top:4px;">Échange possible sous ${settings.returnPolicy?.days||30} jours sur présentation de ce ticket</div>`+
-          (lastTk.barcode?ean13SvgHtml(lastTk.barcode,160,45):"")+
-          `</body></html>`);w.document.close();setTimeout(()=>w.print(),300);
+        <Btn variant="outline" onClick={async()=>{
+          const giftTk={...lastTk,_giftCard:true,_returnDays:settings.returnPolicy?.days||30};
+          const printed=await thermalPrint("receipt",giftTk);
+          if(!printed){const w=window.open("","_blank","width=400,height=600");if(!w)return;
+            w.document.write(`<html><head><title>Ticket cadeau</title><style>body{font-family:'Courier New',monospace;font-size:12px;padding:10px;max-width:300px;margin:0 auto;}h2{text-align:center;font-size:14px;margin:4px 0;}hr{border:none;border-top:1px dashed #333;margin:6px 0;}.center{text-align:center;}</style></head><body>`+
+            `<h2>${settings.name||CO.name}</h2><div class="center">${settings.address||""}, ${settings.postalCode||""} ${settings.city||""}</div><hr>`+
+            `<h2>TICKET CADEAU</h2><div class="center">N° ${lastTk.ticketNumber}</div><div class="center">${new Date(lastTk.date||lastTk.createdAt||"").toLocaleString("fr-FR")}</div><hr>`+
+            (lastTk.items||[]).map(i=>`<div>${i.product?.name||i.product_name}${i.isCustom||i.is_custom?"":" ("+((i.variant?.color||i.variant_color)||"")+"/"+((i.variant?.size||i.variant_size)||"")+")"} x${i.quantity}</div>`).join("")+
+            `<hr><div class="center" style="font-size:10px;">${settings.footerMsg||CO.footerMsg||""}</div>`+
+            `<div class="center" style="font-size:10px;margin-top:4px;">Échange possible sous ${settings.returnPolicy?.days||30} jours sur présentation de ce ticket</div>`+
+            (lastTk.barcode?ean13SvgHtml(lastTk.barcode,160,45):"")+
+            `</body></html>`);w.document.close();setTimeout(()=>w.print(),300);}
         }} style={{flex:1,borderRadius:12}}><Gift size={14}/> Cadeau</Btn>
         <Btn variant="success" onClick={()=>setTkModal(false)} style={{flex:1,borderRadius:12}}><CheckCircle2 size={14}/> Terminé</Btn>
       </div></>)}
@@ -1529,6 +1531,7 @@ function HistoryScreen(){
             <div style={{fontSize:9,color:C.textMuted}}>{new Date(b.date).toLocaleString("fr-FR")} — {b.seller||"?"} — {(b.items||[]).filter(i=>i.desc).length} prestation(s)</div>
             <div style={{fontSize:9,color:C.textMuted,marginTop:2}}>{(b.items||[]).filter(i=>i.desc).map(i=>i.desc).join(", ")}</div>
             {b.dateRetrait&&<div style={{fontSize:9,fontWeight:600,color:new Date(b.dateRetrait)<new Date()?C.danger:C.primary}}>Retrait: {new Date(b.dateRetrait).toLocaleDateString("fr-FR")}</div>}
+            {b.barcode&&<div style={{marginTop:4}}><EAN13Svg code={b.barcode} width={120} height={35}/></div>}
           </div>
           <div style={{textAlign:"right",marginRight:8}}><div style={{fontSize:13,fontWeight:700,color:C.primary}}>{(b.total||0).toFixed(2)}€</div>
             {b.phone&&<div style={{fontSize:8,color:C.textMuted}}>{b.phone}</div>}</div>
@@ -1601,10 +1604,23 @@ function HistoryScreen(){
         {tkFp&&<div style={{textAlign:"center",background:C.fiscalLight,padding:6,borderRadius:6,margin:"6px 0"}}>
           <div style={{fontSize:8,color:C.fiscal,fontWeight:700}}>EMPREINTE NF525</div>
           <div style={{fontSize:11,fontWeight:700,color:C.fiscal,letterSpacing:2}}>{tkFp}</div></div>}
+        {(tk.barcode)&&<div style={{marginTop:6,display:"flex",justifyContent:"center"}}><EAN13Svg code={tk.barcode} width={160} height={45}/></div>}
         <div style={{textAlign:"center",fontSize:8,color:C.textMuted}}>{CO.sw} v{CO.ver} — Conforme NF525<br/>{settings.footerMsg||CO.footerMsg}</div>
       </div>
-      <div style={{display:"flex",gap:8,marginTop:10}}>
+      <div style={{display:"flex",gap:8,marginTop:10,flexWrap:"wrap"}}>
         <Btn variant="outline" onClick={()=>thermalPrint("receipt",tk)} style={{flex:1}}><Printer size={14}/> {printerConnected?"Ticket":"Réimprimer"}</Btn>
+        <Btn variant="outline" onClick={()=>{
+          const giftTk={...tk,_giftCard:true};
+          const printed=thermalPrint("receipt",giftTk);
+          if(!printed){const w=window.open("","_blank","width=400,height=600");if(!w)return;
+            w.document.write(`<html><head><title>Ticket cadeau</title><style>body{font-family:'Courier New',monospace;font-size:12px;padding:10px;max-width:300px;margin:0 auto;}h2{text-align:center;font-size:14px;margin:4px 0;}hr{border:none;border-top:1px dashed #333;margin:6px 0;}.center{text-align:center;}</style></head><body>`+
+            `<h2>${settings.name||CO.name}</h2><div class="center">${settings.address||""}, ${settings.postalCode||""} ${settings.city||""}</div><hr>`+
+            `<h2>TICKET CADEAU</h2><div class="center">N° ${tkNum}</div><div class="center">${tkDateStr}</div><hr>`+
+            tkItems.map(i=>`<div>${i.product?.name||i.product_name||i.name||"Article"}${i.isCustom||i.is_custom?"":" ("+((i.variant?.color||i.variant_color||i.color)||"")+"/"+((i.variant?.size||i.variant_size||i.size)||"")+")"} x${i.quantity||1}</div>`).join("")+
+            `<hr><div class="center" style="font-size:10px;">${settings.footerMsg||CO.footerMsg||""}</div>`+
+            (tk.barcode?ean13SvgHtml(tk.barcode,160,45):"")+
+            `</body></html>`);w.document.close();setTimeout(()=>w.print(),300);}
+        }} style={{flex:1}}><Gift size={14}/> Cadeau</Btn>
         <Btn variant="outline" onClick={()=>{setReassignModal(tk);setReassignCust(null);}} style={{flex:1}}><UserIcon size={14}/> Client</Btn>
         <Btn variant="outline" onClick={()=>{const s=encodeURIComponent(`Ticket ${tkNum} — ${settings.name||CO.name}`);
           const b=encodeURIComponent(`Bonjour,\n\nTicket N°${tkNum}\nDate: ${tkDateStr}\nTotal: ${tkTTC.toFixed(2)}€\n\n${settings.name||CO.name}\nSIRET: ${settings.siret||CO.siret}`);

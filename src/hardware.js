@@ -226,13 +226,21 @@ class SunmiPrinterAdapter {
     if (s.tvaIntra) text(`TVA: ${s.tvaIntra}\n`);
     cmds.push({ cmd: 'line', char: '=', len: 32 });
 
+    // Gift card mode: no prices, special header
+    const isGift = !!t._giftCard;
+
     // Ticket info
     align(0); bold(true);
     let dateStr = '';
     try { dateStr = new Date(t.date || t.createdAt || Date.now()).toLocaleString('fr-FR'); } catch (e) {}
+    if (isGift) {
+      align(1); size(28); bold(true);
+      text('TICKET CADEAU\n');
+      size(20); bold(false); align(0);
+    }
     text(`N: ${t.ticketNumber || t.ticket_number || '?'}  ${dateStr}\n`);
     bold(false);
-    text(`Caissier: ${t.userName || t.user_name || '?'}\n`);
+    if (!isGift) text(`Caissier: ${t.userName || t.user_name || '?'}\n`);
     if (t.customerName || t.customer_name) text(`Client: ${t.customerName || t.customer_name}\n`);
     cmds.push({ cmd: 'line', char: '-', len: 32 });
 
@@ -250,45 +258,58 @@ class SunmiPrinterAdapter {
       bold(true);
       text(`${name}${!isCustom && color ? ` (${color}/${sz})` : ''}\n`);
       bold(false);
-      text(`  x${qty}  ${fmt(lineTTC)} EUR\n`);
+      if (isGift) {
+        text(`  x${qty}\n`);
+      } else {
+        text(`  x${qty}  ${fmt(lineTTC)} EUR\n`);
+      }
     }
     cmds.push({ cmd: 'line', char: '-', len: 32 });
 
-    // Promos
-    if (t.promosApplied?.length > 0) {
-      for (const promo of t.promosApplied) {
-        size(18); text(`  * ${promo}\n`); size(20);
+    if (!isGift) {
+      // Promos
+      if (t.promosApplied?.length > 0) {
+        for (const promo of t.promosApplied) {
+          size(18); text(`  * ${promo}\n`); size(20);
+        }
+        cmds.push({ cmd: 'line', char: '-', len: 32 });
       }
-      cmds.push({ cmd: 'line', char: '-', len: 32 });
+
+      // Discount
+      if (Number(t.globalDiscount || t.global_discount || 0) > 0) {
+        text(`Remise       -${fmt(t.globalDiscount || t.global_discount)} EUR\n`);
+      }
+
+      // Totals
+      text(`Total HT     ${fmt(t.totalHT || t.total_ht)} EUR\n`);
+      text(`TVA          ${fmt(t.totalTVA || t.total_tva)} EUR\n`);
+      bold(true); size(28);
+      text(`TOTAL TTC    ${fmt(t.totalTTC || t.total_ttc)} EUR\n`);
+      size(20); bold(false);
+
+      // Payment
+      const ml = { cash: 'ESP', card: 'CB', amex: 'AMEX', giftcard: 'CAD', cheque: 'CHQ', avoir: 'AVOIR' };
+      const payments = t.payments || [];
+      if (payments.length > 0) {
+        const payStr = payments.map(p => `${ml[p.method] || p.method || '?'} ${fmt(p.amount)} EUR`).join(' + ');
+        text(`Paiement: ${payStr}\n`);
+      }
+      cmds.push({ cmd: 'line', char: '=', len: 32 });
+
+      // NF525
+      align(1); size(18);
+      text('EMPREINTE NF525\n');
+      size(22); bold(true);
+      text(`${t.fingerprint || t.hash || '-'}\n`);
+      bold(false);
+    } else {
+      // Gift card footer
+      align(1); size(18);
+      text(`Echange possible sous ${(t._returnDays || 30)} jours\n`);
+      text('sur presentation de ce ticket\n');
+      size(20);
+      cmds.push({ cmd: 'line', char: '=', len: 32 });
     }
-
-    // Discount
-    if (Number(t.globalDiscount || t.global_discount || 0) > 0) {
-      text(`Remise       -${fmt(t.globalDiscount || t.global_discount)} EUR\n`);
-    }
-
-    // Totals
-    text(`Total HT     ${fmt(t.totalHT || t.total_ht)} EUR\n`);
-    text(`TVA          ${fmt(t.totalTVA || t.total_tva)} EUR\n`);
-    bold(true); size(28);
-    text(`TOTAL TTC    ${fmt(t.totalTTC || t.total_ttc)} EUR\n`);
-    size(20); bold(false);
-
-    // Payment
-    const ml = { cash: 'ESP', card: 'CB', amex: 'AMEX', giftcard: 'CAD', cheque: 'CHQ', avoir: 'AVOIR' };
-    const payments = t.payments || [];
-    if (payments.length > 0) {
-      const payStr = payments.map(p => `${ml[p.method] || p.method || '?'} ${fmt(p.amount)} EUR`).join(' + ');
-      text(`Paiement: ${payStr}\n`);
-    }
-    cmds.push({ cmd: 'line', char: '=', len: 32 });
-
-    // NF525
-    align(1); size(18);
-    text('EMPREINTE NF525\n');
-    size(22); bold(true);
-    text(`${t.fingerprint || t.hash || '-'}\n`);
-    bold(false);
 
     // Footer
     size(16);

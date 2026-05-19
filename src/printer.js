@@ -362,12 +362,25 @@ class ThermalPrinter {
 
       await this.separator('=');
 
+      // ── Gift card mode ──
+      const isGift = !!ticket._giftCard;
+
       // ── Ticket info ──
       await this.alignLeft();
+      if (isGift) {
+        await this.alignCenter();
+        await this.doubleSize();
+        await this.bold(true);
+        await this.text('TICKET CADEAU');
+        await this.newline();
+        await this.normalSize();
+        await this.bold(false);
+        await this.alignLeft();
+      }
       await this.bold(true);
       await this.line(`N° ${ticket.ticketNumber}`, new Date(ticket.date || ticket.createdAt || '').toLocaleString('fr-FR'));
       await this.bold(false);
-      await this.line(`Caissier: ${ticket.userName || '?'}`);
+      if (!isGift) await this.line(`Caissier: ${ticket.userName || '?'}`);
       if (ticket.customerName) await this.line(`Client: ${ticket.customerName}`);
 
       await this.separator('-');
@@ -396,77 +409,94 @@ class ThermalPrinter {
         if (!isCustom && (color || size)) {
           await this.fontSmall();
           let detail = `  ${color}/${size}`;
-          if (sku) detail += ` | Ref: ${sku}`;
-          if (ean) detail += ` | EAN: ${ean}`;
+          if (!isGift && sku) detail += ` | Ref: ${sku}`;
+          if (!isGift && ean) detail += ` | EAN: ${ean}`;
           await this.text(detail);
           await this.newline();
           await this.fontNormal();
         }
 
-        // Qty x price line
-        const unitPrice = lineTTC / qty;
-        let qtyLine = `  ${qty} x ${unitPrice.toFixed(2)}€`;
-        if (discount > 0) qtyLine += ` (-${discount}%)`;
-        const total = discount > 0 ? (lineTTC * (1 - discount / 100)).toFixed(2) : lineTTC.toFixed(2);
-        await this.line(qtyLine, `${total}€`);
-      }
-
-      await this.separator('-');
-
-      // ── Promos ──
-      if (ticket.promosApplied?.length > 0) {
-        await this.fontSmall();
-        for (const promo of ticket.promosApplied) {
-          await this.text(`  * ${promo}`);
+        // Qty x price line (skip prices for gift card)
+        if (isGift) {
+          await this.text(`  x${qty}`);
           await this.newline();
+        } else {
+          const unitPrice = lineTTC / qty;
+          let qtyLine = `  ${qty} x ${unitPrice.toFixed(2)}€`;
+          if (discount > 0) qtyLine += ` (-${discount}%)`;
+          const total = discount > 0 ? (lineTTC * (1 - discount / 100)).toFixed(2) : lineTTC.toFixed(2);
+          await this.line(qtyLine, `${total}€`);
         }
-        await this.fontNormal();
+      }
+
+      await this.separator('-');
+
+      if (!isGift) {
+        // ── Promos ──
+        if (ticket.promosApplied?.length > 0) {
+          await this.fontSmall();
+          for (const promo of ticket.promosApplied) {
+            await this.text(`  * ${promo}`);
+            await this.newline();
+          }
+          await this.fontNormal();
+          await this.separator('-');
+        }
+
+        // ── Totals ──
+        await this.line('Sous-total HT', `${(ticket.totalHT || 0).toFixed(2)}€`);
+        await this.line('TVA', `${(ticket.totalTVA || 0).toFixed(2)}€`);
+
+        if (ticket.globalDiscount > 0) {
+          await this.line('Remise', `-${ticket.globalDiscount.toFixed(2)}€`);
+        }
+
+        await this.bold(true);
+        await this.doubleSize();
+        await this.line('TOTAL TTC', `${(ticket.totalTTC || 0).toFixed(2)}€`);
+        await this.normalSize();
+        await this.bold(false);
+
         await this.separator('-');
+
+        // ── Payment ──
+        const methodLabels = { cash: 'ESP', card: 'CB', giftcard: 'CAD', cheque: 'CHQ', avoir: 'AVOIR' };
+        if (ticket.payments?.length) {
+          const payStr = ticket.payments.map(p => `${methodLabels[p.method] || p.method} ${p.amount.toFixed(2)}€`).join(' + ');
+          await this.line('Paiement:', payStr);
+        }
+
+        // Cash change
+        if (ticket.paymentMethod === 'cash' && ticket.cashGiven > 0) {
+          await this.line('Recu:', `${ticket.cashGiven.toFixed(2)}€`);
+          await this.line('Rendu:', `${(ticket.cashGiven - (ticket.totalTTC || 0)).toFixed(2)}€`);
+        }
+
+        await this.separator('=');
+
+        // ── NF525 Fingerprint ──
+        await this.alignCenter();
+        await this.bold(true);
+        await this.fontSmall();
+        await this.text('EMPREINTE NF525');
+        await this.newline();
+        await this.fontNormal();
+        await this.text(ticket.fingerprint || '—');
+        await this.newline();
+        await this.bold(false);
+
+        await this.separator('-');
+      } else {
+        // Gift card exchange policy
+        await this.alignCenter();
+        await this.fontSmall();
+        await this.text(`Echange possible sous ${ticket._returnDays || 30} jours`);
+        await this.newline();
+        await this.text('sur presentation de ce ticket');
+        await this.newline();
+        await this.fontNormal();
+        await this.separator('=');
       }
-
-      // ── Totals ──
-      await this.line('Sous-total HT', `${(ticket.totalHT || 0).toFixed(2)}€`);
-      await this.line('TVA', `${(ticket.totalTVA || 0).toFixed(2)}€`);
-
-      if (ticket.globalDiscount > 0) {
-        await this.line('Remise', `-${ticket.globalDiscount.toFixed(2)}€`);
-      }
-
-      await this.bold(true);
-      await this.doubleSize();
-      await this.line('TOTAL TTC', `${(ticket.totalTTC || 0).toFixed(2)}€`);
-      await this.normalSize();
-      await this.bold(false);
-
-      await this.separator('-');
-
-      // ── Payment ──
-      const methodLabels = { cash: 'ESP', card: 'CB', giftcard: 'CAD', cheque: 'CHQ', avoir: 'AVOIR' };
-      if (ticket.payments?.length) {
-        const payStr = ticket.payments.map(p => `${methodLabels[p.method] || p.method} ${p.amount.toFixed(2)}€`).join(' + ');
-        await this.line('Paiement:', payStr);
-      }
-
-      // Cash change
-      if (ticket.paymentMethod === 'cash' && ticket.cashGiven > 0) {
-        await this.line('Recu:', `${ticket.cashGiven.toFixed(2)}€`);
-        await this.line('Rendu:', `${(ticket.cashGiven - (ticket.totalTTC || 0)).toFixed(2)}€`);
-      }
-
-      await this.separator('=');
-
-      // ── NF525 Fingerprint ──
-      await this.alignCenter();
-      await this.bold(true);
-      await this.fontSmall();
-      await this.text('EMPREINTE NF525');
-      await this.newline();
-      await this.fontNormal();
-      await this.text(ticket.fingerprint || '—');
-      await this.newline();
-      await this.bold(false);
-
-      await this.separator('-');
 
       // ── Footer ──
       await this.alignCenter();
