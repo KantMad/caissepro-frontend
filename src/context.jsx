@@ -1017,6 +1017,7 @@ function AppProvider({children}){
         if(type==="receipt")await halPrinter.printReceipt(data,settings,CO);
         else if(type==="avoir")await halPrinter.printAvoir(data,settings,CO);
         else if(type==="giftcard")await halPrinter.printGiftCard(data,settings,CO);
+        else if(type==="retouche")await halPrinter.printRetouche(data,settings,CO);
         else if(type==="closure")await halPrinter.printClosure(data,settings,CO);
         else if(type==="test")await halPrinter.testPrint();
         else if(type==="drawer")await halPrinter.openDrawer();
@@ -1029,6 +1030,7 @@ function AppProvider({children}){
         if(type==="receipt")await printer.printReceipt(data,settings,CO);
         else if(type==="avoir")await printer.printAvoir(data,settings,CO);
         else if(type==="giftcard")await printer.printGiftCard(data,settings,CO);
+        else if(type==="retouche")await printer.printRetouche(data,settings,CO);
         else if(type==="closure")await printer.printClosure(data,settings,CO);
         else if(type==="test")await printer.testPrint();
         else if(type==="drawer")await printer.openDrawer();

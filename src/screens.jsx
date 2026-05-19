@@ -785,25 +785,26 @@ function SalesScreen(){
           setRetoucheModal(false);notify(`Retouche ajoutée au panier (${retTotal.toFixed(2)}€)`);
         }} disabled={!retForm.items.some(i=>i.desc&&i.price)}>
           <ShoppingCart size={14}/> Ajouter au panier</Btn>
-        <Btn onClick={()=>{
+        <Btn onClick={async()=>{
           const retTotal=retForm.items.reduce((s,i)=>s+(parseFloat(i.price)||0),0);
           const bonNum=`RET-${Date.now().toString(36).toUpperCase()}`;
           const bon={num:bonNum,client:retForm.client,phone:retForm.phone,dateRetrait:retForm.date,items:retForm.items.filter(i=>i.desc),notes:retForm.notes,total:retTotal,date:new Date().toISOString(),seller:selSeller||currentUser?.name};
           // Add items to cart
           const tva2=(settings.retoucheTVA||20)/100;
           retForm.items.filter(i=>i.desc&&i.price).forEach(i=>{addCustomItem(`Retouche: ${i.desc}`,parseFloat(i.price)/(1+tva2),tva2);});
-          // Print bon
-          const w=window.open("","_blank","width=400,height=600");if(w){w.document.write(`<html><head><title>Bon de retouche ${bonNum}</title><style>body{font-family:'Courier New',monospace;font-size:12px;padding:10px;max-width:300px;margin:0 auto;}h2{text-align:center;font-size:14px;margin:4px 0;}hr{border:none;border-top:1px dashed #333;margin:6px 0;}.row{display:flex;justify-content:space-between;}.center{text-align:center;}</style></head><body>`+
-            `<h2>${settings.name||"CaissePro"}</h2><div class="center">${settings.address||""} ${settings.postalCode||""} ${settings.city||""}</div><hr>`+
-            `<h2>BON DE RETOUCHE</h2><div class="center">N° ${bonNum}</div><hr>`+
-            `<div class="row"><span>Client:</span><strong>${bon.client||"—"}</strong></div>`+
-            `<div class="row"><span>Tél:</span><span>${bon.phone||"—"}</span></div>`+
-            `<div class="row"><span>Date retrait:</span><span>${new Date(bon.dateRetrait).toLocaleDateString("fr-FR")}</span></div><hr>`+
-            bon.items.filter(i=>i.desc).map(i=>`<div class="row"><span>${i.desc}</span><strong>${parseFloat(i.price||0).toFixed(2)}€</strong></div>`).join("")+
-            `<hr><div class="row"><strong>TOTAL</strong><strong>${retTotal.toFixed(2)}€ TTC</strong></div><hr>`+
-            (bon.notes?`<div><strong>Notes:</strong> ${bon.notes}</div><hr>`:"")+
-            `<div class="center" style="font-size:10px;">Vendeur: ${bon.seller}<br>${new Date().toLocaleString("fr-FR")}<br>${settings.name||"CaissePro"} — ${settings.siret||""}</div>`+
-            `</body></html>`);w.document.close();setTimeout(()=>{w.print();},300);}
+          // Print bon via thermal printer (same format as receipt) or fallback to browser
+          try{await thermalPrint("retouche",bon);}catch(e){
+            const w=window.open("","_blank","width=400,height=600");if(w){w.document.write(`<html><head><title>Bon de retouche ${bonNum}</title><style>body{font-family:'Courier New',monospace;font-size:12px;padding:10px;max-width:300px;margin:0 auto;}h2{text-align:center;font-size:14px;margin:4px 0;}hr{border:none;border-top:1px dashed #333;margin:6px 0;}.row{display:flex;justify-content:space-between;}.center{text-align:center;}</style></head><body>`+
+              `<h2>${settings.name||"CaissePro"}</h2><div class="center">${settings.address||""} ${settings.postalCode||""} ${settings.city||""}</div><hr>`+
+              `<h2>BON DE RETOUCHE</h2><div class="center">N° ${bonNum}</div><hr>`+
+              `<div class="row"><span>Client:</span><strong>${bon.client||"—"}</strong></div>`+
+              `<div class="row"><span>Tél:</span><span>${bon.phone||"—"}</span></div>`+
+              `<div class="row"><span>Date retrait:</span><span>${new Date(bon.dateRetrait).toLocaleDateString("fr-FR")}</span></div><hr>`+
+              bon.items.filter(i=>i.desc).map(i=>`<div class="row"><span>${i.desc}</span><strong>${parseFloat(i.price||0).toFixed(2)}€</strong></div>`).join("")+
+              `<hr><div class="row"><strong>TOTAL</strong><strong>${retTotal.toFixed(2)}€ TTC</strong></div><hr>`+
+              (bon.notes?`<div><strong>Notes:</strong> ${bon.notes}</div><hr>`:"")+
+              `<div class="center" style="font-size:10px;">Vendeur: ${bon.seller}<br>${new Date().toLocaleString("fr-FR")}<br>${settings.name||"CaissePro"} — ${settings.siret||""}</div>`+
+              `</body></html>`);w.document.close();setTimeout(()=>{w.print();},300);}}
           setRetoucheModal(false);setRetForm({client:"",phone:"",date:new Date().toISOString().split("T")[0],notes:"",items:[{desc:"",price:""}]});
           notify(`Bon de retouche ${bonNum} créé et ajouté au panier`);
           addAudit("RETOUCHE",`Bon ${bonNum} — ${bon.client} — ${retTotal.toFixed(2)}€`);

@@ -634,6 +634,144 @@ class ThermalPrinter {
     }
   }
 
+  // ── Print retouche receipt (same format as sales receipt) ──
+  async printRetouche(bon, settings, companyInfo) {
+    if (!this.connected) throw new Error("Imprimante non connectee");
+
+    const s = settings || {};
+    const co = companyInfo || {};
+
+    try {
+      await this.send(CMD.INIT);
+      await this.send(CHARSET_FRENCH);
+      await this.send(CODEPAGE_PC858);
+
+      // ── Header (identical to receipt) ──
+      await this.alignCenter();
+      await this.doubleSize();
+      await this.bold(true);
+      await this.text(s.name || co.name || 'Ma Boutique');
+      await this.newline();
+      await this.normalSize();
+      await this.bold(false);
+
+      if (s.address) { await this.text(s.address); await this.newline(); }
+      if (s.postalCode || s.city) {
+        await this.text(`${s.postalCode || ''} ${s.city || ''}`);
+        await this.newline();
+      }
+      if (s.phone) { await this.text(`Tel: ${s.phone}`); await this.newline(); }
+      if (s.siret) { await this.text(`SIRET: ${s.siret}`); await this.newline(); }
+      if (s.tvaIntra) { await this.text(`TVA: ${s.tvaIntra}`); await this.newline(); }
+
+      await this.separator('=');
+
+      // ── Title ──
+      await this.alignCenter();
+      await this.doubleSize();
+      await this.bold(true);
+      await this.text('BON DE RETOUCHE');
+      await this.newline();
+      await this.normalSize();
+      await this.bold(false);
+
+      await this.separator('=');
+
+      // ── Bon info ──
+      await this.alignLeft();
+      await this.bold(true);
+      await this.line(`N° ${bon.num}`, new Date(bon.date || '').toLocaleString('fr-FR'));
+      await this.bold(false);
+      if (bon.seller) await this.line(`Vendeur: ${bon.seller}`);
+      if (bon.client) await this.line(`Client: ${bon.client}`);
+      if (bon.phone) await this.line(`Tel: ${bon.phone}`);
+
+      await this.separator('-');
+
+      // ── Date retrait ──
+      if (bon.dateRetrait) {
+        await this.bold(true);
+        await this.alignCenter();
+        await this.text(`RETRAIT: ${new Date(bon.dateRetrait).toLocaleDateString('fr-FR')}`);
+        await this.newline();
+        await this.bold(false);
+        await this.alignLeft();
+        await this.separator('-');
+      }
+
+      // ── Items (retouche services) ──
+      const items = bon.items || [];
+      const tvaRate = (s.retoucheTVA || 20) / 100;
+      let totalTTC = 0;
+      for (const item of items) {
+        if (!item.desc) continue;
+        const price = parseFloat(item.price) || 0;
+        totalTTC += price;
+
+        await this.bold(true);
+        await this.text(`Retouche: ${item.desc}`);
+        await this.newline();
+        await this.bold(false);
+
+        const ht = (price / (1 + tvaRate)).toFixed(2);
+        await this.line(`  1 x ${price.toFixed(2)}€ TTC`, `${price.toFixed(2)}€`);
+      }
+
+      await this.separator('-');
+
+      // ── Totals ──
+      const totalHT = totalTTC / (1 + tvaRate);
+      const totalTVA = totalTTC - totalHT;
+
+      await this.line('Sous-total HT', `${totalHT.toFixed(2)}€`);
+      await this.line(`TVA ${(tvaRate * 100).toFixed(1)}%`, `${totalTVA.toFixed(2)}€`);
+
+      await this.bold(true);
+      await this.doubleSize();
+      await this.line('TOTAL TTC', `${totalTTC.toFixed(2)}€`);
+      await this.normalSize();
+      await this.bold(false);
+
+      await this.separator('=');
+
+      // ── Notes ──
+      if (bon.notes) {
+        await this.fontSmall();
+        await this.text(`Notes: ${bon.notes}`);
+        await this.newline();
+        await this.fontNormal();
+        await this.separator('-');
+      }
+
+      // ── Footer ──
+      await this.alignCenter();
+      await this.fontSmall();
+      await this.text(`${co.sw || 'CaissePro'} v${co.ver || '5.0.0'}`);
+      await this.newline();
+      if (s.retoucheMsg) {
+        await this.text(s.retoucheMsg);
+        await this.newline();
+      } else {
+        await this.text(`Retrait prevu sous ${s.retoucheDelay || 5} jours ouvres`);
+        await this.newline();
+      }
+      if (s.footerMsg || co.footerMsg) {
+        await this.text(s.footerMsg || co.footerMsg);
+        await this.newline();
+      }
+      await this.fontNormal();
+
+      await this.feed(4);
+      await this.cut();
+
+      this._emit('printed', { type: 'retouche', number: bon.num });
+      return true;
+    } catch (e) {
+      this._emit('error', { message: e.message });
+      throw new Error(`Erreur impression bon de retouche: ${e.message}`);
+    }
+  }
+
   // ── Print gift card receipt ──
   async printGiftCard(card, settings, companyInfo) {
     if (!this.connected) throw new Error("Imprimante non connectee");
