@@ -141,11 +141,20 @@ export const fiscal = {
   closure: (data) => api('/api/fiscal/closure', { method: 'POST', body: JSON.stringify(data) }),
   closures: () => api('/api/fiscal/closures'),
   fec: () => api('/api/fiscal/fec'),
-  archive: () => api('/api/fiscal/archive').then(data => {
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  archive: () => api('/api/fiscal/archive').then(async data => {
+    const JSZip = (await import('jszip')).default;
+    const zip = new JSZip();
+    zip.file('archive.json', JSON.stringify(data.archive, null, 2));
+    zip.file('integrity.json', JSON.stringify({
+      sha256: data.integrityHash,
+      hmacSignature: data.hmacSignature,
+      algorithm: data.signatureAlgorithm,
+      generatedAt: data.archive?.exportDate
+    }, null, 2));
+    const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a'); a.href = url;
-    a.download = `archive-${new Date().toISOString().split('T')[0]}.json`; a.click();
+    a.download = `archive_NF525_${new Date().toISOString().split('T')[0].replace(/-/g,'')}.zip`; a.click();
     return data;
   }),
   verifyChain: () => api('/api/fiscal/verify-chain'),

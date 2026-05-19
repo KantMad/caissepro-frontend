@@ -141,7 +141,7 @@ function SalesScreen(){
     gDisc,gDiscType,setCartGD,promoCode,setPromoCode,calcPromoDiscount,isOnline,findByEAN,offlineMode,
     parked,parkCart,restoreCart,removeParked,customers,addCustomer,selCust,setSelCust,perm,notify,
     stockAlerts,activePromos,avoirPayment,selectedAvoir,setSelectedAvoir,getLoyaltyTier,tickets,saleNote,setSaleNote,favorites,toggleFavorite,getLastPriceForCustomer,settings,
-    printerConnected,thermalPrint,pendingSync,clearPendingSync,users,currentUser,currentStore,avoirs,consumeAvoir,isAvoirExpired,addAudit,addJET,trainingMode,cartTotals,retoucheBons,addRetoucheBon}=useApp();
+    printerConnected,thermalPrint,pendingSync,clearPendingSync,users,currentUser,currentStore,avoirs,consumeAvoir,isAvoirExpired,addAudit,addJET,trainingMode,cartTotals,retoucheBons,addRetoucheBon,cashReg,closures}=useApp();
   const[search,setSearch]=useState("");const[cat,setCat]=useState("Tous");const[vm,setVm]=useState(null);const[selSeller,setSelSeller]=useState(null);
   const[dm,setDm]=useState(null);const[dv,setDv]=useState("");const[gm,setGm]=useState(false);const[gv,setGv]=useState("");const[gtp,setGtp]=useState("percentage");
   const[lastTk,setLastTk]=useState(null);const[tkModal,setTkModal]=useState(false);const[busy,setBusy]=useState(false);
@@ -155,7 +155,9 @@ function SalesScreen(){
   const[clock,setClock]=useState(new Date());useEffect(()=>{const t=setInterval(()=>setClock(new Date()),30000);return()=>clearInterval(t);},[]);
   const[codeInput,setCodeInput]=useState("");
   const[confirmVoid,setConfirmVoid]=useState(false);const[voidReason,setVoidReason]=useState("");
-  const[showShortcuts,setShowShortcuts]=useState(false);
+  const[showShortcuts,setShowShortcuts]=useState(false);const[confirmClear,setConfirmClear]=useState(false);
+  // Garde post-clôture: vérifier si une clôture journalière existe pour aujourd'hui
+  const todayClosed=useMemo(()=>{const today=new Date().toISOString().split("T")[0];return closures?.some(c=>(c.type||c.closure_type)==="daily"&&(c.date||c.createdAt||c.created_at||"").startsWith(today));},[closures]);
 
   // Keyboard shortcuts
   useEffect(()=>{const handler=(e)=>{
@@ -230,6 +232,12 @@ function SalesScreen(){
       background:"#FEF3C7",padding:"6px 18px",display:"flex",alignItems:"center",gap:8,fontSize:12,fontWeight:700,color:"#92400E",
       borderBottom:"2px dashed #D97706",animation:"slideDown 0.3s ease"}}>
       <AlertTriangle size={13}/> MODE FORMATION — Les tickets sont marqués FACTICE</div>}
+
+    {/* NF525: Post-closure warning */}
+    {todayClosed&&!trainingMode&&<div style={{position:"absolute",top:offlineMode||!isOnline?40:trainingMode?68:0,left:72,right:0,zIndex:98,
+      background:"#FEE2E2",padding:"6px 18px",display:"flex",alignItems:"center",gap:8,fontSize:12,fontWeight:700,color:"#991B1B",
+      borderBottom:"2px solid #DC2626"}}>
+      <AlertTriangle size={13}/> CAISSE CLOTUREE — Les nouvelles ventes seront refusées par le serveur</div>}
 
     {/* Products */}
     <div style={{flex:1,padding:16,display:"flex",flexDirection:"column",overflow:"hidden"}}>
@@ -420,7 +428,7 @@ function SalesScreen(){
           {busy?<span className="spin-loader"/>:<><Wallet size={18}/> Règlement — {totals.tTTC.toFixed(2)}€</>}</Btn>}
         <div style={{display:"flex",gap:4}}>
           <Btn variant="outline" onClick={()=>setRetoucheModal(true)} style={{flex:1,height:30,fontSize:10,borderRadius:10,gap:4}}><Edit size={11}/> Retouche</Btn>
-          <Btn variant="outline" onClick={clearCart} style={{flex:1,borderColor:`${C.danger}20`,color:C.danger,height:30,fontSize:10,borderRadius:10}}><RotateCcw size={10}/> Vider</Btn>
+          <Btn variant="outline" onClick={()=>cart.length?setConfirmClear(true):null} style={{flex:1,borderColor:`${C.danger}20`,color:C.danger,height:30,fontSize:10,borderRadius:10}}><RotateCcw size={10}/> Vider</Btn>
         </div>
       </div>
     </div>
@@ -471,6 +479,14 @@ function SalesScreen(){
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
         <Btn variant="outline" onClick={()=>{setCartGD(0,"percentage");setGm(false);}}>Supprimer</Btn>
         <Btn variant="success" onClick={()=>{const d=parseFloat(gv);if(d>=0){setCartGD(d,gtp);setGm(false);}}}>Appliquer</Btn></div></Modal>
+
+    <Modal open={confirmClear} onClose={()=>setConfirmClear(false)} title="Vider le panier">
+      <div style={{textAlign:"center",padding:"10px 0"}}>
+        <div style={{fontSize:13,color:C.text,marginBottom:14}}>Voulez-vous vraiment vider le panier ? ({cart.length} article{cart.length>1?"s":""})</div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+          <Btn variant="outline" onClick={()=>setConfirmClear(false)}>Annuler</Btn>
+          <Btn variant="danger" onClick={()=>{clearCart();setConfirmClear(false);}}>Vider le panier</Btn></div>
+      </div></Modal>
 
     <Modal open={payModal} onClose={()=>setPayModal(false)} title="Paiement fractionné" sub={`Total: ${totals.tTTC.toFixed(2)}€`}>
       {(()=>{const paid=(parseFloat(payCard)||0)+(parseFloat(payCash)||0)+(parseFloat(payGC)||0)+(parseFloat(payChq)||0)+(avoirPayment||0);
@@ -687,9 +703,9 @@ function SalesScreen(){
         <button onClick={async()=>{setPayMethodModal(false);await quickPay("cheque");}} style={{padding:16,borderRadius:14,border:`2px solid #7B879425`,background:"#7B879406",cursor:"pointer",textAlign:"center",transition:"all 0.15s"}}
           onMouseEnter={e=>e.currentTarget.style.borderColor="#7B8794"} onMouseLeave={e=>e.currentTarget.style.borderColor="#7B879425"}>
           <FileText size={24} color="#7B8794" style={{marginBottom:6}}/><div style={{fontSize:13,fontWeight:700,color:C.text}}>Chèque</div><div style={{fontSize:10,color:C.textMuted}}>Paiement par chèque</div></button>
-        <button onClick={async()=>{setPayMethodModal(false);await quickPay("giftcard");}} style={{padding:16,borderRadius:14,border:`2px solid ${C.accent}25`,background:`${C.accent}06`,cursor:"pointer",textAlign:"center",transition:"all 0.15s"}}
+        <button onClick={()=>{setPayMethodModal(false);setPayGC(String(totals.tTTC.toFixed(2)));openPay();}} style={{padding:16,borderRadius:14,border:`2px solid ${C.accent}25`,background:`${C.accent}06`,cursor:"pointer",textAlign:"center",transition:"all 0.15s"}}
           onMouseEnter={e=>e.currentTarget.style.borderColor=C.accent} onMouseLeave={e=>e.currentTarget.style.borderColor=`${C.accent}25`}>
-          <Gift size={24} color={C.accent} style={{marginBottom:6}}/><div style={{fontSize:13,fontWeight:700,color:C.text}}>Carte cadeau</div><div style={{fontSize:10,color:C.textMuted}}>Paiement par carte cadeau</div></button>
+          <Gift size={24} color={C.accent} style={{marginBottom:6}}/><div style={{fontSize:13,fontWeight:700,color:C.text}}>Carte cadeau</div><div style={{fontSize:10,color:C.textMuted}}>Saisir le montant manuellement</div></button>
         <button onClick={()=>{setPayMethodModal(false);setAvoirSelectModal(true);}}
           style={{padding:16,borderRadius:14,border:`2px solid ${C.fiscal}25`,background:avoirs.filter(a=>!a.used&&(a.remaining||a.totalTTC)>0).length?`${C.fiscal}06`:`${C.border}08`,cursor:"pointer",textAlign:"center",transition:"all 0.15s",opacity:avoirs.filter(a=>!a.used&&(a.remaining||a.totalTTC)>0).length?1:0.5}}
           onMouseEnter={e=>e.currentTarget.style.borderColor=C.fiscal} onMouseLeave={e=>e.currentTarget.style.borderColor=`${C.fiscal}25`}>
@@ -1419,7 +1435,7 @@ function StockScreen(){
 
 /* ══════════ HISTORY ══════════ */
 function HistoryScreen(){
-  const{tickets,avoirs,settings,processReturn,perm:p,printerConnected,thermalPrint,setSelectedAvoir,setMode,notify,customers,retoucheBons,scanBarcode,setScanBarcode}=useApp();
+  const{tickets,avoirs,settings,processReturn,perm:p,printerConnected,thermalPrint,setSelectedAvoir,setMode,notify,customers,retoucheBons,scanBarcode,setScanBarcode,trainingMode}=useApp();
   const[tab,setTab]=useState("tickets");const[reprintTk,setReprintTk]=useState(null);const[reassignModal,setReassignModal]=useState(null);const[reassignCust,setReassignCust]=useState(null);
   const[search,setSearch]=useState("");const[dateFilter,setDateFilter]=useState("");
   // Pre-fill search from barcode scan
@@ -1433,8 +1449,6 @@ function HistoryScreen(){
   const[returnItems,setReturnItems]=useState([]);const[returnReason,setReturnReason]=useState("");const[returnMethod,setReturnMethod]=useState("cash");
   const[avoirDetail,setAvoirDetail]=useState(null);
   const[page,setPage]=useState(0);const PAGE_SIZE=25;
-  const[debugClick,setDebugClick]=useState(null);
-  const[testModal,setTestModal]=useState(false);
 
   useEffect(()=>{setPage(0);},[search,dateFilter]);
   const filteredTickets=useMemo(()=>tickets.filter(t=>{
@@ -1475,6 +1489,9 @@ function HistoryScreen(){
 
   return(<div style={{height:"100%",overflowY:"auto",padding:20,background:C.bg}}>
     <h2 style={{fontSize:22,fontWeight:800,marginBottom:14}}>Historique fiscal</h2>
+    {trainingMode&&<div style={{background:"#FEF3C7",border:"2px dashed #D97706",borderRadius:12,padding:12,marginBottom:12,display:"flex",alignItems:"center",gap:10}}>
+      <AlertTriangle size={18} color="#D97706"/><div><div style={{fontSize:12,fontWeight:700,color:"#92400E"}}>MODE FORMATION ACTIF</div>
+        <div style={{fontSize:10,color:"#B45309"}}>Les donnees affichees incluent des tickets FACTICE non comptabilises.</div></div></div>}
     <div style={{display:"flex",gap:6,marginBottom:12,alignItems:"center"}}>
       <Btn variant={tab==="tickets"?"primary":"outline"} onClick={()=>setTab("tickets")} style={{fontSize:11}}>Tickets ({tickets.length})</Btn>
       <Btn variant={tab==="avoirs"?"danger":"outline"} onClick={()=>setTab("avoirs")} style={{fontSize:11}}>Avoirs ({avoirs.length})</Btn>
@@ -1482,23 +1499,12 @@ function HistoryScreen(){
       <div style={{flex:1}}/>
       <Input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Rechercher N°, client, caissier…" style={{width:220,height:32,fontSize:11,padding:"4px 10px"}}/>
       <Input type="date" value={dateFilter} onChange={e=>setDateFilter(e.target.value)} style={{width:140,height:32,fontSize:11,padding:"4px 10px"}}/>
-      <Btn variant="outline" onClick={()=>setTestModal(true)} style={{fontSize:10,padding:"4px 10px",background:"#7C3AED",color:"#fff"}}>Test Modal</Btn></div>
-    {debugClick&&<div style={{background:"#DCFCE7",border:"2px solid #16A34A",borderRadius:8,padding:8,marginBottom:8,fontSize:10,fontFamily:"monospace"}}>
-      <strong>CLIC DETECTE:</strong> {debugClick} <button onClick={()=>setDebugClick(null)} style={{marginLeft:8,fontSize:10}}>X</button></div>}
-
+      </div>
     {tab==="tickets"&&(<>{pagedTickets.length?pagedTickets.map((t,idx)=>(
       <div key={t.ticketNumber||t.id||idx} style={{display:"flex",alignItems:"center",gap:10,padding:10,borderRadius:12,background:C.surface,border:`1.5px solid ${C.border}`,marginBottom:5,transition:"all 0.12s"}}
         onMouseEnter={e=>e.currentTarget.style.borderColor=C.primary+"44"} onMouseLeave={e=>e.currentTarget.style.borderColor=C.border}>
         <Receipt size={14} color={C.textMuted}/>
-        <div style={{flex:1,cursor:"pointer"}} onClick={()=>{
-          const tkId=t.ticketNumber||t.ticket_number||"?";
-          const keys=Object.keys(t).join(",");
-          setDebugClick(`Ticket #${tkId} | keys: ${keys.substring(0,80)}`);
-          console.log("[TICKET CLICK]",tkId,keys);
-          try{setReprintTk({...t});}catch(e){
-            setDebugClick(`CRASH: ${e.message}`);
-          }
-        }}>
+        <div style={{flex:1,cursor:"pointer"}} onClick={()=>setReprintTk({...t})}>
           <div style={{fontSize:11,fontWeight:700}}>N° {t.ticketNumber} <Badge color={C.info}>{t.paymentMethod}</Badge>
           {t.customerName&&<Badge color={C.accent}>{t.customerName}</Badge>}</div>
           <div style={{fontSize:9,color:C.textMuted}}>{new Date(t.date||t.createdAt||t.created_at).toLocaleString("fr-FR")} — {t.userName||t.user_name||"?"} — {(t.items||[]).length} art.</div></div>
@@ -1553,15 +1559,6 @@ function HistoryScreen(){
         </div>
       )):<div style={{textAlign:"center",padding:30,color:C.textLight}}>Aucun bon trouvé</div>;
     })():<div style={{textAlign:"center",padding:30,color:C.textLight}}>Aucun bon de retouche</div>)}
-
-    {/* TEST MODAL — using fixed Modal component */}
-    <Modal open={testModal} onClose={()=>setTestModal(false)} title="Test Modal (composant fixe)">
-      <div>
-        <div style={{fontSize:14,fontWeight:700,marginBottom:10,color:"#16A34A"}}>Le Modal fonctionne sur Capacitor!</div>
-        <div style={{fontSize:11,color:"#666"}}>reprintTk = {reprintTk?"OUI ("+Object.keys(reprintTk).length+" keys)":"null"}</div>
-        <Btn onClick={()=>setTestModal(false)} style={{marginTop:10,width:"100%"}}>Fermer</Btn>
-      </div>
-    </Modal>
 
     {/* Ticket detail/reprint modal */}
     <Modal open={!!reprintTk} onClose={()=>setReprintTk(null)} title={`Ticket ${reprintTk?.ticketNumber||reprintTk?.ticket_number||"?"}`} wide>
@@ -2112,7 +2109,7 @@ function ReturnScreen(){
 
 /* ══════════ CLOSURE ══════════ */
 function ClosureScreen(){
-  const{tickets,cashReg,closures,createClosure,gt,closeReg,perm:p,avoirs,settings,printerConnected,thermalPrint,notify}=useApp();
+  const{tickets,cashReg,closures,createClosure,gt,closeReg,perm:p,avoirs,settings,printerConnected,thermalPrint,notify,trainingMode}=useApp();
   const[aCash,setACash]=useState("");const[aCard,setACard]=useState("");
   const[reportModal,setReportModal]=useState(null);
   const[denomMode,setDenomMode]=useState(false);
@@ -2137,6 +2134,9 @@ function ClosureScreen(){
 
   return(<div style={{height:"100%",overflowY:"auto",padding:20,background:C.bg}}>
     <h2 style={{fontSize:22,fontWeight:800,marginBottom:14}}>Clôture Z</h2>
+    {trainingMode&&<div style={{background:"#FEF3C7",border:"2px dashed #D97706",borderRadius:12,padding:12,marginBottom:12,display:"flex",alignItems:"center",gap:10}}>
+      <AlertTriangle size={18} color="#D97706"/><div><div style={{fontSize:12,fontWeight:700,color:"#92400E"}}>MODE FORMATION ACTIF</div>
+        <div style={{fontSize:10,color:"#B45309"}}>Les tickets FACTICE ne sont pas inclus dans les totaux reels.</div></div></div>}
     <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:10,marginBottom:14}}>
       <SC icon={Receipt} label="Tickets" value={pt.length} color={C.info}/>
       <SC icon={Banknote} label="Espèces" value={`${cash.toFixed(2)}€`} color={C.primary}/>

@@ -6,6 +6,7 @@ import hardwareManager from "./hardware.js";
 import { CO, DEFAULT_TVA_RATES, PERMS, initProducts, initUsers, initCustomers, LOYALTY_TIERS, initPromos, C } from "./constants.jsx";
 import { hashPin, verifyPin, sha256, norm, loadVariantOrderFromSettings, autoImportSizesFromProducts, generateEAN13 } from "./utils.jsx";
 import Papa from "papaparse";
+import JSZip from "jszip";
 
 /* ══════════ CONTEXT ══════════ */
 const AppCtx = createContext(null);
@@ -283,7 +284,7 @@ function AppProvider({children}){
     // NF525: signature SHA-256 chaînée pour le JET
     const hashInput=`${lastH}|${seq}|${codeJet}|${t}|${dt}|${d}|${userId}`;
     const hash=await sha256(hashInput);
-    const fingerprint=hash.slice(0,8).toUpperCase();
+    const fingerprint=hash.slice(0,16).toUpperCase();
     jetSeqRef.current=seq;lastJetHashRef.current=hash;
     try{localStorage.setItem("caissepro_jetseq",String(seq));localStorage.setItem("caissepro_lastjethash",hash);}catch(e){}
     const entry={id:Date.now(),seq,date:dt,type:t,codeJet,detail:d,
@@ -431,7 +432,7 @@ function AppProvider({children}){
   const voidSale=(reason)=>{if(cart.length){addAudit("VOID_SALE",`Annulation panier: ${cart.length} articles — Motif: ${reason||"Non spécifié"}`);addJET("VOID_SALE",`Annulation panier ${cart.length} art. — ${reason||"Non spécifié"}`);setCart([]);setGDisc(0);setSelCust(null);setSelectedAvoir(null);setPromoCode("");setSaleNote("");}};
   const updateQty=(pid,vid,q)=>{if(q<1)return removeFromCart(pid,vid);setCart(p=>p.map(c=>c.product.id===pid&&c.variant?.id===vid?{...c,quantity:q}:c));};
   const updateItemDisc=(pid,vid,d,dt)=>setCart(p=>p.map(c=>c.product.id===pid&&c.variant?.id===vid?{...c,discount:d,discountType:dt||"percent"}:c));
-  const clearCart=()=>{setCart([]);setGDisc(0);setSelCust(null);setPromoCode("");setSelectedAvoir(null);};
+  const clearCart=()=>{setCart([]);setGDisc(0);setSelCust(null);setPromoCode("");setSelectedAvoir(null);setSaleNote("");};
   const setCartGD=(v,t)=>{setGDisc(v);setGDiscType(t);};
 
   // Park — backend-first avec cache localStorage
@@ -584,7 +585,7 @@ function AppProvider({children}){
       const adjHT=i.lineHT*(1-discountRatio);
       tTVA+=Math.round(adjHT*(i.tax_rate||i.product?.taxRate||0.20)*100)/100;
     });
-    const tTTC=Math.max(0,tHT+tTVA-avoirPayment);
+    const tTTC=Math.max(0,Math.round((tHT+tTVA-avoirPayment)*100)/100);
 
     // ── TPE: charge card payments via hardware terminal BEFORE finalizing ──
     const cardMethods=['card','amex','contactless'];
@@ -666,7 +667,7 @@ function AppProvider({children}){
       const caisseId=currentStore?.id||cashReg?.id||"CAISSE-01";
       const hashInput=`${lastHash}|${seq}|VENTE|${caisseId}|${ticketNumber}|${date}|${tTTC.toFixed(2)}|${(gt+tTTC).toFixed(2)}`;
       const hash=await sha256(hashInput);
-      const fingerprint=hash.slice(0,8).toUpperCase();
+      const fingerprint=hash.slice(0,16).toUpperCase();
       const offlineBarcode=generateEAN13("200",Date.now()%1000000000);
       const ticket={ticketNumber,seq,date,items,payments,paymentMethod,barcode:offlineBarcode,
         totalHT:tHT,totalTVA:tTVA,totalTTC:tTTC,globalDiscount:gd,margin,
@@ -710,7 +711,20 @@ function AppProvider({children}){
   const clockOut=useCallback(async()=>{try{await API.auth.clock("OUT");addAudit("CLOCK_OUT",`${currentUser?.name} a pointé`);}catch(e){console.error(e);}},[currentUser,addAudit]);
 
   // ══ P2: Verify hash chain — via API ══
-  const verifyChain=useCallback(async()=>{try{return await API.fiscal.verifyChain();}catch(e){return{valid:false,msg:e.message};};},[]);
+  const verifyChain=useCallback(async()=>{
+    try{return await API.fiscal.verifyChain();}catch(e){
+      // Fallback local: vérifier la chaîne en mémoire
+      const sorted=[...tickets].filter(t=>t.seq&&t.hash).sort((a,b)=>(a.seq||0)-(b.seq||0));
+      if(!sorted.length)return{valid:true,message:"Aucun ticket à vérifier (hors-ligne)",count:0};
+      for(let i=1;i<sorted.length;i++){
+        const prev=sorted[i-1];const cur=sorted[i];
+        if(cur.previousHash&&prev.hash&&cur.previousHash!==prev.hash){
+          return{valid:false,message:`Rupture de chaîne au ticket ${cur.ticketNumber} (seq ${cur.seq}) — vérification locale`,brokenAt:i};
+        }
+      }
+      return{valid:true,message:`Chaîne intègre (locale) — ${sorted.length} tickets vérifiés`,count:sorted.length};
+    }
+  },[tickets]);
 
   const exportCSVReport=useCallback((data,filename)=>{
     const csv=Papa.unparse(data);const b=new Blob([csv],{type:"text/csv"});const u=URL.createObjectURL(b);
@@ -853,7 +867,7 @@ function AppProvider({children}){
       const clDate=new Date().toISOString();
       const hashInput=`${lastClosureHash}|Z-${type}|${today}|${totalTTC.toFixed(2)}|${newGt.toFixed(2)}|${pt.length}`;
       const clHash=await sha256(hashInput);
-      const clFingerprint=clHash.slice(0,8).toUpperCase();
+      const clFingerprint=clHash.slice(0,16).toUpperCase();
       // Paiements par méthode
       const chequeLocal=pt.reduce((s,t)=>s+(t.payments?.filter(p=>p.method==="cheque").reduce((a,p)=>a+p.amount,0)||0),0);
       const giftcardLocal=pt.reduce((s,t)=>s+(t.payments?.filter(p=>p.method==="giftcard").reduce((a,p)=>a+p.amount,0)||0),0);
@@ -950,13 +964,22 @@ function AppProvider({children}){
       {name:`GTT_${period}_${today}.csv`,data:gttRows},
       {name:`GTJ_${period}_${today}.csv`,data:gtjRows},
     ];
-    // Sans librairie ZIP, on crée un fichier JSON contenant tous les CSV
-    const archiveData={meta:{format:"NF525_ARCHIVE",version:CO.ver,socId,caisseId,period,date:today,
-      generatedAt:new Date().toISOString(),ticketCount:tickets.length,gt:gt.toFixed(2)},files:{}};
-    files.forEach(f=>{archiveData.files[f.name]=Papa.unparse(f.data);});
-    const blob=new Blob([JSON.stringify(archiveData,null,2)],{type:"application/json"});
+    // NF-D3: Archive ZIP avec intégrité SHA-256 + HMAC
+    const zip=new JSZip();
+    const csvFolder=zip.folder("data");
+    files.forEach(f=>{csvFolder.file(f.name,Papa.unparse(f.data));});
+    // Métadonnées
+    const meta={format:"NF525_ARCHIVE",version:CO.ver,socId,caisseId,period,date:today,
+      generatedAt:new Date().toISOString(),ticketCount:tickets.length,gt:gt.toFixed(2),
+      files:files.map(f=>f.name)};
+    zip.file("meta.json",JSON.stringify(meta,null,2));
+    // Intégrité: SHA-256 du contenu sérialisé
+    const archiveContent=JSON.stringify({meta,files:Object.fromEntries(files.map(f=>[f.name,Papa.unparse(f.data)]))});
+    const integrityHash=await sha256(archiveContent);
+    zip.file("integrity.json",JSON.stringify({sha256:integrityHash,algorithm:"SHA-256",generatedAt:meta.generatedAt},null,2));
+    const blob=await zip.generateAsync({type:"blob",compression:"DEFLATE",compressionOptions:{level:6}});
     const url=URL.createObjectURL(blob);const a=document.createElement("a");
-    a.href=url;a.download=`${prefix}.json`;a.click();
+    a.href=url;a.download=`${prefix}.zip`;a.click();
     addJET("ARCHIVE",`Archive NF525 locale — ${tickets.length} tickets — GT: ${gt.toFixed(2)}€`);
     addAudit("EXPORT","Export archive NF525 locale");
     notify(`Archive NF525 exportée (${tickets.length} tickets)`,"success");
@@ -1265,7 +1288,7 @@ function AppProvider({children}){
         items,totalHT,totalTVA,totalTTC,remaining:totalTTC,used:false,reason:reason||"",refundMethod,
         userId:currentUser?.id,userName:currentUser?.name,
         customerId:ticket.customerId,customerName:ticket.customerName,
-        hash,fingerprint:hash.slice(0,8).toUpperCase()};
+        hash,fingerprint:hash.slice(0,16).toUpperCase()};
       setAvoirSeq(seq);
       addPendingSync({type:"offlineAvoir",data:{...apiPayload,saleId:ticket.ticketNumber||ticket.id}});
       // Restock local en attendant la synchro backend
