@@ -66,19 +66,6 @@ function AppProvider({children}){
   useEffect(()=>{try{localStorage.setItem("caissepro_parked",JSON.stringify(parked));}catch(e){}},[parked]);
   const[retoucheBons,setRetoucheBons]=useState(()=>{try{const s=localStorage.getItem("caissepro_retouches");return s?JSON.parse(s):[];}catch(e){return[];}});
   useEffect(()=>{try{localStorage.setItem("caissepro_retouches",JSON.stringify(retoucheBons.slice(0,500)));}catch(e){}},[retoucheBons]);
-  const addRetoucheBon=useCallback(async(bon)=>{
-    try{
-      const saved=await API.retouches.create({client:bon.client||"",phone:bon.phone||"",seller:bon.seller||"",items:(bon.items||[]).filter(i=>i.desc),dateRetrait:bon.dateRetrait||null,notes:bon.notes||"",total:bon.total||0});
-      const mapped={num:saved.retouche_number||saved.num,client:saved.client_name||bon.client,phone:saved.client_phone||bon.phone,seller:saved.seller_name||bon.seller,items:saved.items||(bon.items||[]).filter(i=>i.desc),dateRetrait:saved.pickup_date||bon.dateRetrait,total:parseFloat(saved.total)||bon.total,barcode:saved.barcode||bon.barcode,date:saved.created_at||bon.date,id:saved.id,status:saved.status||"pending"};
-      setRetoucheBons(prev=>{const next=[mapped,...prev].slice(0,500);try{localStorage.setItem("caissepro_retouches",JSON.stringify(next));}catch(e){}return next;});
-      return mapped;
-    }catch(e){
-      console.warn("Retouche API failed, saving locally:",e.message);
-      setRetoucheBons(prev=>{const next=[bon,...prev].slice(0,500);try{localStorage.setItem("caissepro_retouches",JSON.stringify(next));}catch(e){}return next;});
-      addPendingSync({type:"createRetouche",data:bon});
-      return bon;
-    }
-  },[addPendingSync]);
   const[selCust,setSelCust]=useState(null);
   const[stockMoves,setStockMoves]=useState(()=>{try{const s=localStorage.getItem("caissepro_stockmoves");return s?JSON.parse(s):[];}catch(e){return[];}});
   useEffect(()=>{try{localStorage.setItem("caissepro_stockmoves",JSON.stringify(stockMoves.slice(0,500)));}catch(e){}},[stockMoves]);
@@ -127,6 +114,19 @@ function AppProvider({children}){
   const[pendingSync,setPendingSync]=useState(()=>{try{const s=localStorage.getItem("caissepro_pendingSync");return s?JSON.parse(s):[];}catch(e){return[];}});
   useEffect(()=>{try{localStorage.setItem("caissepro_pendingSync",JSON.stringify(pendingSync));}catch(e){}},[pendingSync]);
   const addPendingSync=useCallback((action)=>{setPendingSync(p=>[...p,{...action,ts:Date.now()}]);},[]);
+  const addRetoucheBon=useCallback(async(bon)=>{
+    try{
+      const saved=await API.retouches.create({client:bon.client||"",phone:bon.phone||"",seller:bon.seller||"",items:(bon.items||[]).filter(i=>i.desc),dateRetrait:bon.dateRetrait||null,notes:bon.notes||"",total:bon.total||0});
+      const mapped={num:saved.retouche_number||saved.num,client:saved.client_name||bon.client,phone:saved.client_phone||bon.phone,seller:saved.seller_name||bon.seller,items:saved.items||(bon.items||[]).filter(i=>i.desc),dateRetrait:saved.pickup_date||bon.dateRetrait,total:parseFloat(saved.total)||bon.total,barcode:saved.barcode||bon.barcode,date:saved.created_at||bon.date,id:saved.id,status:saved.status||"pending"};
+      setRetoucheBons(prev=>{const next=[mapped,...prev].slice(0,500);try{localStorage.setItem("caissepro_retouches",JSON.stringify(next));}catch(e){}return next;});
+      return mapped;
+    }catch(e){
+      console.warn("Retouche API failed, saving locally:",e.message);
+      setRetoucheBons(prev=>{const next=[bon,...prev].slice(0,500);try{localStorage.setItem("caissepro_retouches",JSON.stringify(next));}catch(e){}return next;});
+      addPendingSync({type:"createRetouche",data:bon});
+      return bon;
+    }
+  },[addPendingSync]);
   const[tvaRates,setTvaRates]=useState([...DEFAULT_TVA_RATES]);
   useEffect(()=>{TVA_RATES=tvaRates;},[tvaRates]);
 
