@@ -468,7 +468,10 @@ public class SunmiPrinterPlugin extends Plugin {
                             break;
                         case "barcode":
                             String bc = cmd.optString("text", "");
-                            if (!bc.isEmpty()) printerService.printBarCode(bc, 8, 80, 2, 2, null);
+                            int bcType = cmd.optInt("type", 2); // 2=EAN13 default
+                            int bcHeight = cmd.optInt("height", 100);
+                            int bcWidth = cmd.optInt("width", 2);
+                            if (!bc.isEmpty()) printerService.printBarCode(bc, bcType, bcHeight, bcWidth, 2, null);
                             break;
                     }
                 }

@@ -64,6 +64,9 @@ function AppProvider({children}){
   const[promos,setPromos]=useState(initPromos);
   const[parked,setParked]=useState(()=>{try{const s=localStorage.getItem("caissepro_parked");return s?JSON.parse(s):[];}catch(e){return[];}});
   useEffect(()=>{try{localStorage.setItem("caissepro_parked",JSON.stringify(parked));}catch(e){}},[parked]);
+  const[retoucheBons,setRetoucheBons]=useState(()=>{try{const s=localStorage.getItem("caissepro_retouches");return s?JSON.parse(s):[];}catch(e){return[];}});
+  useEffect(()=>{try{localStorage.setItem("caissepro_retouches",JSON.stringify(retoucheBons.slice(0,500)));}catch(e){}},[retoucheBons]);
+  const addRetoucheBon=useCallback((bon)=>setRetoucheBons(p=>[bon,...p]),[]);
   const[selCust,setSelCust]=useState(null);
   const[stockMoves,setStockMoves]=useState(()=>{try{const s=localStorage.getItem("caissepro_stockmoves");return s?JSON.parse(s):[];}catch(e){return[];}});
   useEffect(()=>{try{localStorage.setItem("caissepro_stockmoves",JSON.stringify(stockMoves.slice(0,500)));}catch(e){}},[stockMoves]);
@@ -1439,7 +1442,7 @@ function AppProvider({children}){
     promoCode,setPromoCode,calcPromoDiscount,
     cashReg,openReg,closeReg,isOnline,tickets,setTickets,tSeq,lastHash,gt,audit,jet,closures,avoirs,consumeAvoir,isAvoirExpired,
     checkout,createClosure,exportArchive,exportFEC,exportCSVReport,exportCustomerRGPD,addAudit,addJET,
-    promos,setPromos,activePromos,parked,parkCart,restoreCart,removeParked,selCust,setSelCust,
+    promos,setPromos,activePromos,parked,parkCart,restoreCart,removeParked,retoucheBons,addRetoucheBon,selCust,setSelCust,
     stockAlerts,stockMoves,addStockMove,receiveStock,
     refreshProducts,findByEAN,perm,settings,setSettings,saveSettingsToAPI,getLoyaltyTier,avoirPayment,selectedAvoir,setSelectedAvoir,
     bestSellers,salesBySeller,salesByVariant,caEvolution,salesByCollection,

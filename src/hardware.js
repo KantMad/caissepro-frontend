@@ -298,6 +298,12 @@ class SunmiPrinterAdapter {
       text(`Fidelite: +${Math.floor(Number(t.totalTTC || t.total_ttc) || 0)}pts\n`);
     }
 
+    // EAN-13 barcode (Sunmi native printBarCode)
+    if (t.barcode && t.barcode.length === 13) {
+      align(1);
+      cmds.push({ cmd: 'barcode', text: t.barcode, type: 2, height: 100, width: 2 });
+    }
+
     // Feed and cut
     cmds.push({ cmd: 'feed', lines: 4 });
     cmds.push({ cmd: 'cut' });
@@ -341,6 +347,13 @@ class SunmiPrinterAdapter {
     cmds.push({ cmd: 'line', char: '=', len: 32 });
     align(1); size(18);
     text(`EMPREINTE NF525\n${a.fingerprint || a.hash || '-'}\n`);
+
+    // EAN-13 barcode
+    if (a.barcode && a.barcode.length === 13) {
+      align(1);
+      cmds.push({ cmd: 'barcode', text: a.barcode, type: 2, height: 100, width: 2 });
+    }
+
     cmds.push({ cmd: 'feed', lines: 4 });
     cmds.push({ cmd: 'cut' });
     return cmds;

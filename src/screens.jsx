@@ -141,7 +141,7 @@ function SalesScreen(){
     gDisc,gDiscType,setCartGD,promoCode,setPromoCode,calcPromoDiscount,isOnline,findByEAN,offlineMode,
     parked,parkCart,restoreCart,removeParked,customers,addCustomer,selCust,setSelCust,perm,notify,
     stockAlerts,activePromos,avoirPayment,selectedAvoir,setSelectedAvoir,getLoyaltyTier,tickets,saleNote,setSaleNote,favorites,toggleFavorite,getLastPriceForCustomer,settings,
-    printerConnected,thermalPrint,pendingSync,clearPendingSync,users,currentUser,currentStore,avoirs,consumeAvoir,isAvoirExpired,addAudit,addJET,trainingMode,cartTotals}=useApp();
+    printerConnected,thermalPrint,pendingSync,clearPendingSync,users,currentUser,currentStore,avoirs,consumeAvoir,isAvoirExpired,addAudit,addJET,trainingMode,cartTotals,retoucheBons,addRetoucheBon}=useApp();
   const[search,setSearch]=useState("");const[cat,setCat]=useState("Tous");const[vm,setVm]=useState(null);const[selSeller,setSelSeller]=useState(null);
   const[dm,setDm]=useState(null);const[dv,setDv]=useState("");const[gm,setGm]=useState(false);const[gv,setGv]=useState("");const[gtp,setGtp]=useState("percentage");
   const[lastTk,setLastTk]=useState(null);const[tkModal,setTkModal]=useState(false);const[busy,setBusy]=useState(false);
@@ -809,6 +809,7 @@ function SalesScreen(){
               (bon.notes?`<div><strong>Notes:</strong> ${bon.notes}</div><hr>`:"")+
               `<div class="center" style="font-size:10px;">Vendeur: ${bon.seller}<br>${new Date().toLocaleString("fr-FR")}<br>${settings.name||"CaissePro"} — ${settings.siret||""}</div>`+
               `</body></html>`);w.document.close();setTimeout(()=>{w.print();},300);}}
+          addRetoucheBon(bon);
           setRetoucheModal(false);setRetForm({client:"",phone:"",date:new Date().toISOString().split("T")[0],notes:"",items:[{desc:"",price:""}]});
           notify(`Bon de retouche ${bonNum} créé et ajouté au panier`);
           addAudit("RETOUCHE",`Bon ${bonNum} — ${bon.client} — ${retTotal.toFixed(2)}€`);
@@ -1415,7 +1416,7 @@ function StockScreen(){
 
 /* ══════════ HISTORY ══════════ */
 function HistoryScreen(){
-  const{tickets,avoirs,settings,processReturn,perm:p,printerConnected,thermalPrint,setSelectedAvoir,setMode,notify,customers}=useApp();
+  const{tickets,avoirs,settings,processReturn,perm:p,printerConnected,thermalPrint,setSelectedAvoir,setMode,notify,customers,retoucheBons}=useApp();
   const[tab,setTab]=useState("tickets");const[reprintTk,setReprintTk]=useState(null);const[reassignModal,setReassignModal]=useState(null);const[reassignCust,setReassignCust]=useState(null);
   const[search,setSearch]=useState("");const[dateFilter,setDateFilter]=useState("");
   const[returnModal,setReturnModal]=useState(null);
@@ -1467,6 +1468,7 @@ function HistoryScreen(){
     <div style={{display:"flex",gap:6,marginBottom:12,alignItems:"center"}}>
       <Btn variant={tab==="tickets"?"primary":"outline"} onClick={()=>setTab("tickets")} style={{fontSize:11}}>Tickets ({tickets.length})</Btn>
       <Btn variant={tab==="avoirs"?"danger":"outline"} onClick={()=>setTab("avoirs")} style={{fontSize:11}}>Avoirs ({avoirs.length})</Btn>
+      <Btn variant={tab==="retouches"?"primary":"outline"} onClick={()=>setTab("retouches")} style={{fontSize:11}}>Retouches ({retoucheBons.length})</Btn>
       <div style={{flex:1}}/>
       <Input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Rechercher N°, client, caissier…" style={{width:220,height:32,fontSize:11,padding:"4px 10px"}}/>
       <Input type="date" value={dateFilter} onChange={e=>setDateFilter(e.target.value)} style={{width:140,height:32,fontSize:11,padding:"4px 10px"}}/>
@@ -1514,6 +1516,32 @@ function HistoryScreen(){
           <div style={{fontSize:7,color:C.fiscal,fontFamily:"monospace"}}>{a.fingerprint}</div></div>
       </div>
     )):<div style={{textAlign:"center",padding:30,color:C.textLight}}>Aucun avoir</div>)}
+
+    {tab==="retouches"&&(retoucheBons.length?(()=>{
+      const fBons=retoucheBons.filter(b=>{const q=search.toLowerCase();const matchS=!q||(b.num||"").toLowerCase().includes(q)||(b.client||"").toLowerCase().includes(q)||(b.seller||"").toLowerCase().includes(q);
+        const matchD=!dateFilter||(b.date||"").startsWith(dateFilter);return matchS&&matchD;});
+      return fBons.length?fBons.map((b,idx)=>(
+        <div key={b.num||idx} style={{display:"flex",alignItems:"center",gap:10,padding:10,borderRadius:10,background:C.surface,border:`1.5px solid ${C.border}`,marginBottom:5}}>
+          <Edit size={14} color={C.textMuted}/>
+          <div style={{flex:1}}>
+            <div style={{fontSize:11,fontWeight:700}}>{b.num} <Badge color={C.info}>{b.client||"Sans client"}</Badge></div>
+            <div style={{fontSize:9,color:C.textMuted}}>{new Date(b.date).toLocaleString("fr-FR")} — {b.seller||"?"} — {(b.items||[]).filter(i=>i.desc).length} prestation(s)</div>
+            <div style={{fontSize:9,color:C.textMuted,marginTop:2}}>{(b.items||[]).filter(i=>i.desc).map(i=>i.desc).join(", ")}</div>
+            {b.dateRetrait&&<div style={{fontSize:9,fontWeight:600,color:new Date(b.dateRetrait)<new Date()?C.danger:C.primary}}>Retrait: {new Date(b.dateRetrait).toLocaleDateString("fr-FR")}</div>}
+          </div>
+          <div style={{textAlign:"right",marginRight:8}}><div style={{fontSize:13,fontWeight:700,color:C.primary}}>{(b.total||0).toFixed(2)}€</div>
+            {b.phone&&<div style={{fontSize:8,color:C.textMuted}}>{b.phone}</div>}</div>
+          <Btn variant="outline" onClick={async()=>{const printed=await thermalPrint("retouche",b);if(!printed){
+            const w=window.open("","_blank","width=400,height=600");if(w){w.document.write(`<html><head><title>Bon ${b.num}</title><style>body{font-family:'Courier New',monospace;font-size:12px;padding:10px;max-width:300px;margin:0 auto;}h2{text-align:center;font-size:14px;margin:4px 0;}hr{border:none;border-top:1px dashed #333;margin:6px 0;}.row{display:flex;justify-content:space-between;}.center{text-align:center;}</style></head><body>`+
+              `<h2>${settings.name||"CaissePro"}</h2><hr><h2>BON DE RETOUCHE</h2><div class="center">N: ${b.num}</div><hr>`+
+              `<div class="row"><span>Client:</span><strong>${b.client||""}</strong></div>`+
+              (b.items||[]).filter(i=>i.desc).map(i=>`<div class="row"><span>${i.desc}</span><strong>${parseFloat(i.price||0).toFixed(2)}EUR</strong></div>`).join("")+
+              `<hr><div class="row"><strong>TOTAL</strong><strong>${(b.total||0).toFixed(2)}EUR TTC</strong></div>`+
+              `</body></html>`);w.document.close();setTimeout(()=>w.print(),300);}
+          }}} style={{fontSize:10,padding:"4px 10px"}}><Printer size={12}/> Imprimer</Btn>
+        </div>
+      )):<div style={{textAlign:"center",padding:30,color:C.textLight}}>Aucun bon trouvé</div>;
+    })():<div style={{textAlign:"center",padding:30,color:C.textLight}}>Aucun bon de retouche</div>)}
 
     {/* TEST MODAL — using fixed Modal component */}
     <Modal open={testModal} onClose={()=>setTestModal(false)} title="Test Modal (composant fixe)">
