@@ -1419,9 +1419,16 @@ function StockScreen(){
 
 /* ══════════ HISTORY ══════════ */
 function HistoryScreen(){
-  const{tickets,avoirs,settings,processReturn,perm:p,printerConnected,thermalPrint,setSelectedAvoir,setMode,notify,customers,retoucheBons}=useApp();
+  const{tickets,avoirs,settings,processReturn,perm:p,printerConnected,thermalPrint,setSelectedAvoir,setMode,notify,customers,retoucheBons,scanBarcode,setScanBarcode}=useApp();
   const[tab,setTab]=useState("tickets");const[reprintTk,setReprintTk]=useState(null);const[reassignModal,setReassignModal]=useState(null);const[reassignCust,setReassignCust]=useState(null);
   const[search,setSearch]=useState("");const[dateFilter,setDateFilter]=useState("");
+  // Pre-fill search from barcode scan
+  useEffect(()=>{if(scanBarcode){setSearch(scanBarcode);
+    // Auto-detect tab from barcode prefix
+    if(scanBarcode.startsWith("201"))setTab("avoirs");
+    else if(scanBarcode.startsWith("203"))setTab("retouches");
+    else setTab("tickets");
+    setScanBarcode(null);}},[scanBarcode,setScanBarcode]);
   const[returnModal,setReturnModal]=useState(null);
   const[returnItems,setReturnItems]=useState([]);const[returnReason,setReturnReason]=useState("");const[returnMethod,setReturnMethod]=useState("cash");
   const[avoirDetail,setAvoirDetail]=useState(null);

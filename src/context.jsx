@@ -4,7 +4,7 @@ import { setOnAuthExpired, setStoreId, clearStoreId } from "./api.js";
 import printer from "./printer.js";
 import hardwareManager from "./hardware.js";
 import { CO, DEFAULT_TVA_RATES, PERMS, initProducts, initUsers, initCustomers, LOYALTY_TIERS, initPromos, C } from "./constants.jsx";
-import { hashPin, verifyPin, sha256, norm, loadVariantOrderFromSettings, autoImportSizesFromProducts } from "./utils.jsx";
+import { hashPin, verifyPin, sha256, norm, loadVariantOrderFromSettings, autoImportSizesFromProducts, generateEAN13 } from "./utils.jsx";
 import Papa from "papaparse";
 
 /* ══════════ CONTEXT ══════════ */
@@ -653,7 +653,8 @@ function AppProvider({children}){
       const hashInput=`${lastHash}|${seq}|VENTE|${caisseId}|${ticketNumber}|${date}|${tTTC.toFixed(2)}|${(gt+tTTC).toFixed(2)}`;
       const hash=await sha256(hashInput);
       const fingerprint=hash.slice(0,8).toUpperCase();
-      const ticket={ticketNumber,seq,date,items,payments,paymentMethod,
+      const offlineBarcode=generateEAN13("200",Date.now()%1000000000);
+      const ticket={ticketNumber,seq,date,items,payments,paymentMethod,barcode:offlineBarcode,
         totalHT:tHT,totalTVA:tTVA,totalTTC:tTTC,globalDiscount:gd,margin,
         hash,fingerprint,grandTotal:gt+tTTC,promosApplied:applied,
         saleNote:saleNote||null,userName:currentUser?.name,sellerName:sellerName||currentUser?.name,
@@ -974,16 +975,20 @@ function AppProvider({children}){
   const notifyRef=useRef(notify);notifyRef.current=notify;
   const ticketsRef=useRef(tickets);ticketsRef.current=tickets;
   const retoucheBonsRef=useRef(retoucheBons);retoucheBonsRef.current=retoucheBons;
+  const avoirsRef=useRef(avoirs);avoirsRef.current=avoirs;
+  const[scanBarcode,setScanBarcode]=useState(null);
   useEffect(()=>{const s=hardwareManager.scanner;if(!s)return;s.start();
     const off=s.onScan(code=>{
       // 1. Try product EAN
       const found=findByEANRef.current(code);
       if(found){addToCartRef.current(found.product,found.variant);notifyRef.current(found.product.name+" ajouté ("+code+")");return;}
-      // 2. Try ticket/avoir/retouche barcode (EAN-13 starting with "200")
+      // 2. Try ticket/avoir/retouche barcode (EAN-13 starting with "200"/"201"/"203")
       const tk=ticketsRef.current.find(t=>t.barcode===code);
-      if(tk){notifyRef.current(`Ticket ${tk.ticketNumber} trouvé — voir Historique`,"info");setMode("history");return;}
+      if(tk){setScanBarcode(code);notifyRef.current(`Ticket ${tk.ticketNumber} trouvé`,"info");setMode("history");return;}
+      const av=avoirsRef.current.find(a=>a.barcode===code);
+      if(av){setScanBarcode(code);notifyRef.current(`Avoir ${av.avoirNumber} trouvé`,"info");setMode("history");return;}
       const rb=retoucheBonsRef.current.find(b=>b.barcode===code);
-      if(rb){notifyRef.current(`Bon retouche ${rb.num} trouvé — voir Historique`,"info");setMode("history");return;}
+      if(rb){setScanBarcode(code);notifyRef.current(`Bon retouche ${rb.num} trouvé`,"info");setMode("history");return;}
       notifyRef.current("Code-barres inconnu: "+code,"warn");
     });
     return()=>{s.stop();off();};},[]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -1472,6 +1477,7 @@ function AppProvider({children}){
     users,setUsers,tvaRates,setTvaRates,addPendingSync,pendingSync,clearPendingSync,
     trainingMode,setTrainingMode,
     cartTotals,
+    scanBarcode,setScanBarcode,
   }}>{children}</AppCtx.Provider>;
 }
 
