@@ -88,6 +88,7 @@ export const products = {
   duplicate: (id) => api(`/api/products/${id}/duplicate`, { method: 'POST' }),
   addVariant: (id, data) => api(`/api/products/${id}/variants`, { method: 'POST', body: JSON.stringify(data) }),
   removeVariant: (id, variantId) => api(`/api/products/${id}/variants/${variantId}`, { method: 'DELETE' }),
+  reorderVariants: (id, variantIds) => api(`/api/products/${id}/reorder-variants`, { method: 'PUT', body: JSON.stringify({ variantIds }) }),
   findByEAN: (ean) => api(`/api/products/find/ean/${ean}`),
   categories: () => api('/api/products/categories/list'),
 };

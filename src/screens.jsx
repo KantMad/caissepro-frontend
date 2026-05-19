@@ -414,7 +414,7 @@ function SalesScreen(){
           </div>
 
         {selectedAvoir&&totals.tTTC<=0?
-          <Btn onClick={()=>quickPay("avoir")} disabled={!cart.length||busy} style={{width:"100%",height:52,borderRadius:14,background:C.fiscal,fontSize:14,gap:8,boxShadow:`0 4px 16px ${C.fiscal}30`,marginBottom:6,letterSpacing:"-0.3px"}}>
+          <Btn onClick={async()=>await quickPay("avoir")} disabled={!cart.length||busy} style={{width:"100%",height:52,borderRadius:14,background:C.fiscal,fontSize:14,gap:8,boxShadow:`0 4px 16px ${C.fiscal}30`,marginBottom:6,letterSpacing:"-0.3px"}}>
             {busy?<span className="spin-loader"/>:<><CheckCircle2 size={18}/> Valider (avoir) — 0.00€</>}</Btn>
         :<Btn onClick={()=>setPayMethodModal(true)} disabled={!cart.length||busy} style={{width:"100%",height:52,borderRadius:14,background:C.primary,fontSize:14,gap:8,boxShadow:`0 4px 16px ${C.primary}30`,marginBottom:6,letterSpacing:"-0.3px"}}>
           {busy?<span className="spin-loader"/>:<><Wallet size={18}/> Règlement — {totals.tTTC.toFixed(2)}€</>}</Btn>}
@@ -669,19 +669,19 @@ function SalesScreen(){
     {/* PAYMENT METHOD MODAL */}
     <Modal open={payMethodModal} onClose={()=>setPayMethodModal(false)} title="Règlement" sub={`Total: ${totals.tTTC.toFixed(2)}€`}>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:10}}>
-        <button onClick={()=>{setPayMethodModal(false);quickPay("card");}} style={{padding:16,borderRadius:14,border:`2px solid ${C.info}25`,background:`${C.info}06`,cursor:"pointer",textAlign:"center",transition:"all 0.15s"}}
+        <button onClick={async()=>{setPayMethodModal(false);await quickPay("card");}} style={{padding:16,borderRadius:14,border:`2px solid ${C.info}25`,background:`${C.info}06`,cursor:"pointer",textAlign:"center",transition:"all 0.15s"}}
           onMouseEnter={e=>e.currentTarget.style.borderColor=C.info} onMouseLeave={e=>e.currentTarget.style.borderColor=`${C.info}25`}>
           <CreditCard size={24} color={C.info} style={{marginBottom:6}}/><div style={{fontSize:13,fontWeight:700,color:C.text}}>Carte bancaire</div><div style={{fontSize:10,color:C.textMuted}}>CB / Visa / Mastercard</div></button>
-        <button onClick={()=>{setPayMethodModal(false);setCardType("amex");quickPay("amex");}} style={{padding:16,borderRadius:14,border:`2px solid #006FCF25`,background:"#006FCF06",cursor:"pointer",textAlign:"center",transition:"all 0.15s"}}
+        <button onClick={async()=>{setPayMethodModal(false);setCardType("amex");await quickPay("amex");}} style={{padding:16,borderRadius:14,border:`2px solid #006FCF25`,background:"#006FCF06",cursor:"pointer",textAlign:"center",transition:"all 0.15s"}}
           onMouseEnter={e=>e.currentTarget.style.borderColor="#006FCF"} onMouseLeave={e=>e.currentTarget.style.borderColor="#006FCF25"}>
           <CreditCard size={24} color="#006FCF" style={{marginBottom:6}}/><div style={{fontSize:13,fontWeight:700,color:C.text}}>American Express</div><div style={{fontSize:10,color:C.textMuted}}>AMEX</div></button>
         <button onClick={()=>{setPayMethodModal(false);setNumpadValue("");setCashNumpadModal(true);}} style={{padding:16,borderRadius:14,border:`2px solid ${C.primary}25`,background:`${C.primary}06`,cursor:"pointer",textAlign:"center",transition:"all 0.15s"}}
           onMouseEnter={e=>e.currentTarget.style.borderColor=C.primary} onMouseLeave={e=>e.currentTarget.style.borderColor=`${C.primary}25`}>
           <Banknote size={24} color={C.primary} style={{marginBottom:6}}/><div style={{fontSize:13,fontWeight:700,color:C.text}}>Espèces</div><div style={{fontSize:10,color:C.textMuted}}>Avec rendu monnaie</div></button>
-        <button onClick={()=>{setPayMethodModal(false);quickPay("cheque");}} style={{padding:16,borderRadius:14,border:`2px solid #7B879425`,background:"#7B879406",cursor:"pointer",textAlign:"center",transition:"all 0.15s"}}
+        <button onClick={async()=>{setPayMethodModal(false);await quickPay("cheque");}} style={{padding:16,borderRadius:14,border:`2px solid #7B879425`,background:"#7B879406",cursor:"pointer",textAlign:"center",transition:"all 0.15s"}}
           onMouseEnter={e=>e.currentTarget.style.borderColor="#7B8794"} onMouseLeave={e=>e.currentTarget.style.borderColor="#7B879425"}>
           <FileText size={24} color="#7B8794" style={{marginBottom:6}}/><div style={{fontSize:13,fontWeight:700,color:C.text}}>Chèque</div><div style={{fontSize:10,color:C.textMuted}}>Paiement par chèque</div></button>
-        <button onClick={()=>{setPayMethodModal(false);quickPay("giftcard");}} style={{padding:16,borderRadius:14,border:`2px solid ${C.accent}25`,background:`${C.accent}06`,cursor:"pointer",textAlign:"center",transition:"all 0.15s"}}
+        <button onClick={async()=>{setPayMethodModal(false);await quickPay("giftcard");}} style={{padding:16,borderRadius:14,border:`2px solid ${C.accent}25`,background:`${C.accent}06`,cursor:"pointer",textAlign:"center",transition:"all 0.15s"}}
           onMouseEnter={e=>e.currentTarget.style.borderColor=C.accent} onMouseLeave={e=>e.currentTarget.style.borderColor=`${C.accent}25`}>
           <Gift size={24} color={C.accent} style={{marginBottom:6}}/><div style={{fontSize:13,fontWeight:700,color:C.text}}>Carte cadeau</div><div style={{fontSize:10,color:C.textMuted}}>Paiement par carte cadeau</div></button>
         <button onClick={()=>{setPayMethodModal(false);setAvoirSelectModal(true);}}
@@ -1113,7 +1113,8 @@ function StatsScreen(){
 
 /* ══════════ STOCK MATRIX ══════════ */
 function StockScreen(){
-  const{products,setProducts,stockAlerts,stockMoves,receiveStock,stockAging,reorderSuggestions,adjustStock,notify,findByEAN,users,addStockMove,addAudit,settings}=useApp();
+  const{products,setProducts,stockAlerts,stockMoves,receiveStock,stockAging,reorderSuggestions,adjustStock,notify,findByEAN,users,addStockMove,addAudit,settings,perm}=useApp();
+  if(!perm().canCreateProduct)return<div style={{padding:40,textAlign:"center",color:"#94a3b8",fontSize:16,fontWeight:600}}>Accès réservé aux administrateurs</div>;
   const[sel,setSel]=useState(products[0]?.id||"");const[tab,setTab]=useState("matrix");
   const[rcModal,setRcModal]=useState(false);const[rcProd,setRcProd]=useState("");const[rcVar,setRcVar]=useState("");const[rcQty,setRcQty]=useState("");const[rcSup,setRcSup]=useState("");
   const[adjProd,setAdjProd]=useState("");const[adjVar,setAdjVar]=useState("");const[adjQty,setAdjQty]=useState("");const[adjReason,setAdjReason]=useState("INVENTAIRE");
@@ -2479,7 +2480,8 @@ function FiscalScreen(){
 }
 
 function AuditScreen(){
-  const{audit:localAudit,jet:localJet,exportCSVReport,isOnline,currentStore,viewingStoreId,stores,effectiveStoreId}=useApp();
+  const{audit:localAudit,jet:localJet,exportCSVReport,isOnline,currentStore,viewingStoreId,stores,effectiveStoreId,perm}=useApp();
+  if(!perm().canExport)return<div style={{padding:40,textAlign:"center",color:"#94a3b8",fontSize:16,fontWeight:600}}>Accès réservé aux administrateurs</div>;
   const storeName=viewingStoreId==="all"?"Tous les magasins":viewingStoreId?stores.find(s=>s.id===viewingStoreId)?.name:currentStore?.name||"";
   const[filterUser,setFilterUser]=useState("");const[tab,setTab]=useState("audit");const[page,setPage]=useState(0);
   const[apiAudit,setApiAudit]=useState(null);const[apiJet,setApiJet]=useState(null);
@@ -2969,7 +2971,7 @@ function CSVImportWizard({open,onClose,existingProducts,onImportComplete}){
 /* ══════════ PRODUCTS MANAGEMENT ══════════ */
 function ProductsScreen(){
   const{products,setProducts,refreshProducts,addProduct,addAudit,notify,perm:p,exportCatalog,duplicateProduct,
-    updateProduct,deleteProduct,addVariantToProduct,deleteVariant,updateProductPrice,settings,tvaRates}=useApp();
+    updateProduct,deleteProduct,addVariantToProduct,deleteVariant,reorderVariants,updateProductPrice,settings,tvaRates}=useApp();
   const pm=settings.pricingMode||"TTC";
   const[search,setSearch]=useState("");const[importWizardOpen,setImportWizardOpen]=useState(false);
   const[createModal,setCreateModal]=useState(false);
@@ -2991,6 +2993,17 @@ function ProductsScreen(){
       <div style={{display:"flex",gap:6}}>
         <Btn variant="outline" onClick={()=>setImportWizardOpen(true)} style={{fontSize:11}}><Upload size={12}/> CSV</Btn>
         <Btn variant="outline" onClick={exportCatalog} style={{fontSize:11}}><Download size={12}/> Export</Btn>
+        {p().canCreateProduct&&<Btn variant="outline" onClick={async()=>{
+          let count=0;for(const prod of products){
+            if(prod.variants.length<2)continue;
+            const sorted=sortVariantsBySize(prod.variants);
+            const ids=sorted.map(v=>v.id);
+            const changed=ids.some((id,i)=>id!==prod.variants[i]?.id);
+            if(changed){await API.products.reorderVariants(prod.id,ids);count++;}
+          }
+          if(count>0){await refreshProducts();notify(`${count} produit(s) réordonné(s)`,"success");}
+          else notify("Tous les produits sont déjà dans le bon ordre","info");
+        }} style={{fontSize:11,color:C.info,borderColor:C.info+"44"}}><Zap size={12}/> Réordonner tailles</Btn>}
         {p().canCreateProduct&&<Btn onClick={()=>setCreateModal(true)} style={{fontSize:11,background:C.primary}}><Plus size={12}/> Nouveau</Btn>}</div></div>
     <Input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Rechercher par nom ou SKU…" style={{marginBottom:12,height:36,maxWidth:300}}/>
     <div style={{background:C.surface,borderRadius:14,border:`1.5px solid ${C.border}`,overflow:"hidden"}}>
@@ -3046,6 +3059,15 @@ function ProductsScreen(){
               style={{background:"none",border:"none",cursor:"pointer",color:C.danger,fontSize:9}}>
               <Trash2 size={11}/></button>
           </div>))}</div>
+
+        {/* Bouton réordonner les tailles selon le ranking global */}
+        <Btn variant="outline" onClick={async()=>{
+          const sorted=sortVariantsBySize(editModal.variants);
+          const ids=sorted.map(v=>v.id);
+          const ok=await reorderVariants(editModal.id,ids);
+          if(ok){setEditModal(prev=>prev?{...prev,variants:sorted.map((v,i)=>({...v,sort_order:i}))}:null);}
+        }} style={{width:"100%",height:36,fontSize:11,marginBottom:10,color:C.info,borderColor:C.info+"44"}}>
+          <Zap size={13}/> Réordonner les tailles (selon réglages)</Btn>
 
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
           <Btn variant="success" onClick={()=>{
@@ -5696,7 +5718,8 @@ function HelpDashboardScreen(){
 
 /* ══════════ EXPORTS CENTER (Dashboard) ══════════ */
 function ExportsScreen(){
-  const{tickets,avoirs,customers,settings,exportCSVReport,notify,addAudit,addJET}=useApp();
+  const{tickets,avoirs,customers,settings,exportCSVReport,notify,addAudit,addJET,perm}=useApp();
+  if(!perm().canExport)return<div style={{padding:40,textAlign:"center",color:"#94a3b8",fontSize:16,fontWeight:600}}>Accès réservé aux administrateurs</div>;
   const[tab,setTab]=useState("sales");
   const[dateFrom,setDateFrom]=useState(()=>{const d=new Date();d.setMonth(d.getMonth()-1);return d.toISOString().split("T")[0];});
   const[dateTo,setDateTo]=useState(()=>new Date().toISOString().split("T")[0]);

@@ -10,7 +10,8 @@ export let TVA_RATES=[...DEFAULT_TVA_RATES];
 /* ══════════ PERMISSIONS ══════════ */
 export const PERMS={
   admin:{maxDiscount:100,canVoid:true,canExport:true,canSettings:true,canCloseZ:true,canCreateProduct:true,canViewMargin:true,canManagePromos:true},
-  cashier:{maxDiscount:20,canVoid:false,canExport:false,canSettings:false,canCloseZ:true,canCreateProduct:false,canViewMargin:false,canManagePromos:false},
+  manager:{maxDiscount:50,canVoid:true,canExport:true,canSettings:false,canCloseZ:true,canCreateProduct:true,canViewMargin:true,canManagePromos:true},
+  cashier:{maxDiscount:20,canVoid:false,canExport:false,canSettings:false,canCloseZ:false,canCreateProduct:false,canViewMargin:false,canManagePromos:false},
 };
 
 /* ══════════ DATA ══════════ */

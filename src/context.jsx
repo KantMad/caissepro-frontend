@@ -1308,6 +1308,13 @@ function AppProvider({children}){
     }catch(e){notify("Erreur: "+e.message,"error");return false;}
   },[products,addAudit,notify]);
 
+  const reorderVariants=useCallback(async(productId,variantIds)=>{
+    try{const updated=await API.products.reorderVariants(productId,variantIds);
+      if(updated){setProducts(prev=>prev.map(x=>x.id===productId?norm.product(updated):x));}
+      notify("Ordre des tailles mis à jour","success");return true;
+    }catch(e){notify("Erreur: "+e.message,"error");return false;}
+  },[notify]);
+
   // ══ CUSTOMER EDIT — via API ══
   const updateCustomer=useCallback(async(customerId,updates)=>{
     try{await API.customers.update(customerId,updates);
@@ -1428,7 +1435,7 @@ function AppProvider({children}){
     duplicateProduct,salesGoals,setSellerGoal,commissions,getLastPriceForCustomer,theme,setTheme,
     notifications,notify,
     processReturn,giftCards,createGiftCard,useGiftCard,checkGiftCard,
-    updateProduct,deleteProduct,addVariantToProduct,deleteVariant,
+    updateProduct,deleteProduct,addVariantToProduct,deleteVariant,reorderVariants,
     updateCustomer,deleteCustomer,adjustStock,
     printerConnected,printerType,thermalPrint,connectPrinter,disconnectPrinter,isSunmi,isAndroid,
     hwId,hwProfile,switchHardware,hardwareProfiles:hardwareManager.profiles,
