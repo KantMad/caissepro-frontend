@@ -860,6 +860,18 @@ class PAXPrinterAdapter {
   async printClosure(closure, settings, companyInfo) {
     return await _textBasedPrint(this, 'closure', closure, settings, companyInfo, 32);
   }
+  async printRetouche(bon, settings, companyInfo) {
+    return await _textBasedPrint(this, 'retouche', bon, settings, companyInfo, 32);
+  }
+  async printRegisterOpen(data, settings, companyInfo) {
+    return await _textBasedPrint(this, 'registerOpen', data, settings, companyInfo, 32);
+  }
+  async printRegisterClose(data, settings, companyInfo) {
+    return await _textBasedPrint(this, 'registerClose', data, settings, companyInfo, 32);
+  }
+  async printGiftCard(gc, settings, companyInfo) {
+    return await _textBasedPrint(this, 'giftcard', gc, settings, companyInfo, 32);
+  }
   async testPrint() {
     await this.printText('=== TEST CaissePro ===\n');
     await this.printText(`PAX Printer OK\n${new Date().toLocaleString('fr-FR')}\n\n\n`);
@@ -894,6 +906,10 @@ class iMinPrinterAdapter {
   }
   async printAvoir(avoir, s, co) { return await _textBasedPrint(this, 'avoir', avoir, s, co, 48); }
   async printClosure(c, s, co) { return await _textBasedPrint(this, 'closure', c, s, co, 48); }
+  async printRetouche(bon, s, co) { return await _textBasedPrint(this, 'retouche', bon, s, co, 48); }
+  async printRegisterOpen(data, s, co) { return await _textBasedPrint(this, 'registerOpen', data, s, co, 48); }
+  async printRegisterClose(data, s, co) { return await _textBasedPrint(this, 'registerClose', data, s, co, 48); }
+  async printGiftCard(gc, s, co) { return await _textBasedPrint(this, 'giftcard', gc, s, co, 48); }
   async testPrint() {
     await this.printText('=== TEST CaissePro ===\n');
     await this.printText(`iMin Printer OK\n${new Date().toLocaleString('fr-FR')}\n\n\n`);
@@ -957,6 +973,52 @@ class BrowserPrintAdapter {
     return this._printViaIframe(`<div class="center bold big">CLOTURE</div><div class="sep"></div><div class="bold">CA TTC: ${(closure.totalTTC||closure.totalCA||0).toFixed(2)} EUR</div>`);
   }
 
+  async printRetouche(bon, settings, companyInfo) {
+    const s = settings || {}; const co = companyInfo || {};
+    let h = `<div class="center bold big">${s.name || co.name || 'Ma Boutique'}</div><div class="sep"></div>`;
+    h += `<div class="center bold big">BON DE RETOUCHE</div>`;
+    h += `<div class="center">N: ${bon.num || bon.retouche_number || '?'}</div><div class="sep"></div>`;
+    if (bon.client || bon.client_name) h += `<div class="row"><span>Client:</span><span class="bold">${bon.client || bon.client_name}</span></div>`;
+    if (bon.phone || bon.client_phone) h += `<div class="row"><span>Tel:</span><span>${bon.phone || bon.client_phone}</span></div>`;
+    for (const item of (bon.items || []).filter(i => i.desc || i.description)) {
+      h += `<div class="row"><span>${item.desc || item.description}</span><span>${parseFloat(item.price || 0).toFixed(2)}EUR</span></div>`;
+    }
+    h += `<div class="sep"></div><div class="row bold"><span>TOTAL</span><span>${(bon.total || 0).toFixed(2)} EUR TTC</span></div>`;
+    if (bon.dateRetrait || bon.pickup_date) h += `<div class="center">Retrait: ${new Date(bon.dateRetrait || bon.pickup_date).toLocaleDateString('fr-FR')}</div>`;
+    return this._printViaIframe(h);
+  }
+
+  async printRegisterOpen(data, settings, companyInfo) {
+    const s = settings || {}; const co = companyInfo || {};
+    let h = `<div class="center bold big">${s.name || co.name || 'Ma Boutique'}</div><div class="sep"></div>`;
+    h += `<div class="center bold">OUVERTURE DE CAISSE</div>`;
+    h += `<div class="center">${new Date(data.date || data.openDate || '').toLocaleString('fr-FR')}</div><div class="sep"></div>`;
+    h += `<div class="row"><span>Fond de caisse:</span><span class="bold">${(data.openingAmount || data.amount || 0).toFixed(2)} EUR</span></div>`;
+    h += `<div>Caissier: ${data.userName || '?'}</div>`;
+    return this._printViaIframe(h);
+  }
+
+  async printRegisterClose(data, settings, companyInfo) {
+    const el = document.querySelector('[data-print-receipt]');
+    if (el) return this._printViaIframe(el.innerHTML);
+    const s = settings || {}; const co = companyInfo || {};
+    let h = `<div class="center bold big">${s.name || co.name || 'Ma Boutique'}</div><div class="sep"></div>`;
+    h += `<div class="center bold big">CLOTURE DE CAISSE</div><div class="sep"></div>`;
+    h += `<div class="row bold"><span>CA TTC:</span><span>${(data.totalTTC || data.totalCA || 0).toFixed(2)} EUR</span></div>`;
+    return this._printViaIframe(h);
+  }
+
+  async printGiftCard(gc, settings, companyInfo) {
+    const s = settings || {}; const co = companyInfo || {};
+    let h = `<div class="center bold big">${s.name || co.name || 'Ma Boutique'}</div><div class="sep"></div>`;
+    h += `<div class="center bold big">CARTE CADEAU</div>`;
+    h += `<div class="center">Code: ${gc.code || '?'}</div><div class="sep"></div>`;
+    h += `<div class="row bold"><span>Montant:</span><span>${(gc.initialAmount || gc.initial_amount || gc.amount || 0).toFixed(2)} EUR</span></div>`;
+    if (gc.customerName || gc.customer_name) h += `<div>Client: ${gc.customerName || gc.customer_name}</div>`;
+    if (gc.expiresAt || gc.expires_at) h += `<div class="center small">Expire: ${new Date(gc.expiresAt || gc.expires_at).toLocaleDateString('fr-FR')}</div>`;
+    return this._printViaIframe(h);
+  }
+
   async testPrint() {
     return this._printViaIframe('<div class="center bold big">TEST IMPRESSION</div><div class="sep"></div><div class="center">CaissePro OK</div>');
   }
@@ -976,11 +1038,15 @@ async function _textBasedPrint(adapter, type, data, settings, companyInfo, width
   const pad = (l, r) => { const sp = width - l.length - r.length; return l + (sp > 0 ? ' '.repeat(sp) : ' ') + r; };
 
   let lines = [];
-  if (type === 'receipt') {
+  const header = () => {
     lines.push((s.name || co.name || 'Ma Boutique'));
     if (s.address) lines.push(s.address);
     if (s.siret) lines.push(`SIRET: ${s.siret}`);
     lines.push(sep);
+  };
+
+  if (type === 'receipt') {
+    header();
     lines.push(`N: ${data.ticketNumber}  ${new Date(data.date || data.createdAt || '').toLocaleString('fr-FR')}`);
     lines.push(`Caissier: ${data.userName || '?'}`);
     if (data.customerName) lines.push(`Client: ${data.customerName}`);
@@ -997,6 +1063,56 @@ async function _textBasedPrint(adapter, type, data, settings, companyInfo, width
     lines.push(pad('TOTAL TTC', `${(data.totalTTC || 0).toFixed(2)}E`));
     lines.push(sep);
     lines.push(`NF525: ${data.fingerprint || '-'}`);
+  } else if (type === 'avoir') {
+    header();
+    lines.push('AVOIR / NOTE DE CREDIT');
+    lines.push(`N: ${data.avoirNumber || data.avoir_number || '?'}`);
+    lines.push(`Date: ${new Date(data.date || data.createdAt || '').toLocaleString('fr-FR')}`);
+    lines.push(dsep);
+    lines.push(pad('TOTAL', `${(data.totalTTC || data.amount || 0).toFixed(2)}E`));
+    lines.push(sep);
+    if (data.fingerprint) lines.push(`NF525: ${data.fingerprint}`);
+  } else if (type === 'closure') {
+    header();
+    lines.push('CLOTURE DE CAISSE');
+    lines.push(`Date: ${new Date(data.date || data.createdAt || '').toLocaleString('fr-FR')}`);
+    lines.push(dsep);
+    lines.push(pad('CA TTC', `${(data.totalTTC || data.totalCA || 0).toFixed(2)}E`));
+    lines.push(pad('Tickets', `${data.ticketCount || data.nbTickets || 0}`));
+    lines.push(sep);
+  } else if (type === 'retouche') {
+    header();
+    lines.push('BON DE RETOUCHE');
+    lines.push(`N: ${data.num || data.retouche_number || '?'}`);
+    lines.push(dsep);
+    if (data.client || data.client_name) lines.push(`Client: ${data.client || data.client_name}`);
+    if (data.phone || data.client_phone) lines.push(`Tel: ${data.phone || data.client_phone}`);
+    for (const item of (data.items || []).filter(i => i.desc || i.description)) {
+      lines.push(pad(`${item.desc || item.description}`, `${parseFloat(item.price || 0).toFixed(2)}E`));
+    }
+    lines.push(dsep);
+    lines.push(pad('TOTAL', `${(data.total || 0).toFixed(2)}E TTC`));
+    if (data.dateRetrait || data.pickup_date) lines.push(`Retrait: ${new Date(data.dateRetrait || data.pickup_date).toLocaleDateString('fr-FR')}`);
+  } else if (type === 'registerOpen') {
+    header();
+    lines.push('OUVERTURE DE CAISSE');
+    lines.push(`Date: ${new Date(data.date || data.openDate || '').toLocaleString('fr-FR')}`);
+    lines.push(dsep);
+    lines.push(pad('Fond de caisse', `${(data.openingAmount || data.amount || 0).toFixed(2)}E`));
+    lines.push(`Caissier: ${data.userName || '?'}`);
+  } else if (type === 'registerClose') {
+    header();
+    lines.push('FERMETURE DE CAISSE');
+    lines.push(`Date: ${new Date(data.date || '').toLocaleString('fr-FR')}`);
+    lines.push(dsep);
+    lines.push(pad('CA TTC', `${(data.totalTTC || data.totalCA || 0).toFixed(2)}E`));
+  } else if (type === 'giftcard') {
+    header();
+    lines.push('CARTE CADEAU');
+    lines.push(`Code: ${data.code || '?'}`);
+    lines.push(dsep);
+    lines.push(pad('Montant', `${(data.initialAmount || data.initial_amount || data.amount || 0).toFixed(2)}E`));
+    if (data.customerName || data.customer_name) lines.push(`Client: ${data.customerName || data.customer_name}`);
   }
 
   const fullText = lines.join('\n') + '\n\n\n\n';
