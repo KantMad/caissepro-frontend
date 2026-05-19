@@ -160,6 +160,18 @@ const EAN_G = ["0100111","0110011","0011011","0100001","0011101","0111001","0000
 const EAN_R = ["1110010","1100110","1101100","1000010","1011100","1001110","1010000","1000100","1001000","1110100"];
 const EAN_PARITY = ["LLLLLL","LLGLGG","LLGGLG","LLGGGL","LGLLGG","LGGLLG","LGGGLL","LGLGLG","LGLGGL","LGGLGL"];
 
+/* ══════════ EAN-13 BARCODE GENERATION ══════════ */
+export function generateEAN13(prefix, seq) {
+  // prefix: 3 digits (200=ventes, 201=avoirs, 202=cartes cadeau, 203=retouches)
+  // seq: number to encode (will be padded to fill remaining digits)
+  const seqStr = String(seq).padStart(9, '0').slice(-9);
+  const digits12 = prefix + seqStr;
+  // Compute check digit
+  let sum = 0;
+  for (let i = 0; i < 12; i++) sum += parseInt(digits12[i]) * (i % 2 === 0 ? 1 : 3);
+  return digits12 + String((10 - (sum % 10)) % 10);
+}
+
 export function EAN13Svg({ code, width = 180, height = 60 }) {
   if (!code || code.length !== 13) return null;
   const digits = code.split("").map(Number);

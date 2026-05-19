@@ -1075,6 +1075,13 @@ class ThermalPrinter {
       }
       await this.fontNormal();
 
+      // EAN-13 barcode
+      if (bon.barcode) {
+        await this.newline();
+        await this.alignCenter();
+        await this.barcode(bon.barcode);
+      }
+
       await this.feed(4);
       await this.cut();
 

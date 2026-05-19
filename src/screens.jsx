@@ -25,7 +25,7 @@ function sortVariantsBySize(variants){return[...variants].sort((a,b)=>{
 import * as API from "./api.js";
 import printer, { PAPER_48, PAPER_32 } from "./printer.js";
 import { CO, DEFAULT_TVA_RATES, PERMS, initProducts, initUsers, initCustomers, LOYALTY_TIERS, initPromos, categories, C, CAT_COLORS } from "./constants.jsx";
-import { escapeHtml, hashPin, verifyPin, sha256, getPriceHT, getPriceTTC, catIcon, norm, variantKey, getSizeRank, printBarcodeLabels, getVariantOrderMap, saveVariantOrderMap, setProductVariantOrder, DEFAULT_CAT_ICONS, DEFAULT_SIZE_RANKING, getSizeRanking, saveSizeRanking, EAN13Svg, ean13SvgHtml } from "./utils.jsx";
+import { escapeHtml, hashPin, verifyPin, sha256, getPriceHT, getPriceTTC, catIcon, norm, variantKey, getSizeRank, printBarcodeLabels, getVariantOrderMap, saveVariantOrderMap, setProductVariantOrder, DEFAULT_CAT_ICONS, DEFAULT_SIZE_RANKING, getSizeRanking, saveSizeRanking, EAN13Svg, ean13SvgHtml, generateEAN13 } from "./utils.jsx";
 import { Modal, Btn, Input, Badge, SC, Numpad, ConfirmDialog } from "./ui.jsx";
 import { useApp } from "./context.jsx";
 import hardwareManager from "./hardware.js";
@@ -790,7 +790,8 @@ function SalesScreen(){
         <Btn onClick={async()=>{
           const retTotal=retForm.items.reduce((s,i)=>s+(parseFloat(i.price)||0),0);
           const bonNum=`RET-${Date.now().toString(36).toUpperCase()}`;
-          const bon={num:bonNum,client:retForm.client,phone:retForm.phone,dateRetrait:retForm.date,items:retForm.items.filter(i=>i.desc),notes:retForm.notes,total:retTotal,date:new Date().toISOString(),seller:selSeller||currentUser?.name};
+          const retBarcode=generateEAN13("203",Date.now()%1000000000);
+          const bon={num:bonNum,barcode:retBarcode,client:retForm.client,phone:retForm.phone,dateRetrait:retForm.date,items:retForm.items.filter(i=>i.desc),notes:retForm.notes,total:retTotal,date:new Date().toISOString(),seller:selSeller||currentUser?.name};
           // Add items to cart
           const tva2=(settings.retoucheTVA||20)/100;
           const pm2=settings.pricingMode||"TTC";
@@ -1429,7 +1430,7 @@ function HistoryScreen(){
   useEffect(()=>{setPage(0);},[search,dateFilter]);
   const filteredTickets=useMemo(()=>tickets.filter(t=>{
     const q=search.toLowerCase();
-    const matchSearch=!q||(t.ticketNumber||"").toLowerCase().includes(q)||(t.customerName||"").toLowerCase().includes(q)||(t.userName||t.user_name||"").toLowerCase().includes(q);
+    const matchSearch=!q||(t.ticketNumber||"").toLowerCase().includes(q)||(t.customerName||"").toLowerCase().includes(q)||(t.userName||t.user_name||"").toLowerCase().includes(q)||(t.barcode||"").includes(q);
     const matchDate=!dateFilter||(t.date||t.createdAt||t.created_at||"").startsWith(dateFilter);
     return matchSearch&&matchDate;
   }),[tickets,search,dateFilter]);
@@ -1518,7 +1519,7 @@ function HistoryScreen(){
     )):<div style={{textAlign:"center",padding:30,color:C.textLight}}>Aucun avoir</div>)}
 
     {tab==="retouches"&&(retoucheBons.length?(()=>{
-      const fBons=retoucheBons.filter(b=>{const q=search.toLowerCase();const matchS=!q||(b.num||"").toLowerCase().includes(q)||(b.client||"").toLowerCase().includes(q)||(b.seller||"").toLowerCase().includes(q);
+      const fBons=retoucheBons.filter(b=>{const q=search.toLowerCase();const matchS=!q||(b.num||"").toLowerCase().includes(q)||(b.client||"").toLowerCase().includes(q)||(b.seller||"").toLowerCase().includes(q)||(b.barcode||"").includes(q);
         const matchD=!dateFilter||(b.date||"").startsWith(dateFilter);return matchS&&matchD;});
       return fBons.length?fBons.map((b,idx)=>(
         <div key={b.num||idx} style={{display:"flex",alignItems:"center",gap:10,padding:10,borderRadius:10,background:C.surface,border:`1.5px solid ${C.border}`,marginBottom:5}}>

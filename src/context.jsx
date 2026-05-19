@@ -972,8 +972,20 @@ function AppProvider({children}){
   const addToCartRef=useRef(addToCart);addToCartRef.current=addToCart;
   const findByEANRef=useRef(findByEAN);findByEANRef.current=findByEAN;
   const notifyRef=useRef(notify);notifyRef.current=notify;
+  const ticketsRef=useRef(tickets);ticketsRef.current=tickets;
+  const retoucheBonsRef=useRef(retoucheBons);retoucheBonsRef.current=retoucheBons;
   useEffect(()=>{const s=hardwareManager.scanner;if(!s)return;s.start();
-    const off=s.onScan(code=>{const found=findByEANRef.current(code);if(found){addToCartRef.current(found.product,found.variant);notifyRef.current(found.product.name+" ajouté ("+code+")");}else notifyRef.current("Code-barres inconnu: "+code,"warn");});
+    const off=s.onScan(code=>{
+      // 1. Try product EAN
+      const found=findByEANRef.current(code);
+      if(found){addToCartRef.current(found.product,found.variant);notifyRef.current(found.product.name+" ajouté ("+code+")");return;}
+      // 2. Try ticket/avoir/retouche barcode (EAN-13 starting with "200")
+      const tk=ticketsRef.current.find(t=>t.barcode===code);
+      if(tk){notifyRef.current(`Ticket ${tk.ticketNumber} trouvé — voir Historique`,"info");setMode("history");return;}
+      const rb=retoucheBonsRef.current.find(b=>b.barcode===code);
+      if(rb){notifyRef.current(`Bon retouche ${rb.num} trouvé — voir Historique`,"info");setMode("history");return;}
+      notifyRef.current("Code-barres inconnu: "+code,"warn");
+    });
     return()=>{s.stop();off();};},[]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ══ THERMAL PRINTER ══

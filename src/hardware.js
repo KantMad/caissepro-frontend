@@ -513,6 +513,13 @@ class SunmiPrinterAdapter {
     if (s.retoucheMsg) text(s.retoucheMsg + '\n');
     else text(`Retrait prevu sous ${s.retoucheDelay || 5} jours ouvres\n`);
     if (s.footerMsg || co.footerMsg) text(`${s.footerMsg || co.footerMsg}\n`);
+
+    // EAN-13 barcode
+    if (bon.barcode && bon.barcode.length === 13) {
+      align(1);
+      cmds.push({ cmd: 'barcode', text: bon.barcode, type: 2, height: 100, width: 2 });
+    }
+
     cmds.push({ cmd: 'feed', lines: 4 });
     cmds.push({ cmd: 'cut' });
     return cmds;
