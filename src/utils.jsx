@@ -102,8 +102,11 @@ export const norm={
   product(p){
     const sku=p.sku||p.id||"";
     const csvOrder=(getVariantOrderMap())[sku];// array of keys if CSV import exists for this product
-    const variants=(p.variants||[]).map((v,i)=>({...v,stock:parseInt(v.stock||0),stockAlert:parseInt(v.stock_alert||v.stockAlert||5),
-      defective:parseInt(v.defective||0)}))
+    // Check if sort_order was explicitly set (not all null/0)
+    const rawVariants=(p.variants||[]).map((v,i)=>({...v,stock:parseInt(v.stock||0),stockAlert:parseInt(v.stock_alert||v.stockAlert||5),
+      defective:parseInt(v.defective||0)}));
+    const hasExplicitSortOrder=rawVariants.some(v=>v.sort_order!=null&&v.sort_order>0);
+    const variants=rawVariants
       .sort((a,b)=>{
         if(csvOrder){
           // Priority 1: CSV import order for this product
@@ -111,11 +114,13 @@ export const norm={
           const sa=ia>=0?ia:9999;const sb=ib>=0?ib:9999;
           if(sa!==sb)return sa-sb;
         }
-        // Priority 2: Global size ranking (fallback when no CSV order)
+        // Priority 2: sort_order from DB (explicit user reorder action)
+        if(hasExplicitSortOrder&&a.sort_order!=null&&b.sort_order!=null){
+          if(a.sort_order!==b.sort_order)return a.sort_order-b.sort_order;
+        }
+        // Priority 3: Global size ranking (fallback when no explicit sort_order)
         const ra=getSizeRank(a.size);const rb=getSizeRank(b.size);
         if(ra!==rb)return ra-rb;
-        // Priority 3: sort_order from DB
-        if(a.sort_order!=null&&b.sort_order!=null)return a.sort_order-b.sort_order;
         return 0;
       });
     return{...p,price:parseFloat(p.price),costPrice:parseFloat(p.cost_price||p.costPrice||0),

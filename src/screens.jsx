@@ -14,14 +14,9 @@ import {
 } from "recharts";
 import Papa from "papaparse";
 
-// ── Size sorting for textile (XS→5XL, then numeric 24→56) ──
-const SIZE_ORDER=['XXS','XS','S','M','L','XL','XXL','2XL','3XL','4XL','5XL',
-  'TU','UNIQUE','STD',
-  '24','25','26','27','28','29','30','31','32','33','34','35','36','37','38','39',
-  '40','41','42','43','44','45','46','47','48','50','52','54','56','58','60'];
-function sizeRank(s){const idx=SIZE_ORDER.indexOf((s||'').toUpperCase().trim());return idx>=0?idx:999;}
-function sortSizes(a,b){return sizeRank(a)-sizeRank(b);}
-function sortVariantsBySize(variants){return[...variants].sort((a,b)=>sizeRank(a.size)-sizeRank(b.size));}
+// ── Size sorting — uses configurable getSizeRank from utils.jsx (reads Settings) ──
+function sortSizes(a,b){return getSizeRank(a)-getSizeRank(b);}
+function sortVariantsBySize(variants){return[...variants].sort((a,b)=>getSizeRank(a.size)-getSizeRank(b.size));}
 import * as API from "./api.js";
 import printer, { PAPER_48, PAPER_32 } from "./printer.js";
 import { CO, DEFAULT_TVA_RATES, PERMS, initProducts, initUsers, initCustomers, LOYALTY_TIERS, initPromos, categories, C, CAT_COLORS } from "./constants.jsx";
