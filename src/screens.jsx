@@ -781,7 +781,8 @@ function SalesScreen(){
         <Btn variant="outline" onClick={()=>{
           const retTotal=retForm.items.reduce((s,i)=>s+(parseFloat(i.price)||0),0);
           const tva=(settings.retoucheTVA||20)/100;
-          retForm.items.filter(i=>i.desc&&i.price).forEach(i=>{addCustomItem(`Retouche: ${i.desc}`,parseFloat(i.price)/(1+tva),tva);});
+          const pm=settings.pricingMode||"TTC";
+          retForm.items.filter(i=>i.desc&&i.price).forEach(i=>{const p=parseFloat(i.price);addCustomItem(`Retouche: ${i.desc}`,pm==="TTC"?p:p/(1+tva),tva);});
           setRetoucheModal(false);notify(`Retouche ajoutée au panier (${retTotal.toFixed(2)}€)`);
         }} disabled={!retForm.items.some(i=>i.desc&&i.price)}>
           <ShoppingCart size={14}/> Ajouter au panier</Btn>
@@ -791,9 +792,11 @@ function SalesScreen(){
           const bon={num:bonNum,client:retForm.client,phone:retForm.phone,dateRetrait:retForm.date,items:retForm.items.filter(i=>i.desc),notes:retForm.notes,total:retTotal,date:new Date().toISOString(),seller:selSeller||currentUser?.name};
           // Add items to cart
           const tva2=(settings.retoucheTVA||20)/100;
-          retForm.items.filter(i=>i.desc&&i.price).forEach(i=>{addCustomItem(`Retouche: ${i.desc}`,parseFloat(i.price)/(1+tva2),tva2);});
-          // Print bon via thermal printer (same format as receipt) or fallback to browser
-          try{await thermalPrint("retouche",bon);}catch(e){
+          const pm2=settings.pricingMode||"TTC";
+          retForm.items.filter(i=>i.desc&&i.price).forEach(i=>{const p=parseFloat(i.price);addCustomItem(`Retouche: ${i.desc}`,pm2==="TTC"?p:p/(1+tva2),tva2);});
+          // Print bon via thermal printer or fallback to browser
+          const printed=await thermalPrint("retouche",bon);
+          if(!printed){
             const w=window.open("","_blank","width=400,height=600");if(w){w.document.write(`<html><head><title>Bon de retouche ${bonNum}</title><style>body{font-family:'Courier New',monospace;font-size:12px;padding:10px;max-width:300px;margin:0 auto;}h2{text-align:center;font-size:14px;margin:4px 0;}hr{border:none;border-top:1px dashed #333;margin:6px 0;}.row{display:flex;justify-content:space-between;}.center{text-align:center;}</style></head><body>`+
               `<h2>${settings.name||"CaissePro"}</h2><div class="center">${settings.address||""} ${settings.postalCode||""} ${settings.city||""}</div><hr>`+
               `<h2>BON DE RETOUCHE</h2><div class="center">N° ${bonNum}</div><hr>`+

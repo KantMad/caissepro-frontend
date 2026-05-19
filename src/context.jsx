@@ -1041,8 +1041,9 @@ function AppProvider({children}){
         notify("Impression envoyee","success");return true;
       }catch(e){notify(e.message,"danger");}
     }
-    // Fallback: browser iframe print
-    printReceiptOnly();return false;
+    // Fallback: browser iframe print (only for receipts — other types handle their own fallback)
+    if(type==="receipt")printReceiptOnly();
+    return false;
   },[settings,notify,printReceiptOnly]);
 
   const connectPrinter=useCallback(async(method,options={})=>{

@@ -261,27 +261,71 @@ class ThermalPrinter {
   }
 
   async barcode(data) {
-    if (data && data.length === 13) {
-      // ESC/POS EAN-13 barcode
-      await this.send(CMD.BARCODE_HEIGHT(60));
-      await this.send(CMD.BARCODE_WIDTH(2));
-      await this.send(CMD.BARCODE_TEXT_BELOW);
-      await this.send(CMD.ALIGN_CENTER);
-      // Try Format B first (GS k 67 n d1..dn) — more widely supported
-      const digits = data.split('').map(c => c.charCodeAt(0)); // ASCII digits 0x30-0x39
-      try {
-        await this.send([GS, 0x6B, 67, 13, ...digits]); // Format B: type 67 = EAN13, length 13
-      } catch (e) {
-        // Fallback Format A (GS k 2 d1..dk NUL)
-        try {
-          await this.send([GS, 0x6B, 0x02, ...digits, 0x00]);
-        } catch (e2) {
-          // Last fallback: print as text
-          await this.text(data);
+    if (!data || data.length !== 13) return;
+
+    // ── Generate EAN-13 barcode as raster bitmap (universal, no firmware dependency) ──
+    const EAN_L = ['0001101','0011001','0010011','0111101','0100011','0110001','0101111','0111011','0110111','0001011'];
+    const EAN_G = ['0100111','0110011','0011011','0100001','0011101','0111001','0000101','0010001','0001001','0010111'];
+    const EAN_R = ['1110010','1100110','1101100','1000010','1011100','1001110','1010000','1000100','1001000','1110100'];
+    const PARITY = ['LLLLLL','LLGLGG','LLGGLG','LLGGGL','LGLLGG','LGGLLG','LGGGLL','LGLGLG','LGLGGL','LGGLGL'];
+
+    const d = data.split('').map(Number);
+    const parity = PARITY[d[0]];
+
+    // Build module pattern (1 = black bar, 0 = space)
+    let modules = [1,0,1]; // start guard
+    for (let i = 0; i < 6; i++) {
+      const enc = parity[i] === 'L' ? EAN_L : EAN_G;
+      modules.push(...enc[d[i + 1]].split('').map(Number));
+    }
+    modules.push(0,1,0,1,0); // center guard
+    for (let i = 0; i < 6; i++) {
+      modules.push(...EAN_R[d[i + 7]].split('').map(Number));
+    }
+    modules.push(1,0,1); // end guard
+
+    // Scale: each module = 2 pixels wide; barcode height = 50 dots
+    const scale = 2;
+    const barcodeW = modules.length * scale; // 95 * 2 = 190 pixels
+    const barcodeH = 50;
+    // Center in 384-pixel (48mm * 8 dots/mm) print width
+    const printW = 384;
+    const bytesPerRow = Math.ceil(printW / 8);
+    const offsetX = Math.floor((printW - barcodeW) / 2);
+
+    // Build row bitmap (1 row, then repeat for height)
+    const row = new Uint8Array(bytesPerRow);
+    for (let m = 0; m < modules.length; m++) {
+      if (modules[m] === 1) {
+        for (let s = 0; s < scale; s++) {
+          const px = offsetX + m * scale + s;
+          row[Math.floor(px / 8)] |= (0x80 >> (px % 8));
         }
       }
-      await this.newline();
     }
+
+    // Build raster data (all rows identical)
+    const rasterData = new Uint8Array(bytesPerRow * barcodeH);
+    for (let y = 0; y < barcodeH; y++) {
+      rasterData.set(row, y * bytesPerRow);
+    }
+
+    // Send: GS v 0 (raster bit image)
+    // GS v 0 m xL xH yL yH d1...dk
+    const xL = bytesPerRow & 0xFF;
+    const xH = (bytesPerRow >> 8) & 0xFF;
+    const yL = barcodeH & 0xFF;
+    const yH = (barcodeH >> 8) & 0xFF;
+
+    await this.send(CMD.ALIGN_CENTER);
+    await this.send([GS, 0x76, 0x30, 0x00, xL, xH, yL, yH, ...rasterData]);
+
+    // Print barcode number below
+    await this.send(CMD.ALIGN_CENTER);
+    await this.send(CMD.FONT_B);
+    await this.text(data);
+    await this.newline();
+    await this.send(CMD.FONT_A);
   }
 
   // ── Receipt formatting ──
