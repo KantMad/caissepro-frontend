@@ -610,9 +610,13 @@ function AppProvider({children}){
         trainingMode:trainingMode||false,
         avoirUsed:selectedAvoir?{avoirNumber:selectedAvoir.avoirNumber,amount:selectedAvoir.applied,remainingAfter:avoirRemainingAfterSale}:null
       });
-      // Consume avoir AFTER API success
-      if(selectedAvoir&&selectedAvoir.applied>0){await consumeAvoir(selectedAvoir.avoirNumber,selectedAvoir.applied);}
-      const prods=await API.products.list();setProducts(norm.products(prods));
+      // ── Vente CRÉÉE en backend — les appels suivants ne doivent PAS déclencher le fallback offline ──
+      // Consume avoir (non-bloquant — échec ne doit pas invalider la vente)
+      try{if(selectedAvoir&&selectedAvoir.applied>0){await consumeAvoir(selectedAvoir.avoirNumber,selectedAvoir.applied);}}
+      catch(avoirErr){console.warn("Avoir consume failed (sale OK):",avoirErr.message);}
+      // Rafraîchir les produits (stock) — non-bloquant
+      try{const prods=await API.products.list();setProducts(norm.products(prods));}
+      catch(prodErr){console.warn("Products refresh failed (sale OK):",prodErr.message);}
       // FE-12: use Math.round for consistency between add (checkout) and deduct (return)
       if(selCust){setCustomers(prev=>prev.map(c=>c.id===selCust.id?{...c,points:(c.points||0)+Math.round(parseFloat(ticket.totalTTC)),totalSpent:(c.totalSpent||0)+parseFloat(ticket.totalTTC)}:c));}
       setCart([]);setGDisc(0);setSelCust(null);setPromoCode("");setSelectedAvoir(null);setSaleNote("");
@@ -671,7 +675,7 @@ function AppProvider({children}){
       if(selectedAvoir&&selectedAvoir.applied>0){await consumeAvoir(selectedAvoir.avoirNumber,selectedAvoir.applied);}
       notify("Vente enregistrée (hors-ligne) — synchro en attente","warn");return ticket;
     }
-  },[cart,gDisc,gDiscType,currentUser,selCust,calcPromoDiscount,promoCode,saleNote,cashReg,tSeq,gt,avoirPayment,selectedAvoir,consumeAvoir,addStockMove,notify,settings.pricingMode,addPendingSync]);
+  },[cart,gDisc,gDiscType,currentUser,selCust,calcPromoDiscount,promoCode,saleNote,cashReg,tSeq,gt,lastHash,avoirPayment,selectedAvoir,consumeAvoir,addStockMove,notify,settings.pricingMode,addPendingSync,trainingMode,currentStore,hardwareManager]);
   _doCheckoutRef.current=_doCheckout;
 
   // Stock receipt - via API
