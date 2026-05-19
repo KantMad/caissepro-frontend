@@ -15,8 +15,13 @@ import {
 import Papa from "papaparse";
 
 // ── Size sorting — uses configurable getSizeRank from utils.jsx (reads Settings) ──
+// Sort by color first (group same color), then by size rank within each color
 function sortSizes(a,b){return getSizeRank(a)-getSizeRank(b);}
-function sortVariantsBySize(variants){return[...variants].sort((a,b)=>getSizeRank(a.size)-getSizeRank(b.size));}
+function sortVariantsBySize(variants){return[...variants].sort((a,b)=>{
+  const ca=(a.color||"").toLowerCase(),cb=(b.color||"").toLowerCase();
+  if(ca!==cb)return ca<cb?-1:1;
+  return getSizeRank(a.size)-getSizeRank(b.size);
+});}
 import * as API from "./api.js";
 import printer, { PAPER_48, PAPER_32 } from "./printer.js";
 import { CO, DEFAULT_TVA_RATES, PERMS, initProducts, initUsers, initCustomers, LOYALTY_TIERS, initPromos, categories, C, CAT_COLORS } from "./constants.jsx";
@@ -430,7 +435,7 @@ function SalesScreen(){
             {vm.sku&&<div style={{fontSize:10,fontFamily:"monospace",color:C.textMuted,marginTop:1}}>Réf: {vm.sku}</div>}</div>
           <div style={{marginLeft:"auto",fontSize:18,fontWeight:800,color:CAT_COLORS[vm.category]||C.primary}}>{vm.price.toFixed(2)}€</div></div>
         <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(130px,1fr))",gap:8}}>
-          {sortVariantsBySize(vm.variants).map(v=>{const cc=CAT_COLORS[vm.category]||C.primary;return(
+          {vm.variants.map(v=>{const cc=CAT_COLORS[vm.category]||C.primary;return(
             <button key={v.id} onClick={()=>{addToCart(vm,v);setVm(null);}}
               style={{padding:12,borderRadius:14,border:`1.5px solid ${v.stock<=0?C.danger+"30":C.border}`,background:v.stock<=0?C.dangerLight+"15":"transparent",
                 cursor:"pointer",textAlign:"left",transition:"all 0.15s"}}

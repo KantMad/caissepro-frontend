@@ -119,6 +119,9 @@ export const norm={
           if(a.sort_order!==b.sort_order)return a.sort_order-b.sort_order;
         }
         // Priority 3: Global size ranking (fallback when no explicit sort_order)
+        // Sort by color first, then by size rank within same color
+        const ca=(a.color||"").toLowerCase(),cb=(b.color||"").toLowerCase();
+        if(ca!==cb)return ca<cb?-1:1;
         const ra=getSizeRank(a.size);const rb=getSizeRank(b.size);
         if(ra!==rb)return ra-rb;
         return 0;
