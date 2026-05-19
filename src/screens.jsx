@@ -1735,7 +1735,7 @@ function ReturnScreen(){
   const[restock,setRestock]=useState(rp.autoRestock!==false);const[defective,setDefective]=useState(false);
   const[searchProd,setSearchProd]=useState("");const[freeItem,setFreeItem]=useState(null);const[freeQty,setFreeQty]=useState(1);
   const[lastAvoir,setLastAvoir]=useState(null);const[returnBusy,setReturnBusy]=useState(false);
-  const[avoirLookup,setAvoirLookup]=useState("");
+  const[avoirLookup,setAvoirLookup]=useState("");const[avoirDetail,setAvoirDetail]=useState(null);
   // C5 fix: Manager approval required for free/scan returns
   const[managerApproved,setManagerApproved]=useState(false);const[managerPinInput,setManagerPinInput]=useState("");const[managerPinError,setManagerPinError]=useState("");
   const verifyManagerPin=async()=>{const admin=users.find(u=>u.role==="admin");
@@ -1917,7 +1917,7 @@ function ReturnScreen(){
               <Input value={avoirLookup} onChange={e=>setAvoirLookup(e.target.value)} placeholder="Rechercher avoir, client, ticket..." style={{paddingLeft:28,height:34,fontSize:11}}/></div></div>
           {filteredAvoirs.length===0&&<div style={{color:C.textLight,fontSize:11,textAlign:"center",padding:14}}>Aucun avoir{avoirLookup?" pour cette recherche":""}</div>}
           {filteredAvoirs.map(a=>{const expired=isAvoirExpired?.(a);const isAvoirType=a.refundMethod==="avoir";
-            return(<div key={a.avoirNumber||a.id} style={{display:"flex",alignItems:"center",gap:10,padding:10,borderBottom:`1px solid ${C.border}`,opacity:expired?0.5:1}}>
+            return(<div key={a.avoirNumber||a.id} onClick={()=>setAvoirDetail(a)} style={{display:"flex",alignItems:"center",gap:10,padding:10,borderBottom:`1px solid ${C.border}`,opacity:expired?0.5:1,cursor:"pointer"}}>
             <div style={{width:30,height:30,borderRadius:8,background:expired?C.surfaceAlt:isAvoirType&&!a.used?C.fiscalLight:C.dangerLight,
               display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
               <RotateCcw size={13} color={expired?C.textMuted:isAvoirType&&!a.used?C.fiscal:C.danger}/></div>
@@ -1999,6 +1999,56 @@ function ReturnScreen(){
           <Btn variant="outline" onClick={()=>thermalPrint("avoir",lastAvoir)} style={{flex:1}}><Printer size={14}/> Imprimer</Btn>
           <Btn variant="success" onClick={()=>setLastAvoir(null)} style={{flex:1}}><CheckCircle2 size={14}/> Terminé</Btn></div>
       </div>}</Modal>
+
+    {/* Avoir detail modal (ReturnScreen) */}
+    <Modal open={!!avoirDetail} onClose={()=>setAvoirDetail(null)} title={`Avoir ${avoirDetail?.avoirNumber||avoirDetail?.avoir_number||"?"}`} wide>
+      {avoirDetail&&(()=>{try{
+        const av=avoirDetail;
+        const avNum=av.avoirNumber||av.avoir_number||"?";
+        const avOrigTk=av.originalTicket||av.original_ticket||"?";
+        const avOrigDate=av.originalDate||av.original_date||"";
+        const avDate=av.date||av.created_at||"";
+        const avUser=av.userName||av.user_name||"?";
+        const avCust=av.customerName||av.customer_name||"";
+        const avReason=av.reason||"";
+        const avTTC=Number(av.totalTTC||av.total_ttc)||0;
+        const avItems=av.items||[];
+        const avRefund=av.refundMethod||av.refund_method||"?";
+        const avFp=av.fingerprint||av.fiscal_fingerprint||"";
+        return(<>
+        <div data-print-receipt style={{fontFamily:"'Courier New',monospace",fontSize:10,background:C.dangerLight,borderRadius:10,padding:16,border:`1px solid ${C.danger}33`}}>
+        <div style={{textAlign:"center",marginBottom:6,color:C.danger,fontWeight:700,fontSize:12}}>AVOIR / NOTE DE CRÉDIT</div>
+        <div style={{textAlign:"center",marginBottom:6}}><div style={{fontSize:12,fontWeight:700}}>{settings.name||CO.name}</div>
+          <div>SIRET: {settings.siret||CO.siret}</div></div>
+        <div style={{borderTop:`1px dashed ${C.danger}`,margin:"4px 0"}}/>
+        <div>N° {avNum}</div>
+        <div>Ticket original: {avOrigTk}{avOrigDate?` du ${new Date(avOrigDate).toLocaleDateString("fr-FR")}`:""}</div>
+        <div>Date: {avDate?new Date(avDate).toLocaleString("fr-FR"):"?"} — {avUser}</div>
+        {avCust&&<div>Client: {avCust}</div>}
+        <div>Motif: {avReason}</div>
+        <div style={{borderTop:`1px dashed ${C.danger}`,margin:"4px 0"}}/>
+        {avItems.map((i,k)=>{const sku=i.product?.sku||i.product_sku||i.sku||"";const ean=i.variant?.ean||i.variant_ean||i.ean||"";
+          const name=i.product?.name||i.product_name||i.name||"?";
+          const color=i.variant?.color||i.variant_color||i.color||"";
+          const size=i.variant?.size||i.variant_size||i.size||"";
+          const lineAmt=Number(i.lineTTC||i.line_ttc)||0;
+          return(<div key={k}>
+          <div style={{display:"flex",justifyContent:"space-between"}}><span>{name}{(color||size)?` (${color}/${size})`:""} x{i.quantity||1}</span>
+          <span>-{lineAmt.toFixed(2)}€</span></div>
+          {(sku||ean)&&<div style={{fontSize:8,color:`${C.danger}99`}}>{sku?`Réf: ${sku}`:""}{sku&&ean?" — ":""}{ean?`EAN: ${ean}`:""}</div>}
+        </div>);})}
+        <div style={{borderTop:`1px dashed ${C.danger}`,margin:"4px 0"}}/>
+        <div style={{display:"flex",justifyContent:"space-between",fontWeight:700,color:C.danger}}><span>TOTAL AVOIR</span><span>-{avTTC.toFixed(2)}€</span></div>
+        <div>Remboursement: {({cash:"Espèces",card:"Carte bancaire",avoir:"Avoir client"})[avRefund]||avRefund}</div>
+        {avFp&&<div style={{textAlign:"center",background:C.dangerLight,padding:6,borderRadius:6,margin:"6px 0"}}>
+          <div style={{fontSize:8,color:C.danger,fontWeight:700}}>EMPREINTE NF525</div>
+          <div style={{fontSize:11,fontWeight:700,color:C.danger,letterSpacing:2}}>{avFp}</div></div>}
+        {(av.barcode)&&<div style={{marginTop:6,display:"flex",justifyContent:"center"}}><EAN13Svg code={av.barcode} width={160} height={45}/></div>}
+      </div>
+      <Btn variant="outline" onClick={()=>thermalPrint("avoir",av)} style={{width:"100%",marginTop:10}}><Printer size={14}/> {printerConnected?"Ticket":"Imprimer"}</Btn>
+      </>);
+      }catch(err){return(<div style={{padding:20,color:C.danger}}><div style={{fontWeight:700,marginBottom:8}}>Erreur d affichage</div><Btn variant="danger" onClick={()=>setAvoirDetail(null)} style={{marginTop:10}}>Fermer</Btn></div>);}})()}
+    </Modal>
   </div>);
 }
 
