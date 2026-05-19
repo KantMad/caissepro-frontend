@@ -439,6 +439,13 @@ class ThermalPrinter {
 
       await this.fontNormal();
 
+      // EAN-13 barcode
+      if (ticket.barcode) {
+        await this.newline();
+        await this.alignCenter();
+        await this.barcode(ticket.barcode);
+      }
+
       // Feed & cut
       await this.feed(4);
       await this.cut();
@@ -519,6 +526,13 @@ class ThermalPrinter {
       await this.text(avoir.fingerprint || '—');
       await this.newline();
       await this.bold(false);
+
+      // EAN-13 barcode
+      if (avoir.barcode) {
+        await this.newline();
+        await this.alignCenter();
+        await this.barcode(avoir.barcode);
+      }
 
       await this.feed(4);
       await this.cut();
@@ -617,6 +631,105 @@ class ThermalPrinter {
     } catch (e) {
       this._emit('error', { message: e.message });
       throw new Error(`Erreur impression cloture: ${e.message}`);
+    }
+  }
+
+  // ── Print gift card receipt ──
+  async printGiftCard(card, settings, companyInfo) {
+    if (!this.connected) throw new Error("Imprimante non connectee");
+
+    const s = settings || {};
+    const co = companyInfo || {};
+
+    try {
+      await this.send(CMD.INIT);
+      await this.send(CHARSET_FRENCH);
+      await this.send(CODEPAGE_PC858);
+
+      // Header
+      await this.alignCenter();
+      if (co.name) {
+        await this.doubleSize();
+        await this.bold(true);
+        await this.text(co.name);
+        await this.newline();
+        await this.normalSize();
+        await this.bold(false);
+      }
+      if (co.address) { await this.text(co.address); await this.newline(); }
+      if (co.phone) { await this.text(`Tel: ${co.phone}`); await this.newline(); }
+      if (co.siret) { await this.text(`SIRET: ${co.siret}`); await this.newline(); }
+
+      await this.separator('=');
+      await this.doubleSize();
+      await this.bold(true);
+      await this.text('CARTE CADEAU');
+      await this.newline();
+      await this.normalSize();
+      await this.bold(false);
+      await this.separator('=');
+
+      // Card details
+      await this.alignLeft();
+      await this.bold(true);
+      await this.text(`Code: ${card.code}`);
+      await this.newline();
+      await this.bold(false);
+
+      await this.text(`Date: ${new Date(card.created_at).toLocaleDateString('fr-FR')}`);
+      await this.newline();
+
+      if (card.expires_at) {
+        await this.text(`Expire: ${new Date(card.expires_at).toLocaleDateString('fr-FR')}`);
+        await this.newline();
+      }
+
+      if (card.customer_name) {
+        await this.text(`Client: ${card.customer_name}`);
+        await this.newline();
+      }
+
+      await this.separator('-');
+
+      await this.alignCenter();
+      await this.doubleSize();
+      await this.bold(true);
+      await this.text(`${parseFloat(card.remaining || card.initial_amount).toFixed(2)} EUR`);
+      await this.newline();
+      await this.normalSize();
+      await this.bold(false);
+
+      if (card.initial_amount !== card.remaining) {
+        await this.fontSmall();
+        await this.text(`Montant initial: ${parseFloat(card.initial_amount).toFixed(2)} EUR`);
+        await this.newline();
+        await this.fontNormal();
+      }
+
+      await this.separator('-');
+
+      await this.fontSmall();
+      await this.text('Presentez ce ticket pour utiliser');
+      await this.newline();
+      await this.text('votre carte cadeau en magasin.');
+      await this.newline();
+      await this.fontNormal();
+
+      // EAN-13 barcode
+      if (card.barcode) {
+        await this.newline();
+        await this.alignCenter();
+        await this.barcode(card.barcode);
+      }
+
+      await this.feed(4);
+      await this.cut();
+
+      this._emit('printed', { type: 'giftcard', code: card.code });
+      return true;
+    } catch (e) {
+      this._emit('error', { message: e.message });
+      throw new Error(`Erreur impression carte cadeau: ${e.message}`);
     }
   }
 

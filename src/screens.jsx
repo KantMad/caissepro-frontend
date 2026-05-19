@@ -25,7 +25,7 @@ function sortVariantsBySize(variants){return[...variants].sort((a,b)=>{
 import * as API from "./api.js";
 import printer, { PAPER_48, PAPER_32 } from "./printer.js";
 import { CO, DEFAULT_TVA_RATES, PERMS, initProducts, initUsers, initCustomers, LOYALTY_TIERS, initPromos, categories, C, CAT_COLORS } from "./constants.jsx";
-import { escapeHtml, hashPin, verifyPin, sha256, getPriceHT, getPriceTTC, catIcon, norm, variantKey, getSizeRank, printBarcodeLabels, getVariantOrderMap, saveVariantOrderMap, setProductVariantOrder, DEFAULT_CAT_ICONS, DEFAULT_SIZE_RANKING, getSizeRanking, saveSizeRanking } from "./utils.jsx";
+import { escapeHtml, hashPin, verifyPin, sha256, getPriceHT, getPriceTTC, catIcon, norm, variantKey, getSizeRank, printBarcodeLabels, getVariantOrderMap, saveVariantOrderMap, setProductVariantOrder, DEFAULT_CAT_ICONS, DEFAULT_SIZE_RANKING, getSizeRanking, saveSizeRanking, EAN13Svg, ean13SvgHtml } from "./utils.jsx";
 import { Modal, Btn, Input, Badge, SC, Numpad, ConfirmDialog } from "./ui.jsx";
 import { useApp } from "./context.jsx";
 import hardwareManager from "./hardware.js";
@@ -602,6 +602,7 @@ function SalesScreen(){
           {CO.sw} v{CO.ver} — Conforme NF525<br/>{settings.footerMsg||CO.footerMsg}</div>
         {lastTk.saleNote&&<div style={{textAlign:"center",fontSize:9,color:C.text,marginTop:3,fontStyle:"italic"}}>Note: {lastTk.saleNote}</div>}
         {lastTk.customerName&&<div style={{textAlign:"center",fontSize:9,color:C.accent,marginTop:3}}>Fidélité: +{Math.floor(lastTk.totalTTC||0)}pts</div>}
+        {lastTk.barcode&&<div style={{marginTop:6,display:"flex",justifyContent:"center"}}><EAN13Svg code={lastTk.barcode} width={160} height={45}/></div>}
       </div>
       {/* Avoir remaining balance after sale */}
       {lastTk.avoirUsed&&lastTk.avoirUsed.remainingAfter>0&&(
@@ -624,6 +625,7 @@ function SalesScreen(){
               <div>Ticket: ${lastTk.ticketNumber}</div>
               <div>${new Date().toLocaleString("fr-FR")}</div><hr>
               <div style="font-size:10px;">Presentez ce bon lors de votre prochain achat.</div>
+              ${av.barcode?ean13SvgHtml(av.barcode,160,45):""}
               <div class="no-print"><button onclick="window.print()" style="padding:8px 20px;background:#047857;color:#fff;border:none;border-radius:8px;font-size:13px;cursor:pointer;">Imprimer</button></div>
               </body></html>`);w.document.close();
           }} variant="outline" style={{marginTop:8,borderColor:C.fiscal,color:C.fiscal,borderRadius:10,fontSize:12}}>
@@ -641,6 +643,7 @@ function SalesScreen(){
           (lastTk.items||[]).map(i=>`<div>${i.product?.name||i.product_name}${i.isCustom||i.is_custom?"":" ("+((i.variant?.color||i.variant_color)||"")+"/"+((i.variant?.size||i.variant_size)||"")+")"} x${i.quantity}</div>`).join("")+
           `<hr><div class="center" style="font-size:10px;">${settings.footerMsg||CO.footerMsg||""}</div>`+
           `<div class="center" style="font-size:10px;margin-top:4px;">Échange possible sous ${settings.returnPolicy?.days||30} jours sur présentation de ce ticket</div>`+
+          (lastTk.barcode?ean13SvgHtml(lastTk.barcode,160,45):"")+
           `</body></html>`);w.document.close();setTimeout(()=>w.print(),300);
         }} style={{flex:1,borderRadius:12}}><Gift size={14}/> Cadeau</Btn>
         <Btn variant="success" onClick={()=>setTkModal(false)} style={{flex:1,borderRadius:12}}><CheckCircle2 size={14}/> Terminé</Btn>
@@ -702,7 +705,7 @@ function SalesScreen(){
     <Modal open={avoirSelectModal} onClose={()=>{setAvoirSelectModal(false);setAvoirSearch("");}} title="Paiement par avoir" sub={`Total: ${totals.tTTC.toFixed(2)}EUR`}>
       {(()=>{const available=avoirs.filter(a=>!a.used&&(a.remaining??a.totalTTC)>0&&!(isAvoirExpired?.(a)));
         const shown=avoirSearch?available.filter(a=>(a.avoirNumber||"").toLowerCase().includes(avoirSearch.toLowerCase())||
-          (a.customerName||"").toLowerCase().includes(avoirSearch.toLowerCase())||(a.originalTicket||"").toLowerCase().includes(avoirSearch.toLowerCase())):available;
+          (a.customerName||"").toLowerCase().includes(avoirSearch.toLowerCase())||(a.originalTicket||"").toLowerCase().includes(avoirSearch.toLowerCase())||(a.barcode||"").includes(avoirSearch)):available;
         return<div style={{display:"flex",flexDirection:"column",gap:8}}>
           {available.length>0&&<div style={{position:"relative"}}><Search size={13} style={{position:"absolute",left:10,top:11,color:C.textMuted}}/>
             <Input value={avoirSearch} onChange={e=>setAvoirSearch(e.target.value)} placeholder="Rechercher par numero, client, ticket..." style={{paddingLeft:30,marginBottom:4}}/></div>}
@@ -1673,6 +1676,7 @@ function HistoryScreen(){
         {avFp&&<div style={{textAlign:"center",background:C.dangerLight,padding:6,borderRadius:6,margin:"6px 0"}}>
           <div style={{fontSize:8,color:C.danger,fontWeight:700}}>EMPREINTE NF525</div>
           <div style={{fontSize:11,fontWeight:700,color:C.danger,letterSpacing:2}}>{avFp}</div></div>}
+        {(av.barcode)&&<div style={{marginTop:6,display:"flex",justifyContent:"center"}}><EAN13Svg code={av.barcode} width={160} height={45}/></div>}
       </div>
       <Btn variant="outline" onClick={()=>thermalPrint("avoir",av)} style={{width:"100%",marginTop:10}}><Printer size={14}/> {printerConnected?"Ticket":"Imprimer"}</Btn>
       </>);
@@ -1744,7 +1748,7 @@ function ReturnScreen(){
       (a.originalTicket||"").toLowerCase().includes(q)).slice(0,30);},[avoirs,avoirLookup]);
 
   const foundTickets=useMemo(()=>{if(!searchTk||searchTk.length<2)return[];const q=searchTk.toLowerCase();
-    return tickets.filter(t=>(t.ticketNumber||"").toLowerCase().includes(q)||(t.customerName||"").toLowerCase().includes(q))
+    return tickets.filter(t=>(t.ticketNumber||"").toLowerCase().includes(q)||(t.customerName||"").toLowerCase().includes(q)||(t.barcode||"").includes(q))
       .slice(0,10);},[tickets,searchTk]);
 
   const foundProducts=useMemo(()=>{if(!searchProd||searchProd.length<2)return[];const q=searchProd.toLowerCase();
@@ -3160,7 +3164,7 @@ function ReturnsHistoryScreen(){
     if(filter==="card"&&a.refundMethod!=="card")return false;
     if(filter==="exchange"&&a.refundMethod!=="exchange")return false;
     if(search){const s=search.toLowerCase();return(a.avoirNumber||"").toLowerCase().includes(s)||(a.reason||"").toLowerCase().includes(s)||
-      (a.originalTicket||"").toLowerCase().includes(s)||(a.customerName||"").toLowerCase().includes(s)||
+      (a.originalTicket||"").toLowerCase().includes(s)||(a.customerName||"").toLowerCase().includes(s)||(a.barcode||"").includes(s)||
       (a.items||[]).some(it=>((it.product?.name||it.product_name||"").toLowerCase().includes(s)));}
     return true;
   });
@@ -4902,6 +4906,7 @@ function GiftCardScreen(){
             (custName?`<div>Bénéficiaire: ${custName}</div>`:"")+
             `<div style="font-size:10px;margin-top:6px;">Valide 1 an — ${settings.name||CO.name}</div><hr>`+
             `<div style="font-size:9px;">${settings.address||""} ${settings.postalCode||""} ${settings.city||""}<br/>SIRET: ${settings.siret||""}</div>`+
+            (gc.barcode?ean13SvgHtml(gc.barcode,160,45):"")+
             `</body></html>`);w.document.close();setTimeout(()=>w.print(),300);}}
           }}}
           disabled={!amount} style={{flex:1,height:40,background:C.accent}}><Gift size={14}/> Créer + Étiquette</Btn>
@@ -4938,8 +4943,11 @@ function GiftCardScreen(){
             `<h2>CARTE CADEAU</h2><div class="code">${gc.code}</div><hr><h3>${gc.initialAmount.toFixed(2)} EUR</h3>`+
             (gc.customerName?`<div>Bénéficiaire: ${gc.customerName}</div>`:"")+
             `<div style="font-size:10px;margin-top:6px;">Solde: ${gc.balance.toFixed(2)} EUR</div><hr>`+
+            (gc.barcode?ean13SvgHtml(gc.barcode,160,45):"")+
             `<div style="font-size:9px;">${settings.name||""}</div></body></html>`);w.document.close();setTimeout(()=>w.print(),300);}}}
             style={{padding:"4px 10px",borderRadius:8,border:`1px solid ${C.border}`,background:"transparent",cursor:"pointer",fontSize:9,fontWeight:600,color:C.textMuted}} title="Imprimer étiquette"><Printer size={12}/></button>
+          {printerConnected&&<button onClick={(e)=>{e.stopPropagation();thermalPrint("giftcard",{code:gc.code,initial_amount:gc.initialAmount,remaining:gc.balance,customer_name:gc.customerName,created_at:gc.createdDate,barcode:gc.barcode});}}
+            style={{padding:"4px 10px",borderRadius:8,border:`1px solid ${C.accent}`,background:"transparent",cursor:"pointer",fontSize:9,fontWeight:600,color:C.accent}} title="Impression thermique"><Printer size={12}/></button>}
         </div>))}</div></div>
   </div>);
 }

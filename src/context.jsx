@@ -327,7 +327,7 @@ function AppProvider({children}){
       if(apiUsers&&apiUsers.length){const merged=[...apiUsers.map(u=>({id:u.id,name:u.name,role:u.role,pin:"****",apiSynced:true}))];
         setUsers(prev=>{const localOnly=prev.filter(lu=>!apiUsers.find(au=>au.name===lu.name));return[...merged,...localOnly];});}
       // Charger gift cards, paniers suspendus, favoris et footfall depuis le backend
-      try{const gcs=await API.giftcards.list();if(gcs&&Array.isArray(gcs))setGiftCards(gcs.map(g=>({id:g.id,code:g.code,initialAmount:parseFloat(g.initial_amount||0),balance:parseFloat(g.remaining||0),createdDate:g.created_at,customerName:g.customer_name||"",transactions:g.transactions||[]})));}catch(e){}
+      try{const gcs=await API.giftcards.list();if(gcs&&Array.isArray(gcs))setGiftCards(gcs.map(g=>({id:g.id,code:g.code,initialAmount:parseFloat(g.initial_amount||0),balance:parseFloat(g.remaining||0),createdDate:g.created_at,customerName:g.customer_name||"",barcode:g.barcode||null,transactions:g.transactions||[]})));}catch(e){}
       try{const pks=await API.parked.list();if(pks&&Array.isArray(pks))setParked(pks.map(p=>({id:p.id,date:p.created_at,items:p.items||[],customer:null,gDisc:0,gDiscType:"percentage",name:p.name})));}catch(e){}
       // LOW-4: Load favorites and footfall from API
       try{const favs=await API.favorites.list();if(Array.isArray(favs))setFavorites(favs);}catch(e){}
@@ -1016,6 +1016,7 @@ function AppProvider({children}){
       try{
         if(type==="receipt")await halPrinter.printReceipt(data,settings,CO);
         else if(type==="avoir")await halPrinter.printAvoir(data,settings,CO);
+        else if(type==="giftcard")await halPrinter.printGiftCard(data,settings,CO);
         else if(type==="closure")await halPrinter.printClosure(data,settings,CO);
         else if(type==="test")await halPrinter.testPrint();
         else if(type==="drawer")await halPrinter.openDrawer();
@@ -1027,6 +1028,7 @@ function AppProvider({children}){
       try{
         if(type==="receipt")await printer.printReceipt(data,settings,CO);
         else if(type==="avoir")await printer.printAvoir(data,settings,CO);
+        else if(type==="giftcard")await printer.printGiftCard(data,settings,CO);
         else if(type==="closure")await printer.printClosure(data,settings,CO);
         else if(type==="test")await printer.testPrint();
         else if(type==="drawer")await printer.openDrawer();
@@ -1096,7 +1098,7 @@ function AppProvider({children}){
       const gc=await API.giftcards.create({code,initialAmount:amount,customerName:customerName||""});
       const mapped={id:gc.id,code:gc.code,initialAmount:parseFloat(gc.initial_amount||gc.initialAmount||amount),
         balance:parseFloat(gc.remaining||gc.balance||amount),createdDate:gc.created_at||new Date().toISOString(),
-        customerName:customerName||"",transactions:[]};
+        customerName:customerName||"",barcode:gc.barcode||null,transactions:[]};
       setGiftCards(p=>[mapped,...p]);
       addAudit("GIFT_CARD",`Carte cadeau ${code} creee: ${amount.toFixed(2)}EUR`);
       notify(`Carte cadeau creee: ${code}`,"success");return mapped;

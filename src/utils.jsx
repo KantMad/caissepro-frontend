@@ -153,6 +153,58 @@ export const norm={
   avoirs(list){return(list||[]).map(norm.avoir)},
 };
 
+/* ══════════ EAN-13 SVG BARCODE COMPONENT ══════════ */
+// EAN-13 encoding tables
+const EAN_L = ["0001101","0011001","0010011","0111101","0100011","0110001","0101111","0111011","0110111","0001011"];
+const EAN_G = ["0100111","0110011","0011011","0100001","0011101","0111001","0000101","0010001","0001001","0010111"];
+const EAN_R = ["1110010","1100110","1101100","1000010","1011100","1001110","1010000","1000100","1001000","1110100"];
+const EAN_PARITY = ["LLLLLL","LLGLGG","LLGGLG","LLGGGL","LGLLGG","LGGLLG","LGGGLL","LGLGLG","LGLGGL","LGGLGL"];
+
+export function EAN13Svg({ code, width = 180, height = 60 }) {
+  if (!code || code.length !== 13) return null;
+  const digits = code.split("").map(Number);
+  const parity = EAN_PARITY[digits[0]];
+  let bits = "101"; // start guard
+  for (let i = 0; i < 6; i++) {
+    const table = parity[i] === "L" ? EAN_L : EAN_G;
+    bits += table[digits[i + 1]];
+  }
+  bits += "01010"; // center guard
+  for (let i = 0; i < 6; i++) {
+    bits += EAN_R[digits[i + 7]];
+  }
+  bits += "101"; // end guard
+  const barW = width / bits.length;
+  const bars = [];
+  for (let i = 0; i < bits.length; i++) {
+    if (bits[i] === "1") bars.push(<rect key={i} x={i * barW} y={0} width={barW} height={height} fill="#000" />);
+  }
+  return (
+    <div style={{ textAlign: "center" }}>
+      <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`}>{bars}</svg>
+      <div style={{ fontFamily: "monospace", fontSize: 11, letterSpacing: 2, marginTop: 2 }}>{code}</div>
+    </div>
+  );
+}
+
+// EAN-13 SVG as HTML string (for popup windows)
+export function ean13SvgHtml(code, width = 180, height = 60) {
+  if (!code || code.length !== 13) return "";
+  const digits = code.split("").map(Number);
+  const parity = EAN_PARITY[digits[0]];
+  let bits = "101";
+  for (let i = 0; i < 6; i++) { bits += (parity[i] === "L" ? EAN_L : EAN_G)[digits[i + 1]]; }
+  bits += "01010";
+  for (let i = 0; i < 6; i++) { bits += EAN_R[digits[i + 7]]; }
+  bits += "101";
+  const barW = width / bits.length;
+  let rects = "";
+  for (let i = 0; i < bits.length; i++) {
+    if (bits[i] === "1") rects += `<rect x="${(i * barW).toFixed(2)}" y="0" width="${barW.toFixed(2)}" height="${height}" fill="#000"/>`;
+  }
+  return `<div style="text-align:center;margin-top:8px"><svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">${rects}</svg><div style="font-family:monospace;font-size:11px;letter-spacing:2px;margin-top:2px">${code}</div></div>`;
+}
+
 /* ══════════ BARCODE LABEL PRINTING ══════════ */
 export function printBarcodeLabels(product,settings){
   const fmt=settings?.labelFormat||"50x30";const content=settings?.labelContent||"ean+price";
