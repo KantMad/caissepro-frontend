@@ -6,7 +6,6 @@ import hardwareManager from "./hardware.js";
 import { CO, DEFAULT_TVA_RATES, PERMS, initProducts, initUsers, initCustomers, LOYALTY_TIERS, initPromos, C } from "./constants.jsx";
 import { hashPin, verifyPin, sha256, norm, loadVariantOrderFromSettings, autoImportSizesFromProducts, generateEAN13 } from "./utils.jsx";
 import Papa from "papaparse";
-import JSZip from "jszip";
 
 /* ══════════ CONTEXT ══════════ */
 const AppCtx = createContext(null);
@@ -965,6 +964,7 @@ function AppProvider({children}){
       {name:`GTJ_${period}_${today}.csv`,data:gtjRows},
     ];
     // NF-D3: Archive ZIP avec intégrité SHA-256 + HMAC
+    const JSZip=(await import("jszip")).default;
     const zip=new JSZip();
     const csvFolder=zip.folder("data");
     files.forEach(f=>{csvFolder.file(f.name,Papa.unparse(f.data));});
