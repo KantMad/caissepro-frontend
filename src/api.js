@@ -224,5 +224,10 @@ export const footfall = {
   save: (date, count) => api('/api/settings/footfall', { method: 'POST', body: JSON.stringify({ date, count }) }),
 };
 
+// ══ Barcodes ══
+export const barcodes = {
+  lookup: (code) => api(`/api/barcodes/${encodeURIComponent(code)}`),
+};
+
 // ══ Health ══
 export const health = () => api('/api/health');
