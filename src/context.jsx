@@ -430,6 +430,7 @@ function AppProvider({children}){
     setParked(p=>p.filter(x=>x.id!==id));
     try{await API.parked.remove(id);}catch(e){/* Le panier etait peut-etre local seulement */}
     addAudit("RESTORE","Panier restaure");},[parked,cart,parkCart,addAudit]);
+  const removeParked=useCallback(async(id)=>{setParked(p=>p.filter(x=>x.id!==id));try{await API.parked.remove(id);}catch(e){}addAudit("PARK_DELETE","Panier en attente supprime");},[addAudit]);
 
   // ══ PROMO ENGINE ══
   const activePromos=useMemo(()=>{const now=new Date().toISOString().split("T")[0];
@@ -1438,7 +1439,7 @@ function AppProvider({children}){
     promoCode,setPromoCode,calcPromoDiscount,
     cashReg,openReg,closeReg,isOnline,tickets,setTickets,tSeq,lastHash,gt,audit,jet,closures,avoirs,consumeAvoir,isAvoirExpired,
     checkout,createClosure,exportArchive,exportFEC,exportCSVReport,exportCustomerRGPD,addAudit,addJET,
-    promos,setPromos,activePromos,parked,parkCart,restoreCart,selCust,setSelCust,
+    promos,setPromos,activePromos,parked,parkCart,restoreCart,removeParked,selCust,setSelCust,
     stockAlerts,stockMoves,addStockMove,receiveStock,
     refreshProducts,findByEAN,perm,settings,setSettings,saveSettingsToAPI,getLoyaltyTier,avoirPayment,selectedAvoir,setSelectedAvoir,
     bestSellers,salesBySeller,salesByVariant,caEvolution,salesByCollection,

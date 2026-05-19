@@ -139,7 +139,7 @@ function CashRegControl({onSkip,onDone}){
 function SalesScreen(){
   const{products,cart,addToCart,addCustomItem,removeFromCart,voidSale,updateQty,updateItemDisc,clearCart,checkout,
     gDisc,gDiscType,setCartGD,promoCode,setPromoCode,calcPromoDiscount,isOnline,findByEAN,offlineMode,
-    parked,parkCart,restoreCart,customers,addCustomer,selCust,setSelCust,perm,notify,
+    parked,parkCart,restoreCart,removeParked,customers,addCustomer,selCust,setSelCust,perm,notify,
     stockAlerts,activePromos,avoirPayment,selectedAvoir,setSelectedAvoir,getLoyaltyTier,tickets,saleNote,setSaleNote,favorites,toggleFavorite,getLastPriceForCustomer,settings,
     printerConnected,thermalPrint,pendingSync,clearPendingSync,users,currentUser,currentStore,avoirs,consumeAvoir,isAvoirExpired,addAudit,addJET,trainingMode,cartTotals}=useApp();
   const[search,setSearch]=useState("");const[cat,setCat]=useState("Tous");const[vm,setVm]=useState(null);const[selSeller,setSelSeller]=useState(null);
@@ -152,6 +152,7 @@ function SalesScreen(){
   const[retoucheModal,setRetoucheModal]=useState(false);const[retForm,setRetForm]=useState({client:"",phone:"",date:new Date().toISOString().split("T")[0],notes:"",items:[{desc:"",price:""}]});
   const[newCustModal,setNewCustModal]=useState(false);const[ncF,setNcF]=useState("");const[ncL,setNcL]=useState("");const[ncE,setNcE]=useState("");const[ncP,setNcP]=useState("");
   const[syncConfirm,setSyncConfirm]=useState(false);const[avoirSearch,setAvoirSearch]=useState("");
+  const[clock,setClock]=useState(new Date());useEffect(()=>{const t=setInterval(()=>setClock(new Date()),30000);return()=>clearInterval(t);},[]);
   const[codeInput,setCodeInput]=useState("");
   const[confirmVoid,setConfirmVoid]=useState(false);const[voidReason,setVoidReason]=useState("");
   const[showShortcuts,setShowShortcuts]=useState(false);
@@ -238,7 +239,8 @@ function SalesScreen(){
         boxShadow:`0 1px 3px ${C.shadow}`}}>
         <div style={{display:"flex",alignItems:"center",gap:8}}>
           <div style={{width:6,height:6,borderRadius:3,background:C.primary}}/>
-          <span style={{fontSize:12,fontWeight:600,color:C.text}}>{new Date().toLocaleDateString("fr-FR",{weekday:"short",day:"numeric",month:"short"})}</span></div>
+          <span style={{fontSize:12,fontWeight:600,color:C.text}}>{new Date().toLocaleDateString("fr-FR",{weekday:"short",day:"numeric",month:"short"})}</span>
+          <span style={{fontSize:11,fontWeight:700,color:C.primary,fontVariantNumeric:"tabular-nums"}}>{clock.toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"})}</span></div>
         <div style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:12}}>
           <span style={{fontSize:12,color:C.textMuted}}>{todayTickets.length} vente{todayTickets.length>1?"s":""}</span>
           <span style={{fontSize:14,fontWeight:700,color:C.primary,letterSpacing:"-0.3px"}}>{todayCA.toFixed(2)}€</span>
@@ -253,12 +255,10 @@ function SalesScreen(){
         <div style={{position:"relative",flex:1}}>
           <Search size={15} color={C.textMuted} style={{position:"absolute",left:14,top:"50%",transform:"translateY(-50%)"}}/>
           <Input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Rechercher produit, SKU ou scanner…" style={{paddingLeft:38,height:42,fontSize:13,borderRadius:14}}/></div>
-        <Btn variant="outline" onClick={()=>setParkedModal(true)} style={{height:42,padding:"0 14px",position:"relative",borderRadius:14}}>
+        <Btn variant="outline" onClick={()=>setParkedModal(true)} style={{height:42,padding:"0 14px",position:"relative",borderRadius:14}} title="Paniers en attente">
           <Pause size={15}/>{parked.length>0&&<span style={{position:"absolute",top:-5,right:-5,width:18,height:18,borderRadius:9,
             background:C.danger,color:"#fff",fontSize:9,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",
             boxShadow:"0 2px 6px rgba(209,69,59,0.4)"}}>{parked.length}</span>}</Btn>
-        <Btn variant="outline" onClick={()=>setParkedModal(true)} style={{height:42,padding:"0 14px",borderRadius:14,position:"relative"}} title="Paniers en attente">
-          <Play size={15}/>{parked.length>0&&<span style={{position:"absolute",top:-5,right:-5,width:18,height:18,borderRadius:9,background:C.danger,color:"#fff",fontSize:9,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center"}}>{parked.length}</span>}</Btn>
       </div>
       {activePromos.length>0&&<div style={{background:C.warnLight,borderRadius:10,padding:"6px 12px",marginBottom:8,
         display:"flex",alignItems:"center",gap:8,fontSize:11,border:`1px solid ${C.warn}18`}}>
@@ -535,11 +535,12 @@ function SalesScreen(){
 
     {/* Parked */}
     <Modal open={parkedModal} onClose={()=>setParkedModal(false)} title="Paniers en attente">
-      {!parked.length?<div style={{textAlign:"center",padding:24,color:C.textLight,fontSize:12}}>Aucun panier</div>
+      {!parked.length?<div style={{textAlign:"center",padding:24,color:C.textLight,fontSize:12}}>Aucun panier en attente</div>
       :parked.map(p=>(<div key={p.id} style={{display:"flex",alignItems:"center",gap:10,padding:10,borderRadius:10,border:`1.5px solid ${C.border}`,marginBottom:6}}>
         <Pause size={14} color={C.textMuted}/><div style={{flex:1}}><div style={{fontSize:12,fontWeight:600}}>{p.items.length} art.{p.customer?` — ${p.customer.firstName}`:""}</div>
           <div style={{fontSize:10,color:C.textMuted}}>{new Date(p.date).toLocaleTimeString("fr-FR")}</div></div>
-        <Btn onClick={()=>{restoreCart(p.id);setParkedModal(false);}} style={{padding:"4px 10px",fontSize:11}}><Play size={12}/> Reprendre</Btn></div>))}</Modal>
+        <Btn onClick={()=>{restoreCart(p.id);setParkedModal(false);}} style={{padding:"4px 10px",fontSize:11}}><Play size={12}/> Reprendre</Btn>
+        <Btn variant="ghost" onClick={()=>{removeParked(p.id);notify("Panier supprime","info");}} style={{padding:"4px 8px",color:C.danger}}><Trash2 size={12}/></Btn></div>))}</Modal>
 
     {/* Void confirmation */}
     <Modal open={confirmVoid} onClose={()=>{setConfirmVoid(false);setVoidReason("");}} title="Annuler le panier">
@@ -893,7 +894,9 @@ function StatsScreen(){
   return(<div style={{height:"100%",overflowY:"auto",padding:20,background:C.bg}}>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
       <h2 style={{fontSize:22,fontWeight:800,margin:0}}>Statistiques</h2>
-      <Btn variant="outline" onClick={()=>exportCSVReport(fBestSellers,"best-sellers.csv")} style={{fontSize:11}}><Download size={12}/> Export CSV</Btn></div>
+      <div style={{display:"flex",alignItems:"center",gap:12}}>
+        <span style={{fontSize:12,fontWeight:600,color:C.textMuted,fontVariantNumeric:"tabular-nums"}}>{new Date().toLocaleDateString("fr-FR",{weekday:"short",day:"numeric",month:"short"})} {new Date().toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"})}</span>
+        <Btn variant="outline" onClick={()=>exportCSVReport(fBestSellers,"best-sellers.csv")} style={{fontSize:11}}><Download size={12}/> Export CSV</Btn></div></div>
     {/* Filters */}
     <div style={{display:"flex",gap:6,alignItems:"center",marginBottom:10,flexWrap:"wrap"}}>
       <span style={{fontSize:10,fontWeight:600,color:C.textMuted}}>Période:</span>

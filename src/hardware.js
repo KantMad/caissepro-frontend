@@ -431,6 +431,267 @@ class SunmiPrinterAdapter {
     return this._legacyPrintClosure(closure, settings, companyInfo);
   }
 
+  // ── Retouche ──
+  _buildRetoucheBatch(bon, settings, companyInfo) {
+    const s = settings || {};
+    const co = companyInfo || {};
+    const fmt = (v) => { const n = Number(v); return isNaN(n) ? '0.00' : n.toFixed(2); };
+    const cmds = [];
+    const text = (txt) => cmds.push({ cmd: 'text', text: txt });
+    const bold = (on) => cmds.push({ cmd: 'bold', enabled: on });
+    const size = (v) => cmds.push({ cmd: 'size', value: v });
+    const align = (v) => cmds.push({ cmd: 'align', value: v });
+
+    // Header (same as receipt)
+    align(1); size(28); bold(true);
+    text((s.name || co.name || 'Ma Boutique') + '\n');
+    size(20); bold(false);
+    if (s.address) text(s.address + '\n');
+    if (s.postalCode || s.city) text(`${s.postalCode || ''} ${s.city || ''}\n`);
+    if (s.phone) text(`Tel: ${s.phone}\n`);
+    if (s.siret) text(`SIRET: ${s.siret}\n`);
+    cmds.push({ cmd: 'line', char: '=', len: 32 });
+
+    align(1); size(28); bold(true);
+    text('BON DE RETOUCHE\n');
+    size(20); bold(false);
+    cmds.push({ cmd: 'line', char: '=', len: 32 });
+
+    align(0); bold(true);
+    let dateStr = '';
+    try { dateStr = new Date(bon.date || Date.now()).toLocaleString('fr-FR'); } catch (e) {}
+    text(`N: ${bon.num || '?'}  ${dateStr}\n`);
+    bold(false);
+    if (bon.seller) text(`Vendeur: ${bon.seller}\n`);
+    if (bon.client) text(`Client: ${bon.client}\n`);
+    if (bon.phone) text(`Tel: ${bon.phone}\n`);
+    cmds.push({ cmd: 'line', char: '-', len: 32 });
+
+    if (bon.dateRetrait) {
+      bold(true); align(1);
+      text(`RETRAIT: ${new Date(bon.dateRetrait).toLocaleDateString('fr-FR')}\n`);
+      bold(false); align(0);
+      cmds.push({ cmd: 'line', char: '-', len: 32 });
+    }
+
+    const tvaRate = (s.retoucheTVA || 20) / 100;
+    let totalTTC = 0;
+    for (const item of (bon.items || [])) {
+      if (!item.desc) continue;
+      const price = parseFloat(item.price) || 0;
+      totalTTC += price;
+      bold(true); text(`Retouche: ${item.desc}\n`); bold(false);
+      text(`  1 x ${fmt(price)} EUR TTC\n`);
+    }
+    cmds.push({ cmd: 'line', char: '-', len: 32 });
+
+    const totalHT = totalTTC / (1 + tvaRate);
+    text(`Total HT     ${fmt(totalHT)} EUR\n`);
+    text(`TVA ${(tvaRate * 100).toFixed(1)}%    ${fmt(totalTTC - totalHT)} EUR\n`);
+    bold(true); size(28);
+    text(`TOTAL TTC    ${fmt(totalTTC)} EUR\n`);
+    size(20); bold(false);
+    cmds.push({ cmd: 'line', char: '=', len: 32 });
+
+    if (bon.notes) { size(18); text(`Notes: ${bon.notes}\n`); size(20); cmds.push({ cmd: 'line', char: '-', len: 32 }); }
+
+    align(1); size(16);
+    text(`${co.sw || 'CaissePro'} v${co.ver || '6.1.0'}\n`);
+    if (s.retoucheMsg) text(s.retoucheMsg + '\n');
+    else text(`Retrait prevu sous ${s.retoucheDelay || 5} jours ouvres\n`);
+    if (s.footerMsg || co.footerMsg) text(`${s.footerMsg || co.footerMsg}\n`);
+    cmds.push({ cmd: 'feed', lines: 4 });
+    cmds.push({ cmd: 'cut' });
+    return cmds;
+  }
+
+  async printRetouche(bon, settings, companyInfo) {
+    if (this._isCapacitor && this._bridge) {
+      const commands = this._buildRetoucheBatch(bon, settings, companyInfo);
+      if (this._bridge.printRaw) { await this._bridge.printRaw({ commands }); }
+      else if (this._bridge.printBatch) { await this._bridge.printBatch({ commands }); }
+      return true;
+    }
+    try {
+      await this._cap('printerInit', {});
+      await this.printText('BON DE RETOUCHE\n');
+      await this.printText(`N: ${bon?.num || '?'}\nClient: ${bon?.client || '?'}\n`);
+      for (const item of (bon?.items || [])) { if (item.desc) await this.printText(`${item.desc}  ${parseFloat(item.price || 0).toFixed(2)} EUR\n`); }
+      await this._cap('lineWrap', { lines: 4 });
+      try { await this._cap('cutPaper', {}); } catch (e) {}
+      return true;
+    } catch (e) { throw e; }
+  }
+
+  // ── Register Open ──
+  _buildRegisterOpenBatch(data, settings, companyInfo) {
+    const s = settings || {};
+    const co = companyInfo || {};
+    const fmt = (v) => { const n = Number(v); return isNaN(n) ? '0.00' : n.toFixed(2); };
+    const cmds = [];
+    const text = (txt) => cmds.push({ cmd: 'text', text: txt });
+    const bold = (on) => cmds.push({ cmd: 'bold', enabled: on });
+    const size = (v) => cmds.push({ cmd: 'size', value: v });
+    const align = (v) => cmds.push({ cmd: 'align', value: v });
+
+    align(1); size(28); bold(true);
+    text((s.name || co.name || 'Ma Boutique') + '\n');
+    size(20); bold(false);
+    cmds.push({ cmd: 'line', char: '=', len: 32 });
+    align(1); size(28); bold(true);
+    text('OUVERTURE DE CAISSE\n');
+    size(20); bold(false);
+    cmds.push({ cmd: 'line', char: '=', len: 32 });
+    align(0);
+    let dateStr = '';
+    try { dateStr = new Date(data.openDate || Date.now()).toLocaleString('fr-FR'); } catch (e) {}
+    text(`Date: ${dateStr}\n`);
+    if (data.userName) text(`Caissier: ${data.userName}\n`);
+    if (data.storeName) text(`Magasin: ${data.storeName}\n`);
+    cmds.push({ cmd: 'line', char: '-', len: 32 });
+    bold(true); size(28);
+    text(`FOND DE CAISSE  ${fmt(data.openingAmount)} EUR\n`);
+    size(20); bold(false);
+    if (data.denominations) {
+      cmds.push({ cmd: 'line', char: '-', len: 32 });
+      for (const [k, v] of Object.entries(data.denominations)) { if (v > 0) text(`  ${k} EUR x ${v}\n`); }
+    }
+    cmds.push({ cmd: 'line', char: '=', len: 32 });
+    align(1); size(16);
+    text('Document obligatoire - a conserver\n');
+    cmds.push({ cmd: 'feed', lines: 4 });
+    cmds.push({ cmd: 'cut' });
+    return cmds;
+  }
+
+  async printRegisterOpen(data, settings, companyInfo) {
+    if (this._isCapacitor && this._bridge) {
+      const commands = this._buildRegisterOpenBatch(data, settings, companyInfo);
+      if (this._bridge.printRaw) { await this._bridge.printRaw({ commands }); }
+      else if (this._bridge.printBatch) { await this._bridge.printBatch({ commands }); }
+      return true;
+    }
+    try {
+      await this._cap('printerInit', {});
+      await this.printText('OUVERTURE DE CAISSE\n');
+      await this.printText(`Fond: ${parseFloat(data?.openingAmount || 0).toFixed(2)} EUR\n`);
+      await this._cap('lineWrap', { lines: 4 });
+      try { await this._cap('cutPaper', {}); } catch (e) {}
+      return true;
+    } catch (e) { throw e; }
+  }
+
+  // ── Register Close ──
+  _buildRegisterCloseBatch(data, settings, companyInfo) {
+    const s = settings || {};
+    const co = companyInfo || {};
+    const fmt = (v) => { const n = Number(v); return isNaN(n) ? '0.00' : n.toFixed(2); };
+    const cmds = [];
+    const text = (txt) => cmds.push({ cmd: 'text', text: txt });
+    const bold = (on) => cmds.push({ cmd: 'bold', enabled: on });
+    const size = (v) => cmds.push({ cmd: 'size', value: v });
+    const align = (v) => cmds.push({ cmd: 'align', value: v });
+
+    align(1); size(28); bold(true);
+    text((s.name || co.name || 'Ma Boutique') + '\n');
+    size(20); bold(false);
+    cmds.push({ cmd: 'line', char: '=', len: 32 });
+    align(1); size(28); bold(true);
+    text('FERMETURE DE CAISSE\n');
+    size(20); bold(false);
+    cmds.push({ cmd: 'line', char: '=', len: 32 });
+    align(0);
+    let openStr = '', closeStr = '';
+    try { openStr = new Date(data.openDate || Date.now()).toLocaleString('fr-FR'); } catch (e) {}
+    try { closeStr = new Date(data.closeDate || Date.now()).toLocaleString('fr-FR'); } catch (e) {}
+    text(`Ouverture: ${openStr}\n`);
+    text(`Fermeture: ${closeStr}\n`);
+    if (data.userName) text(`Caissier: ${data.userName}\n`);
+    if (data.storeName) text(`Magasin: ${data.storeName}\n`);
+    cmds.push({ cmd: 'line', char: '-', len: 32 });
+    bold(true); text('ACTIVITE\n'); bold(false);
+    text(`Nb ventes        ${data.salesCount || 0}\n`);
+    text(`CA TTC           ${fmt(data.totalTTC || data.totalCA)} EUR\n`);
+    text(`Total HT         ${fmt(data.totalHT)} EUR\n`);
+    text(`Total TVA        ${fmt(data.totalTVA)} EUR\n`);
+    if (data.avgBasket) text(`Panier moyen     ${fmt(data.avgBasket)} EUR\n`);
+    cmds.push({ cmd: 'line', char: '-', len: 32 });
+    bold(true); text('PAIEMENTS\n'); bold(false);
+    if (data.cashTotal != null) text(`Especes          ${fmt(data.cashTotal)} EUR\n`);
+    if (data.cardTotal != null) text(`CB               ${fmt(data.cardTotal)} EUR\n`);
+    cmds.push({ cmd: 'line', char: '-', len: 32 });
+    bold(true); text('CONTROLE\n'); bold(false);
+    text(`Fond ouverture   ${fmt(data.openingAmount)} EUR\n`);
+    if (data.actualCash != null) text(`Especes comptees ${fmt(data.actualCash)} EUR\n`);
+    if (data.actualCard != null) text(`CB comptees      ${fmt(data.actualCard)} EUR\n`);
+    cmds.push({ cmd: 'line', char: '=', len: 32 });
+    align(1); size(16);
+    text('Document obligatoire - a conserver\n');
+    cmds.push({ cmd: 'feed', lines: 4 });
+    cmds.push({ cmd: 'cut' });
+    return cmds;
+  }
+
+  async printRegisterClose(data, settings, companyInfo) {
+    if (this._isCapacitor && this._bridge) {
+      const commands = this._buildRegisterCloseBatch(data, settings, companyInfo);
+      if (this._bridge.printRaw) { await this._bridge.printRaw({ commands }); }
+      else if (this._bridge.printBatch) { await this._bridge.printBatch({ commands }); }
+      return true;
+    }
+    try {
+      await this._cap('printerInit', {});
+      await this.printText('FERMETURE DE CAISSE\n');
+      await this.printText(`CA TTC: ${parseFloat(data?.totalTTC || data?.totalCA || 0).toFixed(2)} EUR\n`);
+      await this._cap('lineWrap', { lines: 4 });
+      try { await this._cap('cutPaper', {}); } catch (e) {}
+      return true;
+    } catch (e) { throw e; }
+  }
+
+  // ── Gift Card ──
+  async printGiftCard(card, settings, companyInfo) {
+    if (this._isCapacitor && this._bridge) {
+      const s = settings || {};
+      const co = companyInfo || {};
+      const fmt = (v) => { const n = Number(v); return isNaN(n) ? '0.00' : n.toFixed(2); };
+      const cmds = [];
+      const text = (txt) => cmds.push({ cmd: 'text', text: txt });
+      const bold = (on) => cmds.push({ cmd: 'bold', enabled: on });
+      const size = (v) => cmds.push({ cmd: 'size', value: v });
+      const align = (v) => cmds.push({ cmd: 'align', value: v });
+
+      align(1); size(28); bold(true);
+      text((s.name || co.name || 'Ma Boutique') + '\n');
+      size(20); bold(false);
+      cmds.push({ cmd: 'line', char: '=', len: 32 });
+      align(1); size(28); bold(true);
+      text('CARTE CADEAU\n');
+      size(22); text(`${card.code || '?'}\n`);
+      size(20); bold(false);
+      cmds.push({ cmd: 'line', char: '-', len: 32 });
+      align(0);
+      text(`Montant: ${fmt(card.initialAmount || card.initial_amount)} EUR\n`);
+      text(`Solde:   ${fmt(card.balance || card.remaining)} EUR\n`);
+      if (card.customerName) text(`Client:  ${card.customerName}\n`);
+      cmds.push({ cmd: 'line', char: '=', len: 32 });
+      align(1); size(16);
+      text(`${co.sw || 'CaissePro'}\n`);
+      cmds.push({ cmd: 'feed', lines: 4 });
+      cmds.push({ cmd: 'cut' });
+
+      if (this._bridge.printRaw) { await this._bridge.printRaw({ commands: cmds }); }
+      else if (this._bridge.printBatch) { await this._bridge.printBatch({ commands: cmds }); }
+      return true;
+    }
+    try {
+      await this._cap('printerInit', {});
+      await this.printText(`CARTE CADEAU\n${card?.code || '?'}\nMontant: ${parseFloat(card?.initialAmount || 0).toFixed(2)} EUR\n`);
+      await this._cap('lineWrap', { lines: 4 });
+      return true;
+    } catch (e) { throw e; }
+  }
+
   async testPrint() {
     if (this._isCapacitor && this._bridge?.testPrint) {
       // Use the native Java testPrint — proven to work
