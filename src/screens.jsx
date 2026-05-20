@@ -1143,10 +1143,22 @@ function StatsScreen(){
 
 /* ══════════ STOCK MATRIX ══════════ */
 function StockScreen(){
-  const{products,setProducts,stockAlerts,stockMoves,receiveStock,stockAging,reorderSuggestions,adjustStock,notify,findByEAN,users,addStockMove,addAudit,settings,perm,defectiveStock,loadDefectiveStock,receiveDefectiveStock,adjustDefectiveStock}=useApp();
+  const{products,setProducts,stockAlerts,stockMoves,receiveStock,receiveBatchStock,stockAging,reorderSuggestions,adjustStock,notify,findByEAN,users,addStockMove,addAudit,settings,perm,defectiveStock,loadDefectiveStock,receiveDefectiveStock,adjustDefectiveStock}=useApp();
   if(!perm().canCreateProduct)return<div style={{padding:40,textAlign:"center",color:"#94a3b8",fontSize:16,fontWeight:600}}>Accès réservé aux administrateurs</div>;
   const[sel,setSel]=useState(products[0]?.id||"");const[tab,setTab]=useState("matrix");
   const[rcModal,setRcModal]=useState(false);const[rcProd,setRcProd]=useState("");const[rcVar,setRcVar]=useState("");const[rcQty,setRcQty]=useState("");const[rcSup,setRcSup]=useState("");
+  // Batch reception state
+  const[batchItems,setBatchItems]=useState([]);const[batchSupplier,setBatchSupplier]=useState("");const[batchSaving,setBatchSaving]=useState(false);
+  const batchScanRef=useRef(null);const batchLastScan=useRef(0);
+  const batchAddByEAN=useCallback((ean)=>{
+    const found=findByEAN(ean);if(!found){notify("Code-barres inconnu: "+ean,"warn");return;}
+    const{product:p,variant:v}=found;
+    setBatchItems(prev=>{const idx=prev.findIndex(i=>i.variantId===v.id);
+      if(idx>=0){const next=[...prev];next[idx]={...next[idx],qty:next[idx].qty+1};return next;}
+      return[...prev,{productId:p.id,variantId:v.id,name:p.name,sku:p.sku,color:v.color,size:v.size,ean:v.ean,currentStock:v.stock,qty:1}];});
+    // Audio feedback
+    try{const ac=new(window.AudioContext||window.webkitAudioContext)();const o=ac.createOscillator();const g=ac.createGain();o.connect(g);g.connect(ac.destination);o.frequency.value=1200;g.gain.value=0.08;o.start();o.stop(ac.currentTime+0.08);}catch(e){}
+  },[findByEAN,notify]);
   const[adjProd,setAdjProd]=useState("");const[adjVar,setAdjVar]=useState("");const[adjQty,setAdjQty]=useState("");const[adjReason,setAdjReason]=useState("INVENTAIRE");
   const[invSearch,setInvSearch]=useState("");const[invCounts,setInvCounts]=useState({});
   const[stSearchMatrix,setStSearchMatrix]=useState("");const[stSearchReceipt,setStSearchReceipt]=useState("");const[stSearchAdj,setStSearchAdj]=useState("");
@@ -1167,9 +1179,9 @@ function StockScreen(){
       <h2 style={{fontSize:22,fontWeight:800,margin:0}}>Stock</h2>
       {stockAlerts.length>0&&<Badge color={C.danger}>{stockAlerts.length} alertes</Badge>}
       <div style={{flex:1}}/>
-      <Btn variant="outline" onClick={()=>setRcModal(true)}><Upload size={14}/> Réception</Btn></div>
+      <Btn variant="outline" onClick={()=>setTab("reception")}><Upload size={14}/> Réception</Btn></div>
     <div style={{display:"flex",gap:6,marginBottom:12}}>
-      {[{id:"matrix",l:"Matrice"},{id:"alerts",l:"Alertes"},{id:"moves",l:"Mouvements"},{id:"inventory",l:"Inventaire"},{id:"adjust",l:"Ajustement"},{id:"defective",l:"Défectueux"},{id:"tenues",l:"Tenues"},{id:"transfers",l:"Transferts"},{id:"aging",l:"Vieillissement"},{id:"reorder",l:"Réassort"}].map(t=>(
+      {[{id:"matrix",l:"Matrice"},{id:"reception",l:"Réception"},{id:"alerts",l:"Alertes"},{id:"moves",l:"Mouvements"},{id:"inventory",l:"Inventaire"},{id:"adjust",l:"Ajustement"},{id:"defective",l:"Défectueux"},{id:"tenues",l:"Tenues"},{id:"transfers",l:"Transferts"},{id:"aging",l:"Vieillissement"},{id:"reorder",l:"Réassort"}].map(t=>(
         <button key={t.id} onClick={()=>setTab(t.id)} style={{padding:"5px 12px",borderRadius:8,border:`1.5px solid ${tab===t.id?C.primary:C.border}`,
           background:tab===t.id?C.primary:"transparent",color:tab===t.id?"#fff":C.text,fontSize:11,fontWeight:600,cursor:"pointer"}}>{t.l}</button>))}</div>
 
@@ -1187,6 +1199,74 @@ function StockScreen(){
               color:st===0?C.danger:st<=(v?.stockAlert||5)?C.warn:C.primary}}>{v?st:"—"}</td>);})}</tr>))}</tbody></table>
       <div style={{marginTop:10,fontSize:11,color:C.textMuted}}>Prix: {p.price.toFixed(2)}€ — Coût: {p.costPrice?.toFixed(2)||"—"}€ — Marge: {p.costPrice?((p.price-p.costPrice)/p.price*100).toFixed(1)+"%":"—"} — TVA: {(p.taxRate*100).toFixed(0)}% — Collection: {p.collection||"—"}</div>
     </div>}</>}
+
+    {tab==="reception"&&<div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`}}>
+      <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}>
+        <h3 style={{fontSize:14,fontWeight:700,margin:0}}>Réception réassort</h3>
+        <Badge color={C.primary}>{batchItems.reduce((s,i)=>s+i.qty,0)} pièces — {batchItems.length} réf</Badge>
+        <div style={{flex:1}}/>
+        {batchItems.length>0&&<Btn variant="outline" onClick={()=>{if(confirm("Vider la réception en cours ?"))setBatchItems([]);}} style={{fontSize:10,padding:"4px 10px",color:C.danger,borderColor:C.danger}}>Vider</Btn>}
+      </div>
+
+      {/* Scanner input — always visible, auto-focused */}
+      <div style={{display:"flex",gap:8,marginBottom:12}}>
+        <div style={{flex:1,position:"relative"}}>
+          <Input ref={batchScanRef} autoFocus placeholder="Scanner un code-barres ou saisir EAN..."
+            style={{height:44,fontSize:15,fontWeight:600,paddingLeft:12,paddingRight:12,borderColor:C.primary,borderWidth:2}}
+            onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();const v=e.target.value.trim();if(v){batchAddByEAN(v);e.target.value="";e.target.focus();}}}}/>
+          <div style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50)",fontSize:9,color:C.textLight,pointerEvents:"none"}}>ENTREE pour ajouter</div>
+        </div>
+        <Input value={batchSupplier} onChange={e=>setBatchSupplier(e.target.value)} placeholder="Fournisseur"
+          style={{width:160,height:44,fontSize:12}}/></div>
+
+      {/* Batch items list */}
+      {batchItems.length===0&&<div style={{textAlign:"center",padding:40,color:C.textLight}}>
+        <Upload size={32} style={{marginBottom:8,opacity:0.3}}/>
+        <div style={{fontSize:13,fontWeight:600}}>Scannez les codes-barres pour commencer</div>
+        <div style={{fontSize:11,marginTop:4}}>Chaque scan ajoute +1. Vous pouvez aussi modifier la quantité manuellement.</div></div>}
+
+      {batchItems.length>0&&<div style={{maxHeight:400,overflowY:"auto",marginBottom:12}}>
+        <table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
+          <thead><tr style={{borderBottom:`2px solid ${C.border}`,position:"sticky",top:0,background:C.surface}}>
+            {["Produit","Variante","EAN","Stock actuel","Qté reçue",""].map(h=>(
+              <th key={h} style={{padding:6,textAlign:"left",fontSize:9,fontWeight:700,color:C.textMuted}}>{h}</th>))}</tr></thead>
+          <tbody>{batchItems.map((item,i)=>(<tr key={item.variantId} style={{borderBottom:`1px solid ${C.border}`,background:i===batchItems.length-1?`${C.primary}08`:"transparent"}}>
+            <td style={{padding:6,fontWeight:600}}>{item.name} <span style={{color:C.textMuted,fontSize:9}}>({item.sku})</span></td>
+            <td style={{padding:6}}>{item.color}/{item.size}</td>
+            <td style={{padding:6,fontSize:9,color:C.textMuted,fontFamily:"monospace"}}>{item.ean||"—"}</td>
+            <td style={{padding:6,color:C.textMuted}}>{item.currentStock}</td>
+            <td style={{padding:6}}>
+              <div style={{display:"flex",alignItems:"center",gap:4}}>
+                <button onClick={()=>setBatchItems(prev=>{const next=[...prev];if(next[i].qty>1)next[i]={...next[i],qty:next[i].qty-1};else next.splice(i,1);return next;})}
+                  style={{width:24,height:24,borderRadius:6,border:`1.5px solid ${C.border}`,background:"transparent",cursor:"pointer",fontSize:14,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center"}}>-</button>
+                <input type="number" min="1" value={item.qty} onChange={e=>{const val=parseInt(e.target.value);if(val>0)setBatchItems(prev=>{const next=[...prev];next[i]={...next[i],qty:val};return next;});}}
+                  style={{width:50,textAlign:"center",padding:4,borderRadius:6,border:`1.5px solid ${C.primary}`,fontWeight:700,fontSize:13,color:C.primary,background:`${C.primary}08`}}/>
+                <button onClick={()=>setBatchItems(prev=>{const next=[...prev];next[i]={...next[i],qty:next[i].qty+1};return next;})}
+                  style={{width:24,height:24,borderRadius:6,border:`1.5px solid ${C.primary}`,background:`${C.primary}10`,cursor:"pointer",fontSize:14,fontWeight:700,color:C.primary,display:"flex",alignItems:"center",justifyContent:"center"}}>+</button>
+              </div></td>
+            <td style={{padding:6}}>
+              <button onClick={()=>setBatchItems(prev=>prev.filter((_,j)=>j!==i))}
+                style={{background:"transparent",border:"none",cursor:"pointer",color:C.danger,fontSize:14}}>✕</button></td>
+          </tr>))}</tbody></table></div>}
+
+      {/* Summary + validate */}
+      {batchItems.length>0&&<div style={{display:"flex",alignItems:"center",gap:12,padding:12,borderRadius:10,background:C.primaryLight,border:`1.5px solid ${C.primary}33`}}>
+        <div style={{flex:1}}>
+          <div style={{fontSize:13,fontWeight:700,color:C.primary}}>{batchItems.reduce((s,i)=>s+i.qty,0)} pièces — {batchItems.length} référence{batchItems.length>1?"s":""}</div>
+          <div style={{fontSize:10,color:C.textMuted}}>{batchSupplier?`Fournisseur: ${batchSupplier}`:"Aucun fournisseur renseigné"}</div></div>
+        <Btn onClick={async()=>{
+          setBatchSaving(true);
+          try{const payload=batchItems.map(i=>({productId:i.productId,variantId:i.variantId,quantity:i.qty}));
+            const res=await receiveBatchStock(payload,batchSupplier||"Non spécifié");
+            const totalQty=batchItems.reduce((s,i)=>s+i.qty,0);
+            notify(`Réception validée: ${totalQty} pièces, ${batchItems.length} réf`,"success");
+            setBatchItems([]);setBatchSupplier("");
+            if(batchScanRef.current)batchScanRef.current.focus();
+          }catch(e){}finally{setBatchSaving(false);}
+        }} disabled={batchSaving} style={{height:40,minWidth:160,background:C.primary,fontSize:13,fontWeight:700}}>
+          {batchSaving?"Enregistrement...":"Valider la réception"}</Btn>
+      </div>}
+    </div>}
 
     {tab==="alerts"&&<div style={{display:"flex",flexDirection:"column",gap:6}}>
       {stockAlerts.length===0&&<div style={{textAlign:"center",padding:30,color:C.textLight}}>Aucune alerte</div>}

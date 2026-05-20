@@ -705,6 +705,16 @@ function AppProvider({children}){
       addAudit("RECEPTION",`+${qty} — ${supplier}`);}catch(e){notify("Erreur: "+e.message,"error");}
   },[addAudit]);
 
+  // Stock batch receipt - via API
+  const receiveBatchStock=useCallback(async(items,supplier)=>{
+    try{const res=await API.stock.receiveBatch({items,supplier});
+      const prods=await API.products.list();
+      setProducts(norm.products(prods));
+      const totalQty=items.reduce((s,i)=>s+i.quantity,0);
+      addAudit("RECEPTION_BATCH",`Réassort: ${items.length} réf, ${totalQty} pièces — ${supplier||"N/A"}`);
+      return res;}catch(e){notify("Erreur: "+e.message,"error");throw e;}
+  },[addAudit,notify]);
+
   // ══ P2: Clock in/out — via API ══
   const clockIn=useCallback(async()=>{try{await API.auth.clock("IN");addAudit("CLOCK_IN",`${currentUser?.name} a pointé`);}catch(e){console.error(e);}},[currentUser,addAudit]);
   const clockOut=useCallback(async()=>{try{await API.auth.clock("OUT");addAudit("CLOCK_OUT",`${currentUser?.name} a pointé`);}catch(e){console.error(e);}},[currentUser,addAudit]);
@@ -1521,7 +1531,7 @@ function AppProvider({children}){
     cashReg,openReg,closeReg,isOnline,tickets,setTickets,tSeq,lastHash,gt,audit,jet,closures,avoirs,consumeAvoir,isAvoirExpired,
     checkout,createClosure,exportArchive,exportFEC,exportCSVReport,exportCustomerRGPD,addAudit,addJET,
     promos,setPromos,activePromos,parked,parkCart,restoreCart,removeParked,retoucheBons,addRetoucheBon,selCust,setSelCust,
-    stockAlerts,stockMoves,addStockMove,receiveStock,
+    stockAlerts,stockMoves,addStockMove,receiveStock,receiveBatchStock,
     refreshProducts,findByEAN,perm,settings,setSettings,saveSettingsToAPI,getLoyaltyTier,avoirPayment,selectedAvoir,setSelectedAvoir,
     bestSellers,salesBySeller,salesByVariant,caEvolution,salesByCollection,
     saleNote,setSaleNote,clockIn,clockOut,clockEntries,verifyChain,exportCatalog,
