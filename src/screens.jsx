@@ -1143,7 +1143,7 @@ function StatsScreen(){
 
 /* ══════════ STOCK MATRIX ══════════ */
 function StockScreen(){
-  const{products,setProducts,stockAlerts,stockMoves,receiveStock,stockAging,reorderSuggestions,adjustStock,notify,findByEAN,users,addStockMove,addAudit,settings,perm}=useApp();
+  const{products,setProducts,stockAlerts,stockMoves,receiveStock,stockAging,reorderSuggestions,adjustStock,notify,findByEAN,users,addStockMove,addAudit,settings,perm,defectiveStock,loadDefectiveStock,receiveDefectiveStock,adjustDefectiveStock}=useApp();
   if(!perm().canCreateProduct)return<div style={{padding:40,textAlign:"center",color:"#94a3b8",fontSize:16,fontWeight:600}}>Accès réservé aux administrateurs</div>;
   const[sel,setSel]=useState(products[0]?.id||"");const[tab,setTab]=useState("matrix");
   const[rcModal,setRcModal]=useState(false);const[rcProd,setRcProd]=useState("");const[rcVar,setRcVar]=useState("");const[rcQty,setRcQty]=useState("");const[rcSup,setRcSup]=useState("");
@@ -1154,6 +1154,10 @@ function StockScreen(){
   const[csvStMode,setCsvStMode]=useState("add");// "add" = ajouter au stock, "replace" = remplacer
   const[csvStMatchField,setCsvStMatchField]=useState("ean");// champ de matching: ean, sku, name_color_size
   const[csvStImporting,setCsvStImporting]=useState(false);const[csvStResult,setCsvStResult]=useState(null);
+  const[defProd,setDefProd]=useState("");const[defVar,setDefVar]=useState("");const[defQty,setDefQty]=useState("");const[defReason,setDefReason]=useState("");
+  const[defAdjProd,setDefAdjProd]=useState("");const[defAdjVar,setDefAdjVar]=useState("");const[defAdjQty,setDefAdjQty]=useState("");const[defAdjReason,setDefAdjReason]=useState("");
+  const[defSearch,setDefSearch]=useState("");
+  useEffect(()=>{if(tab==="defective")loadDefectiveStock();},[tab]);// eslint-disable-line react-hooks/exhaustive-deps
   const[tenProd,setTenProd]=useState("");const[tenVar,setTenVar]=useState("");const[tenUser,setTenUser]=useState("");const[tenQty,setTenQty]=useState("1");
   const[trProd,setTrProd]=useState("");const[trVar,setTrVar]=useState("");const[trQty,setTrQty]=useState("1");const[trDest,setTrDest]=useState("");const[trRef,setTrRef]=useState("");
   const p=products.find(x=>x.id===sel);
@@ -1165,7 +1169,7 @@ function StockScreen(){
       <div style={{flex:1}}/>
       <Btn variant="outline" onClick={()=>setRcModal(true)}><Upload size={14}/> Réception</Btn></div>
     <div style={{display:"flex",gap:6,marginBottom:12}}>
-      {[{id:"matrix",l:"Matrice"},{id:"alerts",l:"Alertes"},{id:"moves",l:"Mouvements"},{id:"inventory",l:"Inventaire"},{id:"adjust",l:"Ajustement"},{id:"tenues",l:"Tenues"},{id:"transfers",l:"Transferts"},{id:"aging",l:"Vieillissement"},{id:"reorder",l:"Réassort"}].map(t=>(
+      {[{id:"matrix",l:"Matrice"},{id:"alerts",l:"Alertes"},{id:"moves",l:"Mouvements"},{id:"inventory",l:"Inventaire"},{id:"adjust",l:"Ajustement"},{id:"defective",l:"Défectueux"},{id:"tenues",l:"Tenues"},{id:"transfers",l:"Transferts"},{id:"aging",l:"Vieillissement"},{id:"reorder",l:"Réassort"}].map(t=>(
         <button key={t.id} onClick={()=>setTab(t.id)} style={{padding:"5px 12px",borderRadius:8,border:`1.5px solid ${tab===t.id?C.primary:C.border}`,
           background:tab===t.id?C.primary:"transparent",color:tab===t.id?"#fff":C.text,fontSize:11,fontWeight:600,cursor:"pointer"}}>{t.l}</button>))}</div>
 
@@ -1232,6 +1236,71 @@ function StockScreen(){
           <div style={{fontSize:10,color:C.textMuted}}>Stock actuel: {s.currentStock} | Seuil: {s.variant.stockAlert}{s.product.sku?` | Réf: ${s.product.sku}`:""}</div></div>
         <Badge color={C.info}>Commander: {s.suggestedQty}</Badge>
       </div>))}</div>}
+
+    {tab==="defective"&&<div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`}}>
+      <h3 style={{fontSize:14,fontWeight:700,marginBottom:10}}>Stock défectueux ({defectiveStock.length} variante{defectiveStock.length>1?"s":""})</h3>
+      <p style={{fontSize:11,color:C.textMuted,marginBottom:12}}>Produits signalés comme défectueux lors de réceptions ou retours.</p>
+
+      {/* Receive defective */}
+      <div style={{background:C.bg,borderRadius:10,padding:12,marginBottom:14,border:`1.5px solid ${C.border}`}}>
+        <div style={{fontSize:12,fontWeight:700,marginBottom:8,color:C.danger}}>Réception défectueux</div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
+          <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>PRODUIT</label>
+            <select value={defProd} onChange={e=>{setDefProd(e.target.value);setDefVar("");setDefQty("");}} style={{width:"100%",padding:8,borderRadius:8,border:`1.5px solid ${C.border}`,fontSize:11,fontFamily:"inherit"}}>
+              <option value="">Sélectionner…</option>{products.map(p=>(<option key={p.id} value={p.id}>{p.name} ({p.sku})</option>))}</select></div>
+          {defProd&&<div><label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>VARIANTE</label>
+            <select value={defVar} onChange={e=>setDefVar(e.target.value)} style={{width:"100%",padding:8,borderRadius:8,border:`1.5px solid ${C.border}`,fontSize:11,fontFamily:"inherit"}}>
+              <option value="">Sélectionner…</option>{products.find(x=>x.id===defProd)?.variants.map(v=>(<option key={v.id} value={v.id}>{v.color}/{v.size} (stock: {v.stock}, déf: {v.defective||0})</option>))}</select></div>}
+          <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>QUANTITÉ</label>
+            <Input type="number" min="1" value={defQty} onChange={e=>setDefQty(e.target.value)} placeholder="Qté défectueuse"/></div>
+          <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>MOTIF</label>
+            <Input value={defReason} onChange={e=>setDefReason(e.target.value)} placeholder="Ex: produit abîmé à la réception"/></div></div>
+        <Btn onClick={()=>{if(defProd&&defVar&&parseInt(defQty)>0){receiveDefectiveStock(defProd,defVar,parseInt(defQty),defReason);setDefProd("");setDefVar("");setDefQty("");setDefReason("");}}}
+          disabled={!defProd||!defVar||!defQty||parseInt(defQty)<=0} style={{height:34,background:C.danger,fontSize:11}}>
+          <AlertTriangle size={12}/> Enregistrer réception défectueux</Btn></div>
+
+      {/* Adjust defective inventory */}
+      <div style={{background:C.bg,borderRadius:10,padding:12,marginBottom:14,border:`1.5px solid ${C.border}`}}>
+        <div style={{fontSize:12,fontWeight:700,marginBottom:8,color:C.warn}}>Inventaire / Ajustement défectueux</div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
+          <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>PRODUIT</label>
+            <select value={defAdjProd} onChange={e=>{setDefAdjProd(e.target.value);setDefAdjVar("");setDefAdjQty("");}} style={{width:"100%",padding:8,borderRadius:8,border:`1.5px solid ${C.border}`,fontSize:11,fontFamily:"inherit"}}>
+              <option value="">Sélectionner…</option>{products.map(p=>(<option key={p.id} value={p.id}>{p.name} ({p.sku})</option>))}</select></div>
+          {defAdjProd&&<div><label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>VARIANTE</label>
+            <select value={defAdjVar} onChange={e=>{setDefAdjVar(e.target.value);const pr=products.find(x=>x.id===defAdjProd);const v=pr?.variants.find(x=>x.id===e.target.value);if(v)setDefAdjQty(String(v.defective||0));}} style={{width:"100%",padding:8,borderRadius:8,border:`1.5px solid ${C.border}`,fontSize:11,fontFamily:"inherit"}}>
+              <option value="">Sélectionner…</option>{products.find(x=>x.id===defAdjProd)?.variants.map(v=>(<option key={v.id} value={v.id}>{v.color}/{v.size} (stock: {v.stock}, déf: {v.defective||0})</option>))}</select></div>}
+          <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>NOUVEAU QTÉ DÉFECTUEUX</label>
+            <Input type="number" min="0" value={defAdjQty} onChange={e=>setDefAdjQty(e.target.value)} placeholder="Qté réelle défectueuse"/></div>
+          <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>MOTIF</label>
+            <Input value={defAdjReason} onChange={e=>setDefAdjReason(e.target.value)} placeholder="Ex: inventaire, réparation…"/></div></div>
+        {defAdjProd&&defAdjVar&&defAdjQty!==""&&(()=>{const pr=products.find(x=>x.id===defAdjProd);const v=pr?.variants.find(x=>x.id===defAdjVar);
+          const diff=parseInt(defAdjQty)-(v?.defective||0);
+          return diff!==0?<div style={{padding:6,borderRadius:6,background:diff>0?C.dangerLight:C.primaryLight,marginBottom:8,fontSize:10,fontWeight:600,
+            color:diff>0?C.danger:C.primary}}>{diff>0?`+${diff}`:diff} — Défectueux actuel: {v?.defective||0} → Nouveau: {defAdjQty}</div>:
+            <div style={{padding:6,borderRadius:6,background:C.surfaceAlt,marginBottom:8,fontSize:10,color:C.textMuted}}>Aucun changement</div>;})()}
+        <Btn onClick={()=>{if(defAdjProd&&defAdjVar&&defAdjQty!==""&&parseInt(defAdjQty)>=0){adjustDefectiveStock(defAdjProd,defAdjVar,parseInt(defAdjQty),defAdjReason);setDefAdjProd("");setDefAdjVar("");setDefAdjQty("");setDefAdjReason("");}}}
+          disabled={!defAdjProd||!defAdjVar||defAdjQty===""} style={{height:34,background:C.warn,fontSize:11}}>
+          <Save size={12}/> Enregistrer ajustement défectueux</Btn></div>
+
+      {/* Defective stock list */}
+      <Input value={defSearch} onChange={e=>setDefSearch(e.target.value)} placeholder="Rechercher dans les défectueux..." style={{marginBottom:8,height:30,fontSize:11,padding:"4px 10px"}}/>
+      {defectiveStock.length===0&&<div style={{textAlign:"center",padding:20,color:C.textLight}}>Aucun stock défectueux enregistré</div>}
+      {defectiveStock.length>0&&<table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
+        <thead><tr style={{borderBottom:`2px solid ${C.border}`}}>
+          {["Produit","Variante","EAN","Stock sain","Défectueux","Coût"].map(h=>(
+            <th key={h} style={{padding:6,textAlign:"left",fontSize:9,fontWeight:700,color:C.textMuted}}>{h}</th>))}</tr></thead>
+        <tbody>{defectiveStock.filter(d=>!defSearch||d.name.toLowerCase().includes(defSearch.toLowerCase())||d.sku?.toLowerCase().includes(defSearch.toLowerCase())||(d.ean||"").includes(defSearch)).map((d,i)=>(<tr key={i} style={{borderBottom:`1px solid ${C.border}`}}>
+          <td style={{padding:6,fontWeight:600}}>{d.name} <span style={{color:C.textMuted,fontSize:9}}>({d.sku})</span></td>
+          <td style={{padding:6}}>{d.color}/{d.size}</td>
+          <td style={{padding:6,fontSize:9,color:C.textMuted}}>{d.ean||"—"}</td>
+          <td style={{padding:6}}>{d.stock}</td>
+          <td style={{padding:6,fontWeight:700,color:C.danger}}>{d.defective}</td>
+          <td style={{padding:6,color:C.textMuted}}>{d.cost_price?`${(d.defective*parseFloat(d.cost_price)).toFixed(2)}€`:"—"}</td>
+        </tr>))}</tbody></table>}
+      {defectiveStock.length>0&&<div style={{marginTop:8,fontSize:10,color:C.textMuted,fontWeight:600}}>
+        Total défectueux: {defectiveStock.reduce((s,d)=>s+d.defective,0)} unités
+        {defectiveStock.some(d=>d.cost_price)&&` — Valeur: ${defectiveStock.reduce((s,d)=>s+d.defective*parseFloat(d.cost_price||0),0).toFixed(2)}€`}</div>}
+    </div>}
 
     {tab==="adjust"&&<div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`}}>
       <h3 style={{fontSize:14,fontWeight:700,marginBottom:10}}>Ajustement de stock manuel</h3>

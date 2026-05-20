@@ -134,6 +134,9 @@ export const stock = {
   adjust: (data) => api('/api/stock/adjust', { method: 'POST', body: JSON.stringify(data) }),
   aging: () => api('/api/stock/aging'),
   reorder: () => api('/api/stock/reorder'),
+  defective: () => api('/api/stock/defective'),
+  receiveDefective: (data) => api('/api/stock/receive-defective', { method: 'POST', body: JSON.stringify(data) }),
+  adjustDefective: (data) => api('/api/stock/adjust-defective', { method: 'POST', body: JSON.stringify(data) }),
 };
 
 // ══ Fiscal ══

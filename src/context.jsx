@@ -1413,6 +1413,30 @@ function AppProvider({children}){
     }catch(e){notify("Erreur: "+e.message,"error");}
   },[products,addAudit,notify]);
 
+  // ══ DEFECTIVE STOCK ══
+  const[defectiveStock,setDefectiveStock]=useState([]);
+  const loadDefectiveStock=useCallback(async()=>{
+    try{const data=await API.stock.defective();setDefectiveStock(data||[]);}catch(e){console.warn("Erreur chargement défectueux:",e.message);}
+  },[]);
+  const receiveDefectiveStock=useCallback(async(productId,variantId,qty,reason)=>{
+    const p=products.find(x=>x.id===productId);const v=p?.variants.find(x=>x.id===variantId);
+    if(!p||!v)return;
+    try{await API.stock.receiveDefective({productId,variantId,quantity:qty,reason});
+      await loadDefectiveStock();
+      addAudit("DEFECTUEUX",`Réception défectueux: +${qty} ${p.name} ${v.color}/${v.size}`);
+      notify(`Défectueux reçu: +${qty} ${p.name} ${v.color}/${v.size}`,"info");
+    }catch(e){notify("Erreur: "+e.message,"error");}
+  },[products,addAudit,notify,loadDefectiveStock]);
+  const adjustDefectiveStock=useCallback(async(productId,variantId,newDefective,reason)=>{
+    const p=products.find(x=>x.id===productId);const v=p?.variants.find(x=>x.id===variantId);
+    if(!p||!v)return;
+    try{await API.stock.adjustDefective({productId,variantId,newDefective,reason});
+      await loadDefectiveStock();
+      addAudit("INVENTAIRE_DEFECTUEUX",`${p.name} ${v.color}/${v.size}: ${v.defective||0} → ${newDefective}`);
+      notify(`Défectueux ajusté: ${p.name} ${v.color}/${v.size}`,"info");
+    }catch(e){notify("Erreur: "+e.message,"error");}
+  },[products,addAudit,notify,loadDefectiveStock]);
+
   // ══ CUSTOMER DISPLAY (dual screen) ══
   const customerDisplayRef=useRef(null);
   const openCustomerDisplay=useCallback(()=>{
@@ -1507,6 +1531,7 @@ function AppProvider({children}){
     processReturn,giftCards,createGiftCard,useGiftCard,checkGiftCard,
     updateProduct,deleteProduct,addVariantToProduct,deleteVariant,reorderVariants,
     updateCustomer,deleteCustomer,adjustStock,
+    defectiveStock,loadDefectiveStock,receiveDefectiveStock,adjustDefectiveStock,
     printerConnected,printerType,thermalPrint,connectPrinter,disconnectPrinter,isSunmi,isAndroid,
     hwId,hwProfile,switchHardware,hardwareProfiles:hardwareManager.profiles,
     paymentId,paymentConfig,switchPayment,updatePaymentConfig,chargePayment,refundPayment,
