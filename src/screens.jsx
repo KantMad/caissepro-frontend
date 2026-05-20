@@ -1622,6 +1622,8 @@ function StockScreen(){
       <h3 style={{fontSize:14,fontWeight:700,marginBottom:10}}>Sortie stock — Tenue employé</h3>
       <div style={{padding:10,background:C.warnLight,borderRadius:8,marginBottom:12,fontSize:11,color:"#92400E",border:`1px solid ${C.warn}33`}}>
         Les articles sortis en tenue employé sont retirés du stock magasin et tracés dans les mouvements.</div>
+      <Input placeholder="Scanner EAN ou saisir code-barres..." style={{marginBottom:10,height:36,fontSize:12,borderColor:C.accent,borderWidth:2}}
+        onKeyDown={e=>{if(e.key==="Enter"){const r=resolveEAN(e.target.value.trim());if(r){setTenProd(r.productId);setTenVar(r.variantId);setTenQty(prev=>prev&&tenProd===r.productId&&tenVar===r.variantId?String(parseInt(prev)+1):"1");e.target.value="";notify(`${r.product.name} ${r.variant.color}/${r.variant.size} (stock: ${r.variant.stock})`,"info");}else{notify("EAN inconnu: "+e.target.value,"warn");e.target.value="";}}}}/>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
         <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>PRODUIT</label>
           <select value={tenProd} onChange={e=>{setTenProd(e.target.value);setTenVar("");}} style={{width:"100%",padding:8,borderRadius:8,border:`1.5px solid ${C.border}`,fontSize:11,fontFamily:"inherit"}}>
@@ -1661,6 +1663,8 @@ function StockScreen(){
       <h3 style={{fontSize:14,fontWeight:700,marginBottom:10}}>Transfert de stock</h3>
       <div style={{padding:10,background:C.primaryLight,borderRadius:8,marginBottom:12,fontSize:11,color:C.primaryDark,border:`1px solid ${C.primary}22`}}>
         Transférez du stock vers un autre magasin ou une entité externe. Un justificatif est généré automatiquement.</div>
+      <Input placeholder="Scanner EAN ou saisir code-barres..." style={{marginBottom:10,height:36,fontSize:12,borderColor:C.info,borderWidth:2}}
+        onKeyDown={e=>{if(e.key==="Enter"){const r=resolveEAN(e.target.value.trim());if(r){setTrProd(r.productId);setTrVar(r.variantId);e.target.value="";notify(`${r.product.name} ${r.variant.color}/${r.variant.size} (stock: ${r.variant.stock})`,"info");}else{notify("EAN inconnu: "+e.target.value,"warn");e.target.value="";}}}}/>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
         <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>PRODUIT</label>
           <select value={trProd} onChange={e=>{setTrProd(e.target.value);setTrVar("");}} style={{width:"100%",padding:8,borderRadius:8,border:`1.5px solid ${C.border}`,fontSize:11,fontFamily:"inherit"}}>

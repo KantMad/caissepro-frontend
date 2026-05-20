@@ -1448,113 +1448,54 @@ function AppProvider({children}){
   },[products,addAudit,notify,loadDefectiveStock]);
 
   // ══ CUSTOMER DISPLAY (dual screen) ══
+  // Strategy: always write cart to localStorage so any separate window/WebView
+  // (including Sunmi T2 second screen) can poll it. Also try BroadcastChannel
+  // for same-browser-context speed, and window.open as PC fallback.
   const customerDisplayRef=useRef(null);
-  const openCustomerDisplay=useCallback(async()=>{
+  const openCustomerDisplay=useCallback(()=>{
     // Already open?
     if(customerDisplayRef.current&&!customerDisplayRef.current.closed){customerDisplayRef.current.focus();return;}
-    // Method 1: Sunmi DSKernel — native second screen on Sunmi T2/D2
-    if(typeof window.DSKernel!=="undefined"&&window.DSKernel){
-      try{
-        const displayUrl=window.location.origin+"/customer-display.html";
-        window.DSKernel.showSecondScreen&&window.DSKernel.showSecondScreen(displayUrl);
-        // DSKernel communicates via BroadcastChannel
-        const bc=new BroadcastChannel("caissepro_customer_display");
-        customerDisplayRef.current={closed:false,_sunmi:true,_bc:bc,
-          updateCart:(data)=>{try{bc.postMessage(data);}catch(e){}},
-          focus:()=>{},close:()=>{bc.close();}};
-        notify("Ecran client Sunmi connecte","success");
-        return;
-      }catch(e){console.warn("DSKernel failed:",e.message);}
+    // On Sunmi T2: the second screen loads customer-display.html independently.
+    // We just need to enable localStorage sync (always on) and notify user.
+    // Try window.open for PC users who want a draggable window.
+    const displayUrl=window.location.origin+"/customer-display.html";
+    const w=window.open(displayUrl,"CaisseProClient","width=800,height=600,menubar=no,toolbar=no,location=no,status=no");
+    if(w){
+      customerDisplayRef.current=w;
+      notify("Ecran client ouvert — glissez-le sur le 2e moniteur","success");
+    }else{
+      // Popup blocked (common on tablets) — localStorage sync still works
+      // for Sunmi's second screen which loads customer-display.html directly
+      customerDisplayRef.current={closed:false,focus:()=>{},close:()=>{}};
+      notify("Ecran client active — Sur Sunmi, ouvrez "+displayUrl+" sur le 2e ecran","info");
     }
-    // Method 2: Presentation API (Chrome Android dual-screen, Chromebook external display)
-    if(navigator.presentation&&navigator.presentation.request){
-      try{
-        const displayUrl=window.location.origin+"/customer-display.html";
-        const req=new PresentationRequest([displayUrl]);
-        const avail=await req.getAvailability().catch(()=>null);
-        if(avail&&avail.value){
-          const conn=await req.start();
-          const bc=new BroadcastChannel("caissepro_customer_display");
-          customerDisplayRef.current={closed:false,_presentation:true,_bc:bc,
-            updateCart:(data)=>{try{bc.postMessage(data);}catch(e){}},
-            focus:()=>{},close:()=>{try{conn.terminate();}catch(e){}bc.close();}};
-          conn.addEventListener("close",()=>{customerDisplayRef.current=null;});
-          conn.addEventListener("terminate",()=>{customerDisplayRef.current=null;});
-          notify("Ecran client connecte (Presentation API)","success");
-          return;
-        }
-      }catch(e){console.warn("Presentation API failed:",e.message);}
-    }
-    // Method 3: Fallback — window.open (PC, glisser sur 2e ecran)
-    const w=window.open("","CaisseProClient","width=800,height=600,menubar=no,toolbar=no,location=no,status=no");
-    if(!w){notify("Popups bloques sur cet appareil. Sur PC, autorisez les popups. Sur tablette Sunmi, utilisez le mode kiosque.","warn");return;}
-    customerDisplayRef.current=w;
-    w.document.write(`<!DOCTYPE html><html><head><title>Ecran Client</title><style>
-      *{margin:0;padding:0;box-sizing:border-box}body{font-family:'DM Sans',system-ui,sans-serif;background:#F8FAF7;overflow:hidden}
-      #root{height:100vh;display:flex;flex-direction:column}
-      .header{background:linear-gradient(135deg,#047857,#059669);color:#fff;padding:20px 30px;text-align:center}
-      .header h1{font-size:24px;font-weight:800}.header .sub{font-size:13px;opacity:0.8;margin-top:4px}
-      .customer-bar{background:#065F46;color:#fff;padding:10px 30px;display:flex;align-items:center;gap:12px}
-      .customer-bar .avatar{width:32px;height:32px;border-radius:50%;background:rgba(255,255,255,0.2);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px}
-      .customer-bar .info{flex:1}.customer-bar .name{font-weight:600;font-size:14px}.customer-bar .loyalty{font-size:11px;opacity:0.8}
-      .promos-bar{background:#FFFBEB;border-bottom:1px solid #FDE68A;padding:10px 30px;display:flex;flex-wrap:wrap;gap:8px}
-      .promo-tag{background:#FEF3C7;border:1px solid #F59E0B;border-radius:20px;padding:4px 12px;font-size:12px;font-weight:600;color:#92400E}
-      .items{flex:1;overflow-y:auto;padding:20px 30px}.item{display:flex;justify-content:space-between;padding:14px 0;border-bottom:1px solid #E8ECE5;font-size:16px}
-      .item .name{font-weight:600;flex:1}.item .qty{color:#666;margin:0 20px}.item .price{font-weight:800;color:#047857;min-width:80px;text-align:right}
-      .discount-line{display:flex;justify-content:space-between;padding:8px 0;font-size:14px;color:#059669;font-style:italic}
-      .discount-line .label{flex:1}.discount-line .amount{font-weight:700}
-      .total-bar{background:#fff;border-top:3px solid #047857;padding:24px 30px;display:flex;justify-content:space-between;align-items:center}
-      .total-bar .label{font-size:20px;font-weight:700;color:#333}.total-bar .amount{font-size:36px;font-weight:900;color:#047857}
-      .screensaver{height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;background:linear-gradient(135deg,#F8FAF7,#E8F0E3)}
-      .screensaver .logo{width:120px;height:120px;border-radius:30px;background:linear-gradient(135deg,#047857,#059669);display:flex;align-items:center;justify-content:center;color:#fff;font-size:48px;font-weight:900;margin-bottom:20px;box-shadow:0 12px 40px rgba(43,110,68,0.3)}
-      .screensaver h2{font-size:28px;font-weight:800;color:#333;margin-bottom:8px}.screensaver p{font-size:16px;color:#666}
-      .screensaver .time{font-size:48px;font-weight:800;color:#047857;margin-top:20px}
-    </style></head><body><div id="root"><div class="screensaver"><div class="logo">CP</div><h2></h2><p>Bienvenue</p><div class="time"></div></div></div>
-    <script>
-      function updateTime(){const t=document.querySelector('.time');if(t)t.textContent=new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});}
-      setInterval(updateTime,1000);updateTime();
-      window.updateCart=function(data){
-        const root=document.getElementById('root');
-        if(!data||!data.items||data.items.length===0){
-          root.innerHTML='<div class="screensaver"><div class="logo">CP</div><h2></h2><p>'+(data&&data.customer?esc(data.customer.name)+', bienvenue !':'Bienvenue')+'</p><div class="time"></div></div>';
-          var h2=root.querySelector('h2');if(h2)h2.textContent=data&&data.storeName||'';
-          updateTime();return;}
-        var esc=function(s){if(!s)return'';return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');};
-        var html='<div class="header"><h1>'+esc(data.storeName)+'</h1><div class="sub">Votre panier</div></div>';
-        if(data.customer){html+='<div class="customer-bar"><div class="avatar">'+esc(data.customer.name.charAt(0))+'</div><div class="info"><div class="name">'+esc(data.customer.name)+'</div>';
-          if(data.customer.loyalty){html+='<div class="loyalty">'+esc(data.customer.loyalty)+'</div>';}
-          html+='</div></div>';}
-        if(data.promos&&data.promos.length>0){html+='<div class="promos-bar">';
-          data.promos.forEach(function(p){html+='<span class="promo-tag">'+esc(p)+'</span>';});
-          html+='</div>';}
-        html+='<div class="items">';
-        data.items.forEach(function(i){html+='<div class="item"><span class="name">'+esc(i.name)+'</span><span class="qty">x'+esc(i.qty)+'</span><span class="price">'+esc(i.price)+'</span></div>';});
-        if(data.appliedPromos&&data.appliedPromos.length>0){
-          data.appliedPromos.forEach(function(a){html+='<div class="discount-line"><span class="label">'+esc(a)+'</span></div>';});}
-        html+='</div>';
-        html+='<div class="total-bar"><span class="label">Total TTC</span><span class="amount">'+esc(data.total)+'</span></div>';
-        root.innerHTML=html;};
-    <\/script></body></html>`);
-    w.document.close();
-    notify("Ecran client ouvert — glissez-le sur le 2e moniteur","success");
   },[notify]);
 
-  // Sync cart to customer display
+  // Sync cart to customer display — write to localStorage (Sunmi 2nd screen polls it)
+  // + BroadcastChannel (fast path for same-browser-context) + window.updateCart fallback
   useEffect(()=>{
-    if(!customerDisplayRef.current||customerDisplayRef.current.closed)return;
     try{
       const promoResult=calcPromoDiscount(cart);
       const rawTotal=cart.reduce((s,i)=>s+i.product.price*i.quantity,0);
-      const totalAfterPromo=Math.max(0,rawTotal-promoResult.promoDisc).toFixed(2)+"€";
-      customerDisplayRef.current.updateCart({
+      const totalAfterPromo=Math.max(0,rawTotal-promoResult.promoDisc).toFixed(2)+"EUR";
+      const data={
         storeName:settings.name||CO.name,
         customer:selCust?{name:`${selCust.firstName||""} ${selCust.lastName||selCust.name||""}`.trim(),loyalty:getLoyaltyTier(selCust.points||0)?.name||""}:null,
         promos:activePromos.map(p=>p.name).filter(Boolean),
         appliedPromos:promoResult.applied,
         items:cart.map(i=>({name:i.product.name+(i.variant?` (${i.variant.color}/${i.variant.size})`:""),qty:i.quantity,
-          price:(i.product.price*i.quantity).toFixed(2)+"€"})),
-        total:cart.length>0?totalAfterPromo:"0.00€"
-      });
+          price:(i.product.price*i.quantity).toFixed(2)+"EUR"})),
+        total:cart.length>0?totalAfterPromo:"0.00EUR",
+        _ts:Date.now()
+      };
+      // Always write to localStorage — Sunmi 2nd screen WebView polls this
+      try{localStorage.setItem("caissepro_customer_cart",JSON.stringify(data));}catch(e){}
+      // BroadcastChannel — fast path for same browser context
+      try{const bc=new BroadcastChannel("caissepro_customer_display");bc.postMessage(data);bc.close();}catch(e){}
+      // window.open fallback (PC)
+      if(customerDisplayRef.current&&!customerDisplayRef.current.closed&&customerDisplayRef.current.updateCart){
+        try{customerDisplayRef.current.updateCart(data);}catch(e){}
+      }
     }catch(e){}
   },[cart,settings.name,selCust,activePromos,calcPromoDiscount,getLoyaltyTier]);
 

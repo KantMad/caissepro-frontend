@@ -27,6 +27,9 @@ body{font-family:'DM Sans',system-ui,-apple-system,sans-serif;background:#F8FAF7
 .screensaver h2{font-size:28px;font-weight:800;color:#333;margin-bottom:8px}
 .screensaver p{font-size:16px;color:#666}
 .screensaver .time{font-size:48px;font-weight:800;color:#047857;margin-top:20px}
+.status{position:fixed;top:8px;right:8px;padding:4px 10px;border-radius:12px;font-size:9px;font-weight:700;opacity:0.6}
+.status.connected{background:#D1FAE5;color:#065F46}
+.status.polling{background:#FEF3C7;color:#92400E}
 </style>
 </head>
 <body>
@@ -38,7 +41,9 @@ body{font-family:'DM Sans',system-ui,-apple-system,sans-serif;background:#F8FAF7
     <div class="time"></div>
   </div>
 </div>
+<div id="status" class="status polling">En attente...</div>
 <script>
+var lastTs=0;
 function esc(s){if(!s)return'';return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function updateTime(){var t=document.querySelector('.time');if(t)t.textContent=new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});}
 setInterval(updateTime,1000);updateTime();
@@ -73,14 +78,59 @@ function updateCart(data){
   root.innerHTML=html;
 }
 
-// Listen for updates via BroadcastChannel (Sunmi / Presentation API)
+// Method 1: BroadcastChannel (fast, same browser context)
 try{
   var bc=new BroadcastChannel('caissepro_customer_display');
-  bc.onmessage=function(e){updateCart(e.data);};
+  bc.onmessage=function(e){
+    updateCart(e.data);
+    lastTs=e.data._ts||Date.now();
+    var st=document.getElementById('status');
+    if(st){st.className='status connected';st.textContent='Connecte (live)';}
+  };
 }catch(e){}
+
+// Method 2: localStorage polling (works cross-process on Sunmi T2)
+// The main app writes to localStorage.caissepro_customer_cart on every cart change.
+// This page polls every 500ms — cheap read, ensures Sunmi 2nd screen stays in sync.
+setInterval(function(){
+  try{
+    var raw=localStorage.getItem('caissepro_customer_cart');
+    if(!raw)return;
+    var data=JSON.parse(raw);
+    var ts=data._ts||0;
+    if(ts>lastTs){
+      lastTs=ts;
+      updateCart(data);
+      var st=document.getElementById('status');
+      if(st){st.className='status connected';st.textContent='Connecte (sync)';}
+    }
+  }catch(e){}
+},500);
+
+// Method 3: storage event (fires when another tab/window changes localStorage)
+window.addEventListener('storage',function(e){
+  if(e.key==='caissepro_customer_cart'&&e.newValue){
+    try{
+      var data=JSON.parse(e.newValue);
+      var ts=data._ts||0;
+      if(ts>lastTs){
+        lastTs=ts;
+        updateCart(data);
+        var st=document.getElementById('status');
+        if(st){st.className='status connected';st.textContent='Connecte (event)';}
+      }
+    }catch(e){}
+  }
+});
 
 // Also expose globally for window.open fallback
 window.updateCart=updateCart;
+
+// Load initial state from localStorage on page load
+try{
+  var init=localStorage.getItem('caissepro_customer_cart');
+  if(init){var d=JSON.parse(init);lastTs=d._ts||0;updateCart(d);}
+}catch(e){}
 </script>
 </body>
 </html>
