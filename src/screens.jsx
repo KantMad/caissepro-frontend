@@ -1161,6 +1161,8 @@ function StockScreen(){
     // Audio feedback
     try{const ac=new(window.AudioContext||window.webkitAudioContext)();const o=ac.createOscillator();const g=ac.createGain();o.connect(g);g.connect(ac.destination);o.frequency.value=1200;g.gain.value=0.08;o.start();o.stop(ac.currentTime+0.08);}catch(e){}
   },[findByEAN,notify]);
+  // EAN scan helper: resolves an EAN to productId+variantId
+  const resolveEAN=useCallback((ean)=>{const found=findByEAN(ean);if(!found)return null;return{productId:found.product.id,variantId:found.variant.id,product:found.product,variant:found.variant};},[findByEAN]);
   const[adjProd,setAdjProd]=useState("");const[adjVar,setAdjVar]=useState("");const[adjQty,setAdjQty]=useState("");const[adjReason,setAdjReason]=useState("INVENTAIRE");
   const[invSearch,setInvSearch]=useState("");const[invCounts,setInvCounts]=useState({});
   const[stSearchMatrix,setStSearchMatrix]=useState("");const[stSearchReceipt,setStSearchReceipt]=useState("");const[stSearchAdj,setStSearchAdj]=useState("");
@@ -1183,13 +1185,14 @@ function StockScreen(){
       <div style={{flex:1}}/>
       <Btn variant="outline" onClick={()=>setTab("reception")}><Upload size={14}/> Réception</Btn></div>
     <div style={{display:"flex",gap:6,marginBottom:12}}>
-      {[{id:"matrix",l:"Matrice"},{id:"reception",l:"Réception"},{id:"alerts",l:"Alertes"},{id:"moves",l:"Mouvements"},{id:"inventory",l:"Inventaire"},{id:"adjust",l:"Ajustement"},{id:"defective",l:"Défectueux"},{id:"tenues",l:"Tenues"},{id:"transfers",l:"Transferts"},{id:"aging",l:"Vieillissement"},{id:"reorder",l:"Réassort"}].map(t=>(
+      {[{id:"matrix",l:"Matrice"},{id:"reception",l:"Réception"},{id:"alerts",l:"Alertes"},{id:"moves",l:"Mouvements"},{id:"inventory",l:"Inventaire"},{id:"adjust",l:"Ajustement"},{id:"defective",l:"Défectueux"},{id:"tenues",l:"Tenues"},{id:"transfers",l:"Transferts"},{id:"aging",l:"Vieillissement"}].map(t=>(
         <button key={t.id} onClick={()=>setTab(t.id)} style={{padding:"5px 12px",borderRadius:8,border:`1.5px solid ${tab===t.id?C.primary:C.border}`,
           background:tab===t.id?C.primary:"transparent",color:tab===t.id?"#fff":C.text,fontSize:11,fontWeight:600,cursor:"pointer"}}>{t.l}</button>))}</div>
 
-    {tab==="matrix"&&<><Input value={stSearchMatrix} onChange={e=>setStSearchMatrix(e.target.value)} placeholder="Rechercher produit (nom, SKU)..." style={{marginBottom:6,height:32,fontSize:11,padding:"4px 10px"}}/>
+    {tab==="matrix"&&<><Input value={stSearchMatrix} onChange={e=>{setStSearchMatrix(e.target.value);}} placeholder="Rechercher produit (nom, SKU, EAN)..." style={{marginBottom:6,height:32,fontSize:11,padding:"4px 10px"}}
+        onKeyDown={e=>{if(e.key==="Enter"){const r=resolveEAN(stSearchMatrix.trim());if(r){setSel(r.productId);setStSearchMatrix("");notify(`${r.product.name} — ${r.variant.color}/${r.variant.size}`,"info");}}}}/>
       <select value={sel} onChange={e=>setSel(e.target.value)} style={{padding:8,borderRadius:8,border:`1.5px solid ${C.border}`,fontSize:12,marginBottom:12,fontFamily:"inherit"}}>
-      {products.filter(p=>!stSearchMatrix||p.name.toLowerCase().includes(stSearchMatrix.toLowerCase())||p.sku.toLowerCase().includes(stSearchMatrix.toLowerCase())).map(p=>(<option key={p.id} value={p.id}>{p.name} ({p.sku})</option>))}</select>
+      {products.filter(p=>!stSearchMatrix||p.name.toLowerCase().includes(stSearchMatrix.toLowerCase())||p.sku.toLowerCase().includes(stSearchMatrix.toLowerCase())||(p.variants||[]).some(v=>(v.ean||"").includes(stSearchMatrix))).map(p=>(<option key={p.id} value={p.id}>{p.name} ({p.sku})</option>))}</select>
     {p&&<div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`,overflowX:"auto"}}>
       <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
         <thead><tr><th style={{padding:8,textAlign:"left",borderBottom:`2px solid ${C.border}`,fontSize:10}}>Couleur\Taille</th>
@@ -1309,15 +1312,6 @@ function StockScreen(){
           <td style={{padding:8}}><Badge color={p.daysSinceLastSale>60?C.danger:p.daysSinceLastSale>30?C.warn:"#059669"}>{p.daysSinceLastSale>60?"Critique":p.daysSinceLastSale>30?"À surveiller":"OK"}</Badge></td>
         </tr>))}</tbody></table></div>}
 
-    {tab==="reorder"&&<div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`}}>
-      <h3 style={{fontSize:14,fontWeight:700,marginBottom:10}}>Suggestions de réassort ({reorderSuggestions.length})</h3>
-      {reorderSuggestions.length===0&&<div style={{textAlign:"center",padding:20,color:C.textLight}}>Aucune suggestion — tous les stocks sont OK</div>}
-      {reorderSuggestions.map((s,i)=>(<div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:10,borderBottom:`1px solid ${C.border}`}}>
-        <AlertTriangle size={14} color={s.currentStock===0?C.danger:C.warn}/>
-        <div style={{flex:1}}><div style={{fontSize:12,fontWeight:600}}>{s.product.name} — {s.variant.color}/{s.variant.size}</div>
-          <div style={{fontSize:10,color:C.textMuted}}>Stock actuel: {s.currentStock} | Seuil: {s.variant.stockAlert}{s.product.sku?` | Réf: ${s.product.sku}`:""}</div></div>
-        <Badge color={C.info}>Commander: {s.suggestedQty}</Badge>
-      </div>))}</div>}
 
     {tab==="defective"&&<div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`}}>
       <h3 style={{fontSize:14,fontWeight:700,marginBottom:10}}>Stock défectueux ({defectiveStock.length} variante{defectiveStock.length>1?"s":""})</h3>
@@ -1326,31 +1320,35 @@ function StockScreen(){
       {/* Receive defective */}
       <div style={{background:C.bg,borderRadius:10,padding:12,marginBottom:14,border:`1.5px solid ${C.border}`}}>
         <div style={{fontSize:12,fontWeight:700,marginBottom:8,color:C.danger}}>Réception défectueux</div>
+        <Input placeholder="Scanner EAN ou saisir code-barres..." style={{marginBottom:8,height:34,fontSize:12,borderColor:C.danger}}
+          onKeyDown={e=>{if(e.key==="Enter"){const r=resolveEAN(e.target.value.trim());if(r){setDefProd(r.productId);setDefVar(r.variantId);setDefQty(prev=>prev&&defProd===r.productId&&defVar===r.variantId?String(parseInt(prev)+1):"1");e.target.value="";notify(`${r.product.name} ${r.variant.color}/${r.variant.size}`,"info");}else{notify("EAN inconnu: "+e.target.value,"warn");e.target.value="";}}}}/>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
           <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>PRODUIT</label>
             <select value={defProd} onChange={e=>{setDefProd(e.target.value);setDefVar("");setDefQty("");}} style={{width:"100%",padding:8,borderRadius:8,border:`1.5px solid ${C.border}`,fontSize:11,fontFamily:"inherit"}}>
               <option value="">Sélectionner…</option>{products.map(p=>(<option key={p.id} value={p.id}>{p.name} ({p.sku})</option>))}</select></div>
           {defProd&&<div><label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>VARIANTE</label>
             <select value={defVar} onChange={e=>setDefVar(e.target.value)} style={{width:"100%",padding:8,borderRadius:8,border:`1.5px solid ${C.border}`,fontSize:11,fontFamily:"inherit"}}>
-              <option value="">Sélectionner…</option>{products.find(x=>x.id===defProd)?.variants.map(v=>(<option key={v.id} value={v.id}>{v.color}/{v.size} (stock: {v.stock}, déf: {v.defective||0})</option>))}</select></div>}
-          <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>QUANTITÉ</label>
-            <Input type="number" min="1" value={defQty} onChange={e=>setDefQty(e.target.value)} placeholder="Qté défectueuse"/></div>
+              <option value="">Sélectionner…</option>{products.find(x=>x.id===defProd)?.variants.map(v=>(<option key={v.id} value={v.id}>{v.color}/{v.size} (stock: {v.stock}, def: {v.defective||0})</option>))}</select></div>}
+          <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>QUANTITE</label>
+            <Input type="number" min="1" value={defQty} onChange={e=>setDefQty(e.target.value)} placeholder="Qte defectueuse"/></div>
           <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>MOTIF</label>
-            <Input value={defReason} onChange={e=>setDefReason(e.target.value)} placeholder="Ex: produit abîmé à la réception"/></div></div>
+            <Input value={defReason} onChange={e=>setDefReason(e.target.value)} placeholder="Ex: produit abime a la reception"/></div></div>
         <Btn onClick={()=>{if(defProd&&defVar&&parseInt(defQty)>0){receiveDefectiveStock(defProd,defVar,parseInt(defQty),defReason);setDefProd("");setDefVar("");setDefQty("");setDefReason("");}}}
           disabled={!defProd||!defVar||!defQty||parseInt(defQty)<=0} style={{height:34,background:C.danger,fontSize:11}}>
-          <AlertTriangle size={12}/> Enregistrer réception défectueux</Btn></div>
+          <AlertTriangle size={12}/> Enregistrer reception defectueux</Btn></div>
 
       {/* Adjust defective inventory */}
       <div style={{background:C.bg,borderRadius:10,padding:12,marginBottom:14,border:`1.5px solid ${C.border}`}}>
-        <div style={{fontSize:12,fontWeight:700,marginBottom:8,color:C.warn}}>Inventaire / Ajustement défectueux</div>
+        <div style={{fontSize:12,fontWeight:700,marginBottom:8,color:C.warn}}>Inventaire / Ajustement defectueux</div>
+        <Input placeholder="Scanner EAN ou saisir code-barres..." style={{marginBottom:8,height:34,fontSize:12,borderColor:C.warn}}
+          onKeyDown={e=>{if(e.key==="Enter"){const r=resolveEAN(e.target.value.trim());if(r){setDefAdjProd(r.productId);setDefAdjVar(r.variantId);setDefAdjQty(String(r.variant.defective||0));e.target.value="";notify(`${r.product.name} ${r.variant.color}/${r.variant.size}`,"info");}else{notify("EAN inconnu: "+e.target.value,"warn");e.target.value="";}}}}/>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
           <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>PRODUIT</label>
             <select value={defAdjProd} onChange={e=>{setDefAdjProd(e.target.value);setDefAdjVar("");setDefAdjQty("");}} style={{width:"100%",padding:8,borderRadius:8,border:`1.5px solid ${C.border}`,fontSize:11,fontFamily:"inherit"}}>
               <option value="">Sélectionner…</option>{products.map(p=>(<option key={p.id} value={p.id}>{p.name} ({p.sku})</option>))}</select></div>
           {defAdjProd&&<div><label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>VARIANTE</label>
             <select value={defAdjVar} onChange={e=>{setDefAdjVar(e.target.value);const pr=products.find(x=>x.id===defAdjProd);const v=pr?.variants.find(x=>x.id===e.target.value);if(v)setDefAdjQty(String(v.defective||0));}} style={{width:"100%",padding:8,borderRadius:8,border:`1.5px solid ${C.border}`,fontSize:11,fontFamily:"inherit"}}>
-              <option value="">Sélectionner…</option>{products.find(x=>x.id===defAdjProd)?.variants.map(v=>(<option key={v.id} value={v.id}>{v.color}/{v.size} (stock: {v.stock}, déf: {v.defective||0})</option>))}</select></div>}
+              <option value="">Sélectionner…</option>{products.find(x=>x.id===defAdjProd)?.variants.map(v=>(<option key={v.id} value={v.id}>{v.color}/{v.size} (stock: {v.stock}, def: {v.defective||0})</option>))}</select></div>}
           <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>NOUVEAU QTÉ DÉFECTUEUX</label>
             <Input type="number" min="0" value={defAdjQty} onChange={e=>setDefAdjQty(e.target.value)} placeholder="Qté réelle défectueuse"/></div>
           <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>MOTIF</label>
@@ -1387,11 +1385,13 @@ function StockScreen(){
     {tab==="adjust"&&<div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`}}>
       <h3 style={{fontSize:14,fontWeight:700,marginBottom:10}}>Ajustement de stock manuel</h3>
       <p style={{fontSize:11,color:C.textMuted,marginBottom:12}}>Inventaire, casse, perte, correction d'erreur…</p>
+      <Input placeholder="Scanner EAN ou saisir code-barres..." style={{marginBottom:10,height:36,fontSize:12,borderColor:C.primary,borderWidth:2}}
+        onKeyDown={e=>{if(e.key==="Enter"){const r=resolveEAN(e.target.value.trim());if(r){setAdjProd(r.productId);setAdjVar(r.variantId);setAdjQty(String(r.variant.stock));setStSearchAdj("");e.target.value="";notify(`${r.product.name} ${r.variant.color}/${r.variant.size} — stock: ${r.variant.stock}`,"info");}else{notify("EAN inconnu: "+e.target.value,"warn");e.target.value="";}}}}/>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}>
         <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>PRODUIT</label>
-          <Input value={stSearchAdj} onChange={e=>setStSearchAdj(e.target.value)} placeholder="Rechercher..." style={{marginBottom:4,height:28,fontSize:10,padding:"2px 8px"}}/>
+          <Input value={stSearchAdj} onChange={e=>setStSearchAdj(e.target.value)} placeholder="Rechercher (nom, SKU, EAN)..." style={{marginBottom:4,height:28,fontSize:10,padding:"2px 8px"}}/>
           <select value={adjProd} onChange={e=>{setAdjProd(e.target.value);setAdjVar("");setAdjQty("");}} style={{width:"100%",padding:10,borderRadius:10,border:`2px solid ${C.border}`,fontSize:12,fontFamily:"inherit"}}>
-            <option value="">Sélectionner…</option>{products.filter(p=>!stSearchAdj||p.name.toLowerCase().includes(stSearchAdj.toLowerCase())||p.sku.toLowerCase().includes(stSearchAdj.toLowerCase())).map(p=>(<option key={p.id} value={p.id}>{p.name} ({p.sku})</option>))}</select></div>
+            <option value="">Sélectionner…</option>{products.filter(p=>!stSearchAdj||p.name.toLowerCase().includes(stSearchAdj.toLowerCase())||p.sku.toLowerCase().includes(stSearchAdj.toLowerCase())||(p.variants||[]).some(v=>(v.ean||"").includes(stSearchAdj))).map(p=>(<option key={p.id} value={p.id}>{p.name} ({p.sku})</option>))}</select></div>
         {adjProd&&<div><label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>VARIANTE</label>
           <select value={adjVar} onChange={e=>{setAdjVar(e.target.value);const pr=products.find(x=>x.id===adjProd);const v=pr?.variants.find(x=>x.id===e.target.value);if(v)setAdjQty(String(v.stock));}} style={{width:"100%",padding:10,borderRadius:10,border:`2px solid ${C.border}`,fontSize:12,fontFamily:"inherit"}}>
             <option value="">Sélectionner…</option>{products.find(x=>x.id===adjProd)?.variants.map(v=>(<option key={v.id} value={v.id}>{v.color}/{v.size} (stock: {v.stock})</option>))}</select></div>}
@@ -1415,12 +1415,13 @@ function StockScreen(){
     {/* Inventory tab */}
     {tab==="inventory"&&<div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`}}>
       <h3 style={{fontSize:14,fontWeight:700,marginBottom:10}}>Inventaire complet</h3>
-      <Input value={invSearch} onChange={e=>setInvSearch(e.target.value)} placeholder="Rechercher produit (nom, SKU)..." style={{marginBottom:10,height:32,fontSize:11,padding:"4px 10px"}}/>
+      <Input value={invSearch} onChange={e=>setInvSearch(e.target.value)} placeholder="Rechercher produit (nom, SKU, EAN)..." style={{marginBottom:10,height:32,fontSize:11,padding:"4px 10px"}}
+        onKeyDown={e=>{if(e.key==="Enter"){const r=resolveEAN(invSearch.trim());if(r){setInvSearch(r.product.name);notify(`${r.product.name} ${r.variant.color}/${r.variant.size}`,"info");}}}}/>
       <div style={{maxHeight:400,overflowY:"auto",marginBottom:12}}>
         <table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
           <thead><tr style={{borderBottom:`2px solid ${C.border}`,position:"sticky",top:0,background:C.surface}}>
             {["Produit","Variante","EAN","Stock actuel","Stock compté","Écart"].map(h=>(<th key={h} style={{padding:6,textAlign:"left",fontSize:9,fontWeight:700,color:C.textMuted}}>{h}</th>))}</tr></thead>
-          <tbody>{products.filter(p=>!invSearch||p.name.toLowerCase().includes(invSearch.toLowerCase())||p.sku.toLowerCase().includes(invSearch.toLowerCase())).flatMap(p=>
+          <tbody>{products.filter(p=>!invSearch||p.name.toLowerCase().includes(invSearch.toLowerCase())||p.sku.toLowerCase().includes(invSearch.toLowerCase())||(p.variants||[]).some(v=>(v.ean||"").includes(invSearch))).flatMap(p=>
             p.variants.map(v=>{const key=`${p.id}_${v.id}`;const counted=invCounts[key];const diff=counted!==undefined&&counted!==""?parseInt(counted)-v.stock:null;
               return(<tr key={key} style={{borderBottom:`1px solid ${C.border}`,background:diff!==null&&diff!==0?(diff>0?C.primaryLight:C.dangerLight):"transparent"}}>
                 <td style={{padding:6,fontWeight:600}}>{p.name} <span style={{color:C.textMuted,fontSize:9}}>({p.sku})</span></td>
