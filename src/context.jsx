@@ -1448,33 +1448,53 @@ function AppProvider({children}){
   },[products,addAudit,notify,loadDefectiveStock]);
 
   // ══ CUSTOMER DISPLAY (dual screen) ══
-  // Strategy: always write cart to localStorage so any separate window/WebView
-  // (including Sunmi T2 second screen) can poll it. Also try BroadcastChannel
-  // for same-browser-context speed, and window.open as PC fallback.
+  // On Capacitor/Sunmi: uses native CustomerDisplay plugin (Presentation API)
+  // On PC/browser: window.open + BroadcastChannel + localStorage
   const customerDisplayRef=useRef(null);
+  const customerDisplayPluginRef=useRef(null);
+  // Check if Capacitor native plugin is available
+  useEffect(()=>{
+    const plugin=window.Capacitor?.Plugins?.CustomerDisplay;
+    if(plugin){
+      customerDisplayPluginRef.current=plugin;
+      plugin.isConnected().then(r=>{
+        if(r.connected)notify("Ecran client Sunmi connecte automatiquement","success");
+        else if(r.displayAvailable)plugin.connect().then(r2=>{if(r2.connected)notify("Ecran client Sunmi connecte","success");});
+      }).catch(()=>{});
+      // Listen for display changes
+      try{plugin.addListener("displayChanged",e=>{
+        if(e.connected)notify("Second ecran Sunmi connecte","success");
+        else notify("Second ecran Sunmi deconnecte","warn");
+      });}catch(e){}
+    }
+  },[]);
+
   const openCustomerDisplay=useCallback(()=>{
-    // Already open?
+    // Capacitor native — already auto-connected
+    if(customerDisplayPluginRef.current){
+      customerDisplayPluginRef.current.isConnected().then(r=>{
+        if(r.connected)notify("Ecran client deja actif sur le second ecran","info");
+        else if(r.displayAvailable)customerDisplayPluginRef.current.connect().then(r2=>{
+          if(r2.connected)notify("Ecran client connecte","success");
+          else notify("Erreur connexion second ecran","error");
+        });
+        else notify("Aucun second ecran detecte","warn");
+      }).catch(()=>notify("Erreur plugin CustomerDisplay","error"));
+      return;
+    }
+    // Browser fallback: window.open
     if(customerDisplayRef.current&&!customerDisplayRef.current.closed){customerDisplayRef.current.focus();return;}
-    // On Sunmi T2: the second screen loads customer-display.html independently.
-    // We just need to enable localStorage sync (always on) and notify user.
-    // Try window.open for PC users who want a draggable window.
     const displayUrl=window.location.origin+"/customer-display.html";
     const w=window.open(displayUrl,"CaisseProClient","width=800,height=600,menubar=no,toolbar=no,location=no,status=no");
     if(w){
       customerDisplayRef.current=w;
       notify("Ecran client ouvert — glissez-le sur le 2e moniteur","success");
     }else{
-      // Popup blocked (common on tablets) — localStorage sync still works
-      // for Sunmi's second screen which loads customer-display.html directly
-      customerDisplayRef.current={closed:false,focus:()=>{},close:()=>{}};
-      notify("Ecran client active — Sur Sunmi, ouvrez "+displayUrl+" sur le 2e ecran","info");
+      notify("Impossible d'ouvrir l'ecran client. Autorisez les popups.","warn");
     }
   },[notify]);
 
-  // Sync cart to customer display — 3 channels:
-  // 1. API POST (for Sunmi APK second screen — cross-process)
-  // 2. BroadcastChannel (fast, same browser context)
-  // 3. localStorage (fallback, same browser)
+  // Sync cart to customer display
   useEffect(()=>{
     try{
       const promoResult=calcPromoDiscount(cart);
@@ -1490,13 +1510,15 @@ function AppProvider({children}){
         total:cart.length>0?totalAfterPromo:"0.00EUR",
         _ts:Date.now()
       };
-      // Channel 1: API POST — Sunmi APK polls GET /api/customer-display/:storeId
-      try{API.customerDisplay.push(data).catch(()=>{});}catch(e){}
-      // Channel 2: localStorage — same browser context fallback
+      // Channel 1: Capacitor native plugin (Sunmi second screen — direct, instant)
+      if(customerDisplayPluginRef.current){
+        try{customerDisplayPluginRef.current.updateCart(data);}catch(e){}
+      }
+      // Channel 2: localStorage — browser fallback
       try{localStorage.setItem("caissepro_customer_cart",JSON.stringify(data));}catch(e){}
-      // Channel 3: BroadcastChannel — fast path for same browser context
+      // Channel 3: BroadcastChannel — same browser context
       try{const bc=new BroadcastChannel("caissepro_customer_display");bc.postMessage(data);bc.close();}catch(e){}
-      // Channel 4: window.open direct call (PC fallback)
+      // Channel 4: window.open direct (PC)
       if(customerDisplayRef.current&&!customerDisplayRef.current.closed&&customerDisplayRef.current.updateCart){
         try{customerDisplayRef.current.updateCart(data);}catch(e){}
       }
