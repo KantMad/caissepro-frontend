@@ -2797,6 +2797,7 @@ function CSVImportWizard({open,onClose,existingProducts,onImportComplete}){
   const[parentRefField,setParentRefField]=useState("sku");
   const[uniqueKeyField,setUniqueKeyField]=useState("ean");
   const[duplicateAction,setDuplicateAction]=useState("update");
+  const[stockMode,setStockMode]=useState("replace");// "replace" = stock CSV remplace, "add" = stock CSV s'ajoute
   const[processed,setProcessed]=useState(null);
   const[importResult,setImportResult]=useState(null);
   const[importing,setImporting]=useState(false);
@@ -2805,7 +2806,7 @@ function CSVImportWizard({open,onClose,existingProducts,onImportComplete}){
   const fileRef=useRef();
 
   const reset=()=>{setStep(0);setRawData([]);setCsvHeaders([]);setMapping({});setParentRefField("sku");
-    setUniqueKeyField("ean");setDuplicateAction("update");setProcessed(null);setImportResult(null);setImporting(false);setFileName("");};
+    setUniqueKeyField("ean");setDuplicateAction("update");setStockMode("replace");setProcessed(null);setImportResult(null);setImporting(false);setFileName("");};
   const handleClose=()=>{reset();onClose();};
 
   // Step 0: File upload — restore saved mapping if column names match
@@ -2824,6 +2825,7 @@ function CSVImportWizard({open,onClose,existingProducts,onImportComplete}){
             if(prev.parentRefField)setParentRefField(prev.parentRefField);
             if(prev.uniqueKeyField)setUniqueKeyField(prev.uniqueKeyField);
             if(prev.duplicateAction)setDuplicateAction(prev.duplicateAction);
+            if(prev.stockMode)setStockMode(prev.stockMode);
           }}}catch(e){}
       if(restoredMapping){setMapping(restoredMapping);setMappingRestored(true);}
       else{setMappingRestored(false);const auto=csvAutoDetect(r.meta.fields||[]);setMapping(auto);
@@ -2833,7 +2835,7 @@ function CSVImportWizard({open,onClose,existingProducts,onImportComplete}){
   // Step 2→3: Process data — also save column mapping for future imports
   const processData=()=>{
     // Save mapping to localStorage for next import
-    const csvConfig={mapping,parentRefField,uniqueKeyField,duplicateAction,savedAt:new Date().toISOString()};
+    const csvConfig={mapping,parentRefField,uniqueKeyField,duplicateAction,stockMode,savedAt:new Date().toISOString()};
     try{localStorage.setItem("caissepro_csv_column_mapping",JSON.stringify(csvConfig));}catch(e){}
     try{API.settings.update({csvColumnMapping:csvConfig}).catch(()=>{});}catch(e){}
     const errors=[];const grouped=new Map();
@@ -2880,22 +2882,19 @@ function CSVImportWizard({open,onClose,existingProducts,onImportComplete}){
           const newVariants=[];const updatedVariants=[];
           product.variants.forEach(v=>{
             const match=existingMatch.variants.find(ev=>(ev.ean&&ev.ean===v.ean)||(ev.size===v.size&&ev.color===v.color));
-            if(match)updatedVariants.push({...v,existingId:match.id,existingEan:match.ean});
-            else newVariants.push(v);
+            if(match){
+              const existingStock=match.stock||0;
+              const csvStock=v.stock||0;
+              // stockMode: "replace" → stock CSV écrase, "add" → stock CSV s'ajoute
+              const newStock=stockMode==="add"?existingStock+csvStock:csvStock;
+              const diff=newStock-existingStock;
+              updatedVariants.push({...v,existingId:match.id,existingEan:match.ean,
+                existingStock,csvStock,newStock,diff,stockMode});
+            } else newVariants.push(v);
           });
-          updates.push({existing:existingMatch,incoming:product,newVariants,updatedVariants,mode:"update",
+          updates.push({existing:existingMatch,incoming:product,newVariants,updatedVariants,mode:"update",stockMode,
             fieldsChanged:{name:product.name,price:product.price,costPrice:product.costPrice,
               taxRate:product.taxRate,category:product.category,collection:product.collection}});
-        }else if(duplicateAction==="addStock"){
-          // Add CSV quantities to existing stock instead of replacing
-          const newVariants=[];const updatedVariants=[];
-          product.variants.forEach(v=>{
-            const match=existingMatch.variants.find(ev=>(ev.ean&&ev.ean===v.ean)||(ev.size===v.size&&ev.color===v.color));
-            if(match)updatedVariants.push({...v,existingId:match.id,existingEan:match.ean,addQty:v.stock,existingStock:match.stock||0});
-            else newVariants.push(v);
-          });
-          updates.push({existing:existingMatch,incoming:product,newVariants,updatedVariants,mode:"addStock",
-            fieldsChanged:{}});
         }else skipped.push({existing:existingMatch,incoming:product});
       }else{newProducts.push(product);}
     });
@@ -2927,35 +2926,24 @@ function CSVImportWizard({open,onClose,existingProducts,onImportComplete}){
     for(const u of processed.updates){
       let anySuccess=false;
 
-      // For addStock mode, skip product field updates — only adjust stock
-      if(u.mode!=="addStock"){
-        try{
-          // Step 1: Update product core fields (price, name, category, etc.)
-          const fc=u.fieldsChanged;
-          await API.products.update(u.existing.id,{
-            name:fc.name||u.existing.name,price:fc.price||u.existing.price,
-            costPrice:fc.costPrice||u.existing.costPrice,taxRate:fc.taxRate??u.existing.taxRate,
-            category:fc.category||u.existing.category,collection:fc.collection||u.existing.collection
-          });
-          anySuccess=true;
-        }catch(e){console.warn(`CSV update: product fields failed for ${u.existing.name}:`,e.message);}
-      }
+      // Step 1: Update product core fields (price, name, category, etc.)
+      try{
+        const fc=u.fieldsChanged;
+        await API.products.update(u.existing.id,{
+          name:fc.name||u.existing.name,price:fc.price||u.existing.price,
+          costPrice:fc.costPrice||u.existing.costPrice,taxRate:fc.taxRate??u.existing.taxRate,
+          category:fc.category||u.existing.category,collection:fc.collection||u.existing.collection
+        });
+        anySuccess=true;
+      }catch(e){console.warn(`CSV update: product fields failed for ${u.existing.name}:`,e.message);}
 
       // Step 2: Update stock for existing variants via stock.adjust
       for(const uv of u.updatedVariants){
         try{
-          if(u.mode==="addStock"){
-            // addStock mode: add CSV quantity to existing stock
-            const addQty=uv.addQty||uv.stock||0;
-            if(addQty>0)await API.stock.adjust({productId:u.existing.id,variantId:uv.existingId,quantity:addQty,reason:"Import CSV - ajout quantité au stock existant"});
+          if(uv.diff!==0){
+            await API.stock.adjust({productId:u.existing.id,variantId:uv.existingId,quantity:uv.diff,
+              reason:uv.stockMode==="add"?"Import CSV - ajout au stock":"Import CSV - remplacement stock"});
             anySuccess=true;
-          }else{
-            const existingVariant=u.existing.variants.find(ev=>ev.id===uv.existingId);
-            if(existingVariant&&uv.stock!==existingVariant.stock){
-              const diff=uv.stock-(existingVariant.stock||0);
-              if(diff!==0)await API.stock.adjust({productId:u.existing.id,variantId:uv.existingId,quantity:diff,reason:"Import CSV - mise à jour stock"});
-              anySuccess=true;
-            }
           }
         }catch(e){console.warn(`CSV update: stock adjust failed for variant ${uv.size}/${uv.color}:`,e.message);}
       }
@@ -2972,7 +2960,7 @@ function CSVImportWizard({open,onClose,existingProducts,onImportComplete}){
     // Fallback: if API fails for all, do local import (both new + updates)
     if(results.created===0&&results.updated===0&&(processed.newProducts.length>0||processed.updates.length>0)){
       const localUpdates=processed.updates.map(u=>({...u.existing,...u.fieldsChanged,
-        variants:[...u.existing.variants.map(ev=>{const m=u.updatedVariants.find(uv=>uv.existingId===ev.id);return m?{...ev,stock:m.stock,ean:m.ean||ev.ean}:ev;}),...u.newVariants]}));
+        variants:[...u.existing.variants.map(ev=>{const m=u.updatedVariants.find(uv=>uv.existingId===ev.id);return m?{...ev,stock:m.newStock,ean:m.ean||ev.ean}:ev;}),...u.newVariants]}));
       onImportComplete(null,processed.newProducts,localUpdates);setImportResult(results);setImporting(false);setStep(4);return;
     }
     // Refresh from API
@@ -3091,10 +3079,9 @@ function CSVImportWizard({open,onClose,existingProducts,onImportComplete}){
             <option value="name">Nom du produit</option>
           </select></div>
         <div style={{fontSize:10,fontWeight:600,color:C.textMuted,marginBottom:6}}>EN CAS DE DOUBLON</div>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
-          {[{id:"skip",l:"Ignorer la ligne",d:"Les doublons ne seront pas importés",i:XCircle,c:C.warn},
-            {id:"update",l:"Mettre à jour",d:"Mettre à jour prix, stock, variantes du produit existant",i:Upload,c:C.primary},
-            {id:"addStock",l:"Ajouter quantité",d:"Ajouter la quantité CSV au stock existant (réception)",i:Plus,c:"#059669"}].map(o=>(
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}>
+          {[{id:"skip",l:"Ignorer",d:"Les doublons ne seront pas importes",i:XCircle,c:C.warn},
+            {id:"update",l:"Mettre a jour",d:"Mettre a jour les infos du produit existant",i:Upload,c:C.primary}].map(o=>(
             <button key={o.id} onClick={()=>setDuplicateAction(o.id)} style={{padding:12,borderRadius:12,
               border:`2px solid ${duplicateAction===o.id?o.c:C.border}`,background:duplicateAction===o.id?`${o.c}08`:"transparent",
               cursor:"pointer",textAlign:"left",transition:"all 0.15s"}}>
@@ -3103,6 +3090,26 @@ function CSVImportWizard({open,onClose,existingProducts,onImportComplete}){
                 <span style={{fontSize:12,fontWeight:700,color:duplicateAction===o.id?o.c:C.text}}>{o.l}</span></div>
               <div style={{fontSize:10,color:C.textMuted}}>{o.d}</div></button>))}
         </div>
+
+        {duplicateAction==="update"&&<>
+          <div style={{fontSize:10,fontWeight:600,color:C.textMuted,marginBottom:6}}>GESTION DU STOCK POUR LES DOUBLONS</div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+            <button onClick={()=>setStockMode("replace")} style={{padding:12,borderRadius:12,
+              border:`2px solid ${stockMode==="replace"?"#D97706":C.border}`,background:stockMode==="replace"?"#FEF3C710":"transparent",
+              cursor:"pointer",textAlign:"left",transition:"all 0.15s"}}>
+              <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:4}}>
+                <RotateCcw size={14} color={stockMode==="replace"?"#D97706":C.textMuted}/>
+                <span style={{fontSize:12,fontWeight:700,color:stockMode==="replace"?"#D97706":C.text}}>Remplacer le stock</span></div>
+              <div style={{fontSize:10,color:C.textMuted}}>Le stock du CSV ecrase le stock actuel</div></button>
+            <button onClick={()=>setStockMode("add")} style={{padding:12,borderRadius:12,
+              border:`2px solid ${stockMode==="add"?"#059669":C.border}`,background:stockMode==="add"?"#DCFCE710":"transparent",
+              cursor:"pointer",textAlign:"left",transition:"all 0.15s"}}>
+              <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:4}}>
+                <Plus size={14} color={stockMode==="add"?"#059669":C.textMuted}/>
+                <span style={{fontSize:12,fontWeight:700,color:stockMode==="add"?"#059669":C.text}}>Ajouter au stock</span></div>
+              <div style={{fontSize:10,color:C.textMuted}}>La quantite du CSV s'ajoute au stock existant</div></button>
+          </div>
+        </>}
       </div>
     </div>}
 
@@ -3132,10 +3139,18 @@ function CSVImportWizard({open,onClose,existingProducts,onImportComplete}){
       </div>}
 
       {processed.updates.length>0&&<div style={{background:C.infoLight,borderRadius:10,padding:10,marginBottom:12,border:`1.5px solid ${C.info}33`}}>
-        <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:4}}><Upload size={13} color={C.info}/>
-          <span style={{fontSize:11,fontWeight:700,color:C.info}}>Mises à jour ({processed.updates.length})</span></div>
-        {processed.updates.map((u,i)=>(<div key={i} style={{fontSize:10,color:C.info,padding:"2px 0"}}>
-          "{u.existing.name}" ({u.existing.sku}) — {u.updatedVariants.length} variante(s) mise(s) à jour{u.newVariants.length>0?`, +${u.newVariants.length} nouvelle(s)`:""}</div>))}
+        <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:6}}><Upload size={13} color={C.info}/>
+          <span style={{fontSize:11,fontWeight:700,color:C.info}}>Mises a jour ({processed.updates.length})</span>
+          <Badge color={processed.updates[0]?.stockMode==="add"?"#059669":"#D97706"}>{processed.updates[0]?.stockMode==="add"?"Stock: ajout":"Stock: remplacement"}</Badge></div>
+        {processed.updates.map((u,i)=>(<div key={i} style={{fontSize:10,color:C.text,padding:"3px 0",borderBottom:i<processed.updates.length-1?`1px solid ${C.info}22`:"none"}}>
+          <span style={{fontWeight:600}}>"{u.existing.name}"</span> <span style={{color:C.textMuted}}>({u.existing.sku})</span>
+          {u.updatedVariants.length>0&&<span style={{marginLeft:6}}> — {u.updatedVariants.map(uv=>{
+            const arrow=uv.diff>0?`+${uv.diff}`:uv.diff<0?`${uv.diff}`:"=";
+            const col=uv.diff>0?"#059669":uv.diff<0?C.danger:C.textMuted;
+            return `${uv.color}/${uv.size}: ${uv.existingStock}→${uv.newStock} (${arrow})`;
+          }).join(", ")}</span>}
+          {u.newVariants.length>0&&<span style={{color:"#059669",marginLeft:6}}>+{u.newVariants.length} nouvelle(s)</span>}
+        </div>))}
       </div>}
 
       {processed.skipped.length>0&&<div style={{background:C.warnLight,borderRadius:10,padding:10,marginBottom:12,border:`1.5px solid ${C.warn}33`}}>
