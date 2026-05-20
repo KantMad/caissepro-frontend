@@ -250,5 +250,10 @@ export const barcodes = {
   lookup: (code) => api(`/api/barcodes/${encodeURIComponent(code)}`),
 };
 
+// ══ Customer Display (Sunmi second screen sync) ══
+export const customerDisplay = {
+  push: (data) => api('/api/customer-display', { method: 'POST', body: JSON.stringify(data) }),
+};
+
 // ══ Health ══
 export const health = () => api('/api/health');

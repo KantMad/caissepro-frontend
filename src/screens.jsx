@@ -4693,7 +4693,7 @@ function DebugPanel(){
 }
 
 function SettingsScreen(){
-  const{settings,setSettings,saveSettingsToAPI,addAudit,theme,setTheme,clockEntries,priceHistory,printerConnected,printerType,connectPrinter,disconnectPrinter,thermalPrint,notify,users,hwId,hwProfile,switchHardware,hardwareProfiles,paymentId,paymentConfig,switchPayment,updatePaymentConfig,paymentProfiles,perm}=useApp();
+  const{settings,setSettings,saveSettingsToAPI,addAudit,theme,setTheme,clockEntries,priceHistory,printerConnected,printerType,connectPrinter,disconnectPrinter,thermalPrint,notify,users,hwId,hwProfile,switchHardware,hardwareProfiles,paymentId,paymentConfig,switchPayment,updatePaymentConfig,paymentProfiles,perm,effectiveStoreId}=useApp();
   if(!perm().canSettings) return <div style={{padding:40,textAlign:"center",color:C.textMuted,fontSize:16,fontWeight:600}}>Accès refusé</div>;
   const[tab,setTab]=useState("general");
   const[printerBaud,setPrinterBaud]=useState("9600");
@@ -5260,6 +5260,27 @@ function SettingsScreen(){
           <div style={{fontSize:20,fontWeight:800,color:settings.screen2AccentColor||C.primary}}>{settings.screen2WelcomeMsg||"Bienvenue"}</div>
           <div style={{fontSize:10,color:"rgba(255,255,255,0.5)"}}>Aperçu de l'écran client</div></div></div>
       <Btn onClick={()=>{saveSettingsToAPI(settings);addAudit("CONFIG","Paramètres Écran 2 mis à jour");notify("Paramètres Écran 2 sauvegardés","success");}} style={{width:"100%",height:40,background:C.primary}}><Save size={14}/> Enregistrer</Btn>
+
+      <div style={{background:C.surface,borderRadius:16,padding:20,border:`1.5px solid ${C.border}`,marginTop:20}}>
+        <h3 style={{fontSize:14,fontWeight:800,margin:"0 0 4px"}}>Configuration Sunmi T2 / D2</h3>
+        <p style={{fontSize:11,color:C.textMuted,marginBottom:12}}>Pour afficher l'ecran client sur le second ecran Sunmi, installez l'APK "CaissePro Display" et renseignez ces informations :</p>
+        <div style={{background:C.bg,borderRadius:10,padding:12,marginBottom:8}}>
+          <div style={{fontSize:10,fontWeight:600,color:C.textMuted,marginBottom:2}}>URL FRONTEND</div>
+          <div style={{fontSize:12,fontWeight:700,fontFamily:"monospace",wordBreak:"break-all",cursor:"pointer",color:C.primary}}
+            onClick={()=>{navigator.clipboard.writeText(window.location.origin).then(()=>notify("Copie !","info"));}}>{window.location.origin} <span style={{fontSize:9,color:C.textMuted}}>(cliquer pour copier)</span></div></div>
+        <div style={{background:C.bg,borderRadius:10,padding:12,marginBottom:8}}>
+          <div style={{fontSize:10,fontWeight:600,color:C.textMuted,marginBottom:2}}>URL API BACKEND</div>
+          <div style={{fontSize:12,fontWeight:700,fontFamily:"monospace",wordBreak:"break-all",cursor:"pointer",color:C.primary}}
+            onClick={()=>{const u=(import.meta.env.VITE_API_URL||"https://api.techincash.app");navigator.clipboard.writeText(u).then(()=>notify("Copie !","info"));}}>{import.meta.env.VITE_API_URL||"https://api.techincash.app"} <span style={{fontSize:9,color:C.textMuted}}>(cliquer pour copier)</span></div></div>
+        <div style={{background:C.bg,borderRadius:10,padding:12,marginBottom:8}}>
+          <div style={{fontSize:10,fontWeight:600,color:C.textMuted,marginBottom:2}}>ID MAGASIN</div>
+          <div style={{fontSize:12,fontWeight:700,fontFamily:"monospace",wordBreak:"break-all",cursor:"pointer",color:C.primary}}
+            onClick={()=>{navigator.clipboard.writeText(effectiveStoreId||"").then(()=>notify("Copie !","info"));}}>{effectiveStoreId||"Non configure"} <span style={{fontSize:9,color:C.textMuted}}>(cliquer pour copier)</span></div></div>
+        <div style={{fontSize:10,color:C.textMuted,marginTop:8,lineHeight:1.5}}>
+          1. Installez l'APK "CaissePro Display" sur la tablette Sunmi<br/>
+          2. Ouvrez l'app, renseignez les 3 champs ci-dessus<br/>
+          3. Appuyez sur "Connecter" — le second ecran affiche le panier client</div>
+      </div>
     </div>}
 
     {tab==="caticons"&&(()=>{const cats=Object.keys({...DEFAULT_CAT_ICONS,...(settings.categoryIcons||{})});

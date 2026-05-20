@@ -30,6 +30,13 @@ body{font-family:'DM Sans',system-ui,-apple-system,sans-serif;background:#F8FAF7
 .status{position:fixed;top:8px;right:8px;padding:4px 10px;border-radius:12px;font-size:9px;font-weight:700;opacity:0.6}
 .status.connected{background:#D1FAE5;color:#065F46}
 .status.polling{background:#FEF3C7;color:#92400E}
+.status.api{background:#DBEAFE;color:#1E40AF}
+.setup{position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:2px solid #E5E7EB;padding:12px 20px;display:none;z-index:100}
+.setup.visible{display:block}
+.setup label{font-size:11px;font-weight:700;color:#666;display:block;margin-bottom:4px}
+.setup input{width:100%;padding:8px 12px;border:1.5px solid #D1D5DB;border-radius:8px;font-size:13px;margin-bottom:8px}
+.setup button{background:#047857;color:#fff;border:none;padding:8px 20px;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer}
+.setup .hint{font-size:10px;color:#999;margin-top:4px}
 </style>
 </head>
 <body>
@@ -42,11 +49,31 @@ body{font-family:'DM Sans',system-ui,-apple-system,sans-serif;background:#F8FAF7
   </div>
 </div>
 <div id="status" class="status polling">En attente...</div>
+
+<!-- Setup panel: shown on first use or triple-tap -->
+<div id="setup" class="setup">
+  <label>URL de l'API CaissePro</label>
+  <input id="apiUrl" type="url" placeholder="https://votre-api.com" />
+  <label>ID du magasin</label>
+  <input id="storeId" type="text" placeholder="Ex: abc123..." />
+  <button id="btnSave">Enregistrer et connecter</button>
+  <div class="hint">Triple-tap sur l'ecran pour rouvrir ce panneau de configuration.</div>
+</div>
+
 <script>
 var lastTs=0;
+var apiUrl='';
+var storeId='';
+var apiActive=false;
+
 function esc(s){if(!s)return'';return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function updateTime(){var t=document.querySelector('.time');if(t)t.textContent=new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});}
 setInterval(updateTime,1000);updateTime();
+
+function setStatus(cls,text){
+  var st=document.getElementById('status');
+  if(st){st.className='status '+cls;st.textContent=text;}
+}
 
 function updateCart(data){
   var root=document.getElementById('root');
@@ -78,20 +105,36 @@ function updateCart(data){
   root.innerHTML=html;
 }
 
-// Method 1: BroadcastChannel (fast, same browser context)
+// ══ Channel 1: API polling (primary for Sunmi APK — cross-process) ══
+function pollAPI(){
+  if(!apiUrl||!storeId)return;
+  fetch(apiUrl+'/api/customer-display/'+encodeURIComponent(storeId))
+    .then(function(r){return r.json();})
+    .then(function(res){
+      if(res&&res.data&&res.updatedAt>lastTs){
+        lastTs=res.updatedAt;
+        updateCart(res.data);
+        setStatus('api','Connecte (API)');
+        apiActive=true;
+      }
+    })
+    .catch(function(){
+      if(apiActive){setStatus('polling','API indisponible...');apiActive=false;}
+    });
+}
+setInterval(pollAPI,500);
+
+// ══ Channel 2: BroadcastChannel (fast, same browser context) ══
 try{
   var bc=new BroadcastChannel('caissepro_customer_display');
   bc.onmessage=function(e){
     updateCart(e.data);
     lastTs=e.data._ts||Date.now();
-    var st=document.getElementById('status');
-    if(st){st.className='status connected';st.textContent='Connecte (live)';}
+    setStatus('connected','Connecte (live)');
   };
 }catch(e){}
 
-// Method 2: localStorage polling (works cross-process on Sunmi T2)
-// The main app writes to localStorage.caissepro_customer_cart on every cart change.
-// This page polls every 500ms — cheap read, ensures Sunmi 2nd screen stays in sync.
+// ══ Channel 3: localStorage polling (same browser, different tab) ══
 setInterval(function(){
   try{
     var raw=localStorage.getItem('caissepro_customer_cart');
@@ -101,13 +144,12 @@ setInterval(function(){
     if(ts>lastTs){
       lastTs=ts;
       updateCart(data);
-      var st=document.getElementById('status');
-      if(st){st.className='status connected';st.textContent='Connecte (sync)';}
+      setStatus('connected','Connecte (sync)');
     }
   }catch(e){}
-},500);
+},600);
 
-// Method 3: storage event (fires when another tab/window changes localStorage)
+// ══ Channel 4: storage event ══
 window.addEventListener('storage',function(e){
   if(e.key==='caissepro_customer_cart'&&e.newValue){
     try{
@@ -116,17 +158,66 @@ window.addEventListener('storage',function(e){
       if(ts>lastTs){
         lastTs=ts;
         updateCart(data);
-        var st=document.getElementById('status');
-        if(st){st.className='status connected';st.textContent='Connecte (event)';}
+        setStatus('connected','Connecte (event)');
       }
     }catch(e){}
   }
 });
 
+// ══ Setup panel ══
+function loadConfig(){
+  try{
+    apiUrl=localStorage.getItem('caissepro_display_api_url')||'';
+    storeId=localStorage.getItem('caissepro_display_store_id')||'';
+  }catch(e){}
+  // Auto-detect API URL from current origin if on same domain
+  if(!apiUrl){
+    // Check URL params
+    var params=new URLSearchParams(window.location.search);
+    if(params.get('api'))apiUrl=params.get('api');
+    if(params.get('store'))storeId=params.get('store');
+  }
+  document.getElementById('apiUrl').value=apiUrl;
+  document.getElementById('storeId').value=storeId;
+  // Show setup if not configured
+  if(!apiUrl||!storeId){
+    document.getElementById('setup').className='setup visible';
+  }
+}
+
+document.getElementById('btnSave').addEventListener('click',function(){
+  apiUrl=document.getElementById('apiUrl').value.trim().replace(/\/$/,'');
+  storeId=document.getElementById('storeId').value.trim();
+  if(!apiUrl||!storeId){alert('Remplissez les deux champs');return;}
+  try{
+    localStorage.setItem('caissepro_display_api_url',apiUrl);
+    localStorage.setItem('caissepro_display_store_id',storeId);
+  }catch(e){}
+  document.getElementById('setup').className='setup';
+  setStatus('polling','Configuration sauvegardee. Connexion...');
+  pollAPI();
+});
+
+// Triple-tap to open config
+var tapCount=0;var tapTimer=null;
+document.addEventListener('click',function(){
+  tapCount++;
+  if(tapTimer)clearTimeout(tapTimer);
+  if(tapCount>=3){
+    tapCount=0;
+    var setup=document.getElementById('setup');
+    setup.className=setup.className.indexOf('visible')>=0?'setup':'setup visible';
+  }
+  tapTimer=setTimeout(function(){tapCount=0;},600);
+});
+
 // Also expose globally for window.open fallback
 window.updateCart=updateCart;
 
-// Load initial state from localStorage on page load
+// Init
+loadConfig();
+
+// Load initial state from localStorage
 try{
   var init=localStorage.getItem('caissepro_customer_cart');
   if(init){var d=JSON.parse(init);lastTs=d._ts||0;updateCart(d);}

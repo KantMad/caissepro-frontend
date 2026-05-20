@@ -1471,8 +1471,10 @@ function AppProvider({children}){
     }
   },[notify]);
 
-  // Sync cart to customer display — write to localStorage (Sunmi 2nd screen polls it)
-  // + BroadcastChannel (fast path for same-browser-context) + window.updateCart fallback
+  // Sync cart to customer display — 3 channels:
+  // 1. API POST (for Sunmi APK second screen — cross-process)
+  // 2. BroadcastChannel (fast, same browser context)
+  // 3. localStorage (fallback, same browser)
   useEffect(()=>{
     try{
       const promoResult=calcPromoDiscount(cart);
@@ -1488,11 +1490,13 @@ function AppProvider({children}){
         total:cart.length>0?totalAfterPromo:"0.00EUR",
         _ts:Date.now()
       };
-      // Always write to localStorage — Sunmi 2nd screen WebView polls this
+      // Channel 1: API POST — Sunmi APK polls GET /api/customer-display/:storeId
+      try{API.customerDisplay.push(data).catch(()=>{});}catch(e){}
+      // Channel 2: localStorage — same browser context fallback
       try{localStorage.setItem("caissepro_customer_cart",JSON.stringify(data));}catch(e){}
-      // BroadcastChannel — fast path for same browser context
+      // Channel 3: BroadcastChannel — fast path for same browser context
       try{const bc=new BroadcastChannel("caissepro_customer_display");bc.postMessage(data);bc.close();}catch(e){}
-      // window.open fallback (PC)
+      // Channel 4: window.open direct call (PC fallback)
       if(customerDisplayRef.current&&!customerDisplayRef.current.closed&&customerDisplayRef.current.updateCart){
         try{customerDisplayRef.current.updateCart(data);}catch(e){}
       }
