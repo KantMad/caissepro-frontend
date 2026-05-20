@@ -1135,7 +1135,7 @@ function AppProvider({children}){
     const prods=await API.products.list();setProducts(norm.products(prods));}catch(e){notify("Erreur: "+e.message,"error");}},[notify]);
   // Add customer — via API with offline fallback
   const addCustomer=useCallback(async(c)=>{
-    try{const nc=await API.customers.create(c);setCustomers(p=>[...p,nc]);notify("Client créé","success");return nc;}
+    try{const nc=await API.customers.create(c);const mapped=norm.customer(nc);setCustomers(p=>[...p,mapped]);notify("Client créé","success");return mapped;}
     catch(e){
       // Fallback local si API indisponible — pas d'erreur, juste création locale
       const nc={id:`c-${Date.now()}`,firstName:c.firstName||"",lastName:c.lastName||"",email:c.email||"",phone:c.phone||"",
@@ -1449,8 +1449,43 @@ function AppProvider({children}){
 
   // ══ CUSTOMER DISPLAY (dual screen) ══
   const customerDisplayRef=useRef(null);
-  const openCustomerDisplay=useCallback(()=>{
+  const openCustomerDisplay=useCallback(async()=>{
+    // Already open?
     if(customerDisplayRef.current&&!customerDisplayRef.current.closed){customerDisplayRef.current.focus();return;}
+    // Method 1: Sunmi DSKernel — native second screen on Sunmi T2/D2
+    if(typeof window.DSKernel!=="undefined"&&window.DSKernel){
+      try{
+        const displayUrl=window.location.origin+"/customer-display.html";
+        window.DSKernel.showSecondScreen&&window.DSKernel.showSecondScreen(displayUrl);
+        // DSKernel communicates via BroadcastChannel
+        const bc=new BroadcastChannel("caissepro_customer_display");
+        customerDisplayRef.current={closed:false,_sunmi:true,_bc:bc,
+          updateCart:(data)=>{try{bc.postMessage(data);}catch(e){}},
+          focus:()=>{},close:()=>{bc.close();}};
+        notify("Ecran client Sunmi connecte","success");
+        return;
+      }catch(e){console.warn("DSKernel failed:",e.message);}
+    }
+    // Method 2: Presentation API (Chrome Android dual-screen, Chromebook external display)
+    if(navigator.presentation&&navigator.presentation.request){
+      try{
+        const displayUrl=window.location.origin+"/customer-display.html";
+        const req=new PresentationRequest([displayUrl]);
+        const avail=await req.getAvailability().catch(()=>null);
+        if(avail&&avail.value){
+          const conn=await req.start();
+          const bc=new BroadcastChannel("caissepro_customer_display");
+          customerDisplayRef.current={closed:false,_presentation:true,_bc:bc,
+            updateCart:(data)=>{try{bc.postMessage(data);}catch(e){}},
+            focus:()=>{},close:()=>{try{conn.terminate();}catch(e){}bc.close();}};
+          conn.addEventListener("close",()=>{customerDisplayRef.current=null;});
+          conn.addEventListener("terminate",()=>{customerDisplayRef.current=null;});
+          notify("Ecran client connecte (Presentation API)","success");
+          return;
+        }
+      }catch(e){console.warn("Presentation API failed:",e.message);}
+    }
+    // Method 3: Fallback — window.open (PC, glisser sur 2e ecran)
     const w=window.open("","CaisseProClient","width=800,height=600,menubar=no,toolbar=no,location=no,status=no");
     if(!w){notify("Popups bloques sur cet appareil. Sur PC, autorisez les popups. Sur tablette Sunmi, utilisez le mode kiosque.","warn");return;}
     customerDisplayRef.current=w;
