@@ -807,31 +807,33 @@ function SalesScreen(){
           <ShoppingCart size={14}/> Ajouter au panier</Btn>
         <Btn onClick={async()=>{
           const retTotal=retForm.items.reduce((s,i)=>s+(parseFloat(i.price)||0),0);
-          const bonNum=`RET-${Date.now().toString(36).toUpperCase()}`;
-          const retBarcode=generateEAN13("203",Date.now()%1000000000);
-          const bon={num:bonNum,barcode:retBarcode,client:retForm.client,phone:retForm.phone,dateRetrait:retForm.date,items:retForm.items.filter(i=>i.desc),notes:retForm.notes,total:retTotal,date:new Date().toISOString(),seller:selSeller||currentUser?.name};
-          // Add items to cart
+          const bonDraft={client:retForm.client,phone:retForm.phone,dateRetrait:retForm.date,items:retForm.items.filter(i=>i.desc),notes:retForm.notes,total:retTotal,date:new Date().toISOString(),seller:selSeller||currentUser?.name};
+          // 1. Create in backend first to get real number + shortCode
+          const saved=await addRetoucheBon(bonDraft);
+          const bonNum=saved.num||`RET-${Date.now().toString(36).toUpperCase()}`;
+          const sc=saved.shortCode||(bonNum.slice(-4));
+          const bon={...saved,...bonDraft,num:bonNum,shortCode:sc};
+          // 2. Add items to cart
           const tva2=(settings.retoucheTVA||20)/100;
           const pm2=settings.pricingMode||"TTC";
           retForm.items.filter(i=>i.desc&&i.price).forEach(i=>{const p=parseFloat(i.price);addCustomItem(`Retouche: ${i.desc}`,pm2==="TTC"?p:p/(1+tva2),tva2);});
-          // Print bon via thermal printer or fallback to browser
+          // 3. Print with real number + shortCode bien visible
           const printed=await thermalPrint("retouche",bon);
           if(!printed){
-            const w=window.open("","_blank","width=400,height=600");if(w){w.document.write(`<html><head><title>Bon de retouche ${bonNum}</title><style>body{font-family:'Courier New',monospace;font-size:12px;padding:10px;max-width:300px;margin:0 auto;}h2{text-align:center;font-size:14px;margin:4px 0;}hr{border:none;border-top:1px dashed #333;margin:6px 0;}.row{display:flex;justify-content:space-between;}.center{text-align:center;}</style></head><body>`+
+            const w=window.open("","_blank","width=400,height=600");if(w){w.document.write(`<html><head><title>Bon de retouche ${bonNum}</title><style>body{font-family:'Courier New',monospace;font-size:12px;padding:10px;max-width:300px;margin:0 auto;}h2{text-align:center;font-size:14px;margin:4px 0;}hr{border:none;border-top:1px dashed #333;margin:6px 0;}.row{display:flex;justify-content:space-between;}.center{text-align:center;}.short-code{text-align:center;font-size:32px;font-weight:900;letter-spacing:6px;margin:8px 0;padding:8px;border:3px solid #000;}</style></head><body>`+
               `<h2>${settings.name||"CaissePro"}</h2><div class="center">${settings.address||""} ${settings.postalCode||""} ${settings.city||""}</div><hr>`+
-              `<h2>BON DE RETOUCHE</h2><div class="center">N° ${bonNum}</div><hr>`+
+              `<h2>BON DE RETOUCHE</h2><div class="short-code">${sc}</div><div class="center" style="font-size:10px;margin-bottom:6px;">Ref: ${bonNum}</div><hr>`+
               `<div class="row"><span>Client:</span><strong>${bon.client||"—"}</strong></div>`+
-              `<div class="row"><span>Tél:</span><span>${bon.phone||"—"}</span></div>`+
+              `<div class="row"><span>Tel:</span><span>${bon.phone||"—"}</span></div>`+
               `<div class="row"><span>Date retrait:</span><span>${new Date(bon.dateRetrait).toLocaleDateString("fr-FR")}</span></div><hr>`+
-              bon.items.filter(i=>i.desc).map(i=>`<div class="row"><span>${i.desc}</span><strong>${parseFloat(i.price||0).toFixed(2)}€</strong></div>`).join("")+
-              `<hr><div class="row"><strong>TOTAL</strong><strong>${retTotal.toFixed(2)}€ TTC</strong></div><hr>`+
+              bon.items.filter(i=>i.desc).map(i=>`<div class="row"><span>${i.desc}</span><strong>${parseFloat(i.price||0).toFixed(2)}EUR</strong></div>`).join("")+
+              `<hr><div class="row"><strong>TOTAL</strong><strong>${retTotal.toFixed(2)}EUR TTC</strong></div><hr>`+
               (bon.notes?`<div><strong>Notes:</strong> ${bon.notes}</div><hr>`:"")+
               `<div class="center" style="font-size:10px;">Vendeur: ${bon.seller}<br>${new Date().toLocaleString("fr-FR")}<br>${settings.name||"CaissePro"} — ${settings.siret||""}</div>`+
               `</body></html>`);w.document.close();setTimeout(()=>{w.print();},300);}}
-          await addRetoucheBon(bon);
           setRetoucheModal(false);setRetForm({client:"",phone:"",date:new Date().toISOString().split("T")[0],notes:"",items:[{desc:"",price:""}]});
-          notify(`Bon de retouche ${bonNum} créé et ajouté au panier`);
-          addAudit("RETOUCHE",`Bon ${bonNum} — ${bon.client} — ${retTotal.toFixed(2)}€`);
+          notify(`Bon de retouche #${sc} (${bonNum}) cree et ajoute au panier`);
+          addAudit("RETOUCHE",`Bon ${bonNum} #${sc} — ${bon.client} — ${retTotal.toFixed(2)}EUR`);
         }} disabled={!retForm.items.some(i=>i.desc&&i.price)||!retForm.client}
           style={{background:C.primary}}>
           <Printer size={14}/> Imprimer le bon + panier</Btn>
@@ -1802,11 +1804,11 @@ function HistoryScreen(){
     )):<div style={{textAlign:"center",padding:30,color:C.textLight}}>Aucun avoir</div>)}
 
     {tab==="retouches"&&(retoucheBons.length?(()=>{
-      const fBons=retoucheBons.filter(b=>{const q=search.toLowerCase();const matchS=!q||(b.num||"").toLowerCase().includes(q)||(b.client||"").toLowerCase().includes(q)||(b.seller||"").toLowerCase().includes(q)||(b.barcode||"").includes(q);
+      const fBons=retoucheBons.filter(b=>{const q=search.toLowerCase();const sc=b.shortCode||(b.num||"").slice(-4);const matchS=!q||(b.num||"").toLowerCase().includes(q)||(b.client||"").toLowerCase().includes(q)||(b.seller||"").toLowerCase().includes(q)||(b.barcode||"").includes(q)||sc.includes(q);
         const matchD=!dateFilter||(b.date||"").startsWith(dateFilter);return matchS&&matchD;});
-      return fBons.length?fBons.map((b,idx)=>(
+      return fBons.length?fBons.map((b,idx)=>{const sc=b.shortCode||(b.num||"").slice(-4);return(
         <div key={b.num||idx} style={{display:"flex",alignItems:"center",gap:10,padding:10,borderRadius:10,background:C.surface,border:`1.5px solid ${C.border}`,marginBottom:5}}>
-          <Edit size={14} color={C.textMuted}/>
+          <div style={{minWidth:52,height:44,borderRadius:8,background:C.primary,color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,fontWeight:900,letterSpacing:2}}>{sc}</div>
           <div style={{flex:1}}>
             <div style={{fontSize:11,fontWeight:700}}>{b.num} <Badge color={C.info}>{b.client||"Sans client"}</Badge></div>
             <div style={{fontSize:9,color:C.textMuted}}>{new Date(b.date).toLocaleString("fr-FR")} — {b.seller||"?"} — {(b.items||[]).filter(i=>i.desc).length} prestation(s)</div>
@@ -1814,18 +1816,20 @@ function HistoryScreen(){
             {b.dateRetrait&&<div style={{fontSize:9,fontWeight:600,color:new Date(b.dateRetrait)<new Date()?C.danger:C.primary}}>Retrait: {new Date(b.dateRetrait).toLocaleDateString("fr-FR")}</div>}
             {b.barcode&&<div style={{marginTop:4}}><EAN13Svg code={b.barcode} width={120} height={35}/></div>}
           </div>
-          <div style={{textAlign:"right",marginRight:8}}><div style={{fontSize:13,fontWeight:700,color:C.primary}}>{(b.total||0).toFixed(2)}€</div>
+          <div style={{textAlign:"right",marginRight:8}}><div style={{fontSize:13,fontWeight:700,color:C.primary}}>{(b.total||0).toFixed(2)}EUR</div>
             {b.phone&&<div style={{fontSize:8,color:C.textMuted}}>{b.phone}</div>}</div>
           <Btn variant="outline" onClick={async()=>{const printed=await thermalPrint("retouche",b);if(!printed){
-            const w=window.open("","_blank","width=400,height=600");if(w){w.document.write(`<html><head><title>Bon ${b.num}</title><style>body{font-family:'Courier New',monospace;font-size:12px;padding:10px;max-width:300px;margin:0 auto;}h2{text-align:center;font-size:14px;margin:4px 0;}hr{border:none;border-top:1px dashed #333;margin:6px 0;}.row{display:flex;justify-content:space-between;}.center{text-align:center;}</style></head><body>`+
-              `<h2>${settings.name||"CaissePro"}</h2><hr><h2>BON DE RETOUCHE</h2><div class="center">N: ${b.num}</div><hr>`+
+            const w=window.open("","_blank","width=400,height=600");if(w){w.document.write(`<html><head><title>Bon ${b.num}</title><style>body{font-family:'Courier New',monospace;font-size:12px;padding:10px;max-width:300px;margin:0 auto;}h2{text-align:center;font-size:14px;margin:4px 0;}hr{border:none;border-top:1px dashed #333;margin:6px 0;}.row{display:flex;justify-content:space-between;}.center{text-align:center;}.short-code{text-align:center;font-size:32px;font-weight:900;letter-spacing:6px;margin:8px 0;padding:8px;border:3px solid #000;}</style></head><body>`+
+              `<h2>${settings.name||"CaissePro"}</h2><hr><h2>BON DE RETOUCHE</h2><div class="short-code">${sc}</div><div class="center" style="font-size:10px;margin-bottom:6px;">Ref: ${b.num}</div><hr>`+
               `<div class="row"><span>Client:</span><strong>${b.client||""}</strong></div>`+
+              `<div class="row"><span>Tel:</span><span>${b.phone||""}</span></div>`+
+              (b.dateRetrait?`<div class="row"><span>Retrait:</span><span>${new Date(b.dateRetrait).toLocaleDateString("fr-FR")}</span></div>`:"")+`<hr>`+
               (b.items||[]).filter(i=>i.desc).map(i=>`<div class="row"><span>${i.desc}</span><strong>${parseFloat(i.price||0).toFixed(2)}EUR</strong></div>`).join("")+
               `<hr><div class="row"><strong>TOTAL</strong><strong>${(b.total||0).toFixed(2)}EUR TTC</strong></div>`+
               `</body></html>`);w.document.close();setTimeout(()=>w.print(),300);}
           }}} style={{fontSize:10,padding:"4px 10px"}}><Printer size={12}/> Imprimer</Btn>
-        </div>
-      )):<div style={{textAlign:"center",padding:30,color:C.textLight}}>Aucun bon trouvé</div>;
+        </div>);
+      }):<div style={{textAlign:"center",padding:30,color:C.textLight}}>Aucun bon trouve</div>;
     })():<div style={{textAlign:"center",padding:30,color:C.textLight}}>Aucun bon de retouche</div>)}
 
     {/* Ticket detail/reprint modal */}
