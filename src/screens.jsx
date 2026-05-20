@@ -1151,6 +1151,9 @@ function StockScreen(){
   const[invSearch,setInvSearch]=useState("");const[invCounts,setInvCounts]=useState({});
   const[stSearchMatrix,setStSearchMatrix]=useState("");const[stSearchReceipt,setStSearchReceipt]=useState("");const[stSearchAdj,setStSearchAdj]=useState("");
   const[csvStockModal,setCsvStockModal]=useState(false);const[csvStStep,setCsvStStep]=useState(0);const[csvStData,setCsvStData]=useState([]);const[csvStHeaders,setCsvStHeaders]=useState([]);const[csvStMapping,setCsvStMapping]=useState({});const[csvStPreview,setCsvStPreview]=useState([]);
+  const[csvStMode,setCsvStMode]=useState("add");// "add" = ajouter au stock, "replace" = remplacer
+  const[csvStMatchField,setCsvStMatchField]=useState("ean");// champ de matching: ean, sku, name_color_size
+  const[csvStImporting,setCsvStImporting]=useState(false);const[csvStResult,setCsvStResult]=useState(null);
   const[tenProd,setTenProd]=useState("");const[tenVar,setTenVar]=useState("");const[tenUser,setTenUser]=useState("");const[tenQty,setTenQty]=useState("1");
   const[trProd,setTrProd]=useState("");const[trVar,setTrVar]=useState("");const[trQty,setTrQty]=useState("1");const[trDest,setTrDest]=useState("");const[trRef,setTrRef]=useState("");
   const p=products.find(x=>x.id===sel);
@@ -1290,7 +1293,7 @@ function StockScreen(){
     {/* Stock receipt modal */}
     <Modal open={rcModal} onClose={()=>setRcModal(false)} title="Réception de marchandise">
       <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:12}}>
-        <div style={{display:"flex",gap:6,justifyContent:"flex-end"}}><Btn variant="outline" onClick={()=>{setCsvStockModal(true);setCsvStStep(0);setCsvStData([]);}} style={{fontSize:10,padding:"4px 10px"}}><Upload size={11}/> Import CSV stock</Btn></div>
+        <div style={{display:"flex",gap:6,justifyContent:"flex-end"}}><Btn variant="outline" onClick={()=>{setCsvStockModal(true);setCsvStStep(0);setCsvStData([]);setCsvStPreview([]);setCsvStResult(null);setCsvStMode("add");setCsvStMatchField("ean");}} style={{fontSize:10,padding:"4px 10px"}}><Upload size={11}/> Import CSV stock</Btn></div>
         <Input value={stSearchReceipt} onChange={e=>setStSearchReceipt(e.target.value)} placeholder="Rechercher produit..." style={{height:28,fontSize:10,padding:"2px 8px"}}/>
         <select value={rcProd} onChange={e=>{setRcProd(e.target.value);setRcVar("");}} style={{padding:10,borderRadius:10,border:`2px solid ${C.border}`,fontSize:12,fontFamily:"inherit"}}>
           <option value="">Sélectionner un produit</option>{products.filter(p=>!stSearchReceipt||p.name.toLowerCase().includes(stSearchReceipt.toLowerCase())||p.sku.toLowerCase().includes(stSearchReceipt.toLowerCase())).map(p=>(<option key={p.id} value={p.id}>{p.name} ({p.sku})</option>))}</select>
@@ -1301,50 +1304,166 @@ function StockScreen(){
       <Btn onClick={()=>{if(rcProd&&rcVar&&rcQty){receiveStock(rcProd,rcVar,parseInt(rcQty),rcSup||"Non spécifié");setRcModal(false);setRcQty("");setRcSup("");}}}
         style={{width:"100%",height:40,background:C.primary}}><Upload size={14}/> Enregistrer la réception</Btn></Modal>
 
-    {/* CSV Stock Import Modal */}
-    <Modal open={csvStockModal} onClose={()=>setCsvStockModal(false)} title="Import CSV - Réception stock" wide>
-      {csvStStep===0&&<div style={{textAlign:"center",padding:20}}>
-        <Upload size={32} color={C.primary} style={{marginBottom:10}}/>
-        <p style={{fontSize:12,color:C.textMuted,marginBottom:12}}>CSV avec colonnes: sku (ou ean), quantité, fournisseur</p>
-        <input type="file" accept=".csv,.txt" onChange={e=>{const file=e.target.files[0];if(!file)return;
-          Papa.parse(file,{header:true,skipEmptyLines:true,complete:(r)=>{if(!r.data.length)return;
-            setCsvStHeaders(r.meta.fields||[]);setCsvStData(r.data);
-            const map={};(r.meta.fields||[]).forEach(h=>{const hl=h.toLowerCase().trim();
-              if(["sku","ref","reference","référence","code"].includes(hl))map[h]="sku";
-              if(["ean","ean13","barcode","code_barre"].includes(hl))map[h]="ean";
-              if(["quantity","quantite","quantité","qty","qte"].includes(hl))map[h]="quantity";
-              if(["supplier","fournisseur","source"].includes(hl))map[h]="supplier";});
-            setCsvStMapping(map);setCsvStStep(1);}});}} style={{fontSize:12}}/></div>}
+    {/* CSV Stock Import Modal — matching configurable + mode add/replace */}
+    <Modal open={csvStockModal} onClose={()=>{setCsvStockModal(false);setCsvStStep(0);setCsvStResult(null);}} title="Import CSV stock" wide>
+      {/* STEP 0: Upload + config */}
+      {csvStStep===0&&<div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>
+          <div style={{padding:12,borderRadius:12,border:`2px solid ${csvStMode==="add"?C.primary:C.border}`,background:csvStMode==="add"?`${C.primary}08`:"transparent",cursor:"pointer",textAlign:"center",transition:"all 0.15s"}}
+            onClick={()=>setCsvStMode("add")}>
+            <Upload size={20} color={csvStMode==="add"?C.primary:C.textMuted} style={{marginBottom:4}}/>
+            <div style={{fontSize:12,fontWeight:700,color:csvStMode==="add"?C.primary:C.text}}>Ajouter au stock</div>
+            <div style={{fontSize:10,color:C.textMuted}}>Les quantites du CSV s'ajoutent au stock existant</div></div>
+          <div style={{padding:12,borderRadius:12,border:`2px solid ${csvStMode==="replace"?"#D97706":C.border}`,background:csvStMode==="replace"?"#FEF3C710":"transparent",cursor:"pointer",textAlign:"center",transition:"all 0.15s"}}
+            onClick={()=>setCsvStMode("replace")}>
+            <RotateCcw size={20} color={csvStMode==="replace"?"#D97706":C.textMuted} style={{marginBottom:4}}/>
+            <div style={{fontSize:12,fontWeight:700,color:csvStMode==="replace"?"#D97706":C.text}}>Remplacer le stock</div>
+            <div style={{fontSize:10,color:C.textMuted}}>Le stock est ecrase par la quantite du CSV</div></div></div>
+        <div style={{marginBottom:12}}>
+          <label style={{fontSize:10,fontWeight:700,color:C.textMuted,display:"block",marginBottom:4}}>CHAMP DE CORRESPONDANCE</label>
+          <select value={csvStMatchField} onChange={e=>setCsvStMatchField(e.target.value)}
+            style={{width:"100%",padding:8,borderRadius:8,border:`1.5px solid ${C.border}`,fontSize:11,fontFamily:"inherit"}}>
+            <option value="ean">Code-barres EAN</option>
+            <option value="sku">Reference / SKU</option>
+            <option value="name_color_size">Nom produit + Couleur + Taille</option></select>
+          <div style={{fontSize:9,color:C.textLight,marginTop:3}}>Le champ utilise pour faire correspondre les lignes CSV avec les variantes existantes</div></div>
+        <div style={{textAlign:"center",padding:14,border:`2px dashed ${C.border}`,borderRadius:12,marginBottom:8}}>
+          <Upload size={28} color={C.primary} style={{marginBottom:6}}/>
+          <p style={{fontSize:11,color:C.textMuted,marginBottom:8}}>CSV avec colonnes correspondant au champ choisi + quantite</p>
+          <input type="file" accept=".csv,.txt,.xls,.xlsx" onChange={e=>{const file=e.target.files[0];if(!file)return;
+            Papa.parse(file,{header:true,skipEmptyLines:true,complete:(r)=>{if(!r.data.length){notify("Fichier vide","error");return;}
+              setCsvStHeaders(r.meta.fields||[]);setCsvStData(r.data);
+              // Auto-mapping intelligent
+              const map={};(r.meta.fields||[]).forEach(h=>{const hl=h.toLowerCase().trim().replace(/[^a-z0-9]/g,"");
+                if(["sku","ref","reference","code","codearticle","refarticle","codeproduit"].includes(hl))map[h]="sku";
+                else if(["ean","ean13","barcode","codebarre","codebarres","gtin"].includes(hl))map[h]="ean";
+                else if(["quantity","quantite","qty","qte","stock","stockqty","enstock","quantiteenstock"].includes(hl))map[h]="stock";
+                else if(["nom","name","produit","product","designation","libelle","article","nomproduit"].includes(hl))map[h]="name";
+                else if(["couleur","color","colour","coloris"].includes(hl))map[h]="color";
+                else if(["taille","size","pointure","dimension"].includes(hl))map[h]="size";
+                else if(["supplier","fournisseur","source"].includes(hl))map[h]="supplier";});
+              setCsvStMapping(map);setCsvStStep(1);}});}} style={{fontSize:11}}/></div></div>}
+
+      {/* STEP 1: Column mapping */}
       {csvStStep===1&&<div>
-        <div style={{fontSize:12,fontWeight:700,marginBottom:8}}>Associer les colonnes</div>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
+          <div style={{fontSize:12,fontWeight:700}}>Associer les colonnes ({csvStData.length} lignes)</div>
+          <div style={{display:"flex",gap:6,alignItems:"center"}}>
+            <Badge color={csvStMode==="add"?C.primary:"#D97706"}>{csvStMode==="add"?"Ajout":"Remplacement"}</Badge>
+            <Badge color={C.info}>{csvStMatchField==="ean"?"EAN":csvStMatchField==="sku"?"SKU":"Nom+Couleur+Taille"}</Badge></div></div>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginBottom:12}}>
-          {csvStHeaders.map(h=>(<div key={h} style={{display:"flex",alignItems:"center",gap:6,padding:6,borderRadius:8,background:C.surfaceAlt}}>
-            <span style={{fontSize:11,fontWeight:600,flex:1}}>{h}</span>
+          {csvStHeaders.map(h=>(<div key={h} style={{display:"flex",alignItems:"center",gap:6,padding:8,borderRadius:8,background:csvStMapping[h]?`${C.primary}08`:C.surfaceAlt,
+            border:`1.5px solid ${csvStMapping[h]?C.primary+"30":C.border}`}}>
+            <span style={{fontSize:11,fontWeight:600,flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={h}>{h}</span>
             <select value={csvStMapping[h]||""} onChange={e=>{const v=e.target.value;setCsvStMapping(p=>{const n={...p};if(!v)delete n[h];else n[h]=v;return n;});}}
-              style={{padding:4,borderRadius:6,border:`1px solid ${C.border}`,fontSize:10,fontFamily:"inherit"}}>
-              <option value="">— ignorer —</option><option value="sku">SKU</option><option value="ean">EAN</option>
-              <option value="quantity">Quantité</option><option value="supplier">Fournisseur</option></select></div>))}</div>
-        <Btn onClick={()=>{const rows=csvStData.map(row=>{const getF=(f)=>{const h=Object.entries(csvStMapping).find(([k,v])=>v===f);return h?row[h[0]]?.trim()||"":"";};
-          const sku=getF("sku");const ean=getF("ean");const qty=parseInt(getF("quantity"))||0;const sup=getF("supplier");
-          let match=null;for(const p of products){for(const v of p.variants){if((ean&&v.ean===ean)||(sku&&p.sku===sku)){match={product:p,variant:v};break;}}if(match)break;}
-          return{sku,ean,qty,supplier:sup,match,status:match?"found":"not_found"};});setCsvStPreview(rows);setCsvStStep(2);}}
-          style={{width:"100%",height:36}}><Search size={12}/> Prévisualiser</Btn></div>}
-      {csvStStep===2&&<div>
-        <div style={{fontSize:12,fontWeight:700,marginBottom:8}}>Aperçu ({csvStPreview.filter(r=>r.status==="found").length}/{csvStPreview.length} trouvés)</div>
-        <div style={{maxHeight:300,overflowY:"auto",marginBottom:12}}>
+              style={{padding:4,borderRadius:6,border:`1px solid ${C.border}`,fontSize:10,fontFamily:"inherit",minWidth:100}}>
+              <option value="">-- ignorer --</option>
+              <option value="ean">EAN / Code-barres</option>
+              <option value="sku">SKU / Reference</option>
+              <option value="name">Nom produit</option>
+              <option value="color">Couleur</option>
+              <option value="size">Taille</option>
+              <option value="stock">Quantite / Stock</option>
+              <option value="supplier">Fournisseur</option></select></div>))}</div>
+        {/* Apercu premiere ligne */}
+        {csvStData.length>0&&<div style={{padding:8,background:C.surfaceAlt,borderRadius:8,marginBottom:10,fontSize:10}}>
+          <div style={{fontWeight:700,marginBottom:4,color:C.textMuted}}>Apercu 1ere ligne :</div>
+          {Object.entries(csvStMapping).filter(([,v])=>v).map(([col,role])=>(<span key={col} style={{display:"inline-block",marginRight:10}}>
+            <span style={{color:C.textMuted}}>{role}:</span> <span style={{fontWeight:600}}>{csvStData[0][col]||"(vide)"}</span></span>))}</div>}
+        <div style={{display:"flex",gap:6}}>
+          <Btn variant="outline" onClick={()=>setCsvStStep(0)} style={{flex:1}}>Retour</Btn>
+          <Btn onClick={()=>{
+            // Validation
+            const hasStock=Object.values(csvStMapping).includes("stock");
+            if(!hasStock){notify("Associez au moins une colonne 'Quantite / Stock'","error");return;}
+            const matchField=csvStMatchField;
+            if(matchField==="ean"&&!Object.values(csvStMapping).includes("ean")){notify("Associez une colonne EAN (mode matching EAN)","error");return;}
+            if(matchField==="sku"&&!Object.values(csvStMapping).includes("sku")){notify("Associez une colonne SKU (mode matching SKU)","error");return;}
+            if(matchField==="name_color_size"&&(!Object.values(csvStMapping).includes("name")||!Object.values(csvStMapping).includes("color")||!Object.values(csvStMapping).includes("size"))){
+              notify("Associez les colonnes Nom, Couleur et Taille (mode matching Nom+Couleur+Taille)","error");return;}
+            // Build preview
+            const getF=(row,f)=>{const h=Object.entries(csvStMapping).find(([,v])=>v===f);return h?(row[h[0]]??"").toString().trim():"";};
+            const rows=csvStData.map(row=>{
+              const ean=getF(row,"ean");const sku=getF(row,"sku");const name=getF(row,"name");const color=getF(row,"color");const size=getF(row,"size");
+              const stockVal=parseInt(getF(row,"stock"));const qty=isNaN(stockVal)?null:stockVal;const sup=getF(row,"supplier");
+              // Matching
+              let match=null;
+              for(const p of products){for(const v of (p.variants||[])){
+                if(matchField==="ean"&&ean&&v.ean&&v.ean.toLowerCase()===ean.toLowerCase()){match={product:p,variant:v};break;}
+                if(matchField==="sku"&&sku&&p.sku&&p.sku.toLowerCase()===sku.toLowerCase()){match={product:p,variant:v};break;}
+                if(matchField==="name_color_size"&&name&&color&&size&&
+                  p.name.toLowerCase().trim()===name.toLowerCase().trim()&&
+                  (v.color||"").toLowerCase().trim()===color.toLowerCase().trim()&&
+                  (v.size||"").toLowerCase().trim()===size.toLowerCase().trim()){match={product:p,variant:v};break;}
+              }if(match)break;}
+              const currentStock=match?match.variant.stock:null;
+              const newStock=match&&qty!==null?(csvStMode==="add"?currentStock+qty:qty):null;
+              const diff=match&&newStock!==null?newStock-currentStock:null;
+              return{ean,sku,name:name||match?.product.name||"",color:color||match?.variant.color||"",size:size||match?.variant.size||"",
+                qty,supplier:sup,match,currentStock,newStock,diff,status:match?(qty!==null?"found":"no_qty"):"not_found"};});
+            setCsvStPreview(rows);setCsvStStep(2);}}
+            style={{flex:2,height:36,background:C.primary}}><Search size={12}/> Analyser et previsualiser</Btn></div></div>}
+
+      {/* STEP 2: Preview + confirm */}
+      {csvStStep===2&&!csvStResult&&<div>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
+          <div style={{fontSize:12,fontWeight:700}}>Previsualisation</div>
+          <div style={{display:"flex",gap:6}}>
+            <Badge color="#059669">{csvStPreview.filter(r=>r.status==="found").length} trouves</Badge>
+            <Badge color={C.danger}>{csvStPreview.filter(r=>r.status==="not_found").length} non trouves</Badge>
+            {csvStPreview.some(r=>r.status==="no_qty")&&<Badge color={C.warn}>{csvStPreview.filter(r=>r.status==="no_qty").length} sans qte</Badge>}</div></div>
+        {csvStMode==="replace"&&<div style={{padding:8,background:"#FEF3C7",border:"1.5px solid #D97706",borderRadius:8,marginBottom:8,fontSize:10,color:"#92400E",display:"flex",alignItems:"center",gap:6}}>
+          <AlertTriangle size={14} color="#D97706"/> Le stock existant sera ecrase par les valeurs du CSV pour les lignes trouvees.</div>}
+        <div style={{maxHeight:340,overflowY:"auto",marginBottom:10,border:`1px solid ${C.border}`,borderRadius:10}}>
           <table style={{width:"100%",borderCollapse:"collapse",fontSize:10}}>
-            <thead><tr style={{borderBottom:`2px solid ${C.border}`}}>
-              {["SKU/EAN","Produit","Variante","Qté","Fournisseur","Statut"].map(h=>(<th key={h} style={{padding:4,textAlign:"left",fontSize:9,fontWeight:700,color:C.textMuted}}>{h}</th>))}</tr></thead>
-            <tbody>{csvStPreview.map((r,i)=>(<tr key={i} style={{borderBottom:`1px solid ${C.border}`,background:r.status==="found"?"transparent":C.dangerLight}}>
-              <td style={{padding:4,fontFamily:"monospace"}}>{r.sku||r.ean}</td>
-              <td style={{padding:4,fontWeight:600}}>{r.match?.product.name||"—"}</td>
-              <td style={{padding:4}}>{r.match?`${r.match.variant.color}/${r.match.variant.size}`:"—"}</td>
-              <td style={{padding:4,fontWeight:700}}>{r.qty}</td><td style={{padding:4}}>{r.supplier}</td>
-              <td style={{padding:4}}>{r.status==="found"?<Badge color="#059669">Trouvé</Badge>:<Badge color={C.danger}>Non trouvé</Badge>}</td></tr>))}</tbody></table></div>
-        <Btn onClick={()=>{csvStPreview.filter(r=>r.status==="found"&&r.qty>0).forEach(r=>{
-          receiveStock(r.match.product.id,r.match.variant.id,r.qty,r.supplier||"Import CSV");});
-          setCsvStockModal(false);setCsvStStep(0);}}
-          style={{width:"100%",height:40,background:C.primary}}><Upload size={14}/> Réceptionner {csvStPreview.filter(r=>r.status==="found"&&r.qty>0).length} ligne(s)</Btn></div>}
+            <thead><tr style={{borderBottom:`2px solid ${C.border}`,position:"sticky",top:0,background:C.surface}}>
+              {["Ref","Produit","Variante","Stock actuel",csvStMode==="add"?"+ Ajout":"Nouveau stock","Resultat","Statut"].map(h=>(
+                <th key={h} style={{padding:"6px 4px",textAlign:"left",fontSize:9,fontWeight:700,color:C.textMuted}}>{h}</th>))}</tr></thead>
+            <tbody>{csvStPreview.map((r,i)=>{
+              const bgColor=r.status==="found"?"transparent":r.status==="no_qty"?`${C.warn}10`:C.dangerLight+"40";
+              return(<tr key={i} style={{borderBottom:`1px solid ${C.border}`,background:bgColor}}>
+                <td style={{padding:4,fontFamily:"monospace",fontSize:9}}>{r.ean||r.sku||"—"}</td>
+                <td style={{padding:4,fontWeight:600,maxWidth:120,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={r.name}>{r.name||"—"}</td>
+                <td style={{padding:4}}>{r.match?`${r.match.variant.color} / ${r.match.variant.size}`:(r.color&&r.size?`${r.color} / ${r.size}`:"—")}</td>
+                <td style={{padding:4,fontFamily:"monospace",textAlign:"center"}}>{r.currentStock!==null?r.currentStock:"—"}</td>
+                <td style={{padding:4,fontFamily:"monospace",textAlign:"center",fontWeight:700,color:csvStMode==="add"?C.primary:"#D97706"}}>{r.qty!==null?(csvStMode==="add"?`+${r.qty}`:r.qty):"—"}</td>
+                <td style={{padding:4,fontFamily:"monospace",textAlign:"center",fontWeight:700}}>
+                  {r.newStock!==null?<span style={{color:r.diff>0?"#059669":r.diff<0?C.danger:C.text}}>{r.newStock} ({r.diff>0?"+":""}{r.diff})</span>:"—"}</td>
+                <td style={{padding:4}}>{r.status==="found"?<Badge color="#059669">OK</Badge>:r.status==="no_qty"?<Badge color={C.warn}>Sans qte</Badge>:<Badge color={C.danger}>Non trouve</Badge>}</td>
+              </tr>);})}</tbody></table></div>
+        <div style={{display:"flex",gap:6}}>
+          <Btn variant="outline" onClick={()=>setCsvStStep(1)} style={{flex:1}}>Retour</Btn>
+          <Btn onClick={async()=>{
+            const toProcess=csvStPreview.filter(r=>r.status==="found"&&r.qty!==null&&r.match);
+            if(!toProcess.length){notify("Aucune ligne a traiter","warn");return;}
+            setCsvStImporting(true);
+            let ok=0,err=0;
+            for(const r of toProcess){
+              try{
+                if(csvStMode==="add"){
+                  await receiveStock(r.match.product.id,r.match.variant.id,r.qty,r.supplier||"Import CSV");
+                }else{
+                  await adjustStock(r.match.product.id,r.match.variant.id,r.qty,r.supplier?`Import CSV (${r.supplier})`:"Import CSV - remplacement stock");
+                }
+                ok++;
+              }catch(e){err++;console.warn("Stock import error:",e.message);}
+            }
+            setCsvStImporting(false);
+            setCsvStResult({ok,err,total:toProcess.length});
+            addAudit("STOCK",`Import CSV stock (${csvStMode}) — ${ok}/${toProcess.length} lignes traitees`);
+          }} disabled={csvStImporting||!csvStPreview.some(r=>r.status==="found"&&r.qty!==null)}
+            style={{flex:2,height:40,background:csvStMode==="add"?C.primary:"#D97706"}}>
+            {csvStImporting?<span className="spin-loader"/>:<><Upload size={14}/> {csvStMode==="add"?"Ajouter":"Remplacer"} le stock — {csvStPreview.filter(r=>r.status==="found"&&r.qty!==null).length} ligne(s)</>}</Btn></div></div>}
+
+      {/* STEP 2b: Result */}
+      {csvStResult&&<div style={{textAlign:"center",padding:20}}>
+        <CheckCircle2 size={40} color="#059669" style={{marginBottom:10}}/>
+        <div style={{fontSize:16,fontWeight:800,marginBottom:6}}>Import termine</div>
+        <div style={{fontSize:13,color:C.textMuted,marginBottom:14}}>
+          <span style={{color:"#059669",fontWeight:700}}>{csvStResult.ok}</span> ligne(s) traitee(s) sur {csvStResult.total}
+          {csvStResult.err>0&&<span style={{color:C.danger,marginLeft:8}}>{csvStResult.err} erreur(s)</span>}</div>
+        <Btn onClick={()=>{setCsvStockModal(false);setCsvStStep(0);setCsvStResult(null);setCsvStPreview([]);setCsvStData([]);}}
+          style={{width:"100%",height:40,background:C.primary}}>Fermer</Btn></div>}
     </Modal>
 
     {tab==="tenues"&&<div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`}}>
