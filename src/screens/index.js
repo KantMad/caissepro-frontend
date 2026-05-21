@@ -1,0 +1,22 @@
+// Barrel file — re-exports all screen components
+export { LoginScreen } from "./LoginScreen.jsx";
+export { CashRegControl } from "./CashRegControl.jsx";
+export { SalesScreen } from "./SalesScreen.jsx";
+export { StatsScreen } from "./StatsScreen.jsx";
+export { StockScreen } from "./StockScreen.jsx";
+export { HistoryScreen } from "./HistoryScreen.jsx";
+export { ReturnScreen } from "./ReturnScreen.jsx";
+export { ClosureScreen } from "./ClosureScreen.jsx";
+export { CustomersScreen } from "./CustomersScreen.jsx";
+export { FiscalScreen } from "./FiscalScreen.jsx";
+export { AuditScreen } from "./AuditScreen.jsx";
+export { CSVImportWizard } from "./CSVImportWizard.jsx";
+export { ProductsScreen } from "./ProductsScreen.jsx";
+export { ReturnsHistoryScreen } from "./ReturnsHistoryScreen.jsx";
+export { SettingsScreen } from "./SettingsScreen.jsx";
+export { GiftCardScreen } from "./GiftCardScreen.jsx";
+export { PromosScreen } from "./PromosScreen.jsx";
+export { FootfallScreen } from "./FootfallScreen.jsx";
+export { HelpCashierScreen } from "./HelpCashierScreen.jsx";
+export { HelpDashboardScreen } from "./HelpDashboardScreen.jsx";
+export { ExportsScreen } from "./ExportsScreen.jsx";
