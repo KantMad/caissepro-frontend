@@ -56,14 +56,17 @@ body{font-family:'DM Sans',system-ui,-apple-system,sans-serif;background:#F8FAF7
   <input id="apiUrl" type="url" placeholder="https://votre-api.com" />
   <label>ID du magasin</label>
   <input id="storeId" type="text" placeholder="Ex: abc123..." />
+  <label>Token ecran</label>
+  <input id="displayToken" type="text" placeholder="Token genere dans Parametres > Ecran 2" />
   <button id="btnSave">Enregistrer et connecter</button>
-  <div class="hint">Triple-tap sur l'ecran pour rouvrir ce panneau de configuration.</div>
+  <div class="hint">Triple-tap sur l'ecran pour rouvrir ce panneau de configuration. Le token est disponible dans les parametres de CaissePro.</div>
 </div>
 
 <script>
 var lastTs=0;
 var apiUrl='';
 var storeId='';
+var displayToken='';
 var apiActive=false;
 
 function esc(s){if(!s)return'';return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
@@ -106,10 +109,11 @@ function updateCart(data){
 }
 
 // ══ Channel 1: API polling (primary for Sunmi APK — cross-process) ══
+// SEC-02: Token required for API polling
 function pollAPI(){
-  if(!apiUrl||!storeId)return;
-  fetch(apiUrl+'/api/customer-display/'+encodeURIComponent(storeId))
-    .then(function(r){return r.json();})
+  if(!apiUrl||!storeId||!displayToken)return;
+  fetch(apiUrl+'/api/customer-display/'+encodeURIComponent(storeId)+'?token='+encodeURIComponent(displayToken))
+    .then(function(r){if(!r.ok)throw new Error('HTTP '+r.status);return r.json();})
     .then(function(res){
       if(res&&res.data&&res.updatedAt>lastTs){
         lastTs=res.updatedAt;
@@ -118,8 +122,9 @@ function pollAPI(){
         apiActive=true;
       }
     })
-    .catch(function(){
+    .catch(function(e){
       if(apiActive){setStatus('polling','API indisponible...');apiActive=false;}
+      if(e.message&&e.message.indexOf('401')>=0)setStatus('polling','Token invalide');
     });
 }
 setInterval(pollAPI,500);
@@ -169,18 +174,20 @@ function loadConfig(){
   try{
     apiUrl=localStorage.getItem('caissepro_display_api_url')||'';
     storeId=localStorage.getItem('caissepro_display_store_id')||'';
+    displayToken=localStorage.getItem('caissepro_display_token')||'';
   }catch(e){}
-  // Auto-detect API URL from current origin if on same domain
+  // Auto-detect from URL params
   if(!apiUrl){
-    // Check URL params
     var params=new URLSearchParams(window.location.search);
     if(params.get('api'))apiUrl=params.get('api');
     if(params.get('store'))storeId=params.get('store');
+    if(params.get('token'))displayToken=params.get('token');
   }
   document.getElementById('apiUrl').value=apiUrl;
   document.getElementById('storeId').value=storeId;
+  document.getElementById('displayToken').value=displayToken;
   // Show setup if not configured
-  if(!apiUrl||!storeId){
+  if(!apiUrl||!storeId||!displayToken){
     document.getElementById('setup').className='setup visible';
   }
 }
@@ -188,10 +195,12 @@ function loadConfig(){
 document.getElementById('btnSave').addEventListener('click',function(){
   apiUrl=document.getElementById('apiUrl').value.trim().replace(/\/$/,'');
   storeId=document.getElementById('storeId').value.trim();
-  if(!apiUrl||!storeId){alert('Remplissez les deux champs');return;}
+  displayToken=document.getElementById('displayToken').value.trim();
+  if(!apiUrl||!storeId||!displayToken){alert('Remplissez les trois champs (URL, ID magasin, Token)');return;}
   try{
     localStorage.setItem('caissepro_display_api_url',apiUrl);
     localStorage.setItem('caissepro_display_store_id',storeId);
+    localStorage.setItem('caissepro_display_token',displayToken);
   }catch(e){}
   document.getElementById('setup').className='setup';
   setStatus('polling','Configuration sauvegardee. Connexion...');

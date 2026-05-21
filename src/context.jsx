@@ -105,10 +105,8 @@ function AppProvider({children}){
     return unsub;
   },[hwId]);
   // Barcode scanner auto-start (moved after findByEAN/addToCart declarations)
-  // Default PINs are hashed on first load (SHA-256 + salt)
-  const DEFAULT_PIN_HASH="3a24a2105c7a06376ff41e7e06a6cd2a3941c980d99e169c8fbb60d29b741395"; // hash of "1234"
-  const defaultUsers=[{id:"u1",name:"Admin",role:"admin",pin:DEFAULT_PIN_HASH},{id:"u2",name:"Sophie",role:"cashier",pin:DEFAULT_PIN_HASH},{id:"u3",name:"Marc",role:"cashier",pin:DEFAULT_PIN_HASH}];
-  const[users,setUsersRaw]=useState(()=>{try{const s=localStorage.getItem("caissepro_users");return s?JSON.parse(s):defaultUsers;}catch(e){return defaultUsers;}});
+  // SEC-04: Removed hardcoded PIN hash and default users. Offline login uses only cached credentials from last successful online session.
+  const[users,setUsersRaw]=useState(()=>{try{const s=localStorage.getItem("caissepro_users");return s?JSON.parse(s):[];}catch(e){return[];}});
   const setUsers=useCallback((v)=>{setUsersRaw(prev=>{const next=typeof v==="function"?v(prev):v;try{localStorage.setItem("caissepro_users",JSON.stringify(next));}catch(e){}return next;});},[]);
   // ══ Pending sync queue — retry offline user/settings changes when back online ══
   const[pendingSync,setPendingSync]=useState(()=>{try{const s=localStorage.getItem("caissepro_pendingSync");return s?JSON.parse(s):[];}catch(e){return[];}});
@@ -411,8 +409,10 @@ function AppProvider({children}){
       setOfflineMode(false);setFiscalWarning(false);addJET("LOGIN",n);notify("Connecté au serveur","success");return{ok:true,stores:userStores};
     }catch(e){
       console.warn("API indisponible, tentative login hors-ligne:",e.message);
-      let localUser=initUsers.find(u=>u.name===n&&u.password===pw);
-      if(!localUser){for(const u of users){if(u.name===n&&u.pin!=="****"&&await verifyPin(pw,u.pin)){localUser=u;break;}}}
+      // SEC-04: Offline login uses ONLY cached credentials from last successful online session (no hardcoded passwords)
+      if(users.length===0){notify("Connexion impossible en mode hors ligne — connectez-vous d'abord en ligne","error");return{ok:false};}
+      let localUser=null;
+      for(const u of users){if(u.name===n&&u.pin&&u.pin!=="****"&&await verifyPin(pw,u.pin)){localUser=u;break;}}
       if(localUser){setCurrentUser({id:localUser.id,name:localUser.name,role:localUser.role});
         setProducts(initProducts);setCustomers(initCustomers);setPromos(initPromos);
         setOfflineMode(true);setFiscalWarning(true);addJET("LOGIN_OFFLINE",n);
@@ -1522,8 +1522,12 @@ function AppProvider({children}){
       if(customerDisplayRef.current&&!customerDisplayRef.current.closed&&customerDisplayRef.current.updateCart){
         try{customerDisplayRef.current.updateCart(data);}catch(e){}
       }
+      // Channel 5: API push (SEC-02: for remote second screens)
+      if(effectiveStoreId&&isOnline){
+        try{API.customerDisplay.push(data);}catch(e){}
+      }
     }catch(e){}
-  },[cart,settings.name,selCust,activePromos,calcPromoDiscount,getLoyaltyTier]);
+  },[cart,settings.name,selCust,activePromos,calcPromoDiscount,getLoyaltyTier,effectiveStoreId,isOnline]);
 
   return<AppCtx.Provider value={{currentUser,login,logout,mode,setMode,offlineMode,
     stores,setStores,currentStore,setCurrentStore,selectStore,viewingStoreId,switchViewingStore,effectiveStoreId,

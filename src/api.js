@@ -253,6 +253,7 @@ export const barcodes = {
 // ══ Customer Display (Sunmi second screen sync) ══
 export const customerDisplay = {
   push: (data) => api('/api/customer-display', { method: 'POST', body: JSON.stringify(data) }),
+  getToken: (storeId) => api(`/api/customer-display/token/${storeId}`),
 };
 
 // ══ Backup ══

@@ -5341,10 +5341,24 @@ function SettingsScreen(){
           <div style={{fontSize:10,fontWeight:600,color:C.textMuted,marginBottom:2}}>ID MAGASIN</div>
           <div style={{fontSize:12,fontWeight:700,fontFamily:"monospace",wordBreak:"break-all",cursor:"pointer",color:C.primary}}
             onClick={()=>{navigator.clipboard.writeText(effectiveStoreId||"").then(()=>notify("Copie !","info"));}}>{effectiveStoreId||"Non configure"} <span style={{fontSize:9,color:C.textMuted}}>(cliquer pour copier)</span></div></div>
+        <div style={{background:C.bg,borderRadius:10,padding:12,marginBottom:8}}>
+          <div style={{fontSize:10,fontWeight:600,color:C.textMuted,marginBottom:2}}>TOKEN ECRAN (securite)</div>
+          <div style={{display:"flex",alignItems:"center",gap:8}}>
+            <div id="displayTokenValue" style={{fontSize:12,fontWeight:700,fontFamily:"monospace",wordBreak:"break-all",cursor:"pointer",color:C.primary,flex:1}}
+              onClick={()=>{const el=document.getElementById("displayTokenValue");if(el&&el.textContent&&el.textContent!=="Cliquez Generer")navigator.clipboard.writeText(el.textContent.replace(/ \(cliquer.*$/,"")).then(()=>notify("Token copie !","info"));}}>
+              {effectiveStoreId?"Cliquez Generer":"Selectionnez un magasin d'abord"}</div>
+            <Btn size="sm" style={{background:C.primary,fontSize:11,whiteSpace:"nowrap"}} onClick={async()=>{
+              if(!effectiveStoreId){notify("Selectionnez un magasin d'abord","warn");return;}
+              try{const r=await API.customerDisplay.getToken(effectiveStoreId);
+                const el=document.getElementById("displayTokenValue");
+                if(el)el.textContent=r.token;
+                navigator.clipboard.writeText(r.token).then(()=>notify("Token genere et copie !","success"));
+              }catch(e){notify("Erreur: "+e.message,"error");}
+            }}>Generer</Btn></div></div>
         <div style={{fontSize:10,color:C.textMuted,marginTop:8,lineHeight:1.5}}>
-          1. Installez l'APK "CaissePro Display" sur la tablette Sunmi<br/>
-          2. Ouvrez l'app, renseignez les 3 champs ci-dessus<br/>
-          3. Appuyez sur "Connecter" — le second ecran affiche le panier client</div>
+          1. Sur l'ecran secondaire, ouvrez la page ecran client<br/>
+          2. Renseignez l'URL API, l'ID magasin et le Token ci-dessus<br/>
+          3. Le second ecran affiche le panier client en temps reel</div>
       </div>
     </div>}
 

@@ -36,7 +36,8 @@ export const initProducts=[
   {id:"6",name:"Veste Blazer",sku:"VT-001",price:129.90,costPrice:52.00,taxRate:0.20,category:"Vestes",collection:"AH-2025",
     variants:[{id:"v30",color:"Noir",size:"M",ean:"3760123510011",stock:4,defective:0,stockAlert:2}]},
 ];
-export const initUsers=[{id:"1",name:"Admin",password:"1234",role:"admin"},{id:"2",name:"Sophie",password:"1234",role:"cashier"},{id:"3",name:"Marc",password:"1234",role:"cashier"}];
+// SEC-04: Removed hardcoded passwords. Offline login uses cached credentials from last successful online login.
+export const initUsers=[];
 export const initCustomers=[
   {id:"1",firstName:"Marie",lastName:"Dupont",email:"marie.dupont@email.com",phone:"0612345678",city:"Paris",points:120,totalSpent:450,notes:"Préfère les couleurs claires, taille M"},
   {id:"2",firstName:"Jean",lastName:"Martin",email:"jean.martin@email.com",phone:"0623456789",city:"Lyon",points:85,totalSpent:320,notes:""},
