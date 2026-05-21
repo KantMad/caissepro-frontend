@@ -191,11 +191,11 @@ function AppProvider({children}){
       if(apiUsers?.length){const merged=[...apiUsers.map(u=>({id:u.id,name:u.name,role:u.role,pin:"****",apiSynced:true}))];
         setUsers(prev=>{const localOnly=prev.filter(lu=>!apiUsers.find(au=>au.name===lu.name));return[...merged,...localOnly];});}
       // Load tickets and closures from backend
-      try{const salesData=await API.sales.list({limit:200});if(salesData?.length)setTickets(salesData.map(s=>({...s,ticketNumber:s.ticket_number,totalHT:parseFloat(s.total_ht),totalTVA:parseFloat(s.total_tva),totalTTC:parseFloat(s.total_ttc),date:s.created_at,userName:s.user_name,paymentMethod:s.payment_method,customerName:s.customer_name,fingerprint:s.fingerprint})));}catch(e){}
-      try{const closData=await API.fiscal.closures();if(closData?.length)setClosures(closData.map(c=>({...c,type:c.closure_type,totalHT:parseFloat(c.total_ht),totalTVA:parseFloat(c.total_tva),totalTTC:parseFloat(c.total_ttc),totalMargin:parseFloat(c.total_margin||0),date:c.created_at,userName:c.user_name})));}catch(e){}
+      try{const salesData=await API.sales.list({limit:200});if(salesData?.length)setTickets(salesData.map(s=>({...s,ticketNumber:s.ticket_number,totalHT:parseFloat(s.total_ht),totalTVA:parseFloat(s.total_tva),totalTTC:parseFloat(s.total_ttc),date:s.created_at,userName:s.user_name,paymentMethod:s.payment_method,customerName:s.customer_name,fingerprint:s.fingerprint})));}catch(e){console.warn("Chargement ventes échoué:",e.message);}
+      try{const closData=await API.fiscal.closures();if(closData?.length)setClosures(closData.map(c=>({...c,type:c.closure_type,totalHT:parseFloat(c.total_ht),totalTVA:parseFloat(c.total_tva),totalTTC:parseFloat(c.total_ttc),totalMargin:parseFloat(c.total_margin||0),date:c.created_at,userName:c.user_name})));}catch(e){console.warn("Chargement clôtures échoué:",e.message);}
       // Load avoirs from server
       try{const avoirsData=await API.returns.list({limit:500});if(avoirsData?.length)setAvoirs(norm.avoirs(avoirsData));}catch(e){/* keep localStorage avoirs */}
-      try{const ctr=await API.returns.counter();if(ctr?.seq)setAvoirSeq(ctr.seq);}catch(e){}
+      try{const ctr=await API.returns.counter();if(ctr?.seq)setAvoirSeq(ctr.seq);}catch(e){console.warn("Chargement compteur avoirs échoué:",e.message);}
       // LS-04/05/06/07: reload audit, JET, stock movements, clock from API
       try{const auditData=await API.audit.list({limit:1000});if(auditData?.length)setAudit(auditData);}catch(e){/* keep localStorage audit */}
       try{const jetData=await API.audit.jet();if(jetData?.length)setJet(jetData);}catch(e){/* keep localStorage jet */}
@@ -252,7 +252,7 @@ function AppProvider({children}){
       if(synced>0){
         notify(`${synced} modification(s) synchronisée(s) avec le serveur`,"success");
         // Rafraichir les produits (stock) apres sync d'avoirs ou ventes
-        try{const prods=await API.products.list();setProducts(norm.products(prods));}catch(e){}
+        try{const prods=await API.products.list();setProducts(norm.products(prods));}catch(e){console.warn("Rafraîchissement produits échoué:",e.message);}
       }
       if(failed.length>0&&failed.some(f=>f.retries<3))notify(`${failed.length} synchro(s) en attente — nouvelle tentative prochainement`,"warn");
     },2000);// 2s debounce
@@ -342,11 +342,11 @@ function AppProvider({children}){
       if(apiUsers&&apiUsers.length){const merged=[...apiUsers.map(u=>({id:u.id,name:u.name,role:u.role,pin:"****",apiSynced:true}))];
         setUsers(prev=>{const localOnly=prev.filter(lu=>!apiUsers.find(au=>au.name===lu.name));return[...merged,...localOnly];});}
       // Charger gift cards, paniers suspendus, favoris et footfall depuis le backend
-      try{const gcs=await API.giftcards.list();if(gcs&&Array.isArray(gcs))setGiftCards(gcs.map(g=>({id:g.id,code:g.code,initialAmount:parseFloat(g.initial_amount||0),balance:parseFloat(g.remaining||0),createdDate:g.created_at,customerName:g.customer_name||"",barcode:g.barcode||null,transactions:g.transactions||[]})));}catch(e){}
-      try{const pks=await API.parked.list();if(pks&&Array.isArray(pks))setParked(pks.map(p=>({id:p.id,date:p.created_at,items:p.items||[],customer:null,gDisc:0,gDiscType:"percentage",name:p.name})));}catch(e){}
+      try{const gcs=await API.giftcards.list();if(gcs&&Array.isArray(gcs))setGiftCards(gcs.map(g=>({id:g.id,code:g.code,initialAmount:parseFloat(g.initial_amount||0),balance:parseFloat(g.remaining||0),createdDate:g.created_at,customerName:g.customer_name||"",barcode:g.barcode||null,transactions:g.transactions||[]})));}catch(e){console.warn("Chargement cartes cadeaux échoué:",e.message);}
+      try{const pks=await API.parked.list();if(pks&&Array.isArray(pks))setParked(pks.map(p=>({id:p.id,date:p.created_at,items:p.items||[],customer:null,gDisc:0,gDiscType:"percentage",name:p.name})));}catch(e){console.warn("Chargement paniers suspendus échoué:",e.message);}
       // LOW-4: Load favorites and footfall from API
-      try{const favs=await API.favorites.list();if(Array.isArray(favs))setFavorites(favs);}catch(e){}
-      try{const ff=await API.footfall.list();if(Array.isArray(ff))setFootfall(ff);}catch(e){}
+      try{const favs=await API.favorites.list();if(Array.isArray(favs))setFavorites(favs);}catch(e){console.warn("Chargement favoris échoué:",e.message);}
+      try{const ff=await API.footfall.list();if(Array.isArray(ff))setFootfall(ff);}catch(e){console.warn("Chargement footfall échoué:",e.message);}
     }catch(e){console.warn("Chargement données magasin échoué:",e.message);}
   },[]);
 
@@ -447,7 +447,7 @@ function AppProvider({children}){
     setParked(p=>p.filter(x=>x.id!==id));
     try{await API.parked.remove(id);}catch(e){/* Le panier etait peut-etre local seulement */}
     addAudit("RESTORE","Panier restaure");},[parked,cart,parkCart,addAudit]);
-  const removeParked=useCallback(async(id)=>{setParked(p=>p.filter(x=>x.id!==id));try{await API.parked.remove(id);}catch(e){}addAudit("PARK_DELETE","Panier en attente supprime");},[addAudit]);
+  const removeParked=useCallback(async(id)=>{setParked(p=>p.filter(x=>x.id!==id));try{await API.parked.remove(id);}catch(e){console.warn("Suppression panier suspendu échouée:",e.message);}addAudit("PARK_DELETE","Panier en attente supprime");},[addAudit]);
 
   // ══ PROMO ENGINE ══
   const activePromos=useMemo(()=>{const now=new Date().toISOString().split("T")[0];
@@ -1524,9 +1524,9 @@ function AppProvider({children}){
       }
       // Channel 5: API push (SEC-02: for remote second screens)
       if(effectiveStoreId&&isOnline){
-        try{API.customerDisplay.push(data);}catch(e){}
+        try{API.customerDisplay.push(data);}catch(e){console.warn("Push écran client échoué:",e.message);}
       }
-    }catch(e){}
+    }catch(e){console.warn("Sync écran client échoué:",e.message);}
   },[cart,settings.name,selCust,activePromos,calcPromoDiscount,getLoyaltyTier,effectiveStoreId,isOnline]);
 
   return<AppCtx.Provider value={{currentUser,login,logout,mode,setMode,offlineMode,
