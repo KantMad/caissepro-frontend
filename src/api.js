@@ -255,5 +255,14 @@ export const customerDisplay = {
   push: (data) => api('/api/customer-display', { method: 'POST', body: JSON.stringify(data) }),
 };
 
+// ══ Backup ══
+export const backup = {
+  list: () => api('/api/backup'),
+  status: () => api('/api/backup/status'),
+  trigger: (opts) => api('/api/backup', { method: 'POST', body: JSON.stringify(opts || {}) }),
+  remove: (filename) => api(`/api/backup/${encodeURIComponent(filename)}`, { method: 'DELETE' }),
+  downloadUrl: (filename) => `${API_URL}/api/backup/download/${encodeURIComponent(filename)}`,
+};
+
 // ══ Health ══
 export const health = () => api('/api/health');

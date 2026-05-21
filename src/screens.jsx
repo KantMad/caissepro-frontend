@@ -4692,6 +4692,71 @@ function DebugPanel(){
   </div>);
 }
 
+function BackupPanel({notify,addAudit}){
+  const[backups,setBackups]=useState([]);const[status,setStatus]=useState(null);const[loading,setLoading]=useState(true);const[triggering,setTriggering]=useState(false);
+  const load=useCallback(async()=>{
+    try{const[b,s]=await Promise.all([API.backup.list().catch(()=>({backups:[]})),API.backup.status().catch(()=>null)]);
+      setBackups(b.backups||[]);setStatus(s);}catch(e){}finally{setLoading(false);}
+  },[]);
+  useEffect(()=>{load();},[load]);
+  const triggerBackup=async()=>{
+    setTriggering(true);
+    try{await API.backup.trigger();notify("Backup lance en arriere-plan. Rafraichissez dans 1-2 min.","success");addAudit("BACKUP","Backup manuel declenche");}
+    catch(e){notify("Erreur: "+e.message,"error");}finally{setTriggering(false);}
+  };
+  const deleteBackup=async(f)=>{
+    if(!confirm("Supprimer "+f+" ?"))return;
+    try{await API.backup.remove(f);notify("Backup supprime","info");load();}catch(e){notify("Erreur: "+e.message,"error");}
+  };
+  if(loading)return<div style={{padding:20,color:C.textMuted}}>Chargement...</div>;
+  return<div style={{maxWidth:700}}>
+    <div style={{background:C.primaryLight,borderRadius:16,padding:20,border:`1.5px solid ${C.primary}22`,marginBottom:16}}>
+      <h3 style={{fontSize:16,fontWeight:800,margin:"0 0 4px"}}>Sauvegardes</h3>
+      <p style={{fontSize:11,color:C.textMuted,margin:0}}>Backups automatiques quotidiens (3h) + backup manuel a la demande. Base de donnees + config + fichiers critiques.</p></div>
+
+    {/* Status */}
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10,marginBottom:16}}>
+      <div style={{background:C.surface,borderRadius:12,padding:14,border:`1.5px solid ${C.border}`,textAlign:"center"}}>
+        <div style={{fontSize:10,fontWeight:600,color:C.textMuted,marginBottom:4}}>CRON</div>
+        <div style={{fontSize:13,fontWeight:700,color:status?.cronConfigured?C.primary:C.danger}}>{status?.cronConfigured?"Actif":"Non configure"}</div></div>
+      <div style={{background:C.surface,borderRadius:12,padding:14,border:`1.5px solid ${C.border}`,textAlign:"center"}}>
+        <div style={{fontSize:10,fontWeight:600,color:C.textMuted,marginBottom:4}}>DERNIER BACKUP</div>
+        <div style={{fontSize:13,fontWeight:700,color:status?.lastBackup?C.primary:C.textMuted}}>{status?.lastBackup?`il y a ${status.lastBackup.ageHours}h`:"Aucun"}</div>
+        {status?.lastBackup&&<div style={{fontSize:9,color:C.textMuted}}>{status.lastBackup.size}</div>}</div>
+      <div style={{background:C.surface,borderRadius:12,padding:14,border:`1.5px solid ${C.border}`,textAlign:"center"}}>
+        <div style={{fontSize:10,fontWeight:600,color:C.textMuted,marginBottom:4}}>DISQUE</div>
+        <div style={{fontSize:13,fontWeight:700,color:C.text}}>{status?.diskSpace?.percent||"?"}</div>
+        <div style={{fontSize:9,color:C.textMuted}}>{status?.diskSpace?.available||"?"} libre</div></div></div>
+
+    {/* Trigger */}
+    <Btn onClick={triggerBackup} disabled={triggering} style={{width:"100%",height:44,background:C.primary,marginBottom:16}}>
+      {triggering?"Backup en cours...":"Lancer un backup maintenant"}</Btn>
+
+    {/* List */}
+    <div style={{fontSize:13,fontWeight:700,marginBottom:8}}>Backups disponibles ({backups.length})</div>
+    {backups.length===0&&<div style={{padding:20,textAlign:"center",color:C.textMuted,fontSize:12,background:C.surface,borderRadius:12,border:`1.5px solid ${C.border}`}}>Aucun backup. Lancez-en un ou configurez le cron sur le serveur.</div>}
+    {backups.map(b=>(<div key={b.filename} style={{display:"flex",alignItems:"center",gap:10,padding:10,borderBottom:`1px solid ${C.border}`,fontSize:11}}>
+      <div style={{flex:1}}>
+        <div style={{fontWeight:700,fontSize:12}}>{new Date(b.date).toLocaleString("fr-FR")}</div>
+        <div style={{color:C.textMuted,fontSize:10}}>{b.filename}</div></div>
+      <div style={{fontWeight:700,color:C.primary,minWidth:60,textAlign:"right"}}>{b.sizeHuman}</div>
+      {b.hasChecksum&&<span style={{fontSize:8,background:C.primaryLight,color:C.primary,padding:"2px 6px",borderRadius:6,fontWeight:700}}>SHA256</span>}
+      <a href={API.backup.downloadUrl(b.filename)} style={{fontSize:10,color:C.info,fontWeight:600,textDecoration:"none"}} target="_blank">Telecharger</a>
+      <button onClick={()=>deleteBackup(b.filename)} style={{fontSize:10,color:C.danger,background:"none",border:"none",cursor:"pointer",fontWeight:600}}>Supprimer</button>
+    </div>))}
+
+    {!status?.configured&&<div style={{background:"#FEF2F2",borderRadius:12,padding:16,marginTop:16,border:"1.5px solid #FECACA"}}>
+      <div style={{fontSize:12,fontWeight:700,color:"#991B1B",marginBottom:6}}>Configuration requise sur le VPS</div>
+      <div style={{fontSize:11,color:"#7F1D1D",lineHeight:1.6}}>
+        Le systeme de backup n'est pas encore configure sur le serveur. Executez :<br/>
+        <code style={{background:"#FEE2E2",padding:"2px 6px",borderRadius:4,fontFamily:"monospace",fontSize:10}}>
+          cd /var/www/caissepro-api && sudo bash scripts/setup-backup.sh
+        </code><br/><br/>
+        Cela installe le backup automatique quotidien a 3h, avec chiffrement AES-256 et rotation 30 jours.
+      </div></div>}
+  </div>;
+}
+
 function SettingsScreen(){
   const{settings,setSettings,saveSettingsToAPI,addAudit,theme,setTheme,clockEntries,priceHistory,printerConnected,printerType,connectPrinter,disconnectPrinter,thermalPrint,notify,users,hwId,hwProfile,switchHardware,hardwareProfiles,paymentId,paymentConfig,switchPayment,updatePaymentConfig,paymentProfiles,perm,effectiveStoreId}=useApp();
   if(!perm().canSettings) return <div style={{padding:40,textAlign:"center",color:C.textMuted,fontSize:16,fontWeight:600}}>Accès refusé</div>;
@@ -4704,7 +4769,7 @@ function SettingsScreen(){
   return(<div style={{height:"100%",overflowY:"auto",padding:20,background:C.bg}}>
     <h2 style={{fontSize:22,fontWeight:800,marginBottom:14}}>Paramètres</h2>
     <div style={{display:"flex",gap:6,marginBottom:14,flexWrap:"wrap"}}>
-      {[{id:"general",l:"Général"},{id:"retouche",l:"✂️ Retouches"},{id:"pricing",l:"💰 Prix HT/TTC"},{id:"commission",l:"Commission"},{id:"stores",l:"Magasins"},{id:"printer",l:"Imprimante"},{id:"tpe",l:"Terminal paiement"},{id:"receipt",l:"Ticket"},{id:"screen2",l:"📺 Écran 2"},{id:"caticons",l:"🏷️ Icônes catégories"},{id:"return",l:"Retours"},{id:"sizes",l:"📏 Ordre tailles"},{id:"theme",l:"Thème"},{id:"clock",l:"Pointages"},{id:"prices",l:"Historique prix"},{id:"debug",l:"DEBUG"}].map(t=>(
+      {[{id:"general",l:"Général"},{id:"retouche",l:"✂️ Retouches"},{id:"pricing",l:"💰 Prix HT/TTC"},{id:"commission",l:"Commission"},{id:"stores",l:"Magasins"},{id:"printer",l:"Imprimante"},{id:"tpe",l:"Terminal paiement"},{id:"receipt",l:"Ticket"},{id:"screen2",l:"📺 Écran 2"},{id:"caticons",l:"🏷️ Icônes catégories"},{id:"return",l:"Retours"},{id:"sizes",l:"📏 Ordre tailles"},{id:"theme",l:"Thème"},{id:"clock",l:"Pointages"},{id:"prices",l:"Historique prix"},{id:"backup",l:"Backup"},{id:"debug",l:"DEBUG"}].map(t=>(
         <button key={t.id} onClick={()=>setTab(t.id)} style={{padding:"5px 12px",borderRadius:8,border:`1.5px solid ${tab===t.id?C.primary:C.border}`,
           background:tab===t.id?C.primary:"transparent",color:tab===t.id?"#fff":C.text,fontSize:11,fontWeight:600,cursor:"pointer"}}>{t.l}</button>))}</div>
 
@@ -5296,6 +5361,8 @@ function SettingsScreen(){
               <Input value={val} onChange={e=>setSettings(s=>({...s,categoryIcons:{...(s.categoryIcons||{}),[c]:e.target.value}}))} style={{width:60,textAlign:"center",fontSize:16}}/></div>);})}</div>
         <Btn onClick={()=>{saveSettingsToAPI(settings);addAudit("CONFIG","Icônes catégories mis à jour");notify("Icônes sauvegardées","success");}} style={{width:"100%",height:40,background:C.primary}}><Save size={14}/> Enregistrer</Btn>
       </div>);})()}
+
+    {tab==="backup"&&<BackupPanel notify={notify} addAudit={addAudit}/>}
 
     {tab==="debug"&&<DebugPanel/>}
 
