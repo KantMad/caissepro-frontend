@@ -52,11 +52,21 @@ export const initPromos=[
 export const categories=["Tous","T-shirts","Jeans","Robes","Pulls","Chemises","Vestes"];
 
 /* ══════════ DESIGN ══════════ */
-export const C={bg:"#F8FAFC",surface:"#FFFFFF",surfaceAlt:"#F1F5F9",surfaceHover:"#F8FAFC",text:"#0F172A",textMuted:"#64748B",textLight:"#94A3B8",
+const C_NORMAL={bg:"#F8FAFC",surface:"#FFFFFF",surfaceAlt:"#F1F5F9",surfaceHover:"#F8FAFC",text:"#0F172A",textMuted:"#64748B",textLight:"#94A3B8",
   primary:"#047857",primaryLight:"#ECFDF5",primaryDark:"#022C22",accent:"#D97706",accentLight:"#FFFBEB",
   danger:"#DC2626",dangerLight:"#FEF2F2",info:"#0369A1",infoLight:"#F0F9FF",border:"#E2E8F0",borderDark:"#CBD5E1",
   gradientB:"#059669",fiscal:"#0F766E",fiscalLight:"#F0FDFA",warn:"#D97706",warnLight:"#FFFBEB",
   shadow:"rgba(15,23,42,0.04)",shadowMd:"rgba(15,23,42,0.08)",shadowLg:"rgba(15,23,42,0.12)"};
+// 4.4: High-contrast theme for accessibility
+const C_HIGH_CONTRAST={bg:"#FFFFFF",surface:"#FFFFFF",surfaceAlt:"#F3F4F6",surfaceHover:"#E5E7EB",text:"#000000",textMuted:"#374151",textLight:"#4B5563",
+  primary:"#065F46",primaryLight:"#D1FAE5",primaryDark:"#022C22",accent:"#92400E",accentLight:"#FEF3C7",
+  danger:"#B91C1C",dangerLight:"#FEE2E2",info:"#1E40AF",infoLight:"#DBEAFE",border:"#9CA3AF",borderDark:"#6B7280",
+  gradientB:"#047857",fiscal:"#0F766E",fiscalLight:"#CCFBF1",warn:"#92400E",warnLight:"#FEF3C7",
+  shadow:"rgba(0,0,0,0.08)",shadowMd:"rgba(0,0,0,0.15)",shadowLg:"rgba(0,0,0,0.2)"};
+let _highContrast=false;try{_highContrast=localStorage.getItem("caissepro_highcontrast")==="true";}catch(e){}
+export let C=_highContrast?{...C_HIGH_CONTRAST}:{...C_NORMAL};
+export function setHighContrast(on){_highContrast=on;Object.assign(C,on?C_HIGH_CONTRAST:C_NORMAL);try{localStorage.setItem("caissepro_highcontrast",String(on));}catch(e){}}
+export function isHighContrast(){return _highContrast;}
 export const CAT_COLORS={"T-shirts":"#0369A1","Jeans":"#047857","Robes":"#D97706","Pulls":"#7C3AED","Chemises":"#CA8A04","Vestes":"#DC2626","Divers":"#64748B"};
 
 /* ══════════ CATEGORY ICON ══════════ */

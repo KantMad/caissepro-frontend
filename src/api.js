@@ -91,6 +91,7 @@ export const products = {
   reorderVariants: (id, variantIds) => api(`/api/products/${id}/reorder-variants`, { method: 'PUT', body: JSON.stringify({ variantIds }) }),
   findByEAN: (ean) => api(`/api/products/find/ean/${ean}`),
   categories: () => api('/api/products/categories/list'),
+  exportCSV: () => `${API_URL}/api/products/export/csv?token=${token}&store=${storeId || ''}`,
 };
 
 // ══ Sales ══
@@ -138,6 +139,7 @@ export const stock = {
   defective: () => api('/api/stock/defective'),
   receiveDefective: (data) => api('/api/stock/receive-defective', { method: 'POST', body: JSON.stringify(data) }),
   adjustDefective: (data) => api('/api/stock/adjust-defective', { method: 'POST', body: JSON.stringify(data) }),
+  transfer: (data) => api('/api/stock/transfer', { method: 'POST', body: JSON.stringify(data) }),
 };
 
 // ══ Fiscal ══

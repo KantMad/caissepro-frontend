@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import { Trash2, CreditCard, Plus, XCircle, RotateCcw, Euro, AlertTriangle, Save, Activity, Printer, Box, Star, Grid, ScanLine, Check, X, Scissors, Monitor, Wifi, Code, Receipt } from "lucide-react";
 import * as API from "../api.js";
 import printer from "../printer.js";
-import { C } from "../constants.jsx";
+import { C, setHighContrast, isHighContrast } from "../constants.jsx";
 import { DEFAULT_CAT_ICONS, getVariantOrderMap, saveVariantOrderMap, DEFAULT_SIZE_RANKING, getSizeRanking, saveSizeRanking, norm } from "../utils.jsx";
 import { Btn, Input, Badge } from "../ui.jsx";
 import { useApp } from "../context.jsx";
@@ -1434,6 +1434,14 @@ function SettingsScreen(){
           style={{width:40,height:36,border:"none",cursor:"pointer",borderRadius:8}}/><span style={{fontSize:12}}>{theme.accentColor}</span></div></div>
       <div style={{marginBottom:10}}><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>URL DU LOGO</label>
         <Input value={settings.logo||""} onChange={e=>setSettings(s=>({...s,logo:e.target.value}))} placeholder="https://…"/></div>
+      <div style={{marginTop:16,marginBottom:10}}><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:6}}>ACCESSIBILITÉ</label>
+        <div style={{display:"flex",alignItems:"center",gap:10}}>
+          <button onClick={()=>{setHighContrast(!isHighContrast());window.location.reload();}}
+            style={{padding:"8px 16px",borderRadius:8,border:`1.5px solid ${C.border}`,background:isHighContrast()?C.primary:C.surface,
+              color:isHighContrast()?"#fff":C.text,fontSize:12,fontWeight:600,cursor:"pointer"}}>
+            {isHighContrast()?"Contraste élevé activé":"Activer contraste élevé"}</button>
+          <span style={{fontSize:11,color:C.textMuted}}>Augmente le contraste des textes et bordures pour une meilleure lisibilité</span>
+        </div></div>
       <p style={{fontSize:10,color:C.textMuted}}>Les changements de thème seront appliqués au prochain rechargement.</p></div>}
 
     {tab==="clock"&&<div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`}}>
