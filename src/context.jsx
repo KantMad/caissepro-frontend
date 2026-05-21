@@ -1104,8 +1104,54 @@ function AppProvider({children}){
         notify("Impression envoyee","success");return true;
       }catch(e){notify(e.message,"danger");}
     }
-    // Fallback: browser iframe print (only for receipts — other types handle their own fallback)
-    if(type==="receipt")printReceiptOnly();
+    // Fallback: browser print
+    if(type==="receipt"){printReceiptOnly();return false;}
+    if(type==="register-open"||type==="register-close"){
+      // Generate HTML and print via popup — same approach as receipt tickets
+      const d=data||{};const co=settings||{};
+      const isOpen=type==="register-open";
+      const title=isOpen?"OUVERTURE DE CAISSE":"FERMETURE DE CAISSE";
+      let denomHtml="";
+      if(isOpen&&d.denominations){
+        const entries=Object.entries(d.denominations).filter(([,n])=>n>0).sort(([a],[b])=>parseFloat(b)-parseFloat(a));
+        if(entries.length){denomHtml=`<div class="sep"></div><div style="font-weight:700;margin-bottom:3px;">DETAIL DES COUPURES</div>`+
+          entries.map(([v,n])=>{const pv=parseFloat(v);const label=pv>=1?`${pv.toFixed(0)} EUR`:`${(pv*100).toFixed(0)} cts`;
+            return`<div style="display:flex;justify-content:space-between;"><span>${label} x ${n}</span><span>${(pv*n).toFixed(2)} EUR</span></div>`;}).join("");}
+      }
+      let closeHtml="";
+      if(!isOpen&&d){
+        closeHtml=`<div class="sep"></div>`+
+          (d.openingAmount!=null?`<div style="display:flex;justify-content:space-between;"><span>Fond de caisse</span><span>${parseFloat(d.openingAmount||0).toFixed(2)} EUR</span></div>`:"")+
+          (d.totalCash!=null?`<div style="display:flex;justify-content:space-between;"><span>Especes encaissees</span><span>${parseFloat(d.totalCash||0).toFixed(2)} EUR</span></div>`:"")+
+          (d.totalCard!=null?`<div style="display:flex;justify-content:space-between;"><span>CB encaissees</span><span>${parseFloat(d.totalCard||0).toFixed(2)} EUR</span></div>`:"")+
+          (d.totalSales!=null?`<div style="display:flex;justify-content:space-between;font-weight:700;margin-top:4px;"><span>CA total</span><span>${parseFloat(d.totalSales||0).toFixed(2)} EUR</span></div>`:"")+
+          (d.ticketCount!=null?`<div style="display:flex;justify-content:space-between;"><span>Nb tickets</span><span>${d.ticketCount}</span></div>`:"")+
+          (d.actualCash!=null?`<div class="sep"></div><div style="display:flex;justify-content:space-between;font-weight:700;"><span>Especes en caisse</span><span>${parseFloat(d.actualCash||0).toFixed(2)} EUR</span></div>`:"")+
+          (d.difference!=null?`<div style="display:flex;justify-content:space-between;color:${parseFloat(d.difference||0)===0?"#059669":"#dc2626"};font-weight:700;"><span>Ecart</span><span>${parseFloat(d.difference||0).toFixed(2)} EUR</span></div>`:"");
+      }
+      const html=`<!DOCTYPE html><html><head><title>${title}</title>
+        <style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Courier New',monospace;font-size:11px;padding:6px;width:72mm;max-width:72mm;color:#000}
+        .sep{border-top:1px dashed #000;margin:6px 0}.center{text-align:center}
+        h2{font-size:14px;margin:2px 0}h3{font-size:16px;margin:4px 0}
+        @media print{@page{size:72mm auto;margin:2mm}body{padding:0}.no-print{display:none}}</style></head><body>
+        <div class="center"><h2>${co.name||"Ma Boutique"}</h2>
+        ${co.address?`<div>${co.address}</div>`:""}${co.postalCode||co.city?`<div>${co.postalCode||""} ${co.city||""}</div>`:""}
+        ${co.phone?`<div>Tel: ${co.phone}</div>`:""}${co.siret?`<div style="font-size:9px;">SIRET: ${co.siret}</div>`:""}</div>
+        <div class="sep" style="border-top-style:double;"></div>
+        <div class="center"><h3>${title}</h3></div>
+        <div class="sep" style="border-top-style:double;"></div>
+        <div style="display:flex;justify-content:space-between;"><span>Date</span><span>${new Date(d.openDate||d.closeDate||"").toLocaleString("fr-FR")}</span></div>
+        <div style="display:flex;justify-content:space-between;"><span>Caissier</span><span>${d.userName||"?"}</span></div>
+        ${d.storeName?`<div style="display:flex;justify-content:space-between;"><span>Magasin</span><span>${d.storeName}</span></div>`:""}
+        ${isOpen?`<div class="sep"></div><div class="center"><div style="font-weight:700;">FOND DE CAISSE</div><div style="font-size:18px;font-weight:900;">${parseFloat(d.openingAmount||0).toFixed(2)} EUR</div></div>${denomHtml}`:closeHtml}
+        <div class="sep" style="border-top-style:double;"></div>
+        <div class="center" style="font-size:9px;">CaissePro — Document obligatoire</div>
+        <div class="no-print center" style="margin-top:12px;"><button onclick="window.print()" style="padding:8px 20px;background:#047857;color:#fff;border:none;border-radius:8px;font-size:13px;cursor:pointer;">Imprimer</button></div>
+        </body></html>`;
+      const w=window.open("","_blank","width=350,height=500");
+      if(w){w.document.write(html);w.document.close();setTimeout(()=>{try{w.focus();w.print();}catch(e){}},300);}
+      return false;
+    }
     return false;
   },[settings,notify,printReceiptOnly]);
 
