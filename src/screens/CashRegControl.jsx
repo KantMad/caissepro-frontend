@@ -57,7 +57,7 @@ function CashRegControl({onSkip,onDone}){
 
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
         <Btn variant="outline" onClick={onSkip} style={{height:48,borderRadius:12}}><XCircle size={14}/> Passer</Btn>
-        <Btn onClick={()=>{const amt=denomMode?denomTotal:parseFloat(a);if(amt){openReg(amt,denomMode?denom:null);onDone();}}} disabled={denomMode?denomTotal===0:!a}
+        <Btn onClick={async()=>{const amt=denomMode?denomTotal:parseFloat(a);if(amt){await openReg(amt,denomMode?denom:null);onDone();}}} disabled={denomMode?denomTotal===0:!a}
           style={{height:48,borderRadius:12,background:C.accent,boxShadow:(denomMode?denomTotal>0:a)?`0 4px 16px ${C.accent}33`:"none"}}><Wallet size={14}/> Ouvrir la caisse</Btn>
       </div></div></div>);
 }
