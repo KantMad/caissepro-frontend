@@ -104,6 +104,7 @@ export const sales = {
   bestSellers: () => api('/api/sales/stats/best-sellers'),
   bySeller: () => api('/api/sales/stats/by-seller'),
   byDay: () => api('/api/sales/stats/by-day'),
+  emailTicket: (saleId, to) => api(`/api/sales/${saleId}/email`, { method: 'POST', body: JSON.stringify({ to }) }),
 };
 
 // ══ Returns / Avoirs ══

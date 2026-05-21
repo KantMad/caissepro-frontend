@@ -78,11 +78,30 @@ function SalesScreen(){
   const maxDisc=perm().maxDiscount;
   const custTier=selCust?getLoyaltyTier(selCust.points):null;
 
-  // Email ticket
-  const emailTicket=(tk)=>{if(!tk)return;
-    const subj=encodeURIComponent(`Ticket ${tk.ticketNumber} — ${settings.name||CO.name}`);
-    const body=encodeURIComponent(`Bonjour,\n\nVoici votre ticket N°${tk.ticketNumber}\nTotal: ${(tk.totalTTC||0).toFixed(2)}€\nDate: ${new Date(tk.date||tk.createdAt||"").toLocaleString("fr-FR")}\n\n${settings.name||CO.name}\n${settings.siret||CO.siret}`);
-    window.open(`mailto:${selCust?.email||""}?subject=${subj}&body=${body}`);};
+  // Email ticket — send via API (SMTP) with fallback to mailto
+  const[emailModal,setEmailModal]=useState(false);const[emailAddr,setEmailAddr]=useState("");const[emailSending,setEmailSending]=useState(false);const[emailTarget,setEmailTarget]=useState(null);
+  const emailTicket=(tk)=>{if(!tk)return;setEmailTarget(tk);setEmailAddr(selCust?.email||tk.customerEmail||"");setEmailModal(true);};
+  const sendEmail=async()=>{if(!emailAddr||!emailTarget)return;
+    setEmailSending(true);
+    try{
+      const saleId=emailTarget.id||emailTarget.saleId;
+      if(saleId){await API.sales.emailTicket(saleId,emailAddr);notify(`Ticket envoyé à ${emailAddr}`,"success");}
+      else{
+        // Fallback mailto for offline/local tickets
+        const subj=encodeURIComponent(`Ticket ${emailTarget.ticketNumber} — ${settings.name||CO.name}`);
+        const body=encodeURIComponent(`Bonjour,\n\nVoici votre ticket N°${emailTarget.ticketNumber}\nTotal: ${(emailTarget.totalTTC||0).toFixed(2)}€\nDate: ${new Date(emailTarget.date||emailTarget.createdAt||"").toLocaleString("fr-FR")}\n\n${settings.name||CO.name}\n${settings.siret||CO.siret}`);
+        window.open(`mailto:${emailAddr}?subject=${subj}&body=${body}`);
+        notify("Ouverture du client mail (ticket hors-ligne)","info");}
+      setEmailModal(false);
+    }catch(e){
+      if(e.message?.includes("503")||e.message?.includes("non configuré")){notify("Email non configuré sur le serveur. Configurez SMTP_HOST dans .env","warn");
+        // Fallback mailto
+        const subj=encodeURIComponent(`Ticket ${emailTarget.ticketNumber} — ${settings.name||CO.name}`);
+        const body=encodeURIComponent(`Bonjour,\n\nVoici votre ticket N°${emailTarget.ticketNumber}\nTotal: ${(emailTarget.totalTTC||0).toFixed(2)}€\n\n${settings.name||CO.name}`);
+        window.open(`mailto:${emailAddr}?subject=${subj}&body=${body}`);}
+      else notify(`Erreur envoi: ${e.message}`,"error");
+    }finally{setEmailSending(false);}
+  };
 
   const todayTickets=useMemo(()=>{const today=new Date().toISOString().split("T")[0];
     return tickets.filter(t=>(t.date||t.createdAt||t.created_at||"").startsWith(today));},[tickets]);
@@ -717,6 +736,22 @@ function SalesScreen(){
       <div style={{display:"flex",gap:8}}>
         <Btn variant="outline" onClick={()=>setSyncConfirm(false)} style={{flex:1}}>Annuler</Btn>
         <Btn variant="danger" onClick={()=>{clearPendingSync();setSyncConfirm(false);}} style={{flex:1}}>Vider la file</Btn></div>
+    </Modal>
+
+    {/* EMAIL TICKET MODAL */}
+    <Modal open={emailModal} onClose={()=>{setEmailModal(false);setEmailSending(false);}} title="Envoyer le ticket par email">
+      <div style={{marginBottom:12}}>
+        <label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:4}}>ADRESSE EMAIL</label>
+        <Input value={emailAddr} onChange={e=>setEmailAddr(e.target.value)} placeholder="client@email.com" type="email" style={{height:40,fontSize:14}}
+          onKeyDown={e=>{if(e.key==="Enter")sendEmail();}}/>
+      </div>
+      {emailTarget&&<div style={{background:C.surfaceAlt,borderRadius:10,padding:10,marginBottom:12,fontSize:11,color:C.textMuted}}>
+        <div>Ticket: <strong>{emailTarget.ticketNumber}</strong></div>
+        <div>Total: <strong style={{color:C.primary}}>{(emailTarget.totalTTC||0).toFixed(2)}€</strong></div>
+        <div>Date: {new Date(emailTarget.date||emailTarget.createdAt||"").toLocaleString("fr-FR")}</div>
+      </div>}
+      <Btn onClick={sendEmail} disabled={!emailAddr||emailSending} style={{width:"100%",height:42,background:C.primary,fontSize:14}}>
+        {emailSending?"Envoi en cours…":<><Mail size={16}/> Envoyer</>}</Btn>
     </Modal>
   </div>);
 }

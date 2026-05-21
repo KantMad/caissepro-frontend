@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Search, Trash2, Plus, Receipt, Euro, Download, Save, Upload, Heart, Star, Edit } from "lucide-react";
+import { Search, Trash2, Plus, Receipt, Euro, Download, Save, Upload, Heart, Star, Edit, ChevronDown, Package } from "lucide-react";
 import Papa from "papaparse";
 import * as API from "../api.js";
 import { LOYALTY_TIERS, C } from "../constants.jsx";
@@ -11,7 +11,7 @@ function CustomersScreen(){
   const[sel,setSel]=useState(null);const[search,setSearch]=useState("");
   const[editMode,setEditMode]=useState(false);
   const[editData,setEditData]=useState({});
-  const[custHistory,setCustHistory]=useState([]);const[loadingHist,setLoadingHist]=useState(false);
+  const[custHistory,setCustHistory]=useState([]);const[loadingHist,setLoadingHist]=useState(false);const[expandedTk,setExpandedTk]=useState(null);
   const[newCustModal,setNewCustModal]=useState(false);
   const[nc,setNc]=useState({firstName:"",lastName:"",email:"",phone:"",city:"",notes:""});
   const[confirmDel,setConfirmDel]=useState(false);
@@ -30,7 +30,7 @@ function CustomersScreen(){
   const importCustCSV=()=>{let added=0;csvPreview.forEach(c=>{if(!c.firstName&&!c.lastName)return;if(c._dup)return;
     setCustomers(p=>[...p,{id:crypto.randomUUID?crypto.randomUUID():"c"+Date.now()+Math.random().toString(36).slice(2,8),firstName:c.firstName,lastName:c.lastName,email:c.email,phone:c.phone,city:c.city,notes:c.notes,points:0,totalSpent:0}]);added++;});
     notify(`${added} client(s) importé(s)`,"success");setCsvModal(false);setCsvStep(0);setCsvData([]);};
-  useEffect(()=>{if(!sel)return;setLoadingHist(true);setCustHistory([]);
+  useEffect(()=>{if(!sel)return;setLoadingHist(true);setCustHistory([]);setExpandedTk(null);
     API.customers.history(sel.id).then(data=>{setCustHistory(Array.isArray(data)?data:data.sales||[]);}).catch(()=>{
       // Fallback: filter local tickets
       setCustHistory(tickets.filter(t=>t.customerId===sel.id));
@@ -101,9 +101,42 @@ function CustomersScreen(){
           <div style={{fontSize:14,fontWeight:700,marginBottom:8}}>Historique d'achat ({custTickets.length})</div>
           {loadingHist&&<div style={{color:C.textLight,fontSize:11}}>Chargement…</div>}
           {!loadingHist&&custTickets.length===0&&<div style={{color:C.textLight,fontSize:11}}>Aucun achat</div>}
-          {custTickets.slice(0,20).map(t=>(<div key={t.ticketNumber} style={{display:"flex",justifyContent:"space-between",padding:6,borderBottom:`1px solid ${C.border}`,fontSize:11}}>
-            <span>{t.ticketNumber} — {new Date(t.date||t.createdAt||t.created_at).toLocaleDateString("fr-FR")} — {(t.items||[]).length} art.</span>
-            <span style={{fontWeight:700,color:C.primary}}>{(t.totalTTC||parseFloat(t.total_ttc)||0).toFixed(2)}€</span></div>))}</div>
+          <div style={{maxHeight:400,overflowY:"auto"}}>
+          {custTickets.slice(0,50).map(t=>{const tk=t.ticketNumber||t.ticket_number;const items=t.items||[];const total=(t.totalTTC||parseFloat(t.total_ttc)||0);
+            return(<div key={tk} style={{borderBottom:`1px solid ${C.border}`,marginBottom:2}}>
+              <div onClick={()=>setExpandedTk(prev=>prev===tk?null:tk)} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 6px",cursor:"pointer",borderRadius:6,transition:"background 0.1s"}}
+                onMouseEnter={e=>e.currentTarget.style.background=C.surfaceHover} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+                <div style={{flex:1}}>
+                  <div style={{fontSize:12,fontWeight:600}}>{tk}</div>
+                  <div style={{fontSize:10,color:C.textMuted}}>{new Date(t.date||t.createdAt||t.created_at).toLocaleDateString("fr-FR",{day:"2-digit",month:"short",year:"numeric"})} — {items.length} article{items.length>1?"s":""}{t.user_name?` — ${t.user_name}`:""}</div>
+                </div>
+                <div style={{display:"flex",alignItems:"center",gap:8}}>
+                  <span style={{fontWeight:700,color:C.primary,fontSize:13}}>{total.toFixed(2)}€</span>
+                  <ChevronDown size={14} color={C.textLight} style={{transform:expandedTk===tk?"rotate(180deg)":"rotate(0)",transition:"transform 0.2s"}}/>
+                </div>
+              </div>
+              {expandedTk===tk&&items.length>0&&(
+                <div style={{padding:"0 6px 10px 16px"}}>
+                  {items.map((it,i)=>(
+                    <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"4px 0",borderBottom:i<items.length-1?`1px dashed ${C.border}`:"none"}}>
+                      <div style={{flex:1}}>
+                        <span style={{fontSize:11,fontWeight:600}}>{it.name||it.product_name||"Produit"}</span>
+                        {(it.color||it.variant_color||it.size||it.variant_size)&&<span style={{fontSize:10,color:C.textMuted,marginLeft:6}}>
+                          {it.color||it.variant_color||""}{(it.color||it.variant_color)&&(it.size||it.variant_size)?" / ":""}{it.size||it.variant_size||""}</span>}
+                        {it.sku&&<span style={{fontSize:9,color:C.textLight,marginLeft:6}}>({it.sku})</span>}
+                        {(it.qty||it.quantity)>1&&<span style={{fontSize:10,color:C.textMuted,marginLeft:6}}>x{it.qty||it.quantity}</span>}
+                        {parseFloat(it.discount||it.discount_percent||0)>0&&<span style={{fontSize:10,color:C.accent,marginLeft:4}}>-{parseFloat(it.discount||it.discount_percent).toFixed(0)}%</span>}
+                      </div>
+                      <span style={{fontSize:11,fontWeight:600,color:C.text}}>{parseFloat(it.ttc||it.line_ttc||0).toFixed(2)}€</span>
+                    </div>
+                  ))}
+                  <div style={{display:"flex",justifyContent:"space-between",marginTop:6,paddingTop:4,borderTop:`1.5px solid ${C.border}`}}>
+                    <span style={{fontSize:10,fontWeight:600,color:C.textMuted}}>Mode: {t.payment_method||t.paymentMethod||"—"}</span>
+                    <span style={{fontSize:12,fontWeight:800,color:C.primary}}>Total: {total.toFixed(2)}€</span>
+                  </div>
+                </div>
+              )}
+            </div>);})}</div></div>
       </div>}
     </div>
 
