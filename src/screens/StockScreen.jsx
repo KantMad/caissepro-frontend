@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { Search, RotateCcw, CheckCircle2, AlertTriangle, Save, Upload, Trash2, User, Filter } from "lucide-react";
 import Papa from "papaparse";
 import * as API from "../api.js";
@@ -557,6 +557,8 @@ function TenuesTab({products,setProducts,users,tenUser,setTenUser,tenItems,setTe
   tenHistoryFilter,setTenHistoryFilter,tenScanRef,tenAddByEAN,resolveEAN,
   stockMoves,addStockMove,addAudit,notify,setScanOverride,clearScanOverride,findByEAN}){
 
+  const[manualSearch,setManualSearch]=useState("");
+
   // Register scan override when this tab is active
   useEffect(()=>{
     setScanOverride((code)=>{
@@ -568,6 +570,19 @@ function TenuesTab({products,setProducts,users,tenUser,setTenUser,tenItems,setTe
 
   // Focus scan input on mount
   useEffect(()=>{if(tenScanRef.current)tenScanRef.current.focus();},[]);
+
+  // Manual search results
+  const searchResults=useMemo(()=>{if(!manualSearch||manualSearch.length<2)return[];const q=manualSearch.toLowerCase();
+    return products.filter(p=>p.name.toLowerCase().includes(q)||p.sku.toLowerCase().includes(q)||(p.variants||[]).some(v=>(v.ean||"").includes(q)||(v.color||"").toLowerCase().includes(q))).slice(0,8);
+  },[products,manualSearch]);
+
+  const addManualItem=(prod,vari)=>{
+    setTenItems(prev=>{const idx=prev.findIndex(i=>i.variantId===vari.id);
+      if(idx>=0){const next=[...prev];next[idx]={...next[idx],qty:next[idx].qty+1};return next;}
+      return[...prev,{productId:prod.id,variantId:vari.id,name:prod.name,sku:prod.sku,color:vari.color,colorCode:vari.colorCode||"",size:vari.size,ean:vari.ean||"",stock:vari.stock,qty:1}];});
+    notify(`${prod.name} ${vari.color}/${vari.size} ajouté`,"info");
+    setManualSearch("");
+  };
 
   const tenuesHistory=stockMoves.filter(m=>m.type==="TENUE");
   const filteredHistory=tenHistoryFilter
@@ -600,7 +615,7 @@ function TenuesTab({products,setProducts,users,tenUser,setTenUser,tenItems,setTe
   return(<div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`}}>
     <h3 style={{fontSize:14,fontWeight:700,marginBottom:10}}>Sortie stock — Tenue employé</h3>
     <div style={{padding:10,background:C.warnLight,borderRadius:8,marginBottom:12,fontSize:11,color:"#92400E",border:`1px solid ${C.warn}33`}}>
-      1. Sélectionnez un employé — 2. Scannez les articles (scanner ou saisie EAN) — 3. Validez la liste</div>
+      1. Sélectionnez un employé — 2. Scannez ou recherchez les articles — 3. Validez la liste</div>
 
     {/* Employé selector */}
     <div style={{marginBottom:12}}>
@@ -612,8 +627,37 @@ function TenuesTab({products,setProducts,users,tenUser,setTenUser,tenItems,setTe
 
     {/* EAN scan input */}
     <Input ref={tenScanRef} placeholder={tenUser?"Scanner EAN ou saisir code-barres...":"Sélectionnez d'abord un employé"} disabled={!tenUser}
-      style={{marginBottom:10,height:40,fontSize:13,borderColor:tenUser?C.accent:C.border,borderWidth:2,fontWeight:600}}
+      style={{marginBottom:8,height:40,fontSize:13,borderColor:tenUser?C.accent:C.border,borderWidth:2,fontWeight:600}}
       onKeyDown={e=>{if(e.key==="Enter"&&e.target.value.trim()){tenAddByEAN(e.target.value.trim());e.target.value="";}}}/>
+
+    {/* Manual search — no barcode */}
+    <div style={{marginBottom:12}}>
+      <Input value={manualSearch} onChange={e=>setManualSearch(e.target.value)} disabled={!tenUser}
+        placeholder={tenUser?"Rechercher par nom, réf, couleur...":""}
+        style={{height:36,fontSize:12,borderColor:C.border}}/>
+      {searchResults.length>0&&<div style={{border:`1.5px solid ${C.border}`,borderRadius:10,marginTop:4,maxHeight:220,overflowY:"auto",background:C.surface}}>
+        {searchResults.map(p=>(
+          <div key={p.id}>
+            <div style={{padding:"6px 10px",background:C.surfaceAlt,fontSize:11,fontWeight:700,display:"flex",gap:6,alignItems:"center",borderBottom:`1px solid ${C.border}`}}>
+              <span>{p.name}</span>
+              <span style={{fontSize:9,fontFamily:"monospace",color:C.textMuted}}>Réf: {p.sku}</span>
+            </div>
+            <div style={{display:"flex",flexWrap:"wrap",gap:4,padding:"6px 10px"}}>
+              {(p.variants||[]).map(v=>(
+                <button key={v.id} onClick={()=>addManualItem(p,v)}
+                  style={{padding:"4px 8px",borderRadius:6,border:`1px solid ${C.border}`,background:"transparent",cursor:"pointer",
+                    fontSize:10,fontWeight:600,display:"flex",alignItems:"center",gap:4,transition:"all 0.12s"}}
+                  onMouseEnter={e=>{e.currentTarget.style.borderColor=C.accent;e.currentTarget.style.background=C.accentLight+"40";}}
+                  onMouseLeave={e=>{e.currentTarget.style.borderColor=C.border;e.currentTarget.style.background="transparent";}}>
+                  <span style={{color:C.accent}}>{v.color}</span>
+                  {v.colorCode&&<span style={{fontSize:8,fontFamily:"monospace",color:C.textMuted}}>{v.colorCode}</span>}
+                  <span style={{color:C.info,fontWeight:700}}>{v.size}</span>
+                  <span style={{fontSize:8,color:v.stock>0?C.textMuted:C.danger}}>{v.stock>0?`stk:${v.stock}`:"Rupture"}</span>
+                </button>))}
+            </div>
+          </div>))}
+      </div>}
+    </div>
 
     {/* Items list */}
     {tenItems.length>0&&<div style={{marginBottom:12,border:`1.5px solid ${C.accent}33`,borderRadius:10,overflow:"hidden"}}>
@@ -643,7 +687,7 @@ function TenuesTab({products,setProducts,users,tenUser,setTenUser,tenItems,setTe
     </div>}
 
     {tenItems.length===0&&tenUser&&<div style={{padding:20,textAlign:"center",color:C.textMuted,fontSize:12,border:`1.5px dashed ${C.border}`,borderRadius:10,marginBottom:12}}>
-      Scannez les articles pour les ajouter à la liste</div>}
+      Scannez ou recherchez les articles pour les ajouter à la liste</div>}
 
     <Btn onClick={validateAll} disabled={tenSaving||!tenUser||tenItems.length===0}
       style={{width:"100%",height:44,background:C.accent,opacity:(!tenUser||tenItems.length===0)?0.5:1}}>
