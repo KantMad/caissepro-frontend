@@ -485,9 +485,12 @@ function SalesScreen(){
           <div style={{fontSize:28,fontWeight:900,color:"#059669",letterSpacing:"-1px"}}>{(lastTk.totalTTC||0).toFixed(2)}€</div>
           <div style={{fontSize:12,color:C.textMuted,marginTop:2}}>Paiement {({cash:"Espèces",card:"CB",amex:"American Express",giftcard:"Cadeau",MIXTE:"Mixte",cheque:"Chèque"})[lastTk.paymentMethod]||lastTk.paymentMethod}</div></div>
         <div data-print-receipt style={{fontFamily:"'Courier New',monospace",fontSize:10,background:"#FAFAF8",borderRadius:12,padding:18,border:`1px solid ${C.border}`,boxShadow:`inset 0 1px 3px ${C.shadow}`}}>
-        <div style={{textAlign:"center",marginBottom:8}}><div style={{fontSize:12,fontWeight:700}}>{settings.name||CO.name}</div>
+        <div style={{textAlign:"center",marginBottom:8}}>
+          {settings.receiptLogo&&<div style={{marginBottom:4}}><img src={settings.receiptLogo} alt="" style={{maxHeight:40,maxWidth:180,objectFit:"contain"}}/></div>}
+          <div style={{fontSize:12,fontWeight:700}}>{settings.name||CO.name}</div>
           {currentStore?.name&&<div style={{fontSize:11,fontWeight:600}}>Magasin: {currentStore.name}</div>}
           <div>{currentStore?.address||settings.address}, {currentStore?.postal_code||settings.postalCode} {currentStore?.city||settings.city}</div>
+          {(settings.phone||currentStore?.phone)&&<div>Tél: {currentStore?.phone||settings.phone}</div>}
           <div>SIRET: {settings.siret} — TVA: {settings.tvaIntra}</div></div>
         <div style={{borderTop:"1px dashed #999",margin:"4px 0"}}/>
         <div style={{display:"flex",justifyContent:"space-between"}}><span>N° {lastTk.ticketNumber}</span><span>{new Date(lastTk.date||lastTk.createdAt||"").toLocaleString("fr-FR")}</span></div>

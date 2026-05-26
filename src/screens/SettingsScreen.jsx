@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import { Trash2, CreditCard, Plus, XCircle, RotateCcw, Euro, AlertTriangle, Save, Activity, Printer, Box, Star, Grid, ScanLine, Check, X, Scissors, Monitor, Wifi, Code, Receipt } from "lucide-react";
+import { Trash2, CreditCard, Plus, XCircle, RotateCcw, Euro, AlertTriangle, Save, Activity, Printer, Box, Star, Grid, ScanLine, Check, X, Scissors, Monitor, Wifi, Code, Receipt, Upload } from "lucide-react";
 import * as API from "../api.js";
 import printer from "../printer.js";
 import { C, setHighContrast, isHighContrast } from "../constants.jsx";
@@ -1579,8 +1579,21 @@ function SettingsScreen(){
       <div style={{background:C.primaryLight,borderRadius:16,padding:20,border:`1.5px solid ${C.primary}22`,marginBottom:16}}>
         <h3 style={{fontSize:16,fontWeight:800,margin:"0 0 4px"}}>Personnalisation du ticket</h3>
         <p style={{fontSize:11,color:C.textMuted,margin:0}}>Configurez l'apparence et les informations affichées sur vos tickets de caisse.</p></div>
-      <div style={{marginBottom:10}}><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>URL du logo</label>
-        <Input value={settings.receiptLogo||""} onChange={e=>setSettings(s=>({...s,receiptLogo:e.target.value}))} placeholder="https://example.com/logo.png"/></div>
+      <div style={{marginBottom:10}}><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>Logo du ticket</label>
+        <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:6}}>
+          {settings.receiptLogo&&<img src={settings.receiptLogo} alt="Logo" style={{maxHeight:40,maxWidth:120,objectFit:"contain",borderRadius:6,border:`1px solid ${C.border}`,padding:4}}/>}
+          <label style={{display:"inline-flex",alignItems:"center",gap:6,padding:"8px 14px",borderRadius:10,border:`1.5px solid ${C.border}`,cursor:"pointer",fontSize:11,fontWeight:600,color:C.text,background:C.surface,transition:"all 0.15s"}}>
+            <Upload size={14}/> Importer une image
+            <input type="file" accept="image/*" style={{display:"none"}} onChange={e=>{
+              const file=e.target.files?.[0];if(!file)return;
+              if(file.size>500000){notify("Image trop lourde (max 500 Ko)","error");return;}
+              const reader=new FileReader();
+              reader.onload=ev=>{setSettings(s=>({...s,receiptLogo:ev.target.result}));notify("Logo importé","success");};
+              reader.readAsDataURL(file);
+            }}/></label>
+          {settings.receiptLogo&&<button onClick={()=>setSettings(s=>({...s,receiptLogo:""}))} style={{padding:"6px 10px",borderRadius:8,border:`1px solid ${C.danger}30`,background:"transparent",cursor:"pointer",fontSize:10,fontWeight:600,color:C.danger}}>Supprimer</button>}
+        </div>
+        <Input value={settings.receiptLogo&&!settings.receiptLogo.startsWith("data:")?settings.receiptLogo:""} onChange={e=>setSettings(s=>({...s,receiptLogo:e.target.value}))} placeholder="Ou collez une URL : https://example.com/logo.png" style={{fontSize:10}}/></div>
       <div style={{marginBottom:10}}><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>Message d'en-tête</label>
         <Input value={settings.receiptHeader||""} onChange={e=>setSettings(s=>({...s,receiptHeader:e.target.value}))} placeholder="Merci pour votre achat !"/></div>
       <div style={{marginBottom:10}}><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>Message de remerciement (affiché en gros)</label>

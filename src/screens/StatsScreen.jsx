@@ -7,7 +7,7 @@ import { Btn, Input, Badge, SC } from "../ui.jsx";
 import { useApp } from "../context.jsx";
 
 function StatsScreen(){
-  const{tickets,products,avoirs,bestSellers:allBestSellers,salesBySeller,salesByVariant,caEvolution,salesByCollection,exportCSVReport,perm,commissions,salesGoals,setSellerGoal}=useApp();
+  const{tickets,products,avoirs,bestSellers:allBestSellers,salesBySeller,salesByVariant,caEvolution,salesByCollection,exportCSVReport,perm,commissions,salesGoals,setSellerGoal,settings}=useApp();
   const[tab,setTab]=useState("ca");
   const[dateFrom,setDateFrom]=useState("");const[dateTo,setDateTo]=useState("");const[catFilter,setCatFilter]=useState("");
   const[apiSummary,setApiSummary]=useState(null);const[apiBySeller,setApiBySeller]=useState(null);const[apiByDay,setApiByDay]=useState(null);const[apiBestSellers,setApiBestSellers]=useState(null);
@@ -53,9 +53,17 @@ function StatsScreen(){
     if(e.colorCode)m[k].colors.add(e.colorCode);}));
     return Object.values(m).map(p=>({...p,colors:[...p.colors]})).sort((a,b)=>b.qty-a.qty);},[fTickets,prodMap]);
   const fCommissions=useMemo(()=>{const m={};fTickets.forEach(t=>{
-    const n=t.userName||t.user_name||"?";if(!m[n])m[n]={name:n,count:0,revenue:0,margin:0};
-    m[n].count++;m[n].revenue+=(t.totalTTC||parseFloat(t.total_ttc)||0);m[n].margin+=(parseFloat(t.margin)||0);});
-    return Object.values(m).sort((a,b)=>b.revenue-a.revenue).map(s=>({...s,commission:s.margin*0.05,goal:salesGoals[s.name]||0,goalProgress:salesGoals[s.name]?(s.revenue/salesGoals[s.name]*100):0}));},[fTickets,salesGoals]);
+    const n=t.sellerName||t.seller_name||t.userName||t.user_name||"?";
+    if(!m[n])m[n]={name:n,count:0,revenue:0,margin:0,totalItems:0,customers:new Set()};
+    m[n].count++;m[n].revenue+=(t.totalTTC||parseFloat(t.total_ttc)||0);m[n].margin+=(parseFloat(t.margin)||0);
+    m[n].totalItems+=(t.items||[]).reduce((s,i)=>s+(parseInt(i.quantity)||0),0);
+    if(t.customerId||t.customer_id)m[n].customers.add(t.customerId||t.customer_id);});
+    const commRate=settings?.defaultCommissionRate||0.05;
+    return Object.values(m).sort((a,b)=>b.revenue-a.revenue).map(s=>{
+      const rate=settings?.commissionRates?.[s.name]||commRate;
+      return{...s,avgBasket:s.count?s.revenue/s.count:0,avgItems:s.count?s.totalItems/s.count:0,
+        uniqueCustomers:s.customers?.size||0,commission:s.margin*rate,
+        goal:salesGoals[s.name]||0,goalProgress:salesGoals[s.name]?(s.revenue/salesGoals[s.name]*100):0};});},[fTickets,salesGoals,settings]);
   const fByVariant=useMemo(()=>{const bySize={},byColor={};fTickets.forEach(t=>(t.items||[]).forEach(i=>{
     const e=enrichItem(i);
     bySize[e.size]=(bySize[e.size]||0)+i.quantity;

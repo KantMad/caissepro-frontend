@@ -194,8 +194,11 @@ function HistoryScreen(){
         const tkPayMethod=tk.paymentMethod||tk.payment_method||"?";
         return(<>
         <div data-print-receipt style={{fontFamily:"'Courier New',monospace",fontSize:10,background:"#FAFAF8",borderRadius:10,padding:16,border:`1px solid ${C.border}`}}>
-        <div style={{textAlign:"center",marginBottom:6}}><div style={{fontSize:12,fontWeight:700}}>{settings.name||CO.name}</div>
+        <div style={{textAlign:"center",marginBottom:6}}>
+          {settings.receiptLogo&&<div style={{marginBottom:4}}><img src={settings.receiptLogo} alt="" style={{maxHeight:40,maxWidth:180,objectFit:"contain"}}/></div>}
+          <div style={{fontSize:12,fontWeight:700}}>{settings.name||CO.name}</div>
           <div>{settings.address}, {settings.postalCode} {settings.city}</div>
+          {settings.phone&&<div>Tél: {settings.phone}</div>}
           <div>SIRET: {settings.siret||CO.siret} — TVA: {settings.tvaIntra||CO.tvaIntra}</div></div>
         <div style={{borderTop:"1px dashed #999",margin:"4px 0"}}/>
         <div style={{display:"flex",justifyContent:"space-between"}}><span>N° {tkNum}</span><span>{tkDateStr}</span></div>
