@@ -3,8 +3,8 @@ import * as API from "./api.js";
 import { setOnAuthExpired, setStoreId, clearStoreId } from "./api.js";
 import printer from "./printer.js";
 import hardwareManager from "./hardware.js";
-import { CO, DEFAULT_TVA_RATES, PERMS, initProducts, initUsers, initCustomers, LOYALTY_TIERS, initPromos, C } from "./constants.jsx";
-import { hashPin, verifyPin, sha256, norm, loadVariantOrderFromSettings, autoImportSizesFromProducts, generateEAN13 } from "./utils.jsx";
+import { CO, DEFAULT_TVA_RATES, PERMS, initProducts, initUsers, initCustomers, LOYALTY_TIERS, initPromos, C, categories as defaultCategories } from "./constants.jsx";
+import { hashPin, verifyPin, sha256, norm, loadVariantOrderFromSettings, autoImportSizesFromProducts, generateEAN13, DEFAULT_CAT_ICONS } from "./utils.jsx";
 import Papa from "papaparse";
 
 /* ══════════ CONTEXT ══════════ */
@@ -1016,6 +1016,15 @@ function AppProvider({children}){
     if(v.stock<=0)a.push({product:p,variant:v,level:"rupture"});
     else if(v.stock<=(v.stockAlert||5))a.push({product:p,variant:v,level:"bas"});}));return a;},[products]);
 
+  // Dynamic categories: merge defaults + custom from settings + from products
+  const allCategories=useMemo(()=>{
+    const customCats=(settings.customCategories||[]).map(c=>c.name);
+    const productCats=[...new Set(products.map(p=>p.category).filter(Boolean))];
+    const base=defaultCategories.filter(c=>c!=="Tous");
+    const merged=["Tous",...new Set([...base,...customCats,...productCats])];
+    return merged;
+  },[settings.customCategories,products]);
+
   // Find by EAN
   const findByEAN=useCallback((ean)=>{for(const p of products)for(const v of p.variants)if(v.ean===ean)return{product:p,variant:v};return null;},[products]);
 
@@ -1609,7 +1618,7 @@ function AppProvider({children}){
     paymentProfiles:hardwareManager.paymentProfiles,
     users,setUsers,tvaRates,setTvaRates,addPendingSync,pendingSync,clearPendingSync,
     trainingMode,setTrainingMode,
-    cartTotals,
+    cartTotals,allCategories,
     scanBarcode,setScanBarcode,
     setScanOverride,clearScanOverride,
   }}>{children}</AppCtx.Provider>;

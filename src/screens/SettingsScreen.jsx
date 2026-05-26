@@ -1045,7 +1045,7 @@ function BackupPanel({notify,addAudit}){
 }
 
 function SettingsScreen(){
-  const{settings,setSettings,saveSettingsToAPI,addAudit,theme,setTheme,clockEntries,priceHistory,printerConnected,printerType,connectPrinter,disconnectPrinter,thermalPrint,notify,users,hwId,hwProfile,switchHardware,hardwareProfiles,paymentId,paymentConfig,switchPayment,updatePaymentConfig,paymentProfiles,perm,effectiveStoreId}=useApp();
+  const{settings,setSettings,saveSettingsToAPI,addAudit,theme,setTheme,clockEntries,priceHistory,printerConnected,printerType,connectPrinter,disconnectPrinter,thermalPrint,notify,users,hwId,hwProfile,switchHardware,hardwareProfiles,paymentId,paymentConfig,switchPayment,updatePaymentConfig,paymentProfiles,perm,effectiveStoreId,allCategories,products,updateProduct}=useApp();
   if(!perm().canSettings) return <div style={{padding:40,textAlign:"center",color:C.textMuted,fontSize:16,fontWeight:600}}>Accès refusé</div>;
   const[tab,setTab]=useState("general");
   const[printerBaud,setPrinterBaud]=useState("9600");
@@ -1056,7 +1056,7 @@ function SettingsScreen(){
   return(<div style={{height:"100%",overflowY:"auto",padding:"var(--pad,16px)",background:C.bg}}>
     <h2 style={{fontSize:20,fontWeight:800,marginBottom:10}}>Paramètres</h2>
     <div style={{display:"flex",gap:6,marginBottom:14,flexWrap:"wrap"}}>
-      {[{id:"general",l:"Général"},{id:"retouche",l:"✂️ Retouches"},{id:"pricing",l:"💰 Prix HT/TTC"},{id:"commission",l:"Commission"},{id:"stores",l:"Magasins"},{id:"printer",l:"Imprimante"},{id:"tpe",l:"Terminal paiement"},{id:"receipt",l:"Ticket"},{id:"screen2",l:"📺 Écran 2"},{id:"caticons",l:"🏷️ Icônes catégories"},{id:"return",l:"Retours"},{id:"sizes",l:"📏 Ordre tailles"},{id:"theme",l:"Thème"},{id:"clock",l:"Pointages"},{id:"prices",l:"Historique prix"},{id:"backup",l:"Backup"},{id:"debug",l:"DEBUG"}].map(t=>(
+      {[{id:"general",l:"Général"},{id:"retouche",l:"✂️ Retouches"},{id:"pricing",l:"💰 Prix HT/TTC"},{id:"commission",l:"Commission"},{id:"stores",l:"Magasins"},{id:"printer",l:"Imprimante"},{id:"tpe",l:"Terminal paiement"},{id:"receipt",l:"Ticket"},{id:"screen2",l:"📺 Écran 2"},{id:"caticons",l:"🏷️ Catégories"},{id:"return",l:"Retours"},{id:"sizes",l:"📏 Ordre tailles"},{id:"theme",l:"Thème"},{id:"clock",l:"Pointages"},{id:"prices",l:"Historique prix"},{id:"backup",l:"Backup"},{id:"debug",l:"DEBUG"}].map(t=>(
         <button key={t.id} onClick={()=>setTab(t.id)} style={{padding:"5px 12px",borderRadius:8,border:`1.5px solid ${tab===t.id?C.primary:C.border}`,
           background:tab===t.id?C.primary:"transparent",color:tab===t.id?"#fff":C.text,fontSize:11,fontWeight:600,cursor:"pointer"}}>{t.l}</button>))}</div>
 
@@ -1673,18 +1673,95 @@ function SettingsScreen(){
       </div>
     </div>}
 
-    {tab==="caticons"&&(()=>{const cats=Object.keys({...DEFAULT_CAT_ICONS,...(settings.categoryIcons||{})});
-      return(<div style={{maxWidth:550}}>
+    {tab==="caticons"&&(()=>{
+      const EMOJI_GRID=["👕","👖","👗","🧶","👔","🧥","👟","👜","👒","🧣","🧤","👙","👠","🥿","👞","👢","🎒","💍","⌚","🕶️","👚","🩳","🩱","🧢","📦","🎀","✂️","🪡","🧵","💎","🛍️","👘","🥋","🧸","🎁","🏷️"];
+      const allCats=allCategories.filter(c=>c!=="Tous");
+      const customCats=settings.customCategories||[];
+      const defaultCatNames=["T-shirts","Jeans","Robes","Pulls","Chemises","Vestes"];
+      // Products count per category
+      const prodCountByCat={};products.forEach(p=>{if(p.category)prodCountByCat[p.category]=(prodCountByCat[p.category]||0)+1;});
+      return(<div style={{maxWidth:650}}>
         <div style={{background:C.primaryLight,borderRadius:16,padding:20,border:`1.5px solid ${C.primary}22`,marginBottom:16}}>
-          <h3 style={{fontSize:16,fontWeight:800,margin:"0 0 4px"}}>Icônes par catégorie</h3>
-          <p style={{fontSize:11,color:C.textMuted,margin:0}}>Associez un emoji à chaque catégorie de produits. L'emoji s'affiche sur les cartes produit en caisse.</p></div>
-        <div style={{display:"flex",flexDirection:"column",gap:6,marginBottom:14}}>
-          {cats.map(c=>{const val=(settings.categoryIcons||{})[c]||DEFAULT_CAT_ICONS[c]||"📦";
-            return(<div key={c} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderRadius:10,background:C.surfaceAlt,border:`1px solid ${C.border}`}}>
-              <span style={{fontSize:20}}>{val}</span>
-              <span style={{flex:1,fontSize:12,fontWeight:600}}>{c}</span>
-              <Input value={val} onChange={e=>setSettings(s=>({...s,categoryIcons:{...(s.categoryIcons||{}),[c]:e.target.value}}))} style={{width:60,textAlign:"center",fontSize:16}}/></div>);})}</div>
-        <Btn onClick={()=>{saveSettingsToAPI(settings);addAudit("CONFIG","Icônes catégories mis à jour");notify("Icônes sauvegardées","success");}} style={{width:"100%",height:40,background:C.primary}}><Save size={14}/> Enregistrer</Btn>
+          <h3 style={{fontSize:16,fontWeight:800,margin:"0 0 4px"}}>Gestion des catégories</h3>
+          <p style={{fontSize:11,color:C.textMuted,margin:0}}>Ajoutez, modifiez et personnalisez les catégories et leurs icônes. Les icônes s'affichent sur les cartes produit en caisse.</p></div>
+
+        {/* Add new category */}
+        <div style={{background:C.surface,borderRadius:12,padding:14,border:`1.5px dashed ${C.primary}44`,marginBottom:16}}>
+          <div style={{fontSize:12,fontWeight:700,marginBottom:8}}>Ajouter une catégorie</div>
+          <div style={{display:"flex",gap:8,alignItems:"center"}}>
+            <Input id="newCatName" placeholder="Nom de la catégorie" style={{flex:1,height:36,fontSize:12}}/>
+            <Btn onClick={()=>{
+              const inp=document.getElementById("newCatName");const name=(inp?.value||"").trim();
+              if(!name){notify("Entrez un nom de catégorie","error");return;}
+              if(allCats.includes(name)){notify("Cette catégorie existe déjà","error");return;}
+              const newCat={name,icon:"📦"};
+              setSettings(s=>({...s,customCategories:[...(s.customCategories||[]),newCat]}));
+              inp.value="";notify(`Catégorie "${name}" ajoutée`,"success");
+            }} style={{height:36,padding:"0 16px",background:C.primary}}><Plus size={14}/> Ajouter</Btn>
+          </div>
+        </div>
+
+        {/* Categories list */}
+        <div style={{display:"flex",flexDirection:"column",gap:6,marginBottom:16}}>
+          {allCats.map(c=>{
+            const isCustom=customCats.some(cc=>cc.name===c);
+            const isDefault=defaultCatNames.includes(c);
+            const icon=(settings.categoryIcons||{})[c]||DEFAULT_CAT_ICONS[c]||"📦";
+            const count=prodCountByCat[c]||0;
+            return(<div key={c} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",borderRadius:12,background:C.surface,border:`1.5px solid ${C.border}`,transition:"all 0.15s"}}>
+              {/* Emoji picker dropdown */}
+              <div style={{position:"relative"}}>
+                <button onClick={e=>{const dd=e.currentTarget.nextElementSibling;dd.style.display=dd.style.display==="none"?"block":"none";}}
+                  style={{width:40,height:40,borderRadius:10,border:`1.5px solid ${C.border}`,background:C.surfaceAlt,cursor:"pointer",fontSize:22,display:"flex",alignItems:"center",justifyContent:"center"}}>{icon}</button>
+                <div style={{display:"none",position:"absolute",top:44,left:0,zIndex:50,background:C.surface,borderRadius:12,padding:8,border:`1.5px solid ${C.border}`,boxShadow:`0 8px 24px ${C.shadowLg}`,width:220}}>
+                  <div style={{display:"grid",gridTemplateColumns:"repeat(6,1fr)",gap:4}}>
+                    {EMOJI_GRID.map(em=>(
+                      <button key={em} onClick={e=>{
+                        setSettings(s=>({...s,categoryIcons:{...(s.categoryIcons||{}),[c]:em}}));
+                        e.currentTarget.closest("div[style*='position: absolute']").style.display="none";
+                      }} style={{width:32,height:32,borderRadius:6,border:"none",background:icon===em?C.primaryLight:"transparent",cursor:"pointer",fontSize:18,display:"flex",alignItems:"center",justifyContent:"center",transition:"all 0.1s"}}
+                        onMouseEnter={e=>e.currentTarget.style.background=C.surfaceAlt} onMouseLeave={e=>e.currentTarget.style.background=icon===em?C.primaryLight:"transparent"}>{em}</button>))}
+                  </div>
+                  <div style={{marginTop:6,borderTop:`1px solid ${C.border}`,paddingTop:6}}>
+                    <Input placeholder="Ou tapez un emoji..." onChange={e=>{if(e.target.value)setSettings(s=>({...s,categoryIcons:{...(s.categoryIcons||{}),[c]:e.target.value}}));}} style={{width:"100%",height:28,fontSize:14,textAlign:"center"}}/></div>
+                </div>
+              </div>
+              <div style={{flex:1}}>
+                <div style={{fontSize:13,fontWeight:700}}>{c}</div>
+                <div style={{fontSize:10,color:C.textMuted}}>{count} produit{count>1?"s":""}{isDefault?" — par défaut":""}{isCustom?" — personnalisée":""}</div>
+              </div>
+              {isCustom&&<Btn variant="ghost" onClick={()=>{
+                if(count>0){notify(`Impossible de supprimer: ${count} produit(s) utilisent cette catégorie`,"error");return;}
+                setSettings(s=>({...s,customCategories:(s.customCategories||[]).filter(cc=>cc.name!==c),categoryIcons:(()=>{const ic={...(s.categoryIcons||{})};delete ic[c];return ic;})()}));
+                notify(`Catégorie "${c}" supprimée`);
+              }} style={{padding:"4px 8px",color:C.danger,fontSize:10}}><Trash2 size={12}/></Btn>}
+            </div>);
+          })}
+        </div>
+
+        {/* Bulk reassign category for products */}
+        <div style={{background:C.surfaceAlt,borderRadius:12,padding:14,border:`1px solid ${C.border}`,marginBottom:16}}>
+          <div style={{fontSize:12,fontWeight:700,marginBottom:8}}>Changer la catégorie de produits existants</div>
+          <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
+            <select id="bulkCatFrom" style={{height:34,borderRadius:8,border:`1.5px solid ${C.border}`,fontSize:11,padding:"0 8px",fontFamily:"inherit",background:C.surface}}>
+              <option value="">De (catégorie actuelle)</option>{allCats.map(c=><option key={c} value={c}>{c} ({prodCountByCat[c]||0})</option>)}</select>
+            <span style={{fontSize:11,color:C.textMuted,fontWeight:600}}>vers</span>
+            <select id="bulkCatTo" style={{height:34,borderRadius:8,border:`1.5px solid ${C.border}`,fontSize:11,padding:"0 8px",fontFamily:"inherit",background:C.surface}}>
+              <option value="">Vers (nouvelle catégorie)</option>{allCats.map(c=><option key={c} value={c}>{c}</option>)}</select>
+            <Btn variant="outline" onClick={async()=>{
+              const from=document.getElementById("bulkCatFrom")?.value;const to=document.getElementById("bulkCatTo")?.value;
+              if(!from||!to){notify("Sélectionnez les deux catégories","error");return;}
+              if(from===to){notify("Les catégories sont identiques","error");return;}
+              const toMove=products.filter(p=>p.category===from);
+              if(!toMove.length){notify(`Aucun produit dans "${from}"`,"error");return;}
+              let ok=0;for(const p of toMove){try{await updateProduct(p.id,{category:to});ok++;}catch(e){}}
+              notify(`${ok}/${toMove.length} produit(s) déplacés de "${from}" vers "${to}"`,"success");
+              addAudit("CONFIG",`Catégorie bulk: ${from} → ${to} (${ok} produits)`);
+            }} style={{height:34,fontSize:11,padding:"0 14px"}}>Déplacer</Btn>
+          </div>
+        </div>
+
+        <Btn onClick={()=>{saveSettingsToAPI(settings);addAudit("CONFIG","Catégories et icônes mis à jour");notify("Catégories sauvegardées","success");}} style={{width:"100%",height:44,background:C.primary,fontSize:13}}><Save size={14}/> Enregistrer les catégories</Btn>
       </div>);})()}
 
     {tab==="backup"&&<BackupPanel notify={notify} addAudit={addAudit}/>}

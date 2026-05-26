@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from "react";
 import { ShoppingCart, Search, Trash2, Percent, CreditCard, Banknote, Gift, Plus, Minus, Wallet, Package, RotateCcw, Users, FileText, CheckCircle2, AlertTriangle, WifiOff, Pause, Play, Printer, Star, Zap, ScanLine, Split, Mail, XOctagon, Edit } from "lucide-react";
 import printer from "../printer.js";
-import { CO, categories, C, CAT_COLORS } from "../constants.jsx";
+import { CO, C, CAT_COLORS } from "../constants.jsx";
 import { catIcon, EAN13Svg, ean13SvgHtml } from "../utils.jsx";
 import { Modal, Btn, Input, Badge, Numpad } from "../ui.jsx";
 import { useApp } from "../context.jsx";
@@ -12,7 +12,8 @@ function SalesScreen(){
     gDisc,gDiscType,setCartGD,promoCode,setPromoCode,calcPromoDiscount,isOnline,findByEAN,offlineMode,
     parked,parkCart,restoreCart,removeParked,customers,addCustomer,selCust,setSelCust,perm,notify,
     stockAlerts,activePromos,avoirPayment,selectedAvoir,setSelectedAvoir,getLoyaltyTier,tickets,saleNote,setSaleNote,favorites,toggleFavorite,getLastPriceForCustomer,settings,
-    printerConnected,thermalPrint,pendingSync,clearPendingSync,users,currentUser,currentStore,avoirs,consumeAvoir,isAvoirExpired,addAudit,addJET,trainingMode,cartTotals,retoucheBons,addRetoucheBon,cashReg,closures}=useApp();
+    printerConnected,thermalPrint,pendingSync,clearPendingSync,users,currentUser,currentStore,avoirs,consumeAvoir,isAvoirExpired,addAudit,addJET,trainingMode,cartTotals,retoucheBons,addRetoucheBon,cashReg,closures,allCategories}=useApp();
+  const categories=allCategories;
   const[search,setSearch]=useState("");const[cat,setCat]=useState("Tous");const[vm,setVm]=useState(null);const[selSeller,setSelSeller]=useState(null);
   const[dm,setDm]=useState(null);const[dv,setDv]=useState("");const[gm,setGm]=useState(false);const[gv,setGv]=useState("");const[gtp,setGtp]=useState("percentage");
   const[lastTk,setLastTk]=useState(null);const[tkModal,setTkModal]=useState(false);const[busy,setBusy]=useState(false);
@@ -162,11 +163,11 @@ function SalesScreen(){
         display:"flex",alignItems:"center",gap:8,fontSize:11,border:`1px solid ${C.warn}18`}}>
         <Zap size={13} color={C.warn}/><span style={{fontWeight:600,color:"#92720E"}}>Promos actives:</span>{activePromos.map(p=><Badge key={p.id} color={C.warn}>{p.name}</Badge>)}</div>}
       <div style={{display:"flex",gap:4,marginBottom:"var(--gap,10px)",overflowX:"auto",flexShrink:0,paddingBottom:2}}>
-        {categories.map(c=>{const cc=CAT_COLORS[c]||C.primary;return(
+        {categories.map(c=>{const cc=CAT_COLORS[c]||C.primary;const ic=c!=="Tous"?catIcon(c,settings.categoryIcons):"";return(
           <button key={c} onClick={()=>setCat(c)} style={{padding:"5px 12px",borderRadius:18,border:"none",
             background:cat===c?(c==="Tous"?C.primary:cc):"transparent",
             color:cat===c?"#fff":C.textMuted,fontSize:10,fontWeight:cat===c?700:500,cursor:"pointer",whiteSpace:"nowrap",
-            transition:"all 0.15s",boxShadow:cat===c?`0 2px 8px ${cc}30`:"none"}}>{c}</button>);})}
+            transition:"all 0.15s",boxShadow:cat===c?`0 2px 8px ${cc}30`:"none"}}>{ic?`${ic} `:""}{c}</button>);})}
         <button onClick={()=>setCat("Favoris")} style={{padding:"5px 12px",borderRadius:18,border:"none",
           background:cat==="Favoris"?C.accent:"transparent",color:cat==="Favoris"?"#fff":C.textMuted,
           fontSize:10,fontWeight:cat==="Favoris"?700:500,cursor:"pointer",whiteSpace:"nowrap",marginLeft:4,transition:"all 0.15s",

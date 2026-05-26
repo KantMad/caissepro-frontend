@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { Trash2, Plus, Download, Save, Upload, Zap, ScanLine, Edit } from "lucide-react";
 import * as API from "../api.js";
-import { DEFAULT_TVA_RATES, categories, C } from "../constants.jsx";
+import { DEFAULT_TVA_RATES, C } from "../constants.jsx";
 import { norm, printBarcodeLabels } from "../utils.jsx";
 import { Modal, Btn, Input, Badge, ConfirmDialog } from "../ui.jsx";
 import { useApp } from "../context.jsx";
@@ -10,7 +10,8 @@ import CSVImportWizard from "./CSVImportWizard.jsx";
 
 function ProductsScreen(){
   const{products,setProducts,refreshProducts,addProduct,addAudit,notify,perm:p,exportCatalog,duplicateProduct,
-    updateProduct,deleteProduct,addVariantToProduct,deleteVariant,reorderVariants,updateProductPrice,settings,tvaRates}=useApp();
+    updateProduct,deleteProduct,addVariantToProduct,deleteVariant,reorderVariants,updateProductPrice,settings,tvaRates,allCategories}=useApp();
+  const categories=allCategories;
   const pm=settings.pricingMode||"TTC";
   const[search,setSearch]=useState("");const[importWizardOpen,setImportWizardOpen]=useState(false);
   const[createModal,setCreateModal]=useState(false);
