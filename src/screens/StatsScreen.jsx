@@ -7,7 +7,7 @@ import { Btn, Input, Badge, SC } from "../ui.jsx";
 import { useApp } from "../context.jsx";
 
 function StatsScreen(){
-  const{tickets,products,avoirs,bestSellers:allBestSellers,salesBySeller,salesByVariant,caEvolution,salesByCollection,exportCSVReport,perm,commissions,salesGoals,setSellerGoal,settings}=useApp();
+  const{tickets,products,avoirs,bestSellers:allBestSellers,salesBySeller,salesByVariant,caEvolution,salesByCollection,exportCSVReport,perm,commissions,salesGoals,setSellerGoal,settings,mode}=useApp();
   const[tab,setTab]=useState("ca");
   const[dateFrom,setDateFrom]=useState("");const[dateTo,setDateTo]=useState("");const[catFilter,setCatFilter]=useState("");
   const[apiSummary,setApiSummary]=useState(null);const[apiBySeller,setApiBySeller]=useState(null);const[apiByDay,setApiByDay]=useState(null);const[apiBestSellers,setApiBestSellers]=useState(null);
@@ -114,7 +114,7 @@ function StatsScreen(){
       <SC icon={BarChart2} label="Marge %" value={stats.tHT>0?`${(stats.margin/stats.tHT*100).toFixed(1)}%`:"—"} color="#059669"/></div>
 
     <div style={{display:"flex",gap:6,marginBottom:14,flexWrap:"wrap"}}>
-      {[{id:"ca",l:"Évolution CA"},{id:"compare",l:"Comparaison"},{id:"hour",l:"CA par heure"},{id:"dow",l:"CA par jour"},{id:"best",l:"Best-sellers"},{id:"variantDetail",l:"Détail variantes"},{id:"seller",l:"Par vendeur"},{id:"variant",l:"Tailles/Couleurs"},{id:"collection",l:"Collections"},{id:"customers",l:"Clients"},{id:"returns",l:"Retours"},{id:"pay",l:"Paiements"},{id:"discounts",l:"Remises"}].map(t=>(
+      {[{id:"ca",l:"Évolution CA"},{id:"compare",l:"Comparaison"},{id:"hour",l:"CA par heure"},{id:"dow",l:"CA par jour"},{id:"best",l:"Best-sellers"},{id:"variantDetail",l:"Détail variantes"},...(mode!=="cashier"?[{id:"seller",l:"Par vendeur"}]:[]),{id:"variant",l:"Tailles/Couleurs"},{id:"collection",l:"Collections"},{id:"customers",l:"Clients"},{id:"returns",l:"Retours"},{id:"pay",l:"Paiements"},{id:"discounts",l:"Remises"}].map(t=>(
         <button key={t.id} onClick={()=>setTab(t.id)} style={{padding:"5px 12px",borderRadius:8,border:`1.5px solid ${tab===t.id?C.primary:C.border}`,
           background:tab===t.id?C.primary:"transparent",color:tab===t.id?"#fff":C.text,fontSize:11,fontWeight:600,cursor:"pointer"}}>{t.l}</button>))}</div>
 

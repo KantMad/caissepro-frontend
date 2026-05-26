@@ -35,6 +35,24 @@ function ExportsScreen(){
       {key:"saleNote",label:"Note de vente",default:false},
       {key:"fingerprint",label:"Empreinte NF525",default:false},
     ],
+    salesDetail:[
+      {key:"ticketNumber",label:"N° Ticket",default:true},
+      {key:"date",label:"Date",default:true},
+      {key:"userName",label:"Vendeur",default:true},
+      {key:"customerName",label:"Client",default:true},
+      {key:"productName",label:"Produit",default:true},
+      {key:"sku",label:"Réf/SKU",default:true},
+      {key:"ean",label:"EAN",default:true},
+      {key:"category",label:"Catégorie",default:true},
+      {key:"collection",label:"Collection",default:true},
+      {key:"color",label:"Couleur",default:true},
+      {key:"size",label:"Taille",default:true},
+      {key:"quantity",label:"Quantité",default:true},
+      {key:"unitPrice",label:"Prix unitaire TTC",default:true},
+      {key:"lineTTC",label:"Ligne TTC",default:true},
+      {key:"discount",label:"Remise article",default:true},
+      {key:"paymentMethod",label:"Mode de paiement",default:true},
+    ],
     returns:[
       {key:"avoirNumber",label:"N° Avoir",default:true},
       {key:"date",label:"Date",default:true},
@@ -227,10 +245,39 @@ function ExportsScreen(){
       return row;});
   };
 
+  const buildSalesDetailRows=()=>{
+    const sel=fields.salesDetail||{};const payLabels={cash:"Espèces",card:"CB",amex:"Amex",contactless:"Sans-contact",giftcard:"Carte cadeau",cheque:"Chèque",avoir:"Avoir"};
+    const rows=[];
+    filteredSales.forEach(t=>{const seller=t.sellerName||t.seller_name||t.userName||t.user_name||"";
+      const client=t.customerName||t.customer_name||"";
+      const tkDate=new Date(t.date||t.createdAt||t.created_at).toLocaleString("fr-FR");
+      const payStr=(t.payments||[]).map(p=>`${payLabels[p.method]||p.method}: ${Number(p.amount||0).toFixed(2)}€`).join(", ");
+      (t.items||[]).forEach(i=>{const row={};
+        if(sel.ticketNumber)row["N° Ticket"]=t.ticketNumber||t.ticket_number||"";
+        if(sel.date)row["Date"]=tkDate;
+        if(sel.userName)row["Vendeur"]=seller;
+        if(sel.customerName)row["Client"]=client;
+        if(sel.productName)row["Produit"]=i.product?.name||i.product_name||i.name||"";
+        if(sel.sku)row["Réf/SKU"]=i.product?.sku||i.product_sku||i.sku||"";
+        if(sel.ean)row["EAN"]=i.variant?.ean||i.variant_ean||i.ean||"";
+        if(sel.category)row["Catégorie"]=i.product?.category||i.category||"";
+        if(sel.collection)row["Collection"]=i.product?.collection||i.collection||"";
+        if(sel.color)row["Couleur"]=i.variant?.color||i.variant_color||i.color||"";
+        if(sel.size)row["Taille"]=i.variant?.size||i.variant_size||i.size||"";
+        if(sel.quantity)row["Quantité"]=i.quantity||1;
+        if(sel.unitPrice)row["Prix unitaire TTC"]=Number(i.unit_price||i.unitTTC||0).toFixed(2);
+        if(sel.lineTTC)row["Ligne TTC"]=Number(i.lineTTC||i.line_ttc||(Number(i.unit_price||0)*(i.quantity||1))).toFixed(2);
+        if(sel.discount)row["Remise article"]=i.discount?`${i.discount}${i.discountType==="amount"||i.discount_type==="amount"?"€":"%"}`:"";
+        if(sel.paymentMethod)row["Paiement"]=payStr;
+        rows.push(row);});
+    });return rows;
+  };
+
   const doExport=()=>{
     let rows,filename;
     const d=dateFrom&&dateTo?`${dateFrom}_${dateTo}`:"all";
     if(tab==="sales"){rows=buildSalesRows();filename=`ventes_${d}.csv`;}
+    else if(tab==="salesDetail"){rows=buildSalesDetailRows();filename=`ventes_detail_${d}.csv`;}
     else if(tab==="returns"){rows=buildReturnsRows(filteredReturns,fields.returns);filename=`retours_${d}.csv`;}
     else if(tab==="exchanges"){rows=buildReturnsRows(filteredExchanges,fields.exchanges);filename=`echanges_${d}.csv`;}
     else if(tab==="refunds"){rows=buildReturnsRows(filteredRefunds,fields.refunds);filename=`remboursements_${d}.csv`;}
@@ -365,21 +412,24 @@ Facture générée par ${CO.sw} v${CO.ver}</div></body></html>`;
     setInvoiceModal(false);setInvoiceTicket(null);setInvoiceClient(null);setInvoiceNotes("");
   };
 
+  const salesDetailCount=useMemo(()=>filteredSales.reduce((s,t)=>s+(t.items||[]).length,0),[filteredSales]);
   const tabs=[
     {id:"sales",label:"Ventes",icon:Receipt,count:filteredSales.length},
+    {id:"salesDetail",label:"Détail articles",icon:Grid,count:salesDetailCount},
     {id:"returns",label:"Retours",icon:RotateCcw,count:filteredReturns.length},
     {id:"exchanges",label:"Échanges",icon:Split,count:filteredExchanges.length},
     {id:"refunds",label:"Remboursements",icon:DollarSign,count:filteredRefunds.length},
     {id:"clients",label:"Clients",icon:Users,count:filteredClients.length},
   ];
 
-  const currentCount=tab==="sales"?filteredSales.length:tab==="returns"?filteredReturns.length:tab==="exchanges"?filteredExchanges.length:tab==="refunds"?filteredRefunds.length:filteredClients.length;
+  const currentCount=tab==="sales"?filteredSales.length:tab==="salesDetail"?salesDetailCount:tab==="returns"?filteredReturns.length:tab==="exchanges"?filteredExchanges.length:tab==="refunds"?filteredRefunds.length:filteredClients.length;
   const activeFields=FIELD_DEFS[tab]||[];
   const selectedCount=activeFields.filter(f=>fields[tab]?.[f.key]).length;
 
   // Data preview (first 10 rows)
   const previewData=useMemo(()=>{
     if(tab==="sales")return filteredSales.slice(0,10);
+    if(tab==="salesDetail"){const rows=[];filteredSales.some(t=>{(t.items||[]).forEach(i=>{if(rows.length<10)rows.push({...t,_item:i});});return rows.length>=10;});return rows;}
     if(tab==="returns")return filteredReturns.slice(0,10);
     if(tab==="exchanges")return filteredExchanges.slice(0,10);
     if(tab==="refunds")return filteredRefunds.slice(0,10);

@@ -1048,6 +1048,7 @@ function SettingsScreen(){
   const{settings,setSettings,saveSettingsToAPI,addAudit,theme,setTheme,clockEntries,priceHistory,printerConnected,printerType,connectPrinter,disconnectPrinter,thermalPrint,notify,users,hwId,hwProfile,switchHardware,hardwareProfiles,paymentId,paymentConfig,switchPayment,updatePaymentConfig,paymentProfiles,perm,effectiveStoreId,allCategories,products,updateProduct}=useApp();
   if(!perm().canSettings) return <div style={{padding:40,textAlign:"center",color:C.textMuted,fontSize:16,fontWeight:600}}>Accès refusé</div>;
   const[tab,setTab]=useState("general");
+  const[expandedCat,setExpandedCat]=useState(null);
   const[printerBaud,setPrinterBaud]=useState("9600");
   const[printerWidth,setPrinterWidth]=useState("48");
   const[connecting,setConnecting]=useState(false);
@@ -1708,7 +1709,8 @@ function SettingsScreen(){
             const isDefault=defaultCatNames.includes(c);
             const icon=(settings.categoryIcons||{})[c]||DEFAULT_CAT_ICONS[c]||"📦";
             const count=prodCountByCat[c]||0;
-            return(<div key={c} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",borderRadius:12,background:C.surface,border:`1.5px solid ${C.border}`,transition:"all 0.15s"}}>
+            return(<React.Fragment key={c}>
+              <div style={{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",borderRadius:12,background:expandedCat===c?C.primaryLight:C.surface,border:`1.5px solid ${expandedCat===c?C.primary+"33":C.border}`,transition:"all 0.15s"}}>
               {/* Emoji picker dropdown */}
               <div style={{position:"relative"}}>
                 <button onClick={e=>{const dd=e.currentTarget.nextElementSibling;dd.style.display=dd.style.display==="none"?"block":"none";}}
@@ -1726,16 +1728,35 @@ function SettingsScreen(){
                     <Input placeholder="Ou tapez un emoji..." onChange={e=>{if(e.target.value)setSettings(s=>({...s,categoryIcons:{...(s.categoryIcons||{}),[c]:e.target.value}}));}} style={{width:"100%",height:28,fontSize:14,textAlign:"center"}}/></div>
                 </div>
               </div>
-              <div style={{flex:1}}>
+              <div style={{flex:1,cursor:"pointer"}} onClick={()=>setExpandedCat(expandedCat===c?null:c)}>
                 <div style={{fontSize:13,fontWeight:700}}>{c}</div>
-                <div style={{fontSize:10,color:C.textMuted}}>{count} produit{count>1?"s":""}{isDefault?" — par défaut":""}{isCustom?" — personnalisée":""}</div>
+                <div style={{fontSize:10,color:C.textMuted}}>{count} produit{count>1?"s":""}{isDefault?" — par défaut":""}{isCustom?" — personnalisée":""}{count>0?" — cliquez pour voir les produits":""}</div>
               </div>
               {isCustom&&<Btn variant="ghost" onClick={()=>{
                 if(count>0){notify(`Impossible de supprimer: ${count} produit(s) utilisent cette catégorie`,"error");return;}
                 setSettings(s=>({...s,customCategories:(s.customCategories||[]).filter(cc=>cc.name!==c),categoryIcons:(()=>{const ic={...(s.categoryIcons||{})};delete ic[c];return ic;})()}));
                 notify(`Catégorie "${c}" supprimée`);
               }} style={{padding:"4px 8px",color:C.danger,fontSize:10}}><Trash2 size={12}/></Btn>}
-            </div>);
+            </div>
+            {/* Expanded product list for this category */}
+            {expandedCat===c&&count>0&&<div style={{marginLeft:16,marginBottom:4,padding:10,borderRadius:10,background:C.surfaceAlt,border:`1px solid ${C.border}`}}>
+              <div style={{fontSize:10,fontWeight:700,color:C.textMuted,marginBottom:6}}>Produits dans "{c}" — modifier la catégorie :</div>
+              <div style={{display:"flex",flexDirection:"column",gap:4,maxHeight:250,overflowY:"auto"}}>
+                {products.filter(p=>p.category===c).map(p=>(
+                  <div key={p.id} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 10px",borderRadius:8,background:C.surface,border:`1px solid ${C.border}`}}>
+                    <div style={{flex:1}}>
+                      <div style={{fontSize:11,fontWeight:600}}>{p.name}</div>
+                      <div style={{fontSize:9,color:C.textMuted,fontFamily:"monospace"}}>{p.sku||"—"}</div>
+                    </div>
+                    <select value={p.category||""} onChange={async e=>{const newCat=e.target.value;
+                      try{await updateProduct(p.id,{category:newCat});notify(`${p.name} → ${newCat}`,"success");}catch(err){notify("Erreur: "+err.message,"error");}
+                    }} style={{height:28,borderRadius:6,border:`1.5px solid ${C.border}`,fontSize:10,padding:"0 6px",fontFamily:"inherit",background:C.surface,minWidth:120}}>
+                      {allCats.map(cat=><option key={cat} value={cat}>{cat}</option>)}
+                    </select>
+                  </div>))}
+              </div>
+            </div>}
+            </React.Fragment>);
           })}
         </div>
 
