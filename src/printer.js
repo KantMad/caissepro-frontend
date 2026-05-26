@@ -380,8 +380,8 @@ class ThermalPrinter {
       await this.bold(true);
       await this.line(`N° ${ticket.ticketNumber}`, new Date(ticket.date || ticket.createdAt || '').toLocaleString('fr-FR'));
       await this.bold(false);
-      if (!isGift) await this.line(`Caissier: ${ticket.userName || '?'}`);
-      if (ticket.customerName) await this.line(`Client: ${ticket.customerName}`);
+      if (!isGift) { await this.bold(true); await this.line(`Caissier: ${ticket.userName || '?'}`); await this.bold(false); }
+      if (ticket.customerName) { await this.bold(true); await this.line(`Client: ${ticket.customerName}`); await this.bold(false); }
 
       await this.separator('-');
 
@@ -405,12 +405,11 @@ class ThermalPrinter {
         await this.newline();
         await this.bold(false);
 
-        // Variant details — normal font for readability
+        // Variant details
         if (!isCustom && (color || size)) {
           let detail = `  ${color}/${size}`;
           if (!isGift && sku) detail += ` | Ref: ${sku}`;
-          await this.text(detail);
-          await this.newline();
+          await this.bold(true); await this.text(detail); await this.newline(); await this.bold(false);
           if (!isGift && ean) {
             await this.fontSmall();
             await this.text(`  EAN: ${ean}`);
@@ -455,7 +454,7 @@ class ThermalPrinter {
         await this.bold(false);
 
         if (ticket.globalDiscount > 0) {
-          await this.line('Remise', `-${ticket.globalDiscount.toFixed(2)}€`);
+          await this.bold(true); await this.line('Remise', `-${ticket.globalDiscount.toFixed(2)}€`); await this.bold(false);
         }
 
         await this.bold(true);
@@ -470,13 +469,15 @@ class ThermalPrinter {
         const methodLabels = { cash: 'ESP', card: 'CB', giftcard: 'CAD', cheque: 'CHQ', avoir: 'AVOIR' };
         if (ticket.payments?.length) {
           const payStr = ticket.payments.map(p => `${methodLabels[p.method] || p.method} ${p.amount.toFixed(2)}€`).join(' + ');
-          await this.line('Paiement:', payStr);
+          await this.bold(true); await this.line('Paiement:', payStr); await this.bold(false);
         }
 
         // Cash change
         if (ticket.paymentMethod === 'cash' && ticket.cashGiven > 0) {
+          await this.bold(true);
           await this.line('Recu:', `${ticket.cashGiven.toFixed(2)}€`);
           await this.line('Rendu:', `${(ticket.cashGiven - (ticket.totalTTC || 0)).toFixed(2)}€`);
+          await this.bold(false);
         }
 
         await this.separator('=');
@@ -508,8 +509,10 @@ class ThermalPrinter {
       // ── Footer ──
       await this.alignCenter();
       await this.fontNormal();
+      await this.bold(true);
       await this.text('Garantie legale 2 ans');
       await this.newline();
+      await this.bold(false);
 
       // Footer message (thank you) — prominent
       if (s.footerMsg || co.footerMsg) {
@@ -601,12 +604,14 @@ class ThermalPrinter {
       await this.separator('=');
       await this.alignLeft();
 
+      await this.bold(true);
       await this.line(`N° ${avoir.avoirNumber}`);
-      await this.line(`Ticket original: ${avoir.originalTicket}`);
-      await this.line(`Date: ${new Date(avoir.date).toLocaleString('fr-FR')}`);
-      if (avoir.userName) await this.line(`Caissier: ${avoir.userName}`);
-      if (avoir.customerName) await this.line(`Client: ${avoir.customerName}`);
-      await this.line(`Motif: ${avoir.reason || 'Non specifie'}`);
+      await this.bold(false);
+      await this.bold(true); await this.line(`Ticket original: ${avoir.originalTicket}`); await this.bold(false);
+      await this.bold(true); await this.line(`Date: ${new Date(avoir.date).toLocaleString('fr-FR')}`); await this.bold(false);
+      if (avoir.userName) { await this.bold(true); await this.line(`Caissier: ${avoir.userName}`); await this.bold(false); }
+      if (avoir.customerName) { await this.bold(true); await this.line(`Client: ${avoir.customerName}`); await this.bold(false); }
+      await this.bold(true); await this.line(`Motif: ${avoir.reason || 'Non specifie'}`); await this.bold(false);
 
       await this.separator('-');
 
@@ -615,8 +620,8 @@ class ThermalPrinter {
         const name = item.product?.name || '?';
         const sku = item.product?.sku || '';
         const variant = item.variant ? ` (${item.variant.color}/${item.variant.size})` : '';
-        await this.line(`${name}${variant} x${item.quantity}`, `-${(item.lineTTC || 0).toFixed(2)}€`);
-        if (sku) { await this.fontSmall(); await this.line(`  Ref: ${sku}`); await this.fontNormal(); }
+        await this.bold(true); await this.line(`${name}${variant} x${item.quantity}`, `-${(item.lineTTC || 0).toFixed(2)}€`); await this.bold(false);
+        if (sku) { await this.fontSmall(); await this.bold(true); await this.line(`  Ref: ${sku}`); await this.bold(false); await this.fontNormal(); }
       }
 
       await this.separator('-');
@@ -628,17 +633,15 @@ class ThermalPrinter {
       await this.line('TOTAL AVOIR', `-${(avoir.totalTTC || 0).toFixed(2)}€`);
       await this.normalSize();
       await this.bold(false);
-      await this.line('Remboursement:', refundLabels[avoir.refundMethod] || avoir.refundMethod);
+      await this.bold(true); await this.line('Remboursement:', refundLabels[avoir.refundMethod] || avoir.refundMethod); await this.bold(false);
 
       await this.separator('=');
 
       // NF525
       await this.alignCenter();
-      await this.fontSmall();
       await this.bold(true);
       await this.text('EMPREINTE NF525');
       await this.newline();
-      await this.fontNormal();
       await this.text(avoir.fingerprint || '—');
       await this.newline();
       await this.bold(false);
@@ -686,19 +689,23 @@ class ThermalPrinter {
       await this.separator('=');
       await this.alignLeft();
 
+      await this.bold(true);
       await this.line(`N° ${closure.closureNumber || closure.zNumber || '?'}`);
       await this.line(`Date: ${new Date(closure.date || closure.closedAt).toLocaleString('fr-FR')}`);
       await this.line(`Caissier: ${closure.userName || '?'}`);
+      await this.bold(false);
 
       await this.separator('-');
 
       await this.bold(true);
+      await this.doubleSize();
       await this.line('CA TTC', `${(closure.totalTTC || closure.totalCA || 0).toFixed(2)}€`);
-      await this.bold(false);
+      await this.normalSize();
       await this.line('Total HT', `${(closure.totalHT || 0).toFixed(2)}€`);
       await this.line('Total TVA', `${(closure.totalTVA || 0).toFixed(2)}€`);
       await this.line('Nb ventes', `${closure.salesCount || closure.nbSales || 0}`);
       await this.line('Panier moyen', `${(closure.avgBasket || 0).toFixed(2)}€`);
+      await this.bold(false);
 
       await this.separator('-');
       await this.bold(true);
@@ -709,35 +716,35 @@ class ThermalPrinter {
       const payments = closure.payments || closure.byPayment || {};
       const payLabels = { cash: 'Especes', card: 'Carte', giftcard: 'Cadeaux', cheque: 'Cheques', avoir: 'Avoirs' };
       for (const [method, amount] of Object.entries(payments)) {
-        await this.line(`  ${payLabels[method] || method}`, `${(typeof amount === 'number' ? amount : amount?.total || 0).toFixed(2)}€`);
+        await this.bold(true); await this.line(`  ${payLabels[method] || method}`, `${(typeof amount === 'number' ? amount : amount?.total || 0).toFixed(2)}€`); await this.bold(false);
       }
 
       if (closure.openingAmount !== undefined || closure.closingAmount !== undefined) {
         await this.separator('-');
+        await this.bold(true);
         await this.line('Fond ouverture', `${(closure.openingAmount || 0).toFixed(2)}€`);
         await this.line('Fond fermeture', `${(closure.closingAmount || 0).toFixed(2)}€`);
         if (closure.cashDiff !== undefined) {
           await this.line('Ecart', `${closure.cashDiff.toFixed(2)}€`);
         }
+        await this.bold(false);
       }
 
       await this.separator('=');
 
       // NF525
       await this.alignCenter();
-      await this.fontSmall();
       await this.bold(true);
       await this.text('EMPREINTE NF525');
       await this.newline();
-      await this.fontNormal();
       await this.text(closure.fingerprint || '—');
       await this.newline();
       await this.bold(false);
 
-      await this.fontSmall();
+      await this.bold(true);
       await this.text(`${co.sw || 'CaissePro'} v${co.ver || '6.1.0'}`);
       await this.newline();
-      await this.fontNormal();
+      await this.bold(false);
 
       await this.feed(4);
       await this.cut();
@@ -1055,9 +1062,9 @@ class ThermalPrinter {
       await this.bold(true);
       await this.line(`N° ${bon.num}`, new Date(bon.date || '').toLocaleString('fr-FR'));
       await this.bold(false);
-      if (bon.seller) await this.line(`Vendeur: ${bon.seller}`);
-      if (bon.client) await this.line(`Client: ${bon.client}`);
-      if (bon.phone) await this.line(`Tel: ${bon.phone}`);
+      if (bon.seller) { await this.bold(true); await this.line(`Vendeur: ${bon.seller}`); await this.bold(false); }
+      if (bon.client) { await this.bold(true); await this.line(`Client: ${bon.client}`); await this.bold(false); }
+      if (bon.phone) { await this.bold(true); await this.line(`Tel: ${bon.phone}`); await this.bold(false); }
 
       await this.separator('-');
 
@@ -1096,8 +1103,10 @@ class ThermalPrinter {
       const totalHT = totalTTC / (1 + tvaRate);
       const totalTVA = totalTTC - totalHT;
 
+      await this.bold(true);
       await this.line('Sous-total HT', `${totalHT.toFixed(2)}€`);
       await this.line(`TVA ${(tvaRate * 100).toFixed(1)}%`, `${totalTVA.toFixed(2)}€`);
+      await this.bold(false);
 
       await this.bold(true);
       await this.doubleSize();
@@ -1118,7 +1127,8 @@ class ThermalPrinter {
 
       // ── Footer ──
       await this.alignCenter();
-      await this.fontSmall();
+      await this.fontNormal();
+      await this.bold(true);
       await this.text(`${co.sw || 'CaissePro'} v${co.ver || '6.1.0'}`);
       await this.newline();
       if (s.retoucheMsg) {
@@ -1132,7 +1142,7 @@ class ThermalPrinter {
         await this.text(s.footerMsg || co.footerMsg);
         await this.newline();
       }
-      await this.fontNormal();
+      await this.bold(false);
 
       // EAN-13 barcode
       if (bon.barcode) {
@@ -1192,7 +1202,6 @@ class ThermalPrinter {
       await this.bold(true);
       await this.text(`Code: ${card.code}`);
       await this.newline();
-      await this.bold(false);
 
       await this.text(`Date: ${new Date(card.created_at).toLocaleDateString('fr-FR')}`);
       await this.newline();
@@ -1206,6 +1215,7 @@ class ThermalPrinter {
         await this.text(`Client: ${card.customer_name}`);
         await this.newline();
       }
+      await this.bold(false);
 
       await this.separator('-');
 
@@ -1218,15 +1228,15 @@ class ThermalPrinter {
       await this.bold(false);
 
       if (card.initial_amount !== card.remaining) {
-        await this.fontSmall();
+        await this.bold(true);
         await this.text(`Montant initial: ${parseFloat(card.initial_amount).toFixed(2)} EUR`);
         await this.newline();
-        await this.fontNormal();
+        await this.bold(false);
       }
 
       await this.separator('-');
 
-      await this.fontSmall();
+      await this.bold(true);
       await this.text('Presentez ce ticket pour utiliser');
       await this.newline();
       await this.text('votre carte cadeau en magasin.');

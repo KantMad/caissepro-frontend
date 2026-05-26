@@ -216,9 +216,9 @@ class SunmiPrinterAdapter {
 
     // Header
     align(1);
-    size(28); bold(true);
+    size(32); bold(true);
     text((s.name || co.name || 'Ma Boutique') + '\n');
-    size(20); bold(false);
+    size(24); bold(false);
     if (s.address) text(s.address + '\n');
     if (s.postalCode || s.city) text(`${s.postalCode || ''} ${s.city || ''}\n`);
     if (s.phone) text(`Tel: ${s.phone}\n`);
@@ -234,14 +234,14 @@ class SunmiPrinterAdapter {
     let dateStr = '';
     try { dateStr = new Date(t.date || t.createdAt || Date.now()).toLocaleString('fr-FR'); } catch (e) {}
     if (isGift) {
-      align(1); size(28); bold(true);
+      align(1); size(32); bold(true);
       text('TICKET CADEAU\n');
-      size(20); bold(false); align(0);
+      size(24); bold(false); align(0);
     }
     text(`N: ${t.ticketNumber || t.ticket_number || '?'}  ${dateStr}\n`);
     bold(false);
-    if (!isGift) text(`Caissier: ${t.userName || t.user_name || '?'}\n`);
-    if (t.customerName || t.customer_name) text(`Client: ${t.customerName || t.customer_name}\n`);
+    if (!isGift) { bold(true); text(`Caissier: ${t.userName || t.user_name || '?'}\n`); bold(false); }
+    if (t.customerName || t.customer_name) { bold(true); text(`Client: ${t.customerName || t.customer_name}\n`); bold(false); }
     cmds.push({ cmd: 'line', char: '-', len: 32 });
 
     // Items
@@ -261,7 +261,7 @@ class SunmiPrinterAdapter {
       if (isGift) {
         text(`  x${qty}\n`);
       } else {
-        text(`  x${qty}  ${fmt(lineTTC)} EUR\n`);
+        bold(true); text(`  x${qty}  ${fmt(lineTTC)} EUR\n`); bold(false);
       }
     }
     cmds.push({ cmd: 'line', char: '-', len: 32 });
@@ -270,51 +270,53 @@ class SunmiPrinterAdapter {
       // Promos
       if (t.promosApplied?.length > 0) {
         for (const promo of t.promosApplied) {
-          size(18); text(`  * ${promo}\n`); size(20);
+          size(22); text(`  * ${promo}\n`); size(24);
         }
         cmds.push({ cmd: 'line', char: '-', len: 32 });
       }
 
       // Discount
       if (Number(t.globalDiscount || t.global_discount || 0) > 0) {
-        text(`Remise       -${fmt(t.globalDiscount || t.global_discount)} EUR\n`);
+        bold(true); text(`Remise       -${fmt(t.globalDiscount || t.global_discount)} EUR\n`); bold(false);
       }
 
       // Totals
+      bold(true);
       text(`Total HT     ${fmt(t.totalHT || t.total_ht)} EUR\n`);
       text(`TVA          ${fmt(t.totalTVA || t.total_tva)} EUR\n`);
-      bold(true); size(28);
+      size(32);
       text(`TOTAL TTC    ${fmt(t.totalTTC || t.total_ttc)} EUR\n`);
-      size(20); bold(false);
+      size(24); bold(false);
 
       // Payment
       const ml = { cash: 'ESP', card: 'CB', amex: 'AMEX', giftcard: 'CAD', cheque: 'CHQ', avoir: 'AVOIR' };
       const payments = t.payments || [];
       if (payments.length > 0) {
         const payStr = payments.map(p => `${ml[p.method] || p.method || '?'} ${fmt(p.amount)} EUR`).join(' + ');
-        text(`Paiement: ${payStr}\n`);
+        bold(true); text(`Paiement: ${payStr}\n`); bold(false);
       }
       cmds.push({ cmd: 'line', char: '=', len: 32 });
 
       // NF525
-      align(1); size(18);
+      align(1); size(22); bold(true);
       text('EMPREINTE NF525\n');
-      size(22); bold(true);
+      size(24);
       text(`${t.fingerprint || t.hash || '-'}\n`);
       bold(false);
     } else {
       // Gift card footer
-      align(1); size(18);
+      align(1); size(22); bold(true);
       text(`Echange possible sous ${(t._returnDays || 30)} jours\n`);
       text('sur presentation de ce ticket\n');
-      size(20);
+      bold(false); size(24);
       cmds.push({ cmd: 'line', char: '=', len: 32 });
     }
 
     // Footer
-    size(16);
+    size(20); bold(true);
     text(`${co.sw || 'CaissePro'} v${co.ver || '6.1.0'} - Conforme NF525\n`);
-    if (s.footerMsg || co.footerMsg) text(`${s.footerMsg || co.footerMsg}\n`);
+    bold(false);
+    if (s.footerMsg || co.footerMsg) { bold(true); text(`${s.footerMsg || co.footerMsg}\n`); bold(false); }
     if (t.customerName || t.customer_name) {
       text(`Fidelite: +${Math.floor(Number(t.totalTTC || t.total_ttc) || 0)}pts\n`);
     }
@@ -343,31 +345,31 @@ class SunmiPrinterAdapter {
     const size = (v) => cmds.push({ cmd: 'size', value: v });
     const align = (v) => cmds.push({ cmd: 'align', value: v });
 
-    align(1); size(28); bold(true);
+    align(1); size(32); bold(true);
     text('AVOIR / NOTE DE CREDIT\n');
-    size(22); text((s.name || co.name || 'Ma Boutique') + '\n');
-    bold(false); size(20); align(0);
+    size(26); text((s.name || co.name || 'Ma Boutique') + '\n');
+    bold(false); size(24); align(0);
     cmds.push({ cmd: 'line', char: '=', len: 32 });
-    text(`N: ${a.avoirNumber || a.avoir_number || '?'}\n`);
+    bold(true); text(`N: ${a.avoirNumber || a.avoir_number || '?'}\n`); bold(false);
     text(`Ticket original: ${a.originalTicket || a.original_ticket || '?'}\n`);
     let dateStr = '';
     try { dateStr = new Date(a.date || Date.now()).toLocaleString('fr-FR'); } catch (e) {}
     text(`Date: ${dateStr}\n`);
-    text(`Motif: ${a.reason || 'Non specifie'}\n`);
+    bold(true); text(`Motif: ${a.reason || 'Non specifie'}\n`); bold(false);
     cmds.push({ cmd: 'line', char: '-', len: 32 });
     for (const item of (a.items || [])) {
       if (!item) continue;
       const name = item.product?.name || item.product_name || '?';
       const v = item.variant ? ` (${item.variant.color || ''}/${item.variant.size || ''})` : '';
-      text(`${name}${v} x${item.quantity || 1}  -${fmt(item.lineTTC || item.line_ttc)} EUR\n`);
+      bold(true); text(`${name}${v} x${item.quantity || 1}  -${fmt(item.lineTTC || item.line_ttc)} EUR\n`); bold(false);
     }
     cmds.push({ cmd: 'line', char: '-', len: 32 });
-    bold(true); size(28);
+    bold(true); size(32);
     text(`TOTAL AVOIR  -${fmt(a.totalTTC || a.total_ttc)} EUR\n`);
-    size(20); bold(false);
+    size(24); bold(false);
     cmds.push({ cmd: 'line', char: '=', len: 32 });
-    align(1); size(18);
-    text(`EMPREINTE NF525\n${a.fingerprint || a.hash || '-'}\n`);
+    align(1); size(22); bold(true);
+    text(`EMPREINTE NF525\n${a.fingerprint || a.hash || '-'}\n`); bold(false);
 
     // EAN-13 barcode
     if (a.barcode && a.barcode.length === 13) {
@@ -391,26 +393,24 @@ class SunmiPrinterAdapter {
     const size = (v) => cmds.push({ cmd: 'size', value: v });
     const align = (v) => cmds.push({ cmd: 'align', value: v });
 
-    align(1); size(28); bold(true);
+    align(1); size(32); bold(true);
     text('CLOTURE DE CAISSE\n');
-    size(22); text((s.name || co.name || 'Ma Boutique') + '\n');
-    bold(false); size(20); align(0);
+    size(26); text((s.name || co.name || 'Ma Boutique') + '\n');
+    bold(false); size(24); align(0);
     cmds.push({ cmd: 'line', char: '=', len: 32 });
-    let dateStr = '';
-    try { dateStr = new Date(c.date || c.closedAt || Date.now()).toLocaleString('fr-FR'); } catch (e) {}
-    text(`Date: ${dateStr}\n`);
-    text(`Caissier: ${c.userName || c.user_name || '?'}\n`);
+    bold(true); text(`Date: ${(() => { try { return new Date(c.date || c.closedAt || Date.now()).toLocaleString('fr-FR'); } catch (e) { return '?'; } })()}\n`);
+    text(`Caissier: ${c.userName || c.user_name || '?'}\n`); bold(false);
     cmds.push({ cmd: 'line', char: '-', len: 32 });
-    bold(true);
+    bold(true); size(28);
     text(`CA TTC       ${fmt(c.totalTTC || c.totalCA || c.total_ttc)} EUR\n`);
-    bold(false);
-    text(`Total HT     ${fmt(c.totalHT || c.total_ht)} EUR\n`);
+    size(24); bold(false);
+    bold(true); text(`Total HT     ${fmt(c.totalHT || c.total_ht)} EUR\n`);
     text(`Total TVA    ${fmt(c.totalTVA || c.total_tva)} EUR\n`);
     text(`Nb ventes    ${c.salesCount || c.nbSales || c.sales_count || 0}\n`);
-    text(`Panier moyen ${fmt(c.avgBasket || c.avg_basket)} EUR\n`);
+    text(`Panier moyen ${fmt(c.avgBasket || c.avg_basket)} EUR\n`); bold(false);
     cmds.push({ cmd: 'line', char: '=', len: 32 });
-    align(1); size(18);
-    text(`EMPREINTE NF525\n${c.fingerprint || c.hash || '-'}\n`);
+    align(1); size(22); bold(true);
+    text(`EMPREINTE NF525\n${c.fingerprint || c.hash || '-'}\n`); bold(false);
     cmds.push({ cmd: 'feed', lines: 4 });
     cmds.push({ cmd: 'cut' });
     return cmds;
@@ -477,18 +477,18 @@ class SunmiPrinterAdapter {
     const align = (v) => cmds.push({ cmd: 'align', value: v });
 
     // Header (same as receipt)
-    align(1); size(28); bold(true);
+    align(1); size(32); bold(true);
     text((s.name || co.name || 'Ma Boutique') + '\n');
-    size(20); bold(false);
+    size(24); bold(false);
     if (s.address) text(s.address + '\n');
     if (s.postalCode || s.city) text(`${s.postalCode || ''} ${s.city || ''}\n`);
     if (s.phone) text(`Tel: ${s.phone}\n`);
     if (s.siret) text(`SIRET: ${s.siret}\n`);
     cmds.push({ cmd: 'line', char: '=', len: 32 });
 
-    align(1); size(28); bold(true);
+    align(1); size(32); bold(true);
     text('BON DE RETOUCHE\n');
-    size(20); bold(false);
+    size(24); bold(false);
     cmds.push({ cmd: 'line', char: '=', len: 32 });
 
     align(0); bold(true);
@@ -496,8 +496,8 @@ class SunmiPrinterAdapter {
     try { dateStr = new Date(bon.date || Date.now()).toLocaleString('fr-FR'); } catch (e) {}
     text(`N: ${bon.num || '?'}  ${dateStr}\n`);
     bold(false);
-    if (bon.seller) text(`Vendeur: ${bon.seller}\n`);
-    if (bon.client) text(`Client: ${bon.client}\n`);
+    if (bon.seller) { bold(true); text(`Vendeur: ${bon.seller}\n`); bold(false); }
+    if (bon.client) { bold(true); text(`Client: ${bon.client}\n`); bold(false); }
     if (bon.phone) text(`Tel: ${bon.phone}\n`);
     cmds.push({ cmd: 'line', char: '-', len: 32 });
 
@@ -520,20 +520,22 @@ class SunmiPrinterAdapter {
     cmds.push({ cmd: 'line', char: '-', len: 32 });
 
     const totalHT = totalTTC / (1 + tvaRate);
+    bold(true);
     text(`Total HT     ${fmt(totalHT)} EUR\n`);
     text(`TVA ${(tvaRate * 100).toFixed(1)}%    ${fmt(totalTTC - totalHT)} EUR\n`);
-    bold(true); size(28);
+    size(32);
     text(`TOTAL TTC    ${fmt(totalTTC)} EUR\n`);
-    size(20); bold(false);
+    size(24); bold(false);
     cmds.push({ cmd: 'line', char: '=', len: 32 });
 
-    if (bon.notes) { size(18); text(`Notes: ${bon.notes}\n`); size(20); cmds.push({ cmd: 'line', char: '-', len: 32 }); }
+    if (bon.notes) { size(22); bold(true); text(`Notes: ${bon.notes}\n`); bold(false); size(24); cmds.push({ cmd: 'line', char: '-', len: 32 }); }
 
-    align(1); size(16);
+    align(1); size(20); bold(true);
     text(`${co.sw || 'CaissePro'} v${co.ver || '6.1.0'}\n`);
-    if (s.retoucheMsg) text(s.retoucheMsg + '\n');
-    else text(`Retrait prevu sous ${s.retoucheDelay || 5} jours ouvres\n`);
-    if (s.footerMsg || co.footerMsg) text(`${s.footerMsg || co.footerMsg}\n`);
+    bold(false);
+    if (s.retoucheMsg) { bold(true); text(s.retoucheMsg + '\n'); bold(false); }
+    else { bold(true); text(`Retrait prevu sous ${s.retoucheDelay || 5} jours ouvres\n`); bold(false); }
+    if (s.footerMsg || co.footerMsg) { bold(true); text(`${s.footerMsg || co.footerMsg}\n`); bold(false); }
 
     // EAN-13 barcode
     if (bon.barcode && bon.barcode.length === 13) {
@@ -575,31 +577,32 @@ class SunmiPrinterAdapter {
     const size = (v) => cmds.push({ cmd: 'size', value: v });
     const align = (v) => cmds.push({ cmd: 'align', value: v });
 
-    align(1); size(28); bold(true);
+    align(1); size(32); bold(true);
     text((s.name || co.name || 'Ma Boutique') + '\n');
-    size(20); bold(false);
+    size(24); bold(false);
     cmds.push({ cmd: 'line', char: '=', len: 32 });
-    align(1); size(28); bold(true);
+    align(1); size(32); bold(true);
     text('OUVERTURE DE CAISSE\n');
-    size(20); bold(false);
+    size(24); bold(false);
     cmds.push({ cmd: 'line', char: '=', len: 32 });
     align(0);
     let dateStr = '';
     try { dateStr = new Date(data.openDate || Date.now()).toLocaleString('fr-FR'); } catch (e) {}
-    text(`Date: ${dateStr}\n`);
+    bold(true); text(`Date: ${dateStr}\n`);
     if (data.userName) text(`Caissier: ${data.userName}\n`);
     if (data.storeName) text(`Magasin: ${data.storeName}\n`);
+    bold(false);
     cmds.push({ cmd: 'line', char: '-', len: 32 });
-    bold(true); size(28);
+    bold(true); size(32);
     text(`FOND DE CAISSE  ${fmt(data.openingAmount)} EUR\n`);
-    size(20); bold(false);
+    size(24); bold(false);
     if (data.denominations) {
       cmds.push({ cmd: 'line', char: '-', len: 32 });
-      for (const [k, v] of Object.entries(data.denominations)) { if (v > 0) text(`  ${k} EUR x ${v}\n`); }
+      for (const [k, v] of Object.entries(data.denominations)) { if (v > 0) { bold(true); text(`  ${k} EUR x ${v}\n`); bold(false); } }
     }
     cmds.push({ cmd: 'line', char: '=', len: 32 });
-    align(1); size(16);
-    text('Document obligatoire - a conserver\n');
+    align(1); size(20); bold(true);
+    text('Document obligatoire - a conserver\n'); bold(false);
     cmds.push({ cmd: 'feed', lines: 4 });
     cmds.push({ cmd: 'cut' });
     return cmds;
@@ -633,41 +636,46 @@ class SunmiPrinterAdapter {
     const size = (v) => cmds.push({ cmd: 'size', value: v });
     const align = (v) => cmds.push({ cmd: 'align', value: v });
 
-    align(1); size(28); bold(true);
+    align(1); size(32); bold(true);
     text((s.name || co.name || 'Ma Boutique') + '\n');
-    size(20); bold(false);
+    size(24); bold(false);
     cmds.push({ cmd: 'line', char: '=', len: 32 });
-    align(1); size(28); bold(true);
+    align(1); size(32); bold(true);
     text('FERMETURE DE CAISSE\n');
-    size(20); bold(false);
+    size(24); bold(false);
     cmds.push({ cmd: 'line', char: '=', len: 32 });
     align(0);
     let openStr = '', closeStr = '';
     try { openStr = new Date(data.openDate || Date.now()).toLocaleString('fr-FR'); } catch (e) {}
     try { closeStr = new Date(data.closeDate || Date.now()).toLocaleString('fr-FR'); } catch (e) {}
+    bold(true);
     text(`Ouverture: ${openStr}\n`);
     text(`Fermeture: ${closeStr}\n`);
     if (data.userName) text(`Caissier: ${data.userName}\n`);
     if (data.storeName) text(`Magasin: ${data.storeName}\n`);
+    bold(false);
     cmds.push({ cmd: 'line', char: '-', len: 32 });
-    bold(true); text('ACTIVITE\n'); bold(false);
-    text(`Nb ventes        ${data.salesCount || 0}\n`);
-    text(`CA TTC           ${fmt(data.totalTTC || data.totalCA)} EUR\n`);
+    bold(true); size(26); text('ACTIVITE\n'); size(24); bold(false);
+    bold(true); text(`Nb ventes        ${data.salesCount || 0}\n`);
+    size(28); text(`CA TTC           ${fmt(data.totalTTC || data.totalCA)} EUR\n`); size(24);
     text(`Total HT         ${fmt(data.totalHT)} EUR\n`);
     text(`Total TVA        ${fmt(data.totalTVA)} EUR\n`);
     if (data.avgBasket) text(`Panier moyen     ${fmt(data.avgBasket)} EUR\n`);
+    bold(false);
     cmds.push({ cmd: 'line', char: '-', len: 32 });
-    bold(true); text('PAIEMENTS\n'); bold(false);
+    bold(true); size(26); text('PAIEMENTS\n'); size(24);
     if (data.cashTotal != null) text(`Especes          ${fmt(data.cashTotal)} EUR\n`);
     if (data.cardTotal != null) text(`CB               ${fmt(data.cardTotal)} EUR\n`);
+    bold(false);
     cmds.push({ cmd: 'line', char: '-', len: 32 });
-    bold(true); text('CONTROLE\n'); bold(false);
+    bold(true); size(26); text('CONTROLE\n'); size(24);
     text(`Fond ouverture   ${fmt(data.openingAmount)} EUR\n`);
     if (data.actualCash != null) text(`Especes comptees ${fmt(data.actualCash)} EUR\n`);
     if (data.actualCard != null) text(`CB comptees      ${fmt(data.actualCard)} EUR\n`);
+    bold(false);
     cmds.push({ cmd: 'line', char: '=', len: 32 });
-    align(1); size(16);
-    text('Document obligatoire - a conserver\n');
+    align(1); size(20); bold(true);
+    text('Document obligatoire - a conserver\n'); bold(false);
     cmds.push({ cmd: 'feed', lines: 4 });
     cmds.push({ cmd: 'cut' });
     return cmds;
@@ -702,22 +710,23 @@ class SunmiPrinterAdapter {
       const size = (v) => cmds.push({ cmd: 'size', value: v });
       const align = (v) => cmds.push({ cmd: 'align', value: v });
 
-      align(1); size(28); bold(true);
+      align(1); size(32); bold(true);
       text((s.name || co.name || 'Ma Boutique') + '\n');
-      size(20); bold(false);
+      size(24); bold(false);
       cmds.push({ cmd: 'line', char: '=', len: 32 });
-      align(1); size(28); bold(true);
+      align(1); size(32); bold(true);
       text('CARTE CADEAU\n');
-      size(22); text(`${card.code || '?'}\n`);
-      size(20); bold(false);
+      size(26); text(`${card.code || '?'}\n`);
+      size(24); bold(false);
       cmds.push({ cmd: 'line', char: '-', len: 32 });
-      align(0);
+      align(0); bold(true);
       text(`Montant: ${fmt(card.initialAmount || card.initial_amount)} EUR\n`);
       text(`Solde:   ${fmt(card.balance || card.remaining)} EUR\n`);
       if (card.customerName) text(`Client:  ${card.customerName}\n`);
+      bold(false);
       cmds.push({ cmd: 'line', char: '=', len: 32 });
-      align(1); size(16);
-      text(`${co.sw || 'CaissePro'}\n`);
+      align(1); size(20); bold(true);
+      text(`${co.sw || 'CaissePro'}\n`); bold(false);
       cmds.push({ cmd: 'feed', lines: 4 });
       cmds.push({ cmd: 'cut' });
 
@@ -939,9 +948,9 @@ class BrowserPrintAdapter {
     doc.open();
     doc.write(`<html><head><style>
       *{margin:0;padding:0;box-sizing:border-box}
-      body{font-family:'Courier New',monospace;font-size:11px;padding:4px;width:72mm;max-width:72mm;color:#000}
-      .bold{font-weight:bold}.center{text-align:center}.big{font-size:16px}.small{font-size:9px}
-      .sep{border-top:1px dashed #000;margin:4px 0}.row{display:flex;justify-content:space-between}
+      body{font-family:'Courier New',monospace;font-size:13px;font-weight:500;padding:4px;width:72mm;max-width:72mm;color:#000}
+      .bold{font-weight:800}.center{text-align:center}.big{font-size:18px;font-weight:800}.small{font-size:10px}
+      .sep{border-top:1px dashed #000;margin:4px 0}.row{display:flex;justify-content:space-between;font-weight:600}
       @media print{@page{size:72mm auto;margin:2mm}body{padding:0}}
     </style></head><body>${html}</body></html>`);
     doc.close();
