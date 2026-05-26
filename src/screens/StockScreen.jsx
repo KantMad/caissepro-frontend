@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import { Search, RotateCcw, CheckCircle2, AlertTriangle, Save, Upload } from "lucide-react";
+import { Search, RotateCcw, CheckCircle2, AlertTriangle, Save, Upload, Trash2, User, Filter } from "lucide-react";
 import Papa from "papaparse";
 import * as API from "../api.js";
 import { C } from "../constants.jsx";
@@ -9,7 +9,7 @@ import { useApp } from "../context.jsx";
 import { sortSizes } from "./_shared.js";
 
 function StockScreen(){
-  const{products,setProducts,stockAlerts,stockMoves,receiveStock,receiveBatchStock,stockAging,reorderSuggestions,adjustStock,notify,findByEAN,users,addStockMove,addAudit,settings,perm,defectiveStock,loadDefectiveStock,receiveDefectiveStock,adjustDefectiveStock}=useApp();
+  const{products,setProducts,stockAlerts,stockMoves,receiveStock,receiveBatchStock,stockAging,reorderSuggestions,adjustStock,notify,findByEAN,users,addStockMove,addAudit,settings,perm,defectiveStock,loadDefectiveStock,receiveDefectiveStock,adjustDefectiveStock,setScanOverride,clearScanOverride}=useApp();
   if(!perm().canCreateProduct)return<div style={{padding:40,textAlign:"center",color:"#94a3b8",fontSize:16,fontWeight:600}}>Accès réservé aux administrateurs</div>;
   const[sel,setSel]=useState(products[0]?.id||"");const[tab,setTab]=useState("matrix");
   const[rcModal,setRcModal]=useState(false);const[rcProd,setRcProd]=useState("");const[rcVar,setRcVar]=useState("");const[rcQty,setRcQty]=useState("");const[rcSup,setRcSup]=useState("");
@@ -38,7 +38,21 @@ function StockScreen(){
   const[defAdjProd,setDefAdjProd]=useState("");const[defAdjVar,setDefAdjVar]=useState("");const[defAdjQty,setDefAdjQty]=useState("");const[defAdjReason,setDefAdjReason]=useState("");
   const[defSearch,setDefSearch]=useState("");
   useEffect(()=>{if(tab==="defective")loadDefectiveStock();},[tab]);// eslint-disable-line react-hooks/exhaustive-deps
-  const[tenProd,setTenProd]=useState("");const[tenVar,setTenVar]=useState("");const[tenUser,setTenUser]=useState("");const[tenQty,setTenQty]=useState("1");
+  // ══ Tenues: multi-scan list ══
+  const[tenUser,setTenUser]=useState("");
+  const[tenItems,setTenItems]=useState([]); // [{productId,variantId,name,sku,color,size,ean,qty}]
+  const[tenSaving,setTenSaving]=useState(false);
+  const[tenHistoryFilter,setTenHistoryFilter]=useState(""); // filter history by employee
+  const tenScanRef=useRef(null);
+  const tenAddByEAN=useCallback((ean)=>{
+    const found=findByEAN(ean);if(!found){notify("EAN inconnu: "+ean,"warn");return;}
+    const{product:p,variant:v}=found;
+    setTenItems(prev=>{const idx=prev.findIndex(i=>i.variantId===v.id);
+      if(idx>=0){const next=[...prev];next[idx]={...next[idx],qty:next[idx].qty+1};return next;}
+      return[...prev,{productId:p.id,variantId:v.id,name:p.name,sku:p.sku,color:v.color,size:v.size,ean:v.ean||"",stock:v.stock,qty:1}];});
+    try{const ac=new(window.AudioContext||window.webkitAudioContext)();const o=ac.createOscillator();const g=ac.createGain();o.connect(g);g.connect(ac.destination);o.frequency.value=1200;g.gain.value=0.08;o.start();o.stop(ac.currentTime+0.08);}catch(e){}
+    notify(`${p.name} ${v.color}/${v.size} ajouté`,"info");
+  },[findByEAN,notify]);
   const[trProd,setTrProd]=useState("");const[trVar,setTrVar]=useState("");const[trQty,setTrQty]=useState("1");const[trDest,setTrDest]=useState("");const[trRef,setTrRef]=useState("");
   const p=products.find(x=>x.id===sel);
   const sizes=[...new Set(p?.variants.map(v=>v.size)||[])].sort(sortSizes);const colors=[...new Set(p?.variants.map(v=>v.color)||[])].sort();
@@ -482,46 +496,12 @@ function StockScreen(){
           style={{width:"100%",height:40,background:C.primary}}>Fermer</Btn></div>}
     </Modal>
 
-    {tab==="tenues"&&<div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`}}>
-      <h3 style={{fontSize:14,fontWeight:700,marginBottom:10}}>Sortie stock — Tenue employé</h3>
-      <div style={{padding:10,background:C.warnLight,borderRadius:8,marginBottom:12,fontSize:11,color:"#92400E",border:`1px solid ${C.warn}33`}}>
-        Les articles sortis en tenue employé sont retirés du stock magasin et tracés dans les mouvements.</div>
-      <Input placeholder="Scanner EAN ou saisir code-barres..." style={{marginBottom:10,height:36,fontSize:12,borderColor:C.accent,borderWidth:2}}
-        onKeyDown={e=>{if(e.key==="Enter"){const r=resolveEAN(e.target.value.trim());if(r){setTenProd(r.productId);setTenVar(r.variantId);setTenQty(prev=>prev&&tenProd===r.productId&&tenVar===r.variantId?String(parseInt(prev)+1):"1");e.target.value="";notify(`${r.product.name} ${r.variant.color}/${r.variant.size} (stock: ${r.variant.stock})`,"info");}else{notify("EAN inconnu: "+e.target.value,"warn");e.target.value="";}}}}/>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
-        <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>PRODUIT</label>
-          <select value={tenProd} onChange={e=>{setTenProd(e.target.value);setTenVar("");}} style={{width:"100%",padding:8,borderRadius:8,border:`1.5px solid ${C.border}`,fontSize:11,fontFamily:"inherit"}}>
-            <option value="">Sélectionner…</option>
-            {products.map(p=>(<option key={p.id} value={p.id}>{p.name} ({p.sku})</option>))}</select></div>
-        <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>VARIANTE</label>
-          <select value={tenVar} onChange={e=>setTenVar(e.target.value)} style={{width:"100%",padding:8,borderRadius:8,border:`1.5px solid ${C.border}`,fontSize:11,fontFamily:"inherit"}}>
-            <option value="">Sélectionner…</option>
-            {(products.find(p=>p.id===tenProd)?.variants||[]).map(v=>(<option key={v.id} value={v.id}>{v.color} / {v.size} (stock: {v.stock})</option>))}</select></div>
-        <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>EMPLOYÉ</label>
-          <select value={tenUser} onChange={e=>setTenUser(e.target.value)} style={{width:"100%",padding:8,borderRadius:8,border:`1.5px solid ${C.border}`,fontSize:11,fontFamily:"inherit"}}>
-            <option value="">Sélectionner…</option>
-            {(users||[]).map(u=>(<option key={u.id} value={u.name}>{u.name}</option>))}</select></div>
-        <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>QUANTITÉ</label>
-          <Input type="number" value={tenQty} onChange={e=>setTenQty(e.target.value)} min="1" style={{height:36}}/></div></div>
-      <Btn onClick={async()=>{if(!tenProd||!tenVar||!tenUser){notify("Remplissez tous les champs","error");return;}
-        const q=parseInt(tenQty)||1;const prod=products.find(p=>p.id===tenProd);const vari=prod?.variants.find(v=>v.id===tenVar);
-        if(!prod||!vari){notify("Produit introuvable","error");return;}
-        try{await API.stock.adjust({productId:tenProd,variantId:tenVar,quantity:-q,reason:`Tenue employé: ${tenUser}`});
-          const prods=await API.products.list();setProducts(norm.products(prods));}
-        catch(e){setProducts(prev=>prev.map(p=>p.id===tenProd?{...p,variants:p.variants.map(v=>v.id===tenVar?{...v,stock:Math.max(0,v.stock-q)}:v)}:p));}
-        addStockMove("TENUE",prod,vari,-q,`Tenue ${tenUser}`);
-        addAudit("TENUE",`${prod.name} ${vari.color}/${vari.size} x${q} — ${tenUser}`);
-        notify(`${prod.name} ${vari.color}/${vari.size} x${q} sorti en tenue pour ${tenUser}`,"success");
-        setTenProd("");setTenVar("");setTenUser("");setTenQty("1");}}
-        style={{width:"100%",height:44,background:C.accent}}>Sortir en tenue employé</Btn>
-      <div style={{marginTop:16,fontSize:12,fontWeight:700,marginBottom:8}}>Historique tenues</div>
-      {stockMoves.filter(m=>m.type==="TENUE").length===0&&<div style={{color:C.textLight,fontSize:11}}>Aucune sortie tenue</div>}
-      {stockMoves.filter(m=>m.type==="TENUE").slice(0,20).map((m,i)=>(<div key={i} style={{display:"flex",alignItems:"center",gap:8,padding:6,borderBottom:`1px solid ${C.border}`,fontSize:11}}>
-        <span style={{color:C.textMuted,fontSize:9}}>{new Date(m.date).toLocaleDateString("fr-FR")}</span>
-        <span style={{fontWeight:600}}>{m.productName}</span>
-        <span style={{color:C.textMuted}}>{m.variantColor}/{m.variantSize}</span>
-        <span style={{fontWeight:700,color:C.danger}}>x{Math.abs(m.qty)}</span>
-        <span style={{color:C.accent,fontWeight:600}}>{m.ref}</span></div>))}</div>}
+    {tab==="tenues"&&<TenuesTab products={products} setProducts={setProducts} users={users} tenUser={tenUser} setTenUser={setTenUser}
+      tenItems={tenItems} setTenItems={setTenItems} tenSaving={tenSaving} setTenSaving={setTenSaving}
+      tenHistoryFilter={tenHistoryFilter} setTenHistoryFilter={setTenHistoryFilter}
+      tenScanRef={tenScanRef} tenAddByEAN={tenAddByEAN} resolveEAN={resolveEAN}
+      stockMoves={stockMoves} addStockMove={addStockMove} addAudit={addAudit} notify={notify}
+      setScanOverride={setScanOverride} clearScanOverride={clearScanOverride} findByEAN={findByEAN}/>}
 
     {tab==="transfers"&&<div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`}}>
       <h3 style={{fontSize:14,fontWeight:700,marginBottom:10}}>Transfert de stock</h3>
@@ -572,7 +552,130 @@ function StockScreen(){
   </div>);
 }
 
-/* ══════════ HISTORY ══════════ */
+/* ══════════ TENUES TAB ══════════ */
+function TenuesTab({products,setProducts,users,tenUser,setTenUser,tenItems,setTenItems,tenSaving,setTenSaving,
+  tenHistoryFilter,setTenHistoryFilter,tenScanRef,tenAddByEAN,resolveEAN,
+  stockMoves,addStockMove,addAudit,notify,setScanOverride,clearScanOverride,findByEAN}){
+
+  // Register scan override when this tab is active
+  useEffect(()=>{
+    setScanOverride((code)=>{
+      if(!tenUser){notify("Sélectionnez d'abord un employé avant de scanner","warn");return;}
+      tenAddByEAN(code);
+    });
+    return()=>clearScanOverride();
+  },[setScanOverride,clearScanOverride,tenAddByEAN,tenUser,notify]);
+
+  // Focus scan input on mount
+  useEffect(()=>{if(tenScanRef.current)tenScanRef.current.focus();},[]);
+
+  const tenuesHistory=stockMoves.filter(m=>m.type==="TENUE");
+  const filteredHistory=tenHistoryFilter
+    ?tenuesHistory.filter(m=>(m.ref||"").toLowerCase().includes(tenHistoryFilter.toLowerCase()))
+    :tenuesHistory;
+  const employeeNames=[...new Set(tenuesHistory.map(m=>{const match=(m.ref||"").match(/Tenue (.+)/);return match?match[1]:null;}).filter(Boolean))];
+
+  const validateAll=async()=>{
+    if(!tenUser){notify("Sélectionnez un employé","error");return;}
+    if(tenItems.length===0){notify("Ajoutez au moins un article","error");return;}
+    setTenSaving(true);
+    let ok=0,err=0;
+    for(const item of tenItems){
+      const prod=products.find(p=>p.id===item.productId);const vari=prod?.variants.find(v=>v.id===item.variantId);
+      if(!prod||!vari){err++;continue;}
+      try{await API.stock.adjust({productId:item.productId,variantId:item.variantId,quantity:-item.qty,reason:`Tenue employé: ${tenUser}`});ok++;}
+      catch(e){
+        setProducts(prev=>prev.map(p=>p.id===item.productId?{...p,variants:p.variants.map(v=>v.id===item.variantId?{...v,stock:Math.max(0,v.stock-item.qty)}:v)}:p));
+        ok++;
+      }
+      addStockMove("TENUE",prod,vari,-item.qty,`Tenue ${tenUser}`);
+      addAudit("TENUE",`${prod.name} ${vari?.color||""}/${vari?.size||""} x${item.qty} — ${tenUser}`);
+    }
+    // Refresh products
+    try{const prods=await API.products.list();setProducts(norm.products(prods));}catch(e){}
+    notify(`${ok} article(s) sorti(s) en tenue pour ${tenUser}${err>0?` (${err} erreur(s))`:""}`,"success");
+    setTenItems([]);setTenSaving(false);
+  };
+
+  return(<div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`}}>
+    <h3 style={{fontSize:14,fontWeight:700,marginBottom:10}}>Sortie stock — Tenue employé</h3>
+    <div style={{padding:10,background:C.warnLight,borderRadius:8,marginBottom:12,fontSize:11,color:"#92400E",border:`1px solid ${C.warn}33`}}>
+      1. Sélectionnez un employé — 2. Scannez les articles (scanner ou saisie EAN) — 3. Validez la liste</div>
+
+    {/* Employé selector */}
+    <div style={{marginBottom:12}}>
+      <label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3,textTransform:"uppercase",letterSpacing:"0.5px"}}>EMPLOYÉ</label>
+      <select value={tenUser} onChange={e=>setTenUser(e.target.value)} style={{width:"100%",padding:10,borderRadius:8,border:`1.5px solid ${tenUser?C.accent:C.danger}`,fontSize:12,fontWeight:600,fontFamily:"inherit",background:tenUser?C.accentLight+"40":"transparent"}}>
+        <option value="">Sélectionner un employé…</option>
+        {(users||[]).map(u=>(<option key={u.id} value={u.name}>{u.name}</option>))}</select>
+    </div>
+
+    {/* EAN scan input */}
+    <Input ref={tenScanRef} placeholder={tenUser?"Scanner EAN ou saisir code-barres...":"Sélectionnez d'abord un employé"} disabled={!tenUser}
+      style={{marginBottom:10,height:40,fontSize:13,borderColor:tenUser?C.accent:C.border,borderWidth:2,fontWeight:600}}
+      onKeyDown={e=>{if(e.key==="Enter"&&e.target.value.trim()){tenAddByEAN(e.target.value.trim());e.target.value="";}}}/>
+
+    {/* Items list */}
+    {tenItems.length>0&&<div style={{marginBottom:12,border:`1.5px solid ${C.accent}33`,borderRadius:10,overflow:"hidden"}}>
+      <div style={{background:C.accentLight+"30",padding:"6px 10px",display:"flex",justifyContent:"space-between",alignItems:"center",borderBottom:`1px solid ${C.accent}22`}}>
+        <span style={{fontSize:11,fontWeight:700,color:C.accent}}>{tenItems.length} article(s) — {tenItems.reduce((s,i)=>s+i.qty,0)} pièce(s)</span>
+        <button onClick={()=>setTenItems([])} style={{background:"none",border:"none",cursor:"pointer",color:C.danger,fontSize:10,fontWeight:600,display:"flex",alignItems:"center",gap:3}}>
+          <Trash2 size={11}/> Vider</button></div>
+      <div style={{maxHeight:200,overflowY:"auto"}}>
+        {tenItems.map((item,i)=>(<div key={item.variantId} style={{display:"flex",alignItems:"center",gap:8,padding:"7px 10px",borderBottom:`1px solid ${C.border}`,fontSize:11}}>
+          <div style={{flex:1}}>
+            <span style={{fontWeight:600}}>{item.name}</span>
+            <span style={{color:C.textMuted,marginLeft:6}}>{item.color}/{item.size}</span>
+            {item.sku&&<span style={{color:C.textMuted,marginLeft:4,fontSize:9}}>({item.sku})</span>}
+          </div>
+          <div style={{display:"flex",alignItems:"center",gap:4}}>
+            <button onClick={()=>setTenItems(prev=>prev.map((x,j)=>j===i?{...x,qty:Math.max(1,x.qty-1)}:x))}
+              style={{width:22,height:22,borderRadius:6,border:`1px solid ${C.border}`,background:"transparent",cursor:"pointer",fontSize:12,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center"}}>−</button>
+            <span style={{fontWeight:700,minWidth:20,textAlign:"center"}}>{item.qty}</span>
+            <button onClick={()=>setTenItems(prev=>prev.map((x,j)=>j===i?{...x,qty:x.qty+1}:x))}
+              style={{width:22,height:22,borderRadius:6,border:`1px solid ${C.border}`,background:"transparent",cursor:"pointer",fontSize:12,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center"}}>+</button>
+          </div>
+          <span style={{fontSize:9,color:C.textMuted}}>stk:{item.stock}</span>
+          <button onClick={()=>setTenItems(prev=>prev.filter((_,j)=>j!==i))}
+            style={{background:"none",border:"none",cursor:"pointer",color:C.danger,padding:2}}><Trash2 size={12}/></button>
+        </div>))}
+      </div>
+    </div>}
+
+    {tenItems.length===0&&tenUser&&<div style={{padding:20,textAlign:"center",color:C.textMuted,fontSize:12,border:`1.5px dashed ${C.border}`,borderRadius:10,marginBottom:12}}>
+      Scannez les articles pour les ajouter à la liste</div>}
+
+    <Btn onClick={validateAll} disabled={tenSaving||!tenUser||tenItems.length===0}
+      style={{width:"100%",height:44,background:C.accent,opacity:(!tenUser||tenItems.length===0)?0.5:1}}>
+      {tenSaving?"Enregistrement...":tenItems.length>0?`Valider ${tenItems.reduce((s,i)=>s+i.qty,0)} pièce(s) pour ${tenUser||"…"}`:"Sortir en tenue employé"}</Btn>
+
+    {/* ══ Historique tenues ══ */}
+    <div style={{marginTop:20,borderTop:`1.5px solid ${C.border}`,paddingTop:14}}>
+      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
+        <h4 style={{fontSize:13,fontWeight:700,margin:0}}>Historique tenues</h4>
+        <span style={{fontSize:10,color:C.textMuted}}>({filteredHistory.length} sortie(s))</span>
+        <div style={{flex:1}}/>
+        <Filter size={12} color={C.textMuted}/>
+        <select value={tenHistoryFilter} onChange={e=>setTenHistoryFilter(e.target.value)}
+          style={{padding:"4px 8px",borderRadius:6,border:`1px solid ${C.border}`,fontSize:10,fontFamily:"inherit",minWidth:120}}>
+          <option value="">Tous les employés</option>
+          {employeeNames.map(n=>(<option key={n} value={n}>{n}</option>))}
+        </select>
+      </div>
+      {filteredHistory.length===0&&<div style={{color:C.textLight,fontSize:11,textAlign:"center",padding:10}}>Aucune sortie tenue{tenHistoryFilter?` pour "${tenHistoryFilter}"`:""}</div>}
+      <div style={{maxHeight:300,overflowY:"auto"}}>
+        {filteredHistory.slice(0,50).map((m,i)=>(<div key={i} style={{display:"flex",alignItems:"center",gap:8,padding:"7px 0",borderBottom:`1px solid ${C.border}`,fontSize:11}}>
+          <span style={{color:C.textMuted,fontSize:9,minWidth:65}}>{new Date(m.date).toLocaleDateString("fr-FR",{day:"2-digit",month:"2-digit",year:"2-digit"})}</span>
+          <User size={11} color={C.accent}/>
+          <span style={{color:C.accent,fontWeight:600,minWidth:70}}>{(m.ref||"").replace("Tenue ","")}</span>
+          <span style={{fontWeight:600}}>{m.productName}</span>
+          <span style={{color:C.textMuted}}>{m.variantColor}/{m.variantSize}</span>
+          <span style={{fontWeight:700,color:C.danger}}>x{Math.abs(m.qty)}</span>
+        </div>))}
+      </div>
+    </div>
+  </div>);
+}
 
 export default StockScreen;
 export { StockScreen };

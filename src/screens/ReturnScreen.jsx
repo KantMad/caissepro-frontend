@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect, useCallback } from "react";
 import { Search, Trash2, CreditCard, Banknote, Gift, Plus, Minus, Receipt, RotateCcw, Shield, CheckCircle2, AlertTriangle, Printer, ScanLine, Edit } from "lucide-react";
 import printer from "../printer.js";
 import { CO, C } from "../constants.jsx";
@@ -7,7 +7,7 @@ import { Modal, Btn, Input, Badge } from "../ui.jsx";
 import { useApp } from "../context.jsx";
 
 function ReturnScreen(){
-  const{tickets,products,processReturn,findByEAN,avoirs,settings,notify,printerConnected,thermalPrint,setSelectedAvoir,setMode:setAppMode,users,currentUser,addAudit,isAvoirExpired}=useApp();
+  const{tickets,products,processReturn,findByEAN,avoirs,settings,notify,printerConnected,thermalPrint,setSelectedAvoir,setMode:setAppMode,users,currentUser,addAudit,isAvoirExpired,setScanOverride,clearScanOverride}=useApp();
   const rp=settings.returnPolicy||{};
   const[mode,setMode]=useState("ticket");// ticket | scan | free
   const[searchTk,setSearchTk]=useState("");const[selectedTk,setSelectedTk]=useState(null);
@@ -43,6 +43,21 @@ function ReturnScreen(){
   const foundProducts=useMemo(()=>{if(!searchProd||searchProd.length<2)return[];const q=searchProd.toLowerCase();
     return products.filter(p=>p.name.toLowerCase().includes(q)||p.sku.toLowerCase().includes(q)||p.variants.some(v=>(v.ean||"").includes(q)))
       .slice(0,8);},[products,searchProd]);
+
+  // ══ Scan override: intercept barcode scans to search products instead of adding to cart ══
+  const handleReturnScan=useCallback((code)=>{
+    // Try as ticket barcode first
+    const tk=tickets.find(t=>t.barcode===code);
+    if(tk){setSearchTk(code);setMode("ticket");notify(`Ticket ${tk.ticketNumber} trouvé`,"info");return;}
+    // Try as avoir barcode
+    const av=avoirs.find(a=>a.barcode===code);
+    if(av){setAvoirLookup(code);notify(`Avoir ${av.avoirNumber} trouvé`,"info");return;}
+    // Try as product EAN — set search field
+    const found=findByEAN(code);
+    if(found){setSearchProd(code);if(mode==="ticket")setMode("scan");notify(`${found.product.name} ${found.variant.color}/${found.variant.size} trouvé`,"info");return;}
+    notify("Code-barres inconnu: "+code,"warn");
+  },[tickets,avoirs,findByEAN,notify,mode]);
+  useEffect(()=>{setScanOverride(handleReturnScan);return()=>clearScanOverride();},[setScanOverride,clearScanOverride,handleReturnScan]);
 
   // C4 fix: compute already-returned quantities for the selected ticket
   const alreadyReturnedMap=useMemo(()=>{if(!selectedTk)return{};const existing=avoirs.filter(a=>a.originalTicket===selectedTk.ticketNumber);

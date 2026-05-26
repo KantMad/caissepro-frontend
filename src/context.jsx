@@ -1024,8 +1024,14 @@ function AppProvider({children}){
   const retoucheBonsRef=useRef(retoucheBons);retoucheBonsRef.current=retoucheBons;
   const avoirsRef=useRef(avoirs);avoirsRef.current=avoirs;
   const[scanBarcode,setScanBarcode]=useState(null);
+  // ══ Scan override: screens can register a callback to intercept barcode scans ══
+  const scanOverrideRef=useRef(null);
+  const setScanOverride=useCallback((fn)=>{scanOverrideRef.current=fn;},[]);
+  const clearScanOverride=useCallback(()=>{scanOverrideRef.current=null;},[]);
   useEffect(()=>{const s=hardwareManager.scanner;if(!s)return;s.start();
     const off=s.onScan(code=>{
+      // 0. If a screen has registered a scan override, delegate to it
+      if(scanOverrideRef.current){scanOverrideRef.current(code);return;}
       // 1. Try product EAN
       const found=findByEANRef.current(code);
       if(found){addToCartRef.current(found.product,found.variant);notifyRef.current(found.product.name+" ajouté ("+code+")");return;}
@@ -1602,6 +1608,7 @@ function AppProvider({children}){
     trainingMode,setTrainingMode,
     cartTotals,
     scanBarcode,setScanBarcode,
+    setScanOverride,clearScanOverride,
   }}>{children}</AppCtx.Provider>;
 }
 
