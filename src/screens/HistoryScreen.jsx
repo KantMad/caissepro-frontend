@@ -60,8 +60,8 @@ function HistoryScreen(){
   };
   const returnTotal=Math.round(returnItems.reduce((s,i)=>s+(i.qty||0)*(i.unitTTC||0),0)*100)/100;
 
-  return(<div style={{height:"100%",overflowY:"auto",padding:20,background:C.bg}}>
-    <h2 style={{fontSize:22,fontWeight:800,marginBottom:14}}>Historique fiscal</h2>
+  return(<div style={{height:"100%",overflowY:"auto",padding:"var(--pad,16px)",background:C.bg}}>
+    <h2 style={{fontSize:20,fontWeight:800,marginBottom:10}}>Historique fiscal</h2>
     {trainingMode&&<div style={{background:"#FEF3C7",border:"2px dashed #D97706",borderRadius:12,padding:12,marginBottom:12,display:"flex",alignItems:"center",gap:10}}>
       <AlertTriangle size={18} color="#D97706"/><div><div style={{fontSize:12,fontWeight:700,color:"#92400E"}}>MODE FORMATION ACTIF</div>
         <div style={{fontSize:10,color:"#B45309"}}>Les donnees affichees incluent des tickets FACTICE non comptabilises.</div></div></div>}

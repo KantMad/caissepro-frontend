@@ -81,9 +81,9 @@ function StatsScreen(){
     fTickets.forEach(t=>{const dow=new Date(t.date||t.createdAt||t.created_at).getDay();d[dow]+=(t.totalTTC||parseFloat(t.total_ttc)||0);});
     return d.map((v,i)=>({day:days[i],ca:Math.round(v*100)/100}));},[fTickets]);
   const allCats=[...new Set(products.flatMap(p=>[p.category]).filter(Boolean))];
-  return(<div style={{height:"100%",overflowY:"auto",padding:20,background:C.bg}}>
+  return(<div style={{height:"100%",overflowY:"auto",padding:"var(--pad,16px)",background:C.bg}}>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-      <h2 style={{fontSize:22,fontWeight:800,margin:0}}>Statistiques</h2>
+      <h2 style={{fontSize:20,fontWeight:800,margin:0}}>Statistiques</h2>
       <div style={{display:"flex",alignItems:"center",gap:12}}>
         <span style={{fontSize:12,fontWeight:600,color:C.textMuted,fontVariantNumeric:"tabular-nums"}}>{new Date().toLocaleDateString("fr-FR",{weekday:"short",day:"numeric",month:"short"})} {new Date().toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"})}</span>
         <Btn variant="outline" onClick={()=>exportCSVReport(fBestSellers,"best-sellers.csv")} style={{fontSize:11}}><Download size={12}/> Export CSV</Btn></div></div>

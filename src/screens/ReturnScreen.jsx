@@ -118,9 +118,9 @@ function ReturnScreen(){
   const isExpired=(tk)=>{if(!tk)return false;const d=new Date(tk.date||tk.createdAt||tk.created_at);
     return(Date.now()-d.getTime())/(1000*60*60*24)>returnWindow;};
 
-  return(<div style={{height:"100%",overflowY:"auto",padding:20,background:C.bg}}>
-    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
-      <h2 style={{fontSize:22,fontWeight:800,margin:0}}>Retours & Avoirs</h2>
+  return(<div style={{height:"100%",overflowY:"auto",padding:"var(--pad,16px)",background:C.bg}}>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+      <h2 style={{fontSize:20,fontWeight:800,margin:0}}>Retours & Avoirs</h2>
       <div style={{display:"flex",gap:6}}>
         <Badge color={C.fiscal}>{avoirs.length} avoir{avoirs.length>1?"s":""}</Badge>
         <Badge color={C.textMuted}>Délai: {returnWindow}j</Badge></div></div>

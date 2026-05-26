@@ -56,9 +56,9 @@ function StockScreen(){
   const[trProd,setTrProd]=useState("");const[trVar,setTrVar]=useState("");const[trQty,setTrQty]=useState("1");const[trDest,setTrDest]=useState("");const[trRef,setTrRef]=useState("");
   const p=products.find(x=>x.id===sel);
   const sizes=[...new Set(p?.variants.map(v=>v.size)||[])].sort(sortSizes);const colors=[...new Set(p?.variants.map(v=>v.color)||[])].sort();
-  return(<div style={{height:"100%",overflowY:"auto",padding:20,background:C.bg}}>
-    <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:14}}>
-      <h2 style={{fontSize:22,fontWeight:800,margin:0}}>Stock</h2>
+  return(<div style={{height:"100%",overflowY:"auto",padding:"var(--pad,16px)",background:C.bg}}>
+    <div style={{display:"flex",alignItems:"center",gap:"var(--gap,10px)",marginBottom:10}}>
+      <h2 style={{fontSize:20,fontWeight:800,margin:0}}>Stock</h2>
       {stockAlerts.length>0&&<Badge color={C.danger}>{stockAlerts.length} alertes</Badge>}
       <div style={{flex:1}}/>
       <Btn variant="outline" onClick={()=>setTab("reception")}><Upload size={14}/> Réception</Btn></div>

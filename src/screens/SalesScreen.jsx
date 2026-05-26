@@ -107,69 +107,69 @@ function SalesScreen(){
     return tickets.filter(t=>(t.date||t.createdAt||t.created_at||"").startsWith(today));},[tickets]);
   const todayCA=todayTickets.reduce((s,t)=>s+(t.totalTTC||parseFloat(t.total_ttc)||0),0);
 
-  return(<div style={{display:"flex",height:"100%",background:C.bg,fontSize:13}}>
-    {(offlineMode||!isOnline)&&<div style={{position:"absolute",top:0,left:72,right:0,zIndex:100,
-      background:offlineMode?C.warnLight:C.dangerLight,padding:"8px 18px",
-      display:"flex",alignItems:"center",gap:8,fontSize:12,fontWeight:500,color:offlineMode?"#92400E":C.danger,
+  return(<div style={{display:"flex",height:"100%",background:C.bg,fontSize:"var(--font-base,13px)"}}>
+    {(offlineMode||!isOnline)&&<div style={{position:"absolute",top:0,left:"var(--nav-w,72px)",right:0,zIndex:100,
+      background:offlineMode?C.warnLight:C.dangerLight,padding:"6px 12px",
+      display:"flex",alignItems:"center",gap:6,fontSize:11,fontWeight:500,color:offlineMode?"#92400E":C.danger,
       borderBottom:`1px solid ${offlineMode?C.warn+"22":C.danger+"22"}`,animation:"slideDown 0.3s ease"}}>
-      <WifiOff size={13}/> {offlineMode?"Mode hors-ligne — Donnees locales":"Connexion internet perdue"}
+      <WifiOff size={12}/> {offlineMode?"Mode hors-ligne — Donnees locales":"Connexion internet perdue"}
       {offlineMode&&<Badge color="#92400E">Local</Badge>}
       {pendingSync.length>0&&<span onClick={()=>setSyncConfirm(true)}
         style={{cursor:"pointer",marginLeft:"auto"}}><Badge color={C.warn}>{pendingSync.length} synchro(s) en attente</Badge></span>}</div>}
 
     {/* NF525: Training mode banner */}
-    {trainingMode&&<div style={{position:"absolute",top:offlineMode||!isOnline?40:0,left:72,right:0,zIndex:99,
-      background:"#FEF3C7",padding:"6px 18px",display:"flex",alignItems:"center",gap:8,fontSize:12,fontWeight:700,color:"#92400E",
+    {trainingMode&&<div style={{position:"absolute",top:offlineMode||!isOnline?36:0,left:"var(--nav-w,72px)",right:0,zIndex:99,
+      background:"#FEF3C7",padding:"5px 12px",display:"flex",alignItems:"center",gap:6,fontSize:11,fontWeight:700,color:"#92400E",
       borderBottom:"2px dashed #D97706",animation:"slideDown 0.3s ease"}}>
-      <AlertTriangle size={13}/> MODE FORMATION — Les tickets sont marqués FACTICE</div>}
+      <AlertTriangle size={12}/> MODE FORMATION — Les tickets sont marqués FACTICE</div>}
 
     {/* NF525: Post-closure warning */}
-    {todayClosed&&!trainingMode&&<div style={{position:"absolute",top:offlineMode||!isOnline?40:trainingMode?68:0,left:72,right:0,zIndex:98,
-      background:"#FEE2E2",padding:"6px 18px",display:"flex",alignItems:"center",gap:8,fontSize:12,fontWeight:700,color:"#991B1B",
+    {todayClosed&&!trainingMode&&<div style={{position:"absolute",top:offlineMode||!isOnline?36:trainingMode?60:0,left:"var(--nav-w,72px)",right:0,zIndex:98,
+      background:"#FEE2E2",padding:"5px 12px",display:"flex",alignItems:"center",gap:6,fontSize:11,fontWeight:700,color:"#991B1B",
       borderBottom:"2px solid #DC2626"}}>
-      <AlertTriangle size={13}/> CAISSE CLOTUREE — Les nouvelles ventes seront refusées par le serveur</div>}
+      <AlertTriangle size={12}/> CAISSE CLOTUREE — Les nouvelles ventes seront refusées par le serveur</div>}
 
     {/* Products */}
-    <div style={{flex:1,padding:16,display:"flex",flexDirection:"column",overflow:"hidden"}}>
+    <div style={{flex:1,padding:"var(--pad,16px)",display:"flex",flexDirection:"column",overflow:"hidden"}}>
       {/* Daily summary bar */}
-      <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:12,padding:"10px 16px",
-        background:C.surface,borderRadius:12,border:`1px solid ${C.border}`,
+      <div style={{display:"flex",alignItems:"center",gap:"var(--gap,10px)",marginBottom:"var(--gap,10px)",padding:"var(--topbar-pad,10px 16px)",
+        background:C.surface,borderRadius:"var(--radius-sm,10px)",border:`1px solid ${C.border}`,
         boxShadow:`0 1px 3px ${C.shadow}`}}>
-        <div style={{display:"flex",alignItems:"center",gap:8}}>
+        <div style={{display:"flex",alignItems:"center",gap:6}}>
           <div style={{width:6,height:6,borderRadius:3,background:C.primary}}/>
-          <span style={{fontSize:12,fontWeight:600,color:C.text}}>{new Date().toLocaleDateString("fr-FR",{weekday:"short",day:"numeric",month:"short"})}</span>
+          <span style={{fontSize:11,fontWeight:600,color:C.text}}>{new Date().toLocaleDateString("fr-FR",{weekday:"short",day:"numeric",month:"short"})}</span>
           <span style={{fontSize:11,fontWeight:700,color:C.primary,fontVariantNumeric:"tabular-nums"}}>{clock.toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"})}</span></div>
-        <div style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:12}}>
-          <span style={{fontSize:12,color:C.textMuted}}>{todayTickets.length} vente{todayTickets.length>1?"s":""}</span>
-          <span style={{fontSize:14,fontWeight:700,color:C.primary,letterSpacing:"-0.3px"}}>{todayCA.toFixed(2)}€</span>
+        <div style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:"var(--gap,10px)"}}>
+          <span style={{fontSize:11,color:C.textMuted}}>{todayTickets.length} vente{todayTickets.length>1?"s":""}</span>
+          <span style={{fontSize:13,fontWeight:700,color:C.primary,letterSpacing:"-0.3px"}}>{todayCA.toFixed(2)}€</span>
           {stockAlerts.length>0&&<Badge color={C.danger}>{stockAlerts.length}</Badge>}
-          <span style={{fontSize:10,color:printerConnected?"#059669":C.textLight,display:"flex",alignItems:"center",gap:3,padding:"3px 8px",borderRadius:6,
+          <span style={{fontSize:9,color:printerConnected?"#059669":C.textLight,display:"flex",alignItems:"center",gap:3,padding:"2px 6px",borderRadius:6,
             background:printerConnected?"#05966908":C.surfaceAlt}}>
-            <Printer size={10}/> {printerConnected?"ESC/POS":"-"}</span>
-          <span style={{fontSize:10,color:C.textMuted,cursor:"pointer",display:"flex",alignItems:"center",gap:3,padding:"3px 8px",borderRadius:6,background:C.surfaceAlt}} onClick={()=>setShowShortcuts(true)}>
+            <Printer size={9}/> {printerConnected?"ESC/POS":"-"}</span>
+          <span style={{fontSize:9,color:C.textMuted,cursor:"pointer",display:"flex",alignItems:"center",gap:3,padding:"2px 6px",borderRadius:6,background:C.surfaceAlt}} onClick={()=>setShowShortcuts(true)}>
             ? Raccourcis</span></div>
       </div>
-      <div style={{display:"flex",gap:8,marginBottom:10}}>
+      <div style={{display:"flex",gap:"var(--gap-sm,6px)",marginBottom:"var(--gap,10px)"}}>
         <div style={{position:"relative",flex:1}}>
-          <Search size={15} color={C.textMuted} style={{position:"absolute",left:14,top:"50%",transform:"translateY(-50%)"}}/>
-          <Input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Rechercher produit, SKU ou scanner…" style={{paddingLeft:38,height:42,fontSize:13,borderRadius:14}}/></div>
-        <Btn variant="outline" onClick={()=>setParkedModal(true)} style={{height:42,padding:"0 14px",position:"relative",borderRadius:14}} title="Paniers en attente">
-          <Pause size={15}/>{parked.length>0&&<span style={{position:"absolute",top:-5,right:-5,width:18,height:18,borderRadius:9,
-            background:C.danger,color:"#fff",fontSize:9,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",
+          <Search size={14} color={C.textMuted} style={{position:"absolute",left:12,top:"50%",transform:"translateY(-50%)"}}/>
+          <Input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Rechercher produit, SKU ou scanner…" style={{paddingLeft:34,height:38,fontSize:"var(--font-base,13px)",borderRadius:"var(--radius,14px)"}}/></div>
+        <Btn variant="outline" onClick={()=>setParkedModal(true)} style={{height:38,padding:"0 12px",position:"relative",borderRadius:"var(--radius,14px)"}} title="Paniers en attente">
+          <Pause size={14}/>{parked.length>0&&<span style={{position:"absolute",top:-5,right:-5,width:16,height:16,borderRadius:8,
+            background:C.danger,color:"#fff",fontSize:8,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",
             boxShadow:"0 2px 6px rgba(209,69,59,0.4)"}}>{parked.length}</span>}</Btn>
       </div>
       {activePromos.length>0&&<div style={{background:C.warnLight,borderRadius:10,padding:"6px 12px",marginBottom:8,
         display:"flex",alignItems:"center",gap:8,fontSize:11,border:`1px solid ${C.warn}18`}}>
         <Zap size={13} color={C.warn}/><span style={{fontWeight:600,color:"#92720E"}}>Promos actives:</span>{activePromos.map(p=><Badge key={p.id} color={C.warn}>{p.name}</Badge>)}</div>}
-      <div style={{display:"flex",gap:5,marginBottom:10,overflowX:"auto",flexShrink:0,paddingBottom:2}}>
+      <div style={{display:"flex",gap:4,marginBottom:"var(--gap,10px)",overflowX:"auto",flexShrink:0,paddingBottom:2}}>
         {categories.map(c=>{const cc=CAT_COLORS[c]||C.primary;return(
-          <button key={c} onClick={()=>setCat(c)} style={{padding:"6px 14px",borderRadius:20,border:"none",
+          <button key={c} onClick={()=>setCat(c)} style={{padding:"5px 12px",borderRadius:18,border:"none",
             background:cat===c?(c==="Tous"?C.primary:cc):"transparent",
-            color:cat===c?"#fff":C.textMuted,fontSize:11,fontWeight:cat===c?700:500,cursor:"pointer",whiteSpace:"nowrap",
+            color:cat===c?"#fff":C.textMuted,fontSize:10,fontWeight:cat===c?700:500,cursor:"pointer",whiteSpace:"nowrap",
             transition:"all 0.15s",boxShadow:cat===c?`0 2px 8px ${cc}30`:"none"}}>{c}</button>);})}
-        <button onClick={()=>setCat("Favoris")} style={{padding:"6px 14px",borderRadius:20,border:"none",
+        <button onClick={()=>setCat("Favoris")} style={{padding:"5px 12px",borderRadius:18,border:"none",
           background:cat==="Favoris"?C.accent:"transparent",color:cat==="Favoris"?"#fff":C.textMuted,
-          fontSize:11,fontWeight:cat==="Favoris"?700:500,cursor:"pointer",whiteSpace:"nowrap",marginLeft:4,transition:"all 0.15s",
+          fontSize:10,fontWeight:cat==="Favoris"?700:500,cursor:"pointer",whiteSpace:"nowrap",marginLeft:4,transition:"all 0.15s",
           boxShadow:cat==="Favoris"?`0 2px 8px ${C.accent}30`:"none"}}>
           <Star size={10} style={{verticalAlign:"middle"}}/> Favoris</button></div>
       <div style={{flex:1,overflowY:"auto",paddingRight:4}}>
@@ -178,7 +178,7 @@ function SalesScreen(){
             <Package size={26} style={{opacity:0.4}}/></div>
           <div style={{fontSize:14,fontWeight:700,marginBottom:4,color:C.text}}>Aucun produit trouvé</div>
           <div style={{fontSize:12}}>Essayez un autre terme de recherche</div></div>}
-        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(155px,1fr))",gap:10}}>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(var(--card-min,155px),1fr))",gap:"var(--gap,10px)"}}>
         {filtered.map(p=>{const ts=p.variants.reduce((s,v)=>s+v.stock,0);const ha=p.variants.some(v=>v.stock<=(v.stockAlert||5));
           const cc=CAT_COLORS[p.category]||C.primary;
           return(<div key={p.id} onClick={()=>p.variants.length===1?addToCart(p,p.variants[0]):setVm(p)}
@@ -194,7 +194,7 @@ function SalesScreen(){
             {p.collection&&<span style={{position:"absolute",top:6,right:6,fontSize:8,background:"rgba(255,255,255,0.9)",color:cc,padding:"2px 6px",borderRadius:8,fontWeight:700,backdropFilter:"blur(4px)",boxShadow:`0 1px 4px ${C.shadow}`}}>{p.collection}</span>}
             <button onClick={e=>{e.stopPropagation();toggleFavorite(p.id);}} style={{position:"absolute",bottom:6,right:6,background:"rgba(255,255,255,0.9)",border:"none",cursor:"pointer",padding:4,borderRadius:8,boxShadow:`0 1px 4px ${C.shadow}`,transition:"all 0.15s"}}>
               <Star size={13} color={favorites.includes(p.id)?C.accent:C.textLight} fill={favorites.includes(p.id)?C.accent:"none"}/></button></div>
-          <div style={{padding:"10px 11px 11px"}}>
+          <div style={{padding:"var(--pad-sm,10px) var(--pad-sm,10px) var(--pad-sm,10px)"}}>
             <div style={{fontSize:12,fontWeight:700,marginBottom:2,lineHeight:1.3,letterSpacing:"-0.2px"}}>{p.name}</div>
             {p.sku&&<div style={{fontSize:9,fontFamily:"'Courier New',monospace",color:C.textMuted,marginBottom:3,letterSpacing:"0.3px"}}>{p.sku}</div>}
             <div style={{display:"flex",alignItems:"center",gap:4,marginBottom:6}}>
@@ -206,120 +206,120 @@ function SalesScreen(){
           </div></div>);})}</div></div></div>
 
     {/* Cart */}
-    <div style={{width:380,background:C.surface,borderLeft:`1px solid ${C.border}`,display:"flex",flexDirection:"column",boxShadow:`-4px 0 20px ${C.shadow}`}}>
+    <div style={{width:"var(--cart-w,380px)",minWidth:"var(--cart-w,380px)",background:C.surface,borderLeft:`1px solid ${C.border}`,display:"flex",flexDirection:"column",boxShadow:`-4px 0 20px ${C.shadow}`}}>
       {/* Cart header */}
-      <div style={{padding:"14px 16px 10px",borderBottom:`1px solid ${C.border}`}}>
-        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}>
-          <div style={{width:40,height:40,borderRadius:12,background:C.primary,display:"flex",alignItems:"center",justifyContent:"center",
-            boxShadow:`0 4px 14px ${C.primary}25`}}><ShoppingCart size={19} color="#fff"/></div>
-          <div style={{flex:1}}><div style={{fontSize:16,fontWeight:800,letterSpacing:"-0.3px"}}>Panier</div>
-            <div style={{fontSize:12,color:C.text,fontWeight:800}}>{cart.reduce((s,i)=>s+i.quantity,0)} pièce{cart.reduce((s,i)=>s+i.quantity,0)>1?"s":""}</div></div>
-          <Btn variant="outline" onClick={parkCart} disabled={!cart.length} style={{padding:"6px 10px",borderRadius:8,fontSize:9,fontWeight:700,gap:4,position:"relative"}} title="Mettre en attente"><Pause size={12}/> Attente
-            {parked.length>0&&<span style={{position:"absolute",top:-5,right:-5,width:16,height:16,borderRadius:8,background:C.danger,color:"#fff",fontSize:8,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center"}}>{parked.length}</span>}</Btn>
-          {perm().canVoid&&<Btn variant="ghost" onClick={()=>{if(cart.length)setConfirmVoid(true);}} disabled={!cart.length} style={{padding:"6px 8px",color:C.danger,borderRadius:8}} title="Annuler"><XOctagon size={13}/></Btn>}
+      <div style={{padding:"var(--cart-pad,14px 16px 10px)",borderBottom:`1px solid ${C.border}`}}>
+        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
+          <div style={{width:34,height:34,borderRadius:10,background:C.primary,display:"flex",alignItems:"center",justifyContent:"center",
+            boxShadow:`0 4px 14px ${C.primary}25`,flexShrink:0}}><ShoppingCart size={16} color="#fff"/></div>
+          <div style={{flex:1,minWidth:0}}><div style={{fontSize:14,fontWeight:800,letterSpacing:"-0.3px"}}>Panier</div>
+            <div style={{fontSize:11,color:C.text,fontWeight:800}}>{cart.reduce((s,i)=>s+i.quantity,0)} pièce{cart.reduce((s,i)=>s+i.quantity,0)>1?"s":""}</div></div>
+          <Btn variant="outline" onClick={parkCart} disabled={!cart.length} style={{padding:"4px 8px",borderRadius:8,fontSize:8,fontWeight:700,gap:3,position:"relative"}} title="Mettre en attente"><Pause size={11}/> Attente
+            {parked.length>0&&<span style={{position:"absolute",top:-5,right:-5,width:14,height:14,borderRadius:7,background:C.danger,color:"#fff",fontSize:7,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center"}}>{parked.length}</span>}</Btn>
+          {perm().canVoid&&<Btn variant="ghost" onClick={()=>{if(cart.length)setConfirmVoid(true);}} disabled={!cart.length} style={{padding:"4px 6px",color:C.danger,borderRadius:8}} title="Annuler"><XOctagon size={12}/></Btn>}
         </div>
 
         {/* Seller selection */}
-        <div style={{display:"flex",gap:4,marginBottom:6}}>
-          <select value={selSeller||""} onChange={e=>setSelSeller(e.target.value||null)} style={{flex:1,height:30,fontSize:10,padding:"4px 8px",borderRadius:10,border:`1px solid ${C.border}`,fontFamily:"inherit",background:C.surface,color:selSeller?C.text:C.textMuted}}>
+        <div style={{display:"flex",gap:4,marginBottom:5}}>
+          <select value={selSeller||""} onChange={e=>setSelSeller(e.target.value||null)} style={{flex:1,height:28,fontSize:10,padding:"3px 6px",borderRadius:8,border:`1px solid ${C.border}`,fontFamily:"inherit",background:C.surface,color:selSeller?C.text:C.textMuted}}>
             <option value="">Vendeur: {currentUser?.name} (moi)</option>
             {users.filter(u=>u.name!==currentUser?.name&&u.role!=="admin").map(u=>(<option key={u.id} value={u.name}>{u.name}</option>))}
           </select>
-          <Input value={saleNote} onChange={e=>setSaleNote(e.target.value)} placeholder="Note…" style={{flex:1,height:30,fontSize:10,padding:"4px 10px",borderRadius:10}}/>
+          <Input value={saleNote} onChange={e=>setSaleNote(e.target.value)} placeholder="Note…" style={{flex:1,height:28,fontSize:10,padding:"3px 8px",borderRadius:8}}/>
         </div>
 
         {/* Customer */}
-        <button onClick={()=>setCustModal(true)} style={{display:"flex",alignItems:"center",gap:8,padding:"7px 10px",borderRadius:10,width:"100%",
-          border:`1.5px dashed ${selCust?C.primary:C.border}`,background:selCust?`${C.primary}08`:"transparent",cursor:"pointer",marginBottom:6,
-          fontSize:11,fontWeight:600,color:selCust?C.primary:C.textMuted,transition:"all 0.15s"}}
+        <button onClick={()=>setCustModal(true)} style={{display:"flex",alignItems:"center",gap:6,padding:"5px 8px",borderRadius:8,width:"100%",
+          border:`1.5px dashed ${selCust?C.primary:C.border}`,background:selCust?`${C.primary}08`:"transparent",cursor:"pointer",marginBottom:5,
+          fontSize:10,fontWeight:600,color:selCust?C.primary:C.textMuted,transition:"all 0.15s"}}
           onMouseEnter={e=>{if(!selCust)e.currentTarget.style.borderColor=C.primary+"66";}} onMouseLeave={e=>{if(!selCust)e.currentTarget.style.borderColor=C.border;}}>
-          {selCust?<><div style={{width:24,height:24,borderRadius:12,background:C.primary,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontSize:9,fontWeight:700}}>{selCust.firstName[0]}{selCust.lastName[0]}</div>{selCust.firstName} {selCust.lastName} — {selCust.points}pts <Badge color={C.accent}>{custTier?.name}</Badge></>
-          :<><Users size={13}/> Associer un client</>}
+          {selCust?<><div style={{width:22,height:22,borderRadius:11,background:C.primary,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontSize:8,fontWeight:700,flexShrink:0}}>{selCust.firstName[0]}{selCust.lastName[0]}</div><span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{selCust.firstName} {selCust.lastName} — {selCust.points}pts</span> <Badge color={C.accent}>{custTier?.name}</Badge></>
+          :<><Users size={12}/> Associer un client</>}
         </button>
 
         {/* Promo code input */}
         <div style={{display:"flex",gap:4}}>
-          <Input value={codeInput} onChange={e=>setCodeInput(e.target.value)} placeholder="Code promo…" style={{height:32,fontSize:11,padding:"4px 10px",borderRadius:10}}/>
-          <Btn variant="outline" onClick={()=>{setPromoCode(codeInput);}} style={{height:32,padding:"0 12px",fontSize:11,borderRadius:10}}>OK</Btn>
+          <Input value={codeInput} onChange={e=>setCodeInput(e.target.value)} placeholder="Code promo…" style={{height:28,fontSize:10,padding:"3px 8px",borderRadius:8}}/>
+          <Btn variant="outline" onClick={()=>{setPromoCode(codeInput);}} style={{height:28,padding:"0 10px",fontSize:10,borderRadius:8}}>OK</Btn>
         </div>
       </div>
 
       {/* Cart items */}
-      <div style={{flex:1,overflowY:"auto",padding:"8px 12px"}}>
-        {!cart.length?<div style={{textAlign:"center",padding:"40px 0",color:C.textLight}}>
-          <div style={{width:52,height:52,borderRadius:14,background:C.surfaceAlt,display:"inline-flex",alignItems:"center",justifyContent:"center",marginBottom:10}}>
-            <ScanLine size={24} style={{opacity:.4}}/></div>
-          <div style={{fontSize:13,fontWeight:600,marginBottom:2}}>Panier vide</div>
-          <div style={{fontSize:11}}>Scannez ou sélectionnez un produit</div></div>
+      <div style={{flex:1,overflowY:"auto",padding:"var(--pad-sm,8px) var(--pad-sm,12px)"}}>
+        {!cart.length?<div style={{textAlign:"center",padding:"30px 0",color:C.textLight}}>
+          <div style={{width:44,height:44,borderRadius:12,background:C.surfaceAlt,display:"inline-flex",alignItems:"center",justifyContent:"center",marginBottom:8}}>
+            <ScanLine size={20} style={{opacity:.4}}/></div>
+          <div style={{fontSize:12,fontWeight:600,marginBottom:2}}>Panier vide</div>
+          <div style={{fontSize:10}}>Scannez ou sélectionnez un produit</div></div>
         :cart.map(i=>{const t=i.product.price*i.quantity;const d=i.discountType==="amount"?(i.discount||0)*i.quantity:t*(i.discount/100);
           const cc=CAT_COLORS[i.product.category]||C.primary;
           const lastP=selCust&&!i.isCustom?getLastPriceForCustomer(selCust.id,i.product.id):null;
           return(
-          <div key={`${i.product.id}-${i.variant?.id}`} style={{padding:10,borderRadius:12,border:`1px solid ${C.border}`,marginBottom:6,
+          <div key={`${i.product.id}-${i.variant?.id}`} style={{padding:"var(--cart-item-pad,10px)",borderRadius:"var(--radius-sm,10px)",border:`1px solid ${C.border}`,marginBottom:5,
             background:C.surface,transition:"all 0.15s",boxShadow:`0 1px 3px ${C.shadow}`}}
             onMouseEnter={e=>e.currentTarget.style.boxShadow=`0 3px 10px ${C.shadowMd}`}
             onMouseLeave={e=>e.currentTarget.style.boxShadow=`0 1px 3px ${C.shadow}`}>
-            <div style={{display:"flex",gap:8,marginBottom:6}}>
-              <div style={{width:36,height:36,borderRadius:10,background:`${cc}10`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-                <span style={{fontSize:16}}>{i.isCustom?"📝":catIcon(i.product.category,settings.categoryIcons)}</span></div>
+            <div style={{display:"flex",gap:6,marginBottom:4}}>
+              <div style={{width:30,height:30,borderRadius:8,background:`${cc}10`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                <span style={{fontSize:14}}>{i.isCustom?"📝":catIcon(i.product.category,settings.categoryIcons)}</span></div>
               <div style={{flex:1,minWidth:0}}>
-                <div style={{fontSize:12,fontWeight:700,lineHeight:1.2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{i.product.name}{i.isCustom?" (divers)":""}</div>
-                {!i.isCustom&&<><div style={{display:"flex",gap:3,marginTop:3,flexWrap:"wrap"}}>
-                  <span style={{fontSize:9,color:cc,fontWeight:600,background:`${cc}10`,padding:"1px 5px",borderRadius:4}}>{i.variant?.color}</span>
-                  {i.variant?.colorCode&&<span style={{fontSize:8,color:C.accent,fontWeight:600,background:C.accentLight,padding:"1px 4px",borderRadius:4,fontFamily:"monospace"}}>{i.variant.colorCode}</span>}
-                  <span style={{fontSize:9,color:C.info,fontWeight:600,background:`${C.info}10`,padding:"1px 5px",borderRadius:4}}>{i.variant?.size}</span>
-                  {lastP&&<span style={{fontSize:8,color:C.textMuted,background:C.surfaceAlt,padding:"1px 4px",borderRadius:4}}>Préc. {lastP.toFixed(2)}€</span>}</div>
-                <div style={{display:"flex",gap:4,marginTop:2}}>
-                  {i.product.sku&&<span style={{fontSize:8,fontFamily:"monospace",color:C.textMuted}}>Réf: {i.product.sku}</span>}
-                  {i.variant?.ean&&<span style={{fontSize:8,fontFamily:"monospace",color:C.textLight}}>EAN: {i.variant.ean}</span>}
+                <div style={{fontSize:11,fontWeight:700,lineHeight:1.2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{i.product.name}{i.isCustom?" (divers)":""}</div>
+                {!i.isCustom&&<><div style={{display:"flex",gap:2,marginTop:2,flexWrap:"wrap"}}>
+                  <span style={{fontSize:8,color:cc,fontWeight:600,background:`${cc}10`,padding:"1px 4px",borderRadius:3}}>{i.variant?.color}</span>
+                  {i.variant?.colorCode&&<span style={{fontSize:7,color:C.accent,fontWeight:600,background:C.accentLight,padding:"1px 3px",borderRadius:3,fontFamily:"monospace"}}>{i.variant.colorCode}</span>}
+                  <span style={{fontSize:8,color:C.info,fontWeight:600,background:`${C.info}10`,padding:"1px 4px",borderRadius:3}}>{i.variant?.size}</span>
+                  {lastP&&<span style={{fontSize:7,color:C.textMuted,background:C.surfaceAlt,padding:"1px 3px",borderRadius:3}}>Préc. {lastP.toFixed(2)}€</span>}</div>
+                <div style={{display:"flex",gap:3,marginTop:1}}>
+                  {i.product.sku&&<span style={{fontSize:7,fontFamily:"monospace",color:C.textMuted}}>Réf: {i.product.sku}</span>}
+                  {i.variant?.ean&&<span style={{fontSize:7,fontFamily:"monospace",color:C.textLight}}>EAN: {i.variant.ean}</span>}
                 </div></>}</div>
-              <button onClick={()=>removeFromCart(i.product.id,i.variant?.id)} style={{background:C.dangerLight,border:"none",cursor:"pointer",borderRadius:8,width:26,height:26,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"all 0.15s"}}
+              <button onClick={()=>removeFromCart(i.product.id,i.variant?.id)} style={{background:C.dangerLight,border:"none",cursor:"pointer",borderRadius:6,width:24,height:24,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"all 0.15s"}}
                 onMouseEnter={e=>e.currentTarget.style.background=C.danger} onMouseLeave={e=>e.currentTarget.style.background=C.dangerLight}>
-                <Trash2 size={11} color={C.danger} style={{transition:"color 0.15s"}}/></button></div>
+                <Trash2 size={10} color={C.danger} style={{transition:"color 0.15s"}}/></button></div>
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-              <div style={{display:"flex",alignItems:"center",gap:1,background:C.surfaceAlt,borderRadius:20,padding:2}}>
-                <button onClick={()=>updateQty(i.product.id,i.variant?.id,i.quantity-1)} style={{width:26,height:26,borderRadius:13,border:"none",background:C.surface,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:`0 1px 2px ${C.shadow}`,transition:"all 0.1s"}}><Minus size={11}/></button>
-                <span style={{width:28,textAlign:"center",fontSize:13,fontWeight:700}}>{i.quantity}</span>
-                <button onClick={()=>updateQty(i.product.id,i.variant?.id,i.quantity+1)} style={{width:26,height:26,borderRadius:13,border:"none",background:C.surface,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:`0 1px 2px ${C.shadow}`,transition:"all 0.1s"}}><Plus size={11}/></button></div>
-              <button onClick={()=>{setDm({pid:i.product.id,vid:i.variant?.id,discType:i.discountType||"percent"});setDv(String(i.discount));}} style={{padding:"3px 8px",borderRadius:8,border:`1px solid ${i.discount>0?cc:C.border}`,background:i.discount>0?`${cc}08`:"transparent",cursor:"pointer",fontSize:9,fontWeight:600,color:i.discount>0?cc:C.textMuted,transition:"all 0.15s"}}>
+              <div style={{display:"flex",alignItems:"center",gap:1,background:C.surfaceAlt,borderRadius:16,padding:2}}>
+                <button onClick={()=>updateQty(i.product.id,i.variant?.id,i.quantity-1)} style={{width:24,height:24,borderRadius:12,border:"none",background:C.surface,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:`0 1px 2px ${C.shadow}`,transition:"all 0.1s"}}><Minus size={10}/></button>
+                <span style={{width:24,textAlign:"center",fontSize:12,fontWeight:700}}>{i.quantity}</span>
+                <button onClick={()=>updateQty(i.product.id,i.variant?.id,i.quantity+1)} style={{width:24,height:24,borderRadius:12,border:"none",background:C.surface,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:`0 1px 2px ${C.shadow}`,transition:"all 0.1s"}}><Plus size={10}/></button></div>
+              <button onClick={()=>{setDm({pid:i.product.id,vid:i.variant?.id,discType:i.discountType||"percent"});setDv(String(i.discount));}} style={{padding:"2px 6px",borderRadius:6,border:`1px solid ${i.discount>0?cc:C.border}`,background:i.discount>0?`${cc}08`:"transparent",cursor:"pointer",fontSize:8,fontWeight:600,color:i.discount>0?cc:C.textMuted,transition:"all 0.15s"}}>
                 {i.discount>0?`-${i.discount}${i.discountType==="amount"?"€":"%"}`:"Remise"}</button>
-              <div style={{textAlign:"right"}}>{i.discount>0&&<div style={{fontSize:8,color:C.textLight,textDecoration:"line-through"}}>{t.toFixed(2)}€</div>}
-                <div style={{fontSize:14,fontWeight:800,color:cc,letterSpacing:"-0.3px"}}>{(t-d).toFixed(2)}€</div></div></div></div>);})}</div>
+              <div style={{textAlign:"right"}}>{i.discount>0&&<div style={{fontSize:7,color:C.textLight,textDecoration:"line-through"}}>{t.toFixed(2)}€</div>}
+                <div style={{fontSize:13,fontWeight:800,color:cc,letterSpacing:"-0.3px"}}>{(t-d).toFixed(2)}€</div></div></div></div>);})}</div>
 
       {/* Totals & Payment */}
-      <div style={{padding:"0 12px 12px",borderTop:`1px solid ${C.border}`}}>
-        <div style={{background:C.surfaceAlt,borderRadius:14,padding:14,margin:"10px 0 8px",fontSize:11}}>
-          <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><span style={{color:C.textMuted}}>Sous-total HT</span><span style={{fontWeight:600}}>{totals.sHT.toFixed(2)}€</span></div>
-          {totals.gd>0&&<div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><span style={{color:"#059669",display:"flex",alignItems:"center",gap:3}}><Percent size={10}/> Remises & promos</span><span style={{fontWeight:700,color:"#059669"}}>-{totals.gd.toFixed(2)}€</span></div>}
-          {totals.applied?.length>0&&<div style={{background:`${C.warn}10`,borderRadius:8,padding:"4px 8px",marginBottom:4,border:`1px solid ${C.warn}15`}}>{totals.applied.map((a,i)=><div key={i} style={{fontSize:9,color:"#92720E",fontWeight:600}}>✓ {a}</div>)}</div>}
-          <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}><span style={{color:C.textMuted}}>TVA</span><span style={{fontWeight:600}}>{totals.tTVA.toFixed(2)}€</span></div>
-          {selectedAvoir&&avoirPayment>0&&<div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}><span style={{color:C.fiscal,display:"flex",alignItems:"center",gap:4}}>
-            <RotateCcw size={10}/> Avoir {selectedAvoir.avoirNumber}</span>
-            <span style={{display:"flex",alignItems:"center",gap:6}}>
+      <div style={{padding:"0 var(--pad-sm,12px) var(--pad-sm,12px)",borderTop:`1px solid ${C.border}`}}>
+        <div style={{background:C.surfaceAlt,borderRadius:"var(--radius-sm,10px)",padding:"var(--total-pad,14px)",margin:"var(--gap-sm,6px) 0",fontSize:10}}>
+          <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}><span style={{color:C.textMuted}}>Sous-total HT</span><span style={{fontWeight:600}}>{totals.sHT.toFixed(2)}€</span></div>
+          {totals.gd>0&&<div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}><span style={{color:"#059669",display:"flex",alignItems:"center",gap:3}}><Percent size={9}/> Remises & promos</span><span style={{fontWeight:700,color:"#059669"}}>-{totals.gd.toFixed(2)}€</span></div>}
+          {totals.applied?.length>0&&<div style={{background:`${C.warn}10`,borderRadius:6,padding:"3px 6px",marginBottom:3,border:`1px solid ${C.warn}15`}}>{totals.applied.map((a,i)=><div key={i} style={{fontSize:8,color:"#92720E",fontWeight:600}}>✓ {a}</div>)}</div>}
+          <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}><span style={{color:C.textMuted}}>TVA</span><span style={{fontWeight:600}}>{totals.tTVA.toFixed(2)}€</span></div>
+          {selectedAvoir&&avoirPayment>0&&<div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:3}}><span style={{color:C.fiscal,display:"flex",alignItems:"center",gap:3}}>
+            <RotateCcw size={9}/> Avoir {selectedAvoir.avoirNumber}</span>
+            <span style={{display:"flex",alignItems:"center",gap:4}}>
               <span style={{fontWeight:700,color:C.fiscal}}>-{avoirPayment.toFixed(2)}€</span>
-              <button onClick={()=>setSelectedAvoir(null)} style={{background:"none",border:"none",cursor:"pointer",padding:2,color:C.danger,fontSize:10,fontWeight:700}} title="Annuler l'avoir">X</button>
+              <button onClick={()=>setSelectedAvoir(null)} style={{background:"none",border:"none",cursor:"pointer",padding:2,color:C.danger,fontSize:9,fontWeight:700}} title="Annuler l'avoir">X</button>
             </span></div>}
-          <div style={{borderTop:`2px solid ${C.border}`,paddingTop:8,marginTop:6,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-            <span style={{fontSize:16,fontWeight:800}}>Total TTC</span>
-            <span style={{fontSize:24,fontWeight:900,color:C.primary,letterSpacing:"-0.8px"}}>{totals.tTTC.toFixed(2)}€</span></div></div>
+          <div style={{borderTop:`2px solid ${C.border}`,paddingTop:6,marginTop:4,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+            <span style={{fontSize:14,fontWeight:800}}>Total TTC</span>
+            <span style={{fontSize:20,fontWeight:900,color:C.primary,letterSpacing:"-0.8px"}}>{totals.tTTC.toFixed(2)}€</span></div></div>
 
-        {cashGiven&&parseFloat(cashGiven)>0&&<div style={{background:C.primaryLight,borderRadius:12,padding:12,marginBottom:8,display:"flex",justifyContent:"space-between",alignItems:"center",
+        {cashGiven&&parseFloat(cashGiven)>0&&<div style={{background:C.primaryLight,borderRadius:10,padding:"var(--pad-sm,10px)",marginBottom:6,display:"flex",justifyContent:"space-between",alignItems:"center",
           border:`1px solid ${C.primary}15`,boxShadow:`0 2px 8px ${C.primary}10`}}>
-          <span style={{fontSize:13,fontWeight:700,color:C.primaryDark}}>Rendu monnaie</span>
-          <span style={{fontSize:22,fontWeight:900,color:C.primary,letterSpacing:"-0.5px"}}>{change.toFixed(2)}€</span></div>}
+          <span style={{fontSize:12,fontWeight:700,color:C.primaryDark}}>Rendu monnaie</span>
+          <span style={{fontSize:18,fontWeight:900,color:C.primary,letterSpacing:"-0.5px"}}>{change.toFixed(2)}€</span></div>}
 
-        <div style={{display:"flex",gap:4,marginBottom:6}}>
-          <Btn variant="outline" onClick={()=>{setGm(true);setGv(String(gDisc));setGtp(gDiscType);}} style={{flex:1,height:32,fontSize:10,padding:"0 6px",borderRadius:10}}><Percent size={11}/> Remise globale</Btn>
+        <div style={{display:"flex",gap:4,marginBottom:5}}>
+          <Btn variant="outline" onClick={()=>{setGm(true);setGv(String(gDisc));setGtp(gDiscType);}} style={{flex:1,height:28,fontSize:9,padding:"0 6px",borderRadius:8}}><Percent size={10}/> Remise globale</Btn>
           </div>
 
         {selectedAvoir&&totals.tTTC<=0?
-          <Btn onClick={async()=>await quickPay("avoir")} disabled={!cart.length||busy} style={{width:"100%",height:52,borderRadius:14,background:C.fiscal,fontSize:14,gap:8,boxShadow:`0 4px 16px ${C.fiscal}30`,marginBottom:6,letterSpacing:"-0.3px"}}>
-            {busy?<span className="spin-loader"/>:<><CheckCircle2 size={18}/> Valider (avoir) — 0.00€</>}</Btn>
-        :<Btn onClick={()=>setPayMethodModal(true)} disabled={!cart.length||busy} style={{width:"100%",height:52,borderRadius:14,background:C.primary,fontSize:14,gap:8,boxShadow:`0 4px 16px ${C.primary}30`,marginBottom:6,letterSpacing:"-0.3px"}}>
-          {busy?<span className="spin-loader"/>:<><Wallet size={18}/> Règlement — {totals.tTTC.toFixed(2)}€</>}</Btn>}
+          <Btn onClick={async()=>await quickPay("avoir")} disabled={!cart.length||busy} style={{width:"100%",height:"var(--btn-h,52px)",borderRadius:"var(--radius,14px)",background:C.fiscal,fontSize:"var(--btn-font,14px)",gap:6,boxShadow:`0 4px 16px ${C.fiscal}30`,marginBottom:5,letterSpacing:"-0.3px"}}>
+            {busy?<span className="spin-loader"/>:<><CheckCircle2 size={16}/> Valider (avoir) — 0.00€</>}</Btn>
+        :<Btn onClick={()=>setPayMethodModal(true)} disabled={!cart.length||busy} style={{width:"100%",height:"var(--btn-h,52px)",borderRadius:"var(--radius,14px)",background:C.primary,fontSize:"var(--btn-font,14px)",gap:6,boxShadow:`0 4px 16px ${C.primary}30`,marginBottom:5,letterSpacing:"-0.3px"}}>
+          {busy?<span className="spin-loader"/>:<><Wallet size={16}/> Règlement — {totals.tTTC.toFixed(2)}€</>}</Btn>}
         <div style={{display:"flex",gap:4}}>
-          <Btn variant="outline" onClick={()=>setRetoucheModal(true)} style={{flex:1,height:30,fontSize:10,borderRadius:10,gap:4}}><Edit size={11}/> Retouche</Btn>
-          <Btn variant="outline" onClick={()=>cart.length?setConfirmClear(true):null} style={{flex:1,borderColor:`${C.danger}20`,color:C.danger,height:30,fontSize:10,borderRadius:10}}><RotateCcw size={10}/> Vider</Btn>
+          <Btn variant="outline" onClick={()=>setRetoucheModal(true)} style={{flex:1,height:26,fontSize:9,borderRadius:8,gap:3}}><Edit size={10}/> Retouche</Btn>
+          <Btn variant="outline" onClick={()=>cart.length?setConfirmClear(true):null} style={{flex:1,borderColor:`${C.danger}20`,color:C.danger,height:26,fontSize:9,borderRadius:8}}><RotateCcw size={9}/> Vider</Btn>
         </div>
       </div>
     </div>

@@ -26,9 +26,9 @@ function ProductsScreen(){
   const openEdit=(prod)=>{setEp({name:prod.name,sku:prod.sku,price:String(prod.price),costPrice:String(prod.costPrice||""),
     taxRate:String(prod.taxRate),category:prod.category,collection:prod.collection||""});setEditModal(prod);};
 
-  return(<div style={{height:"100%",overflowY:"auto",padding:20,background:C.bg}}>
-    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
-      <h2 style={{fontSize:22,fontWeight:800,margin:0}}>Produits ({products.length})</h2>
+  return(<div style={{height:"100%",overflowY:"auto",padding:"var(--pad,16px)",background:C.bg}}>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+      <h2 style={{fontSize:20,fontWeight:800,margin:0}}>Produits ({products.length})</h2>
       <div style={{display:"flex",gap:6}}>
         <Btn variant="outline" onClick={()=>setImportWizardOpen(true)} style={{fontSize:11}}><Upload size={12}/> CSV</Btn>
         <Btn variant="outline" onClick={exportCatalog} style={{fontSize:11}}><Download size={12}/> Export</Btn>

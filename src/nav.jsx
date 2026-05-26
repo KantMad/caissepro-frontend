@@ -24,7 +24,7 @@ function CashierNav({active,onNav}){
     {id:"products",l:"Produits",i:Package},{id:"history",l:"Tickets",i:Receipt},{id:"customers",l:"Clients",i:Users},{id:"giftcards",l:"Cadeaux",i:Gift},
     {id:"promos",l:"Promos",i:Zap},{id:"closure",l:"Cloture",i:Lock},{id:"footfall",l:"Entrees",i:Activity},
     {id:"audit",l:"Audit",i:Activity},{id:"fiscal",l:"NF525",i:Shield},{id:"settings",l:"Reglages",i:Settings},{id:"help",l:"Aide",i:HelpCircle}];
-  return(<div style={{width:72,background:"#0F172A",display:"flex",flexDirection:"column",alignItems:"center",padding:"14px 0",gap:2}}>
+  return(<div style={{width:"var(--nav-w,72px)",minWidth:"var(--nav-w,72px)",background:"#0F172A",display:"flex",flexDirection:"column",alignItems:"center",padding:"10px 0",gap:1}}>
     <div style={{width:38,height:38,borderRadius:10,background:C.primary,display:"flex",alignItems:"center",justifyContent:"center",
       color:"#fff",fontWeight:700,fontSize:14,marginBottom:4}}>{currentUser?.name?.[0]}</div>
     {currentStore&&<div style={{fontSize:7,color:"rgba(255,255,255,0.6)",fontWeight:600,textAlign:"center",marginBottom:2,
@@ -39,8 +39,8 @@ function CashierNav({active,onNav}){
       <button onClick={clockIn} title="Pointer entree" style={{width:26,height:22,borderRadius:6,border:"none",cursor:"pointer",background:"rgba(52,211,153,0.15)",color:"#34D399",fontSize:8,fontWeight:600,display:"flex",alignItems:"center",justifyContent:"center",transition:"all 0.15s"}}>IN</button>
       <button onClick={clockOut} title="Pointer sortie" style={{width:26,height:22,borderRadius:6,border:"none",cursor:"pointer",background:"rgba(248,113,113,0.15)",color:"#F87171",fontSize:8,fontWeight:600,display:"flex",alignItems:"center",justifyContent:"center",transition:"all 0.15s"}}>OUT</button></div>
     <div style={{flex:1,display:"flex",flexDirection:"column",gap:1,overflowY:"auto",width:"100%",padding:"0 8px"}}>
-      {items.map(({id,l,i:I})=>(<button key={id} onClick={()=>onNav(id)} title={l} style={{width:"100%",height:46,borderRadius:10,border:"none",cursor:"pointer",
-        display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:3,
+      {items.map(({id,l,i:I})=>(<button key={id} onClick={()=>onNav(id)} title={l} style={{width:"100%",height:42,borderRadius:8,border:"none",cursor:"pointer",
+        display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:2,
         background:active===id?"rgba(255,255,255,0.1)":"transparent",
         color:active===id?"#fff":"rgba(255,255,255,0.45)",position:"relative",
         transition:"all 0.2s cubic-bezier(0.16,1,0.3,1)",fontFamily:"inherit"}}
