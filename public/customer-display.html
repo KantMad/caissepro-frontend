@@ -176,20 +176,23 @@ function loadConfig(){
     storeId=localStorage.getItem('caissepro_display_store_id')||'';
     displayToken=localStorage.getItem('caissepro_display_token')||'';
   }catch(e){}
-  // Auto-detect from URL params
-  if(!apiUrl){
-    var params=new URLSearchParams(window.location.search);
-    if(params.get('api'))apiUrl=params.get('api');
-    if(params.get('store'))storeId=params.get('store');
-    if(params.get('token'))displayToken=params.get('token');
+  // Auto-detect from URL params (and save them so setup never shows again)
+  var params=new URLSearchParams(window.location.search);
+  if(params.get('api')){apiUrl=params.get('api');}
+  if(params.get('store')){storeId=params.get('store');}
+  if(params.get('token')){displayToken=params.get('token');}
+  // Persist URL params to localStorage so they survive reload
+  if(apiUrl&&storeId&&displayToken){
+    try{
+      localStorage.setItem('caissepro_display_api_url',apiUrl);
+      localStorage.setItem('caissepro_display_store_id',storeId);
+      localStorage.setItem('caissepro_display_token',displayToken);
+    }catch(e){}
   }
   document.getElementById('apiUrl').value=apiUrl;
   document.getElementById('storeId').value=storeId;
   document.getElementById('displayToken').value=displayToken;
-  // Show setup if not configured
-  if(!apiUrl||!storeId||!displayToken){
-    document.getElementById('setup').className='setup visible';
-  }
+  // Setup panel stays hidden — accessible only via triple-tap
 }
 
 document.getElementById('btnSave').addEventListener('click',function(){

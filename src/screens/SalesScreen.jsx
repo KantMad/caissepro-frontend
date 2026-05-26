@@ -485,33 +485,33 @@ function SalesScreen(){
           <div style={{fontSize:11,fontWeight:600,color:"#059669",textTransform:"uppercase",letterSpacing:"1px",marginBottom:4}}>Vente confirmée</div>
           <div style={{fontSize:28,fontWeight:900,color:"#059669",letterSpacing:"-1px"}}>{(lastTk.totalTTC||0).toFixed(2)}€</div>
           <div style={{fontSize:12,color:C.textMuted,marginTop:2}}>Paiement {({cash:"Espèces",card:"CB",amex:"American Express",giftcard:"Cadeau",MIXTE:"Mixte",cheque:"Chèque"})[lastTk.paymentMethod]||lastTk.paymentMethod}</div></div>
-        <div data-print-receipt style={{fontFamily:"'Courier New',monospace",fontSize:10,background:"#FAFAF8",borderRadius:12,padding:18,border:`1px solid ${C.border}`,boxShadow:`inset 0 1px 3px ${C.shadow}`}}>
+        <div data-print-receipt style={{fontFamily:"'Courier New',monospace",fontSize:12,fontWeight:500,background:"#FAFAF8",borderRadius:12,padding:18,border:`1px solid ${C.border}`,boxShadow:`inset 0 1px 3px ${C.shadow}`}}>
         <div style={{textAlign:"center",marginBottom:8}}>
           {settings.receiptLogo&&<div style={{marginBottom:4}}><img src={settings.receiptLogo} alt="" style={{maxHeight:40,maxWidth:180,objectFit:"contain"}}/></div>}
-          <div style={{fontSize:12,fontWeight:700}}>{settings.name||CO.name}</div>
-          {currentStore?.name&&<div style={{fontSize:11,fontWeight:600}}>Magasin: {currentStore.name}</div>}
-          <div>{currentStore?.address||settings.address}, {currentStore?.postal_code||settings.postalCode} {currentStore?.city||settings.city}</div>
-          {(settings.phone||currentStore?.phone)&&<div>Tél: {currentStore?.phone||settings.phone}</div>}
-          <div>SIRET: {settings.siret} — TVA: {settings.tvaIntra}</div></div>
+          <div style={{fontSize:14,fontWeight:800}}>{settings.name||CO.name}</div>
+          {currentStore?.name&&<div style={{fontSize:12,fontWeight:700}}>Magasin: {currentStore.name}</div>}
+          <div style={{fontWeight:600}}>{currentStore?.address||settings.address}, {currentStore?.postal_code||settings.postalCode} {currentStore?.city||settings.city}</div>
+          {(settings.phone||currentStore?.phone)&&<div style={{fontWeight:600}}>Tél: {currentStore?.phone||settings.phone}</div>}
+          <div style={{fontWeight:600}}>SIRET: {settings.siret} — TVA: {settings.tvaIntra}</div></div>
         <div style={{borderTop:"1px dashed #999",margin:"4px 0"}}/>
-        <div style={{display:"flex",justifyContent:"space-between"}}><span>N° {lastTk.ticketNumber}</span><span>{new Date(lastTk.date||lastTk.createdAt||"").toLocaleString("fr-FR")}</span></div>
-        <div>Caissier: {lastTk.userName}{lastTk.customerName?` — Client: ${lastTk.customerName}`:""}</div>
+        <div style={{display:"flex",justifyContent:"space-between",fontWeight:700}}><span>N° {lastTk.ticketNumber}</span><span>{new Date(lastTk.date||lastTk.createdAt||"").toLocaleString("fr-FR")}</span></div>
+        <div style={{fontWeight:600}}>Caissier: {lastTk.userName}{lastTk.customerName?` — Client: ${lastTk.customerName}`:""}</div>
         <div style={{borderTop:"1px dashed #999",margin:"4px 0"}}/>
         {(lastTk.items||[]).map((i,k)=>{const sku=i.product?.sku||i.product_sku||"";const ean=i.variant?.ean||i.variant_ean||"";return(<div key={k}>
-          <div style={{display:"flex",justifyContent:"space-between",gap:8}}><span style={{flex:1,wordBreak:"break-word",lineHeight:1.3}}>{i.product?.name||i.product_name}{i.isCustom||i.is_custom?"":`(${i.variant?.color||i.variant_color}/${i.variant?.size||i.variant_size})`} x{i.quantity}{i.discount>0?` -${i.discount}${i.discountType==="amount"?"€":"%"}`:""}</span><span style={{whiteSpace:"nowrap",fontWeight:600}}>{(i.lineTTC||i.line_ttc||((i.unit_price||0)*(i.quantity||1))||0).toFixed(2)}€</span></div>
-          {(sku||ean)&&<div style={{fontSize:8,color:"#999"}}>{sku?`Réf: ${sku}`:""}{sku&&ean?" — ":""}{ean?`EAN: ${ean}`:""}</div>}
+          <div style={{display:"flex",justifyContent:"space-between",gap:8}}><span style={{flex:1,wordBreak:"break-word",lineHeight:1.3}}>{i.product?.name||i.product_name}{i.isCustom||i.is_custom?"":`(${i.variant?.color||i.variant_color}/${i.variant?.size||i.variant_size})`} x{i.quantity}{i.discount>0?` -${i.discount}${i.discountType==="amount"?"€":"%"}`:""}</span><span style={{whiteSpace:"nowrap",fontWeight:800}}>{(i.lineTTC||i.line_ttc||((i.unit_price||0)*(i.quantity||1))||0).toFixed(2)}€</span></div>
+          {(sku||ean)&&<div style={{fontSize:9,color:"#888",fontWeight:600}}>{sku?`Réf: ${sku}`:""}{sku&&ean?" — ":""}{ean?`EAN: ${ean}`:""}</div>}
         </div>);})}
         <div style={{borderTop:"1px dashed #999",margin:"4px 0"}}/>
-        {lastTk.promosApplied?.length>0&&lastTk.promosApplied.map((a,i)=><div key={i} style={{color:"#059669",fontSize:9}}>✓ {a}</div>)}
-        <div style={{display:"flex",justifyContent:"space-between"}}><span>Total HT</span><span>{(lastTk.totalHT||0).toFixed(2)}€</span></div>
-        <div style={{display:"flex",justifyContent:"space-between"}}><span>TVA</span><span>{(lastTk.totalTVA||0).toFixed(2)}€</span></div>
-        <div style={{display:"flex",justifyContent:"space-between",fontSize:13,fontWeight:700,marginTop:3}}><span>TOTAL TTC</span><span>{(lastTk.totalTTC||0).toFixed(2)}€</span></div>
+        {lastTk.promosApplied?.length>0&&lastTk.promosApplied.map((a,i)=><div key={i} style={{color:"#059669",fontSize:10,fontWeight:600}}>✓ {a}</div>)}
+        <div style={{display:"flex",justifyContent:"space-between",fontWeight:600}}><span>Total HT</span><span>{(lastTk.totalHT||0).toFixed(2)}€</span></div>
+        <div style={{display:"flex",justifyContent:"space-between",fontWeight:600}}><span>TVA</span><span>{(lastTk.totalTVA||0).toFixed(2)}€</span></div>
+        <div style={{display:"flex",justifyContent:"space-between",fontSize:14,fontWeight:800,marginTop:3}}><span>TOTAL TTC</span><span>{(lastTk.totalTTC||0).toFixed(2)}€</span></div>
         <div style={{borderTop:"1px dashed #999",margin:"4px 0"}}/>
-        <div>Paiement: {lastTk.payments?.map(p=>`${({cash:"ESP",card:"CB",amex:"AMEX",giftcard:"CAD",cheque:"CHQ",avoir:"AVOIR"})[p.method]||p.method} ${(p.amount||0).toFixed(2)}€`).join(" + ")}</div>
+        <div style={{fontWeight:700}}>Paiement: {lastTk.payments?.map(p=>`${({cash:"ESP",card:"CB",amex:"AMEX",giftcard:"CAD",cheque:"CHQ",avoir:"AVOIR"})[p.method]||p.method} ${(p.amount||0).toFixed(2)}€`).join(" + ")}</div>
         <div style={{textAlign:"center",background:C.fiscalLight,padding:6,borderRadius:6,margin:"4px 0"}}>
-          <div style={{fontSize:8,color:C.fiscal,fontWeight:700}}>EMPREINTE NF525</div>
-          <div style={{fontSize:11,fontWeight:700,color:C.fiscal,letterSpacing:2}}>{lastTk.fingerprint}</div></div>
-        <div style={{textAlign:"center",fontSize:10,color:C.text,marginTop:4}}>Garantie légale 2 ans</div>
+          <div style={{fontSize:9,color:C.fiscal,fontWeight:800}}>EMPREINTE NF525</div>
+          <div style={{fontSize:12,fontWeight:800,color:C.fiscal,letterSpacing:2}}>{lastTk.fingerprint}</div></div>
+        <div style={{textAlign:"center",fontSize:11,fontWeight:600,color:C.text,marginTop:4}}>Garantie légale 2 ans</div>
         {(settings.footerMsg||CO.footerMsg)&&<div style={{textAlign:"center",fontSize:14,fontWeight:800,color:C.text,marginTop:6,padding:"6px 0"}}>
           {settings.footerMsg||CO.footerMsg}</div>}
         {settings.ticketFreeText&&<div style={{textAlign:"center",fontSize:11,fontWeight:600,color:C.text,marginTop:4,whiteSpace:"pre-line"}}>

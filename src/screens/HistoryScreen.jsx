@@ -212,16 +212,16 @@ function HistoryScreen(){
         const tkFp=tk.fingerprint||tk.fiscal_fingerprint||"";
         const tkPayMethod=tk.paymentMethod||tk.payment_method||"?";
         return(<>
-        <div data-print-receipt style={{fontFamily:"'Courier New',monospace",fontSize:10,background:"#FAFAF8",borderRadius:10,padding:16,border:`1px solid ${C.border}`}}>
+        <div data-print-receipt style={{fontFamily:"'Courier New',monospace",fontSize:12,fontWeight:500,background:"#FAFAF8",borderRadius:10,padding:16,border:`1px solid ${C.border}`}}>
         <div style={{textAlign:"center",marginBottom:6}}>
           {settings.receiptLogo&&<div style={{marginBottom:4}}><img src={settings.receiptLogo} alt="" style={{maxHeight:40,maxWidth:180,objectFit:"contain"}}/></div>}
-          <div style={{fontSize:12,fontWeight:700}}>{settings.name||CO.name}</div>
-          <div>{settings.address}, {settings.postalCode} {settings.city}</div>
-          {settings.phone&&<div>Tél: {settings.phone}</div>}
-          <div>SIRET: {settings.siret||CO.siret} — TVA: {settings.tvaIntra||CO.tvaIntra}</div></div>
+          <div style={{fontSize:14,fontWeight:800}}>{settings.name||CO.name}</div>
+          <div style={{fontWeight:600}}>{settings.address}, {settings.postalCode} {settings.city}</div>
+          {settings.phone&&<div style={{fontWeight:600}}>Tél: {settings.phone}</div>}
+          <div style={{fontWeight:600}}>SIRET: {settings.siret||CO.siret} — TVA: {settings.tvaIntra||CO.tvaIntra}</div></div>
         <div style={{borderTop:"1px dashed #999",margin:"4px 0"}}/>
-        <div style={{display:"flex",justifyContent:"space-between"}}><span>N° {tkNum}</span><span>{tkDateStr}</span></div>
-        <div>Caissier: {tkUser}{tkCust?` — Client: ${tkCust}`:""}</div>
+        <div style={{display:"flex",justifyContent:"space-between",fontWeight:700}}><span>N° {tkNum}</span><span>{tkDateStr}</span></div>
+        <div style={{fontWeight:600}}>Caissier: {tkUser}{tkCust?` — Client: ${tkCust}`:""}</div>
         <div style={{borderTop:"1px dashed #999",margin:"4px 0"}}/>
         {tkItems.map((i,k)=>{const sku=i.product?.sku||i.product_sku||i.sku||"";const ean=i.variant?.ean||i.variant_ean||i.ean||"";
           const name=i.product?.name||i.product_name||i.name||"Article";
@@ -232,26 +232,26 @@ function HistoryScreen(){
           const disc=Number(i.discount)||0;
           return(<div key={k}>
           <div style={{display:"flex",justifyContent:"space-between",gap:8}}><span style={{flex:1,wordBreak:"break-word",lineHeight:1.3}}>{name}{!isCustom&&(color||size)?` (${color}/${size})`:""} x{i.quantity||1}{disc>0?` -${disc}${i.discountType==="amount"||i.discount_type==="amount"?"€":"%"}`:""}</span>
-          <span style={{whiteSpace:"nowrap",fontWeight:600}}>{lineAmt.toFixed(2)}€</span></div>
-          {(sku||ean)&&<div style={{fontSize:8,color:"#999"}}>{sku?`Réf: ${sku}`:""}{sku&&ean?" — ":""}{ean?`EAN: ${ean}`:""}</div>}
+          <span style={{whiteSpace:"nowrap",fontWeight:800}}>{lineAmt.toFixed(2)}€</span></div>
+          {(sku||ean)&&<div style={{fontSize:9,color:"#888",fontWeight:600}}>{sku?`Réf: ${sku}`:""}{sku&&ean?" — ":""}{ean?`EAN: ${ean}`:""}</div>}
         </div>);})}
         <div style={{borderTop:"1px dashed #999",margin:"4px 0"}}/>
-        {tkDisc>0&&<div style={{display:"flex",justifyContent:"space-between",color:"#059669"}}><span>Remise</span><span>-{tkDisc.toFixed(2)}€</span></div>}
-        <div style={{display:"flex",justifyContent:"space-between"}}><span>Total HT</span><span>{tkHT.toFixed(2)}€</span></div>
-        <div style={{display:"flex",justifyContent:"space-between"}}><span>TVA</span><span>{tkTVA.toFixed(2)}€</span></div>
-        <div style={{display:"flex",justifyContent:"space-between",fontSize:13,fontWeight:700,marginTop:3}}><span>TOTAL TTC</span><span>{tkTTC.toFixed(2)}€</span></div>
+        {tkDisc>0&&<div style={{display:"flex",justifyContent:"space-between",color:"#059669",fontWeight:600}}><span>Remise</span><span>-{tkDisc.toFixed(2)}€</span></div>}
+        <div style={{display:"flex",justifyContent:"space-between",fontWeight:600}}><span>Total HT</span><span>{tkHT.toFixed(2)}€</span></div>
+        <div style={{display:"flex",justifyContent:"space-between",fontWeight:600}}><span>TVA</span><span>{tkTVA.toFixed(2)}€</span></div>
+        <div style={{display:"flex",justifyContent:"space-between",fontSize:14,fontWeight:800,marginTop:3}}><span>TOTAL TTC</span><span>{tkTTC.toFixed(2)}€</span></div>
         <div style={{borderTop:"1px dashed #999",margin:"4px 0"}}/>
-        <div>Paiement: {tkPayments.map(pm=>`${({cash:"ESP",card:"CB",amex:"AMEX",giftcard:"CAD",cheque:"CHQ",avoir:"AVOIR"})[pm.method]||pm.method} ${(Number(pm.amount)||0).toFixed(2)}€`).join(" + ")||tkPayMethod}</div>
+        <div style={{fontWeight:700}}>Paiement: {tkPayments.map(pm=>`${({cash:"ESP",card:"CB",amex:"AMEX",giftcard:"CAD",cheque:"CHQ",avoir:"AVOIR"})[pm.method]||pm.method} ${(Number(pm.amount)||0).toFixed(2)}€`).join(" + ")||tkPayMethod}</div>
         {tkFp&&<div style={{textAlign:"center",background:C.fiscalLight,padding:6,borderRadius:6,margin:"6px 0"}}>
-          <div style={{fontSize:8,color:C.fiscal,fontWeight:700}}>EMPREINTE NF525</div>
-          <div style={{fontSize:11,fontWeight:700,color:C.fiscal,letterSpacing:2}}>{tkFp}</div></div>}
+          <div style={{fontSize:9,color:C.fiscal,fontWeight:800}}>EMPREINTE NF525</div>
+          <div style={{fontSize:12,fontWeight:800,color:C.fiscal,letterSpacing:2}}>{tkFp}</div></div>}
         {(tk.barcode)&&<div style={{marginTop:6,display:"flex",justifyContent:"center"}}><EAN13Svg code={tk.barcode} width={160} height={45}/></div>}
-        <div style={{textAlign:"center",fontSize:10,color:C.text,marginTop:4}}>Garantie légale 2 ans</div>
-        {(settings.footerMsg||CO.footerMsg)&&<div style={{textAlign:"center",fontSize:14,fontWeight:800,color:C.text,marginTop:6,padding:"6px 0"}}>
+        <div style={{textAlign:"center",fontSize:11,fontWeight:600,color:C.text,marginTop:4}}>Garantie légale 2 ans</div>
+        {(settings.footerMsg||CO.footerMsg)&&<div style={{textAlign:"center",fontSize:15,fontWeight:800,color:C.text,marginTop:6,padding:"6px 0"}}>
           {settings.footerMsg||CO.footerMsg}</div>}
-        {settings.ticketFreeText&&<div style={{textAlign:"center",fontSize:11,fontWeight:600,color:C.text,marginTop:4,whiteSpace:"pre-line"}}>
+        {settings.ticketFreeText&&<div style={{textAlign:"center",fontSize:12,fontWeight:700,color:C.text,marginTop:4,whiteSpace:"pre-line"}}>
           {settings.ticketFreeText}</div>}
-        <div style={{textAlign:"center",fontSize:7,color:C.textMuted,marginTop:4}}>{CO.sw} v{CO.ver} — Conforme NF525</div>
+        <div style={{textAlign:"center",fontSize:8,color:C.textMuted,fontWeight:600,marginTop:4}}>{CO.sw} v{CO.ver} — Conforme NF525</div>
       </div>
       <div style={{display:"flex",gap:8,marginTop:10,flexWrap:"wrap"}}>
         <Btn variant="outline" onClick={()=>thermalPrint("receipt",tk)} style={{flex:1}}><Printer size={14}/> {printerConnected?"Ticket":"Réimprimer"}</Btn>
@@ -347,10 +347,10 @@ function HistoryScreen(){
         const avRefund=av.refundMethod||av.refund_method||"?";
         const avFp=av.fingerprint||av.fiscal_fingerprint||"";
         return(<>
-        <div data-print-receipt style={{fontFamily:"'Courier New',monospace",fontSize:10,background:C.dangerLight,borderRadius:10,padding:16,border:`1px solid ${C.danger}33`}}>
-        <div style={{textAlign:"center",marginBottom:6,color:C.danger,fontWeight:700,fontSize:12}}>AVOIR / NOTE DE CRÉDIT</div>
-        <div style={{textAlign:"center",marginBottom:6}}><div style={{fontSize:12,fontWeight:700}}>{settings.name||CO.name}</div>
-          <div>SIRET: {settings.siret||CO.siret}</div></div>
+        <div data-print-receipt style={{fontFamily:"'Courier New',monospace",fontSize:12,fontWeight:500,background:C.dangerLight,borderRadius:10,padding:16,border:`1px solid ${C.danger}33`}}>
+        <div style={{textAlign:"center",marginBottom:6,color:C.danger,fontWeight:800,fontSize:14}}>AVOIR / NOTE DE CRÉDIT</div>
+        <div style={{textAlign:"center",marginBottom:6}}><div style={{fontSize:14,fontWeight:800}}>{settings.name||CO.name}</div>
+          <div style={{fontWeight:600}}>SIRET: {settings.siret||CO.siret}</div></div>
         <div style={{borderTop:`1px dashed ${C.danger}`,margin:"4px 0"}}/>
         <div>N° {avNum}</div>
         <div>Ticket original: {avOrigTk}{avOrigDate?` du ${new Date(avOrigDate).toLocaleDateString("fr-FR")}`:""}</div>
@@ -369,11 +369,11 @@ function HistoryScreen(){
           {(sku||ean)&&<div style={{fontSize:8,color:`${C.danger}99`}}>{sku?`Réf: ${sku}`:""}{sku&&ean?" — ":""}{ean?`EAN: ${ean}`:""}</div>}
         </div>);})}
         <div style={{borderTop:`1px dashed ${C.danger}`,margin:"4px 0"}}/>
-        <div style={{display:"flex",justifyContent:"space-between",fontWeight:700,color:C.danger}}><span>TOTAL AVOIR</span><span>-{avTTC.toFixed(2)}€</span></div>
-        <div>Remboursement: {({cash:"Espèces",card:"Carte bancaire",avoir:"Avoir client"})[avRefund]||avRefund}</div>
+        <div style={{display:"flex",justifyContent:"space-between",fontWeight:800,fontSize:14,color:C.danger}}><span>TOTAL AVOIR</span><span>-{avTTC.toFixed(2)}€</span></div>
+        <div style={{fontWeight:700}}>Remboursement: {({cash:"Espèces",card:"Carte bancaire",avoir:"Avoir client"})[avRefund]||avRefund}</div>
         {avFp&&<div style={{textAlign:"center",background:C.dangerLight,padding:6,borderRadius:6,margin:"6px 0"}}>
-          <div style={{fontSize:8,color:C.danger,fontWeight:700}}>EMPREINTE NF525</div>
-          <div style={{fontSize:11,fontWeight:700,color:C.danger,letterSpacing:2}}>{avFp}</div></div>}
+          <div style={{fontSize:9,color:C.danger,fontWeight:800}}>EMPREINTE NF525</div>
+          <div style={{fontSize:12,fontWeight:800,color:C.danger,letterSpacing:2}}>{avFp}</div></div>}
         {(av.barcode)&&<div style={{marginTop:6,display:"flex",justifyContent:"center"}}><EAN13Svg code={av.barcode} width={160} height={45}/></div>}
       </div>
       <Btn variant="outline" onClick={()=>thermalPrint("avoir",av)} style={{width:"100%",marginTop:10}}><Printer size={14}/> {printerConnected?"Ticket":"Imprimer"}</Btn>

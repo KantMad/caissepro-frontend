@@ -1048,13 +1048,21 @@ function AppProvider({children}){
       const found=findByEANRef.current(code);
       if(found){addToCartRef.current(found.product,found.variant);notifyRef.current(found.product.name+" ajouté ("+code+")");return;}
       // 2. Try ticket/avoir/retouche barcode (EAN-13 starting with "200"/"201"/"203")
+      // Only navigate to history if we're NOT on the sales screen (don't interrupt cart)
+      const currentMode=sessionStorage.getItem("caissepro_mode")||"cashier";
       const tk=ticketsRef.current.find(t=>t.barcode===code);
-      if(tk){setScanBarcode(code);notifyRef.current(`Ticket ${tk.ticketNumber} trouvé`,"info");setMode("history");return;}
+      if(tk){
+        if(currentMode==="cashier"){notifyRef.current(`Ticket ${tk.ticketNumber} — allez dans Historique pour le consulter`,"info");}
+        else{setScanBarcode(code);notifyRef.current(`Ticket ${tk.ticketNumber} trouvé`,"info");setMode("history");}
+        return;}
       const av=avoirsRef.current.find(a=>a.barcode===code);
-      if(av){setScanBarcode(code);notifyRef.current(`Avoir ${av.avoirNumber} trouvé`,"info");setMode("history");return;}
+      if(av){notifyRef.current(`Avoir ${av.avoirNumber||av.code} trouvé (${(av.remaining||av.totalTTC||0).toFixed(2)}€) — utilisez le bouton Avoir pour l'appliquer`,"info");return;}
       const rb=retoucheBonsRef.current.find(b=>b.barcode===code);
-      if(rb){setScanBarcode(code);notifyRef.current(`Bon retouche ${rb.num} trouvé`,"info");setMode("history");return;}
-      notifyRef.current("Code-barres inconnu: "+code,"warn");
+      if(rb){
+        if(currentMode==="cashier"){notifyRef.current(`Bon retouche ${rb.num} — allez dans Historique pour le consulter`,"info");}
+        else{setScanBarcode(code);notifyRef.current(`Bon retouche ${rb.num} trouvé`,"info");setMode("history");}
+        return;}
+      notifyRef.current("Code-barres inconnu: "+code,"error");
     });
     return()=>{s.stop();off();};},[]); // eslint-disable-line react-hooks/exhaustive-deps
 
