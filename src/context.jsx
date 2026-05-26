@@ -114,7 +114,7 @@ function AppProvider({children}){
   const addPendingSync=useCallback((action)=>{setPendingSync(p=>[...p,{...action,ts:Date.now()}]);},[]);
   const addRetoucheBon=useCallback(async(bon)=>{
     try{
-      const saved=await API.retouches.create({client:bon.client||"",phone:bon.phone||"",seller:bon.seller||"",items:(bon.items||[]).filter(i=>i.desc),dateRetrait:bon.dateRetrait||null,notes:bon.notes||"",total:bon.total||0});
+      const saved=await API.retouches.create({client:bon.client||"",phone:bon.phone||"",seller:bon.seller||"",items:(bon.items||[]).filter(i=>i.desc).map(i=>({desc:i.desc||i.description||"",price:parseFloat(i.price)||0})),dateRetrait:bon.dateRetrait||null,notes:bon.notes||"",total:parseFloat(bon.total)||0});
       const mapped={num:saved.retouche_number||saved.num,shortCode:saved.short_code||(saved.retouche_number||"").slice(-4)||"",client:saved.client||bon.client,phone:saved.phone||bon.phone,seller:saved.seller||bon.seller,items:(saved.items||[]).map(i=>({desc:i.description||i.desc||"",price:i.price})).concat(saved.items?[]:(bon.items||[]).filter(i=>i.desc)),dateRetrait:saved.date_retrait||bon.dateRetrait,total:parseFloat(saved.total_ttc)||bon.total,barcode:saved.barcode||bon.barcode,date:saved.created_at||bon.date,id:saved.id,status:saved.status||"pending"};
       setRetoucheBons(prev=>{const next=[mapped,...prev].slice(0,500);try{localStorage.setItem("caissepro_retouches",JSON.stringify(next));}catch(e){}return next;});
       return mapped;
