@@ -8,9 +8,9 @@ import { Modal, Btn, Input, Badge } from "../ui.jsx";
 import { useApp } from "../context.jsx";
 
 function HistoryScreen(){
-  const{tickets,avoirs,settings,processReturn,perm:p,printerConnected,thermalPrint,setSelectedAvoir,setMode,notify,customers,retoucheBons,scanBarcode,setScanBarcode,trainingMode}=useApp();
+  const{tickets,avoirs,settings,processReturn,perm:p,printerConnected,thermalPrint,setSelectedAvoir,setMode,notify,customers,retoucheBons,updateRetoucheStatus,scanBarcode,setScanBarcode,trainingMode}=useApp();
   const[tab,setTab]=useState("tickets");const[reprintTk,setReprintTk]=useState(null);const[reassignModal,setReassignModal]=useState(null);const[reassignCust,setReassignCust]=useState(null);
-  const[search,setSearch]=useState("");const[dateFilter,setDateFilter]=useState("");
+  const[search,setSearch]=useState("");const[dateFilter,setDateFilter]=useState("");const[retDateFrom,setRetDateFrom]=useState("");const[retDateTo,setRetDateTo]=useState("");const[retClientFilter,setRetClientFilter]=useState("");const[retStatusFilter,setRetStatusFilter]=useState("");
   // Pre-fill search from barcode scan
   useEffect(()=>{if(scanBarcode){setSearch(scanBarcode);
     // Auto-detect tab from barcode prefix
@@ -106,34 +106,74 @@ function HistoryScreen(){
       </div>
     )):<div style={{textAlign:"center",padding:30,color:C.textLight}}>Aucun avoir</div>)}
 
-    {tab==="retouches"&&(retoucheBons.length?(()=>{
-      const fBons=retoucheBons.filter(b=>{const q=search.toLowerCase();const sc=b.shortCode||(b.num||"").slice(-4);const matchS=!q||(b.num||"").toLowerCase().includes(q)||(b.client||"").toLowerCase().includes(q)||(b.seller||"").toLowerCase().includes(q)||(b.barcode||"").includes(q)||sc.includes(q);
-        const matchD=!dateFilter||(b.date||"").startsWith(dateFilter);return matchS&&matchD;});
-      return fBons.length?fBons.map((b,idx)=>{const sc=b.shortCode||(b.num||"").slice(-4);return(
-        <div key={b.num||idx} style={{display:"flex",alignItems:"center",gap:10,padding:10,borderRadius:10,background:C.surface,border:`1.5px solid ${C.border}`,marginBottom:5}}>
-          <div style={{minWidth:52,height:44,borderRadius:8,background:C.primary,color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,fontWeight:900,letterSpacing:2}}>{sc}</div>
-          <div style={{flex:1}}>
-            <div style={{fontSize:11,fontWeight:700}}>{b.num} <Badge color={C.info}>{b.client||"Sans client"}</Badge></div>
-            <div style={{fontSize:9,color:C.textMuted}}>{new Date(b.date).toLocaleString("fr-FR")} — {b.seller||"?"} — {(b.items||[]).filter(i=>i.desc).length} prestation(s)</div>
-            <div style={{fontSize:9,color:C.textMuted,marginTop:2}}>{(b.items||[]).filter(i=>i.desc).map(i=>i.desc).join(", ")}</div>
-            {b.dateRetrait&&<div style={{fontSize:9,fontWeight:600,color:new Date(b.dateRetrait)<new Date()?C.danger:C.primary}}>Retrait: {new Date(b.dateRetrait).toLocaleDateString("fr-FR")}</div>}
-            {b.barcode&&<div style={{marginTop:4}}><EAN13Svg code={b.barcode} width={120} height={35}/></div>}
-          </div>
-          <div style={{textAlign:"right",marginRight:8}}><div style={{fontSize:13,fontWeight:700,color:C.primary}}>{(b.total||0).toFixed(2)}EUR</div>
-            {b.phone&&<div style={{fontSize:8,color:C.textMuted}}>{b.phone}</div>}</div>
-          <Btn variant="outline" onClick={async()=>{const printed=await thermalPrint("retouche",b);if(!printed){
-            const w=window.open("","_blank","width=400,height=600");if(w){w.document.write(`<html><head><title>Bon ${b.num}</title><style>body{font-family:'Courier New',monospace;font-size:12px;padding:10px;max-width:300px;margin:0 auto;}h2{text-align:center;font-size:14px;margin:4px 0;}hr{border:none;border-top:1px dashed #333;margin:6px 0;}.row{display:flex;justify-content:space-between;}.center{text-align:center;}.short-code{text-align:center;font-size:32px;font-weight:900;letter-spacing:6px;margin:8px 0;padding:8px;border:3px solid #000;}</style></head><body>`+
-              `<h2>${settings.name||"CaissePro"}</h2><hr><h2>BON DE RETOUCHE</h2><div class="short-code">${sc}</div><div class="center" style="font-size:10px;margin-bottom:6px;">Ref: ${b.num}</div><hr>`+
-              `<div class="row"><span>Client:</span><strong>${b.client||""}</strong></div>`+
-              `<div class="row"><span>Tel:</span><span>${b.phone||""}</span></div>`+
-              (b.dateRetrait?`<div class="row"><span>Retrait:</span><span>${new Date(b.dateRetrait).toLocaleDateString("fr-FR")}</span></div>`:"")+`<hr>`+
-              (b.items||[]).filter(i=>i.desc).map(i=>`<div class="row"><span>${i.desc}</span><strong>${parseFloat(i.price||0).toFixed(2)}EUR</strong></div>`).join("")+
-              `<hr><div class="row"><strong>TOTAL</strong><strong>${(b.total||0).toFixed(2)}EUR TTC</strong></div>`+
-              `</body></html>`);w.document.close();setTimeout(()=>w.print(),300);}
-          }}} style={{fontSize:10,padding:"4px 10px"}}><Printer size={12}/> Imprimer</Btn>
-        </div>);
-      }):<div style={{textAlign:"center",padding:30,color:C.textLight}}>Aucun bon trouve</div>;
-    })():<div style={{textAlign:"center",padding:30,color:C.textLight}}>Aucun bon de retouche</div>)}
+    {tab==="retouches"&&(()=>{
+      const retClients=[...new Set(retoucheBons.map(b=>b.client).filter(Boolean))].sort();
+      const fBons=retoucheBons.filter(b=>{
+        const q=search.toLowerCase();const sc=b.shortCode||(b.num||"").slice(-4);
+        const matchS=!q||(b.num||"").toLowerCase().includes(q)||(b.client||"").toLowerCase().includes(q)||(b.seller||"").toLowerCase().includes(q)||(b.barcode||"").includes(q)||sc.includes(q);
+        const bDate=(b.date||"").slice(0,10);
+        const matchFrom=!retDateFrom||bDate>=retDateFrom;
+        const matchTo=!retDateTo||bDate<=retDateTo;
+        const matchClient=!retClientFilter||(b.client||"")===retClientFilter;
+        const matchStatus=!retStatusFilter||(b.status||"pending")===retStatusFilter;
+        return matchS&&matchFrom&&matchTo&&matchClient&&matchStatus;
+      });
+      const statusLabel={pending:"En attente",ready:"Prêt",delivered:"Livré",cancelled:"Annulé"};
+      const statusColor={pending:"#F59E0B",ready:"#10B981",delivered:"#6366F1",cancelled:"#EF4444"};
+      return<>
+        <div style={{display:"flex",gap:6,marginBottom:10,flexWrap:"wrap",alignItems:"center"}}>
+          <div style={{fontSize:10,fontWeight:700,color:C.textMuted}}>Du</div>
+          <Input type="date" value={retDateFrom} onChange={e=>setRetDateFrom(e.target.value)} style={{width:130,height:30,fontSize:10,padding:"3px 8px"}}/>
+          <div style={{fontSize:10,fontWeight:700,color:C.textMuted}}>au</div>
+          <Input type="date" value={retDateTo} onChange={e=>setRetDateTo(e.target.value)} style={{width:130,height:30,fontSize:10,padding:"3px 8px"}}/>
+          <select value={retClientFilter} onChange={e=>setRetClientFilter(e.target.value)}
+            style={{height:30,borderRadius:8,border:`1.5px solid ${C.border}`,fontSize:10,padding:"0 8px",fontFamily:"inherit",background:C.surface}}>
+            <option value="">Tous les clients</option>{retClients.map(c=><option key={c} value={c}>{c}</option>)}</select>
+          <select value={retStatusFilter} onChange={e=>setRetStatusFilter(e.target.value)}
+            style={{height:30,borderRadius:8,border:`1.5px solid ${C.border}`,fontSize:10,padding:"0 8px",fontFamily:"inherit",background:C.surface}}>
+            <option value="">Tous statuts</option><option value="pending">En attente</option><option value="ready">Prêt</option><option value="delivered">Livré</option></select>
+          {(retDateFrom||retDateTo||retClientFilter||retStatusFilter)&&<Btn variant="ghost" onClick={()=>{setRetDateFrom("");setRetDateTo("");setRetClientFilter("");setRetStatusFilter("");}} style={{fontSize:9,padding:"2px 8px",color:C.danger}}>Effacer filtres</Btn>}
+          <div style={{flex:1}}/><span style={{fontSize:10,color:C.textMuted,fontWeight:600}}>{fBons.length} résultat(s)</span>
+        </div>
+        {fBons.length?fBons.map((b,idx)=>{const sc=b.shortCode||(b.num||"").slice(-4);const st=b.status||"pending";return(
+          <div key={b.id||b.num||idx} style={{display:"flex",alignItems:"center",gap:10,padding:10,borderRadius:10,background:C.surface,border:`1.5px solid ${statusColor[st]||C.border}33`,marginBottom:5}}>
+            <div style={{minWidth:56,textAlign:"center"}}>
+              <div style={{minWidth:56,height:44,borderRadius:8,background:C.primary,color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,fontWeight:900,letterSpacing:3}}>{sc}</div>
+              <div style={{fontSize:7,fontWeight:600,color:C.textMuted,marginTop:2}}>{(b.num||"").replace("RET-","R-")}</div>
+            </div>
+            <div style={{flex:1}}>
+              <div style={{fontSize:11,fontWeight:700,display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
+                <span style={{fontSize:12,fontWeight:800}}>{b.num||"?"}</span>
+                <Badge color={C.info}>{b.client||"Sans client"}</Badge>
+                <span style={{fontSize:8,fontWeight:700,padding:"1px 6px",borderRadius:6,background:statusColor[st]+"22",color:statusColor[st],border:`1px solid ${statusColor[st]}44`}}>{statusLabel[st]||st}</span>
+              </div>
+              <div style={{fontSize:9,color:C.textMuted,marginTop:2}}>{b.date?new Date(b.date).toLocaleString("fr-FR"):""} — {b.seller||"?"} — {(b.items||[]).filter(i=>i.desc).length} prestation(s)</div>
+              <div style={{fontSize:9,color:C.textMuted,marginTop:1}}>{(b.items||[]).filter(i=>i.desc).map(i=>i.desc).join(", ")}</div>
+              {b.dateRetrait&&<div style={{fontSize:9,fontWeight:600,color:new Date(b.dateRetrait)<new Date()?C.danger:C.primary,marginTop:1}}>Retrait: {new Date(b.dateRetrait).toLocaleDateString("fr-FR")}</div>}
+              {b.phone&&<div style={{fontSize:9,color:C.textMuted}}>Tel: {b.phone}</div>}
+              {b.barcode&&<div style={{marginTop:3}}><EAN13Svg code={b.barcode} width={110} height={32}/></div>}
+            </div>
+            <div style={{textAlign:"right",marginRight:6}}>
+              <div style={{fontSize:14,fontWeight:800,color:C.primary}}>{(b.total||0).toFixed(2)}€</div>
+            </div>
+            <Btn variant="outline" onClick={async()=>{const printed=await thermalPrint("retouche",b);if(!printed){
+              const w=window.open("","_blank","width=400,height=600");if(w){w.document.write(`<html><head><title>Bon ${b.num}</title><style>body{font-family:'Courier New',monospace;font-size:12px;padding:10px;max-width:300px;margin:0 auto;}h2{text-align:center;font-size:14px;margin:4px 0;}hr{border:none;border-top:1px dashed #333;margin:6px 0;}.row{display:flex;justify-content:space-between;}.center{text-align:center;}.short-code{text-align:center;font-size:32px;font-weight:900;letter-spacing:6px;margin:8px 0;padding:8px;border:3px solid #000;}</style></head><body>`+
+                `<h2>${settings.name||"CaissePro"}</h2><hr><h2>BON DE RETOUCHE</h2><div class="short-code">${sc}</div><div class="center" style="font-size:10px;margin-bottom:6px;">Ref: ${b.num}</div><hr>`+
+                `<div class="row"><span>Client:</span><strong>${b.client||""}</strong></div>`+
+                `<div class="row"><span>Tel:</span><span>${b.phone||""}</span></div>`+
+                (b.dateRetrait?`<div class="row"><span>Retrait:</span><span>${new Date(b.dateRetrait).toLocaleDateString("fr-FR")}</span></div>`:"")+`<hr>`+
+                (b.items||[]).filter(i=>i.desc).map(i=>`<div class="row"><span>${i.desc}</span><strong>${parseFloat(i.price||0).toFixed(2)}EUR</strong></div>`).join("")+
+                `<hr><div class="row"><strong>TOTAL</strong><strong>${(b.total||0).toFixed(2)}EUR TTC</strong></div>`+
+                `</body></html>`);w.document.close();setTimeout(()=>w.print(),300);}
+            }}} style={{fontSize:10,padding:"4px 10px"}}><Printer size={12}/></Btn>
+            <div style={{display:"flex",flexDirection:"column",gap:3}}>
+              {st==="pending"&&<Btn variant="outline" onClick={async()=>{if(await updateRetoucheStatus(b.id,"ready"))notify(`${b.num} marqué Prêt`);}} style={{fontSize:8,padding:"2px 6px",borderColor:"#10B981",color:"#10B981"}}>Prêt</Btn>}
+              {(st==="pending"||st==="ready")&&<Btn variant="outline" onClick={async()=>{if(await updateRetoucheStatus(b.id,"delivered"))notify(`${b.num} marqué Livré`);}} style={{fontSize:8,padding:"2px 6px",borderColor:"#6366F1",color:"#6366F1"}}>Livré</Btn>}
+            </div>
+          </div>);
+        }):<div style={{textAlign:"center",padding:30,color:C.textLight}}>Aucun bon de retouche{(retDateFrom||retDateTo||retClientFilter||search)?" correspondant":""}</div>}
+      </>;
+    })()}
 
     {/* Ticket detail/reprint modal */}
     <Modal open={!!reprintTk} onClose={()=>setReprintTk(null)} title={`Ticket ${reprintTk?.ticketNumber||reprintTk?.ticket_number||"?"}`} wide>

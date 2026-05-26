@@ -115,7 +115,7 @@ function AppProvider({children}){
   const addRetoucheBon=useCallback(async(bon)=>{
     try{
       const saved=await API.retouches.create({client:bon.client||"",phone:bon.phone||"",seller:bon.seller||"",items:(bon.items||[]).filter(i=>i.desc),dateRetrait:bon.dateRetrait||null,notes:bon.notes||"",total:bon.total||0});
-      const mapped={num:saved.retouche_number||saved.num,shortCode:saved.short_code||(saved.retouche_number||"").slice(-4)||"",client:saved.client_name||bon.client,phone:saved.client_phone||bon.phone,seller:saved.seller_name||bon.seller,items:saved.items||(bon.items||[]).filter(i=>i.desc),dateRetrait:saved.pickup_date||bon.dateRetrait,total:parseFloat(saved.total)||bon.total,barcode:saved.barcode||bon.barcode,date:saved.created_at||bon.date,id:saved.id,status:saved.status||"pending"};
+      const mapped={num:saved.retouche_number||saved.num,shortCode:saved.short_code||(saved.retouche_number||"").slice(-4)||"",client:saved.client||bon.client,phone:saved.phone||bon.phone,seller:saved.seller||bon.seller,items:(saved.items||[]).map(i=>({desc:i.description||i.desc||"",price:i.price})).concat(saved.items?[]:(bon.items||[]).filter(i=>i.desc)),dateRetrait:saved.date_retrait||bon.dateRetrait,total:parseFloat(saved.total_ttc)||bon.total,barcode:saved.barcode||bon.barcode,date:saved.created_at||bon.date,id:saved.id,status:saved.status||"pending"};
       setRetoucheBons(prev=>{const next=[mapped,...prev].slice(0,500);try{localStorage.setItem("caissepro_retouches",JSON.stringify(next));}catch(e){}return next;});
       return mapped;
     }catch(e){
@@ -125,6 +125,9 @@ function AppProvider({children}){
       return bon;
     }
   },[addPendingSync]);
+  const updateRetoucheStatus=useCallback(async(id,status)=>{
+    try{await API.retouches.updateStatus(id,status);setRetoucheBons(prev=>prev.map(b=>b.id===id?{...b,status}:b));return true;}catch(e){console.warn("Retouche status update failed:",e.message);return false;}
+  },[]);
   const[tvaRates,setTvaRates]=useState([...DEFAULT_TVA_RATES]);
   useEffect(()=>{TVA_RATES=tvaRates;},[tvaRates]);
 
@@ -202,7 +205,7 @@ function AppProvider({children}){
       try{const movesData=await API.stock.movements({limit:500});if(movesData?.length)setStockMoves(movesData);}catch(e){/* keep localStorage stockMoves */}
       try{const clockData=await API.audit.clock();if(clockData?.length)setClockEntries(clockData);}catch(e){/* keep localStorage clock */}
       try{const phData=await API.pricehistory.list({limit:500});if(phData?.length)setPriceHistory(phData);}catch(e){/* keep localStorage */}
-      try{const retData=await API.retouches.list();if(retData?.length)setRetoucheBons(retData.map(r=>({id:r.id,num:r.retouche_number,shortCode:r.short_code||r.retouche_number?.slice(-4)||"",client:r.client_name,phone:r.client_phone,seller:r.seller_name,items:r.items||[],dateRetrait:r.pickup_date,total:parseFloat(r.total),barcode:r.barcode,date:r.created_at,status:r.status})));}catch(e){/* keep localStorage retouches */}
+      try{const retData=await API.retouches.list();if(retData?.length)setRetoucheBons(retData.map(r=>({id:r.id,num:r.retouche_number,shortCode:r.short_code||(r.retouche_number||"").slice(-4)||"",client:r.client||"",phone:r.phone||"",seller:r.seller||"",items:(r.items||[]).map(i=>({desc:i.description||i.desc||"",price:i.price})),dateRetrait:r.date_retrait,total:parseFloat(r.total_ttc)||0,barcode:r.barcode,date:r.created_at,status:r.status})));}catch(e){/* keep localStorage retouches */}
     }catch(e){
       console.warn("Chargement données échoué:",e.message);
       if(e.message?.includes("401")||e.message?.includes("Unauthorized")){setCurrentUser(null);API.clearToken();}
@@ -1588,7 +1591,7 @@ function AppProvider({children}){
     promoCode,setPromoCode,calcPromoDiscount,
     cashReg,openReg,closeReg,isOnline,tickets,setTickets,tSeq,lastHash,gt,audit,jet,closures,avoirs,consumeAvoir,isAvoirExpired,
     checkout,createClosure,exportArchive,exportFEC,exportCSVReport,exportCustomerRGPD,addAudit,addJET,
-    promos,setPromos,activePromos,parked,parkCart,restoreCart,removeParked,retoucheBons,addRetoucheBon,selCust,setSelCust,
+    promos,setPromos,activePromos,parked,parkCart,restoreCart,removeParked,retoucheBons,addRetoucheBon,updateRetoucheStatus,selCust,setSelCust,
     stockAlerts,stockMoves,addStockMove,receiveStock,receiveBatchStock,
     refreshProducts,findByEAN,perm,settings,setSettings,saveSettingsToAPI,getLoyaltyTier,avoirPayment,selectedAvoir,setSelectedAvoir,
     bestSellers,salesBySeller,salesByVariant,caEvolution,salesByCollection,
