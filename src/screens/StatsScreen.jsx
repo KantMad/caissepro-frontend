@@ -110,11 +110,11 @@ function StatsScreen(){
       <div><SC icon={Euro} label="CA TTC" value={`${stats.tTTC.toFixed(0)}€`} color={C.primary} sub={<PctBadge cur={stats.tTTC} prev={prevStats.tTTC}/>}/></div>
       <div><SC icon={Receipt} label="Tickets" value={stats.count} color={C.info} sub={<PctBadge cur={stats.count} prev={prevStats.count}/>}/></div>
       <SC icon={TrendingUp} label="Panier moy." value={`${stats.avg.toFixed(1)}€`} color={C.accent}/>
-      {perm().canViewMargin&&<SC icon={BarChart2} label="Marge" value={`${stats.margin.toFixed(0)}€`} color="#059669"/>}
-      <SC icon={BarChart2} label="Marge %" value={stats.tHT>0?`${(stats.margin/stats.tHT*100).toFixed(1)}%`:"—"} color="#059669"/></div>
+      {mode!=="cashier"&&<SC icon={BarChart2} label="Marge" value={`${stats.margin.toFixed(0)}€`} color="#059669"/>}
+      {mode!=="cashier"&&<SC icon={BarChart2} label="Marge %" value={stats.tHT>0?`${(stats.margin/stats.tHT*100).toFixed(1)}%`:"—"} color="#059669"/>}</div>
 
     <div style={{display:"flex",gap:6,marginBottom:14,flexWrap:"wrap"}}>
-      {[{id:"ca",l:"Évolution CA"},{id:"compare",l:"Comparaison"},{id:"hour",l:"CA par heure"},{id:"dow",l:"CA par jour"},{id:"best",l:"Best-sellers"},{id:"variantDetail",l:"Détail variantes"},...(mode!=="cashier"?[{id:"seller",l:"Par vendeur"}]:[]),{id:"variant",l:"Tailles/Couleurs"},{id:"collection",l:"Collections"},{id:"customers",l:"Clients"},{id:"returns",l:"Retours"},{id:"pay",l:"Paiements"},{id:"discounts",l:"Remises"}].map(t=>(
+      {[{id:"ca",l:"Évolution CA"},{id:"compare",l:"Comparaison"},{id:"hour",l:"CA par heure"},{id:"dow",l:"CA par jour"},{id:"best",l:"Best-sellers"},{id:"variantDetail",l:"Détail variantes"},{id:"seller",l:"Par vendeur"},{id:"variant",l:"Tailles/Couleurs"},{id:"collection",l:"Collections"},{id:"customers",l:"Clients"},{id:"returns",l:"Retours"},{id:"pay",l:"Paiements"},{id:"discounts",l:"Remises"}].map(t=>(
         <button key={t.id} onClick={()=>setTab(t.id)} style={{padding:"5px 12px",borderRadius:8,border:`1.5px solid ${tab===t.id?C.primary:C.border}`,
           background:tab===t.id?C.primary:"transparent",color:tab===t.id?"#fff":C.text,fontSize:11,fontWeight:600,cursor:"pointer"}}>{t.l}</button>))}</div>
 
@@ -138,7 +138,7 @@ function StatsScreen(){
     {tab==="best"&&<div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`,overflowX:"auto"}}>
       <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
         <thead><tr style={{borderBottom:`2px solid ${C.border}`}}>
-          {["#","Produit","Réf","Codes couleur","Qté","CA TTC",perm().canViewMargin?"Marge":""].filter(Boolean).map(h=>(
+          {["#","Produit","Réf","Codes couleur","Qté","CA TTC",mode!=="cashier"?"Marge":""].filter(Boolean).map(h=>(
             <th key={h} style={{padding:8,textAlign:"left",fontSize:10,fontWeight:700,color:C.textMuted,whiteSpace:"nowrap"}}>{h}</th>))}</tr></thead>
         <tbody>{fBestSellers.slice(0,20).map((p,i)=>(<tr key={p.sku} style={{borderBottom:`1px solid ${C.border}`}}>
           <td style={{padding:8,fontWeight:700,color:i<3?C.primary:C.text}}>{i+1}</td>
@@ -147,13 +147,13 @@ function StatsScreen(){
           <td style={{padding:8}}>{p.colors.length>0?<div style={{display:"flex",gap:3,flexWrap:"wrap"}}>{p.colors.map(c=>(<span key={c} style={{fontSize:8,fontFamily:"monospace",background:C.accentLight,color:C.accent,padding:"1px 5px",borderRadius:4,fontWeight:600}}>{c}</span>))}</div>:<span style={{color:C.textLight,fontSize:9}}>—</span>}</td>
           <td style={{padding:8,fontWeight:700}}>{p.qty}</td>
           <td style={{padding:8,fontWeight:700,color:C.primary}}>{p.revenue.toFixed(2)}€</td>
-          {perm().canViewMargin&&<td style={{padding:8,color:"#059669",fontWeight:600}}>{p.margin.toFixed(2)}€</td>}
+          {mode!=="cashier"&&<td style={{padding:8,color:"#059669",fontWeight:600}}>{p.margin.toFixed(2)}€</td>}
         </tr>))}</tbody></table></div>}
 
     {tab==="seller"&&<div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`}}>
       <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
         <thead><tr style={{borderBottom:`2px solid ${C.border}`}}>
-          {["Vendeur","Nb ventes","Nb pièces","Panier moyen","Art./vente",perm().canViewMargin?"Marge":"","CA TTC",perm().canViewMargin?"Commission":"","Objectif","Progression"].filter(Boolean).map(h=>(
+          {["Vendeur","Nb ventes","Nb pièces","Panier moyen","Art./vente",mode!=="cashier"?"Marge":"","CA TTC",mode!=="cashier"?"Commission":"","Objectif","Progression"].filter(Boolean).map(h=>(
             <th key={h} style={{padding:8,textAlign:"left",fontSize:10,fontWeight:700,color:C.textMuted}}>{h}</th>))}</tr></thead>
         <tbody>{fCommissions.map(s=>(<tr key={s.name} style={{borderBottom:`1px solid ${C.border}`}}>
           <td style={{padding:8,fontWeight:600}}>{s.name}</td>
@@ -161,9 +161,9 @@ function StatsScreen(){
           <td style={{padding:8,fontWeight:600}}>{s.totalItems||0}</td>
           <td style={{padding:8,fontWeight:700,color:C.info}}>{(s.avgBasket||0).toFixed(2)}€</td>
           <td style={{padding:8}}>{(s.avgItems||0).toFixed(1)}</td>
-          {perm().canViewMargin&&<td style={{padding:8,color:"#059669"}}>{s.margin.toFixed(2)}€</td>}
+          {mode!=="cashier"&&<td style={{padding:8,color:"#059669"}}>{s.margin.toFixed(2)}€</td>}
           <td style={{padding:8,fontWeight:700,color:C.primary}}>{s.revenue.toFixed(2)}€</td>
-          {perm().canViewMargin&&<td style={{padding:8,color:C.accent,fontWeight:600}}>{s.commission.toFixed(2)}€</td>}
+          {mode!=="cashier"&&<td style={{padding:8,color:C.accent,fontWeight:600}}>{s.commission.toFixed(2)}€</td>}
           <td style={{padding:8}}><input type="number" value={s.goal||""} onChange={e=>setSellerGoal(s.name,parseFloat(e.target.value)||0)}
             style={{width:70,padding:"2px 6px",borderRadius:6,border:`1px solid ${C.border}`,fontSize:11,fontFamily:"inherit"}} placeholder="€"/></td>
           <td style={{padding:8}}>{s.goal>0?<div style={{display:"flex",alignItems:"center",gap:6}}>

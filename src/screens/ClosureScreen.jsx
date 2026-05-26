@@ -7,7 +7,7 @@ import { Modal, Btn, Input, SC } from "../ui.jsx";
 import { useApp } from "../context.jsx";
 
 function ClosureScreen(){
-  const{tickets,cashReg,closures,createClosure,gt,closeReg,perm:p,avoirs,settings,printerConnected,thermalPrint,notify,trainingMode}=useApp();
+  const{tickets,cashReg,closures,createClosure,gt,closeReg,perm:p,avoirs,settings,printerConnected,thermalPrint,notify,trainingMode,mode}=useApp();
   const[aCash,setACash]=useState("");const[aCard,setACard]=useState("");
   const[reportModal,setReportModal]=useState(null);
   const[denomMode,setDenomMode]=useState(false);
@@ -39,7 +39,7 @@ function ClosureScreen(){
       <SC icon={Receipt} label="Tickets" value={pt.length} color={C.info}/>
       <SC icon={Banknote} label="Espèces" value={`${cash.toFixed(2)}€`} color={C.primary}/>
       <SC icon={CreditCard} label="Carte" value={`${card.toFixed(2)}€`} color={C.info}/>
-      <SC icon={TrendingUp} label="Marge" value={`${totalMargin.toFixed(0)}€`} color="#059669"/>
+      {mode!=="cashier"&&<SC icon={TrendingUp} label="Marge" value={`${totalMargin.toFixed(0)}€`} color="#059669"/>}
       <SC icon={RotateCcw} label="Retours" value={`-${totalReturns.toFixed(2)}€`} color={C.danger}/></div>
 
     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>
