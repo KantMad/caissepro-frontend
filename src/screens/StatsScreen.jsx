@@ -38,9 +38,10 @@ function StatsScreen(){
   const PctBadge=({cur,prev})=>{const p=pctChange(cur,prev);if(p===null||!dateFrom)return null;
     return<Badge color={p>=0?"#059669":C.danger}>{p>=0?"+":""}{p.toFixed(1)}%</Badge>;};
   const fBestSellers=useMemo(()=>{const m={};fTickets.forEach(t=>(t.items||[]).forEach(i=>{
-    const k=i.product?.sku||i.product_name;if(!m[k])m[k]={name:i.product?.name||i.product_name,sku:k,qty:0,revenue:0,margin:0};
-    m[k].qty+=i.quantity;m[k].revenue+=(i.lineTTC||i.line_ttc||0);m[k].margin+=((i.lineHT||i.line_ht||0)-(i.product?.costPrice||i.cost_price||0)*i.quantity);}));
-    return Object.values(m).sort((a,b)=>b.qty-a.qty);},[fTickets]);
+    const k=i.product?.sku||i.product_name;if(!m[k])m[k]={name:i.product?.name||i.product_name,sku:k,qty:0,revenue:0,margin:0,colors:new Set()};
+    m[k].qty+=i.quantity;m[k].revenue+=(i.lineTTC||i.line_ttc||0);m[k].margin+=((i.lineHT||i.line_ht||0)-(i.product?.costPrice||i.cost_price||0)*i.quantity);
+    const cc=i.variant?.colorCode||i.variant_color_code;if(cc)m[k].colors.add(cc);}));
+    return Object.values(m).map(p=>({...p,colors:[...p.colors]})).sort((a,b)=>b.qty-a.qty);},[fTickets]);
   const fCommissions=useMemo(()=>{const m={};fTickets.forEach(t=>{
     const n=t.userName||t.user_name||"?";if(!m[n])m[n]={name:n,count:0,revenue:0,margin:0};
     m[n].count++;m[n].revenue+=(t.totalTTC||parseFloat(t.total_ttc)||0);m[n].margin+=(parseFloat(t.margin)||0);});
@@ -114,15 +115,16 @@ function StatsScreen(){
         <CartesianGrid strokeDasharray="3 3" stroke={C.border}/><XAxis dataKey="day" tick={{fontSize:10}}/><YAxis tick={{fontSize:10}}/>
         <Tooltip formatter={v=>`${v.toFixed(2)}€`}/><Bar dataKey="ca" fill={C.accent} radius={[4,4,0,0]}/></BarChart></ResponsiveContainer></div>}
 
-    {tab==="best"&&<div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`}}>
+    {tab==="best"&&<div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`,overflowX:"auto"}}>
       <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
         <thead><tr style={{borderBottom:`2px solid ${C.border}`}}>
-          {["#","Produit","SKU","Qté vendue","CA TTC",perm().canViewMargin?"Marge":""].filter(Boolean).map(h=>(
-            <th key={h} style={{padding:8,textAlign:"left",fontSize:10,fontWeight:700,color:C.textMuted}}>{h}</th>))}</tr></thead>
-        <tbody>{fBestSellers.slice(0,15).map((p,i)=>(<tr key={p.sku} style={{borderBottom:`1px solid ${C.border}`}}>
+          {["#","Produit","Réf","Codes couleur","Qté","CA TTC",perm().canViewMargin?"Marge":""].filter(Boolean).map(h=>(
+            <th key={h} style={{padding:8,textAlign:"left",fontSize:10,fontWeight:700,color:C.textMuted,whiteSpace:"nowrap"}}>{h}</th>))}</tr></thead>
+        <tbody>{fBestSellers.slice(0,20).map((p,i)=>(<tr key={p.sku} style={{borderBottom:`1px solid ${C.border}`}}>
           <td style={{padding:8,fontWeight:700,color:i<3?C.primary:C.text}}>{i+1}</td>
           <td style={{padding:8,fontWeight:600}}>{p.name}</td>
-          <td style={{padding:8,color:C.textMuted,fontFamily:"monospace"}}>{p.sku}</td>
+          <td style={{padding:8,color:C.textMuted,fontFamily:"monospace",fontSize:10}}>{p.sku}</td>
+          <td style={{padding:8}}>{p.colors.length>0?<div style={{display:"flex",gap:3,flexWrap:"wrap"}}>{p.colors.map(c=>(<span key={c} style={{fontSize:8,fontFamily:"monospace",background:C.accentLight,color:C.accent,padding:"1px 5px",borderRadius:4,fontWeight:600}}>{c}</span>))}</div>:<span style={{color:C.textLight,fontSize:9}}>—</span>}</td>
           <td style={{padding:8,fontWeight:700}}>{p.qty}</td>
           <td style={{padding:8,fontWeight:700,color:C.primary}}>{p.revenue.toFixed(2)}€</td>
           {perm().canViewMargin&&<td style={{padding:8,color:"#059669",fontWeight:600}}>{p.margin.toFixed(2)}€</td>}
@@ -205,24 +207,29 @@ function StatsScreen(){
 
     {/* Détail variantes vendues */}
     {tab==="variantDetail"&&(()=>{const byProd={};fTickets.forEach(t=>(t.items||[]).forEach(i=>{
-      const pn=i.product?.name||i.product_name;const c=i.variant?.color||i.variant_color||"?";const s=i.variant?.size||i.variant_size||"?";
-      if(!byProd[pn])byProd[pn]={name:pn,variants:{}};const vk=`${c}/${s}`;
-      if(!byProd[pn].variants[vk])byProd[pn].variants[vk]={color:c,size:s,qty:0,revenue:0};
-      byProd[pn].variants[vk].qty+=i.quantity;byProd[pn].variants[vk].revenue+=(i.lineTTC||i.line_ttc||0);}));
+      const pn=i.product?.name||i.product_name;const sku=i.product?.sku||i.product_sku||"";
+      const c=i.variant?.color||i.variant_color||"?";const cc=i.variant?.colorCode||i.variant_color_code||"";const s=i.variant?.size||i.variant_size||"?";
+      const pk=sku||pn;if(!byProd[pk])byProd[pk]={name:pn,sku,variants:{}};const vk=`${c}/${s}`;
+      if(!byProd[pk].variants[vk])byProd[pk].variants[vk]={color:c,colorCode:cc,size:s,qty:0,revenue:0};
+      byProd[pk].variants[vk].qty+=i.quantity;byProd[pk].variants[vk].revenue+=(i.lineTTC||i.line_ttc||0);}));
       const prodList=Object.values(byProd).sort((a,b)=>{const aq=Object.values(a.variants).reduce((s,v)=>s+v.qty,0);
         const bq=Object.values(b.variants).reduce((s,v)=>s+v.qty,0);return bq-aq;});
       return(<div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`}}>
         <h3 style={{fontSize:14,fontWeight:700,marginBottom:10}}>Détail des variantes vendues</h3>
-        {prodList.slice(0,10).map(p=>{const vars=Object.values(p.variants).sort((a,b)=>b.qty-a.qty);
+        {prodList.slice(0,15).map(p=>{const vars=Object.values(p.variants).sort((a,b)=>b.qty-a.qty);
           const totalQty=vars.reduce((s,v)=>s+v.qty,0);
-          return(<div key={p.name} style={{marginBottom:14,padding:12,borderRadius:10,background:C.surfaceAlt}}>
-            <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}>
-              <span style={{fontSize:13,fontWeight:700}}>{p.name}</span>
+          return(<div key={p.sku||p.name} style={{marginBottom:14,padding:12,borderRadius:10,background:C.surfaceAlt}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+              <div><span style={{fontSize:13,fontWeight:700}}>{p.name}</span>
+                {p.sku&&<span style={{fontSize:10,fontFamily:"monospace",color:C.textMuted,marginLeft:6}}>Réf: {p.sku}</span>}</div>
               <Badge color={C.primary}>{totalQty} vendus</Badge></div>
-            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(120px,1fr))",gap:4}}>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(140px,1fr))",gap:4}}>
               {vars.map(v=>{const pct=totalQty?(v.qty/totalQty*100):0;return(
                 <div key={`${v.color}/${v.size}`} style={{padding:6,borderRadius:8,background:C.surface,border:`1px solid ${C.border}`,fontSize:10}}>
-                  <div style={{fontWeight:600}}>{v.color} — {v.size}</div>
+                  <div style={{display:"flex",alignItems:"center",gap:4}}>
+                    <span style={{fontWeight:600}}>{v.color}</span>
+                    {v.colorCode&&<span style={{fontSize:8,fontFamily:"monospace",color:C.accent,background:C.accentLight,padding:"0 4px",borderRadius:3}}>{v.colorCode}</span>}
+                    <span style={{color:C.textMuted}}>— {v.size}</span></div>
                   <div style={{display:"flex",justifyContent:"space-between",marginTop:3}}>
                     <span style={{fontWeight:700,color:C.primary}}>{v.qty} ({pct.toFixed(0)}%)</span>
                     <span style={{color:C.textMuted}}>{v.revenue.toFixed(0)}€</span></div>

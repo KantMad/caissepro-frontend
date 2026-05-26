@@ -18,9 +18,9 @@ function ProductsScreen(){
   const[addVarModal,setAddVarModal]=useState(null);
   const[confirmDel,setConfirmDel]=useState(null);
   const[np,setNp]=useState({name:"",sku:"",price:"",costPrice:"",taxRate:"0.20",category:"T-shirts",collection:"PE-2026"});
-  const[nv,setNv]=useState({color:"",size:"",ean:"",stock:"",stockAlert:"5"});
+  const[nv,setNv]=useState({color:"",colorCode:"",size:"",ean:"",stock:"",stockAlert:"5"});
   const[ep,setEp]=useState({});
-  const[newVar,setNewVar]=useState({color:"",size:"",ean:"",stock:"0",stockAlert:"5"});
+  const[newVar,setNewVar]=useState({color:"",colorCode:"",size:"",ean:"",stock:"0",stockAlert:"5"});
   const filtered=products.filter(q=>!search||q.name.toLowerCase().includes(search.toLowerCase())||q.sku.toLowerCase().includes(search.toLowerCase()));
 
   const openEdit=(prod)=>{setEp({name:prod.name,sku:prod.sku,price:String(prod.price),costPrice:String(prod.costPrice||""),
@@ -87,10 +87,10 @@ function ProductsScreen(){
         {/* Variants list */}
         <div style={{fontSize:12,fontWeight:700,marginBottom:8,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
           <span>Variantes ({editModal.variants.length})</span>
-          <Btn variant="outline" onClick={()=>{setAddVarModal(editModal.id);setNewVar({color:"",size:"",ean:"",stock:"0",stockAlert:"5"});}} style={{fontSize:10,padding:"4px 10px"}}><Plus size={11}/> Variante</Btn></div>
+          <Btn variant="outline" onClick={()=>{setAddVarModal(editModal.id);setNewVar({color:"",colorCode:"",size:"",ean:"",stock:"0",stockAlert:"5"});}} style={{fontSize:10,padding:"4px 10px"}}><Plus size={11}/> Variante</Btn></div>
         <div style={{display:"flex",flexDirection:"column",gap:4,marginBottom:14}}>
           {editModal.variants.map(v=>(<div key={v.id} style={{display:"flex",alignItems:"center",gap:8,padding:6,borderRadius:8,border:`1px solid ${C.border}`,fontSize:11}}>
-            <Badge color={C.primary}>{v.color}</Badge><Badge color={C.info}>{v.size}</Badge>
+            <Badge color={C.primary}>{v.color}</Badge>{v.colorCode&&<span style={{fontSize:8,fontFamily:"monospace",color:C.accent,background:C.accentLight,padding:"1px 4px",borderRadius:4}}>{v.colorCode}</span>}<Badge color={C.info}>{v.size}</Badge>
             <span style={{color:C.textMuted,fontFamily:"monospace",fontSize:9}}>{v.ean||"—"}</span>
             <span style={{marginLeft:"auto",fontWeight:700,color:v.stock<=0?C.danger:v.stock<=(v.stockAlert||5)?C.warn:C.primary}}>Stock: {v.stock}</span>
             <button onClick={()=>{if(deleteVariant(editModal.id,v.id)){
@@ -127,12 +127,13 @@ function ProductsScreen(){
     <Modal open={!!addVarModal} onClose={()=>setAddVarModal(null)} title="Ajouter une variante">
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}>
         <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>COULEUR</label><Input value={newVar.color} onChange={e=>setNewVar(v=>({...v,color:e.target.value}))}/></div>
+        <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>CODE COULEUR</label><Input value={newVar.colorCode} onChange={e=>setNewVar(v=>({...v,colorCode:e.target.value}))} placeholder="ex: BLK, NVY, 001"/></div>
         <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>TAILLE</label><Input value={newVar.size} onChange={e=>setNewVar(v=>({...v,size:e.target.value}))}/></div>
         <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>EAN</label><Input value={newVar.ean} onChange={e=>setNewVar(v=>({...v,ean:e.target.value}))}/></div>
         <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>STOCK INITIAL</label><Input type="number" value={newVar.stock} onChange={e=>setNewVar(v=>({...v,stock:e.target.value}))}/></div>
         <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>SEUIL ALERTE</label><Input type="number" value={newVar.stockAlert} onChange={e=>setNewVar(v=>({...v,stockAlert:e.target.value}))}/></div></div>
       <Btn onClick={()=>{if(newVar.color&&newVar.size){
-        addVariantToProduct(addVarModal,{color:newVar.color,size:newVar.size,ean:newVar.ean||"",stock:parseInt(newVar.stock)||0,stockAlert:parseInt(newVar.stockAlert)||5});
+        addVariantToProduct(addVarModal,{color:newVar.color,colorCode:newVar.colorCode||"",size:newVar.size,ean:newVar.ean||"",stock:parseInt(newVar.stock)||0,stockAlert:parseInt(newVar.stockAlert)||5});
         setAddVarModal(null);}}} style={{width:"100%",height:40,background:C.primary}}>Ajouter la variante</Btn></Modal>
 
     {/* Delete confirmation */}
@@ -154,8 +155,9 @@ function ProductsScreen(){
             {categories.filter(c=>c!=="Tous").map(c=>(<option key={c} value={c}>{c}</option>))}</select></div>
         <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>COLLECTION</label><Input value={np.collection} onChange={e=>setNp(p=>({...p,collection:e.target.value}))}/></div></div>
       <div style={{fontSize:12,fontWeight:700,marginBottom:8}}>Première variante</div>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr 1fr",gap:6,marginBottom:14}}>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr 1fr 1fr",gap:6,marginBottom:14}}>
         <div><label style={{fontSize:9,color:C.textMuted}}>COULEUR</label><Input value={nv.color} onChange={e=>setNv(v=>({...v,color:e.target.value}))}/></div>
+        <div><label style={{fontSize:9,color:C.textMuted}}>CODE COULEUR</label><Input value={nv.colorCode} onChange={e=>setNv(v=>({...v,colorCode:e.target.value}))} placeholder="BLK"/></div>
         <div><label style={{fontSize:9,color:C.textMuted}}>TAILLE</label><Input value={nv.size} onChange={e=>setNv(v=>({...v,size:e.target.value}))}/></div>
         <div><label style={{fontSize:9,color:C.textMuted}}>EAN</label><Input value={nv.ean} onChange={e=>setNv(v=>({...v,ean:e.target.value}))}/></div>
         <div><label style={{fontSize:9,color:C.textMuted}}>STOCK</label><Input type="number" value={nv.stock} onChange={e=>setNv(v=>({...v,stock:e.target.value}))}/></div>
@@ -163,10 +165,10 @@ function ProductsScreen(){
       <Btn onClick={()=>{if(np.name&&np.sku&&np.price){
         addProduct({name:np.name,sku:np.sku,price:parseFloat(np.price),costPrice:parseFloat(np.costPrice)||0,
           taxRate:parseFloat(np.taxRate),category:np.category,collection:np.collection,
-          variants:[{id:`v${Date.now()}`,color:nv.color||"Défaut",size:nv.size||"TU",ean:nv.ean||"",
+          variants:[{id:`v${Date.now()}`,color:nv.color||"Défaut",colorCode:nv.colorCode||"",size:nv.size||"TU",ean:nv.ean||"",
             stock:parseInt(nv.stock)||0,defective:0,stockAlert:parseInt(nv.stockAlert)||5}]});
         setCreateModal(false);setNp({name:"",sku:"",price:"",costPrice:"",taxRate:"0.20",category:"T-shirts",collection:"PE-2026"});
-        setNv({color:"",size:"",ean:"",stock:"",stockAlert:"5"});}}}
+        setNv({color:"",colorCode:"",size:"",ean:"",stock:"",stockAlert:"5"});}}}
         style={{width:"100%",height:44,background:C.primary}}>Créer le produit</Btn></Modal>
 
     {/* CSV Import Wizard */}

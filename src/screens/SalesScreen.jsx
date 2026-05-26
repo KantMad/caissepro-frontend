@@ -264,8 +264,9 @@ function SalesScreen(){
                 <span style={{fontSize:16}}>{i.isCustom?"📝":catIcon(i.product.category,settings.categoryIcons)}</span></div>
               <div style={{flex:1,minWidth:0}}>
                 <div style={{fontSize:12,fontWeight:700,lineHeight:1.2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{i.product.name}{i.isCustom?" (divers)":""}</div>
-                {!i.isCustom&&<><div style={{display:"flex",gap:3,marginTop:3}}>
+                {!i.isCustom&&<><div style={{display:"flex",gap:3,marginTop:3,flexWrap:"wrap"}}>
                   <span style={{fontSize:9,color:cc,fontWeight:600,background:`${cc}10`,padding:"1px 5px",borderRadius:4}}>{i.variant?.color}</span>
+                  {i.variant?.colorCode&&<span style={{fontSize:8,color:C.accent,fontWeight:600,background:C.accentLight,padding:"1px 4px",borderRadius:4,fontFamily:"monospace"}}>{i.variant.colorCode}</span>}
                   <span style={{fontSize:9,color:C.info,fontWeight:600,background:`${C.info}10`,padding:"1px 5px",borderRadius:4}}>{i.variant?.size}</span>
                   {lastP&&<span style={{fontSize:8,color:C.textMuted,background:C.surfaceAlt,padding:"1px 4px",borderRadius:4}}>Préc. {lastP.toFixed(2)}€</span>}</div>
                 <div style={{display:"flex",gap:4,marginTop:2}}>
@@ -340,7 +341,8 @@ function SalesScreen(){
               onMouseEnter={e=>e.currentTarget.style.borderColor=cc} onMouseLeave={e=>e.currentTarget.style.borderColor=v.stock<=0?C.danger+"30":C.border}>
               <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:6}}>
                 <div style={{width:14,height:14,borderRadius:7,background:cc+"30",border:`2px solid ${cc}`}}/>
-                <span style={{fontSize:12,fontWeight:700}}>{v.color}</span></div>
+                <span style={{fontSize:12,fontWeight:700}}>{v.color}</span>
+                {v.colorCode&&<span style={{fontSize:9,fontFamily:"monospace",color:C.accent,background:C.accentLight,padding:"1px 5px",borderRadius:4}}>{v.colorCode}</span>}</div>
               <div style={{fontSize:16,fontWeight:800,color:v.stock>0?C.text:C.danger,marginBottom:4}}>{v.size}</div>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                 <span style={{fontSize:11,fontWeight:600,color:v.stock>0?(v.stock<=(v.stockAlert||5)?C.warn:cc):C.danger,

@@ -104,7 +104,7 @@ export const norm={
     const csvOrder=(getVariantOrderMap())[sku];// array of keys if CSV import exists for this product
     // Check if sort_order was explicitly set (not all null/0)
     const rawVariants=(p.variants||[]).map((v,i)=>({...v,stock:parseInt(v.stock||0),stockAlert:parseInt(v.stock_alert||v.stockAlert||5),
-      defective:parseInt(v.defective||0)}));
+      defective:parseInt(v.defective||0),colorCode:v.color_code||v.colorCode||""}));
     const hasExplicitSortOrder=rawVariants.some(v=>v.sort_order!=null&&v.sort_order>0);
     const variants=rawVariants
       .sort((a,b)=>{

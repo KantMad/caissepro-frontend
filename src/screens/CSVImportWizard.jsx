@@ -11,6 +11,7 @@ const CSV_TARGET_FIELDS=[
   {key:"price",label:"Prix vente",required:true},{key:"costPrice",label:"Prix achat",required:false},
   {key:"taxRate",label:"TVA",required:false},{key:"category",label:"Catégorie",required:false},
   {key:"collection",label:"Collection",required:false},{key:"color",label:"Couleur",required:false},
+  {key:"colorCode",label:"Code couleur",required:false},
   {key:"size",label:"Taille",required:false},{key:"ean",label:"Code EAN",required:false},
   {key:"stock",label:"Stock",required:false},{key:"stockAlert",label:"Seuil alerte",required:false},
 ];
@@ -22,7 +23,8 @@ const CSV_SYNONYMS={
   taxRate:["taxrate","tax_rate","tva","tax","vat","taux_tva"],
   category:["category","categorie","catégorie","cat","famille","type"],
   collection:["collection","saison","season"],
-  color:["color","couleur","colour","coloris"],
+  color:["color","couleur","colour","coloris","libelle_couleur","libelle couleur"],
+  colorCode:["colorcode","color_code","code_couleur","codecouleur","color code","code couleur","ref_couleur","refcouleur"],
   size:["size","taille","pointure","dim"],
   ean:["ean","ean13","barcode","code_barre","codebarre","gtin","code_ean","codeean"],
   stock:["stock","qty","quantity","quantite","quantité","qte"],
@@ -104,7 +106,7 @@ function CSVImportWizard({open,onClose,existingProducts,onImportComplete}){
         taxRate:csvParseTax(get("taxRate")),category:get("category")||"Divers",collection:get("collection")||"",
         variants:group.rows.map((r,i)=>{const gv=(f)=>r[mapping[f]]||"";return{
           id:`iv-${Date.now()}-${i}-${Math.random().toString(36).slice(2,6)}`,
-          color:gv("color")||"Défaut",size:gv("size")||"TU",ean:gv("ean")||"",
+          color:gv("color")||"Défaut",colorCode:gv("colorCode")||"",size:gv("size")||"TU",ean:gv("ean")||"",
           stock:Math.max(0,parseInt(gv("stock"))||0),defective:0,stockAlert:Math.max(0,parseInt(gv("stockAlert"))||5),sortOrder:i};}),
         sourceRows:group.indices.map(i=>i+2),
       };
@@ -162,7 +164,7 @@ function CSVImportWizard({open,onClose,existingProducts,onImportComplete}){
     // Create new products
     for(const p of processed.newProducts){
       try{await API.products.create({name:p.name,sku:p.sku,price:p.price,costPrice:p.costPrice,taxRate:p.taxRate,
-        category:p.category,collection:p.collection,variants:p.variants.map((v,i)=>({color:v.color,size:v.size,ean:v.ean,stock:v.stock,defective:0,stockAlert:v.stockAlert,sort_order:i}))});
+        category:p.category,collection:p.collection,variants:p.variants.map((v,i)=>({color:v.color,colorCode:v.colorCode||"",size:v.size,ean:v.ean,stock:v.stock,defective:0,stockAlert:v.stockAlert,sort_order:i}))});
         results.created++;}catch(e){results.errors.push({name:p.name,error:e.message});}
     }
     // Update existing products — 3 steps: product fields, variant stock, new variants
@@ -194,7 +196,7 @@ function CSVImportWizard({open,onClose,existingProducts,onImportComplete}){
       // Step 3: Add new variants
       for(const v of u.newVariants){
         try{const sortIdx=u.updatedVariants.length+u.newVariants.indexOf(v);
-          await API.products.addVariant(u.existing.id,{color:v.color,size:v.size,ean:v.ean,stock:v.stock,defective:0,stockAlert:v.stockAlert,sort_order:sortIdx});
+          await API.products.addVariant(u.existing.id,{color:v.color,colorCode:v.colorCode||"",size:v.size,ean:v.ean,stock:v.stock,defective:0,stockAlert:v.stockAlert,sort_order:sortIdx});
           anySuccess=true;}catch(e){console.warn(`CSV update: addVariant failed for ${v.size}/${v.color}:`,e.message);}
       }
 
