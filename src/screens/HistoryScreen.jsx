@@ -120,7 +120,26 @@ function HistoryScreen(){
       });
       const statusLabel={pending:"En attente",ready:"Prêt",delivered:"Livré",cancelled:"Annulé"};
       const statusColor={pending:"#F59E0B",ready:"#10B981",delivered:"#6366F1",cancelled:"#EF4444"};
+      const countByStatus={pending:0,ready:0,delivered:0,cancelled:0};retoucheBons.forEach(b=>{const s=b.status||"pending";if(countByStatus[s]!==undefined)countByStatus[s]++;});
+      const totalCA=fBons.reduce((s,b)=>s+(b.total||0),0);
       return<>
+        {/* Compteurs par statut */}
+        <div style={{display:"flex",gap:8,marginBottom:10,flexWrap:"wrap"}}>
+          {[{key:"pending",icon:"⏳",label:"En attente"},{key:"ready",icon:"✅",label:"Prêts"},{key:"delivered",icon:"📦",label:"Livrés"}].map(s=>(
+            <div key={s.key} onClick={()=>setRetStatusFilter(retStatusFilter===s.key?"":s.key)}
+              style={{flex:1,minWidth:100,padding:"10px 14px",borderRadius:10,background:retStatusFilter===s.key?statusColor[s.key]+"18":C.surface,border:`1.5px solid ${retStatusFilter===s.key?statusColor[s.key]:C.border}`,cursor:"pointer",transition:"all 0.15s"}}>
+              <div style={{fontSize:20,fontWeight:900,color:statusColor[s.key]}}>{countByStatus[s.key]}</div>
+              <div style={{fontSize:10,fontWeight:700,color:C.textMuted}}>{s.label}</div>
+            </div>))}
+          <div style={{flex:1,minWidth:100,padding:"10px 14px",borderRadius:10,background:C.surface,border:`1.5px solid ${C.border}`}}>
+            <div style={{fontSize:20,fontWeight:900,color:C.primary}}>{retoucheBons.length}</div>
+            <div style={{fontSize:10,fontWeight:700,color:C.textMuted}}>Total bons</div>
+          </div>
+          <div style={{flex:1,minWidth:100,padding:"10px 14px",borderRadius:10,background:C.surface,border:`1.5px solid ${C.border}`}}>
+            <div style={{fontSize:20,fontWeight:900,color:C.primary}}>{totalCA.toFixed(2)}€</div>
+            <div style={{fontSize:10,fontWeight:700,color:C.textMuted}}>CA retouches</div>
+          </div>
+        </div>
         <div style={{display:"flex",gap:6,marginBottom:10,flexWrap:"wrap",alignItems:"center"}}>
           <div style={{fontSize:10,fontWeight:700,color:C.textMuted}}>Du</div>
           <Input type="date" value={retDateFrom} onChange={e=>setRetDateFrom(e.target.value)} style={{width:130,height:30,fontSize:10,padding:"3px 8px"}}/>
