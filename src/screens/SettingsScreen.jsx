@@ -1583,8 +1583,11 @@ function SettingsScreen(){
         <Input value={settings.receiptLogo||""} onChange={e=>setSettings(s=>({...s,receiptLogo:e.target.value}))} placeholder="https://example.com/logo.png"/></div>
       <div style={{marginBottom:10}}><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>Message d'en-tête</label>
         <Input value={settings.receiptHeader||""} onChange={e=>setSettings(s=>({...s,receiptHeader:e.target.value}))} placeholder="Merci pour votre achat !"/></div>
-      <div style={{marginBottom:10}}><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>Message de pied de page</label>
+      <div style={{marginBottom:10}}><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>Message de remerciement (affiché en gros)</label>
         <Input value={settings.footerMsg||""} onChange={e=>setSettings(s=>({...s,footerMsg:e.target.value}))} placeholder="Merci de votre visite !"/></div>
+      <div style={{marginBottom:10}}><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>Texte libre en bas du ticket (multiligne)</label>
+        <textarea value={settings.ticketFreeText||""} onChange={e=>setSettings(s=>({...s,ticketFreeText:e.target.value}))} placeholder={"Ex: Échange sous 30 jours sur présentation du ticket.\nSuivez-nous sur Instagram @maboutique"}
+          style={{width:"100%",minHeight:70,padding:10,borderRadius:10,border:`2px solid ${C.border}`,fontSize:12,fontFamily:"inherit",resize:"vertical"}}/></div>
       <div style={{marginBottom:14}}>
         <div style={{fontSize:12,fontWeight:700,marginBottom:8}}>Champs affichés sur le ticket</div>
         {[{k:"showShopName",l:"Nom de la boutique"},{k:"showAddress",l:"Adresse"},{k:"showSiret",l:"SIRET"},{k:"showPhone",l:"Téléphone"},{k:"showTvaDetails",l:"Détails TVA"},{k:"showSellerName",l:"Nom du vendeur"},{k:"showDateTime",l:"Date et heure"}].map(f=>{

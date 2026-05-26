@@ -405,15 +405,18 @@ class ThermalPrinter {
         await this.newline();
         await this.bold(false);
 
-        // Variant details
+        // Variant details — normal font for readability
         if (!isCustom && (color || size)) {
-          await this.fontSmall();
           let detail = `  ${color}/${size}`;
           if (!isGift && sku) detail += ` | Ref: ${sku}`;
-          if (!isGift && ean) detail += ` | EAN: ${ean}`;
           await this.text(detail);
           await this.newline();
-          await this.fontNormal();
+          if (!isGift && ean) {
+            await this.fontSmall();
+            await this.text(`  EAN: ${ean}`);
+            await this.newline();
+            await this.fontNormal();
+          }
         }
 
         // Qty x price line (skip prices for gift card)
@@ -425,7 +428,9 @@ class ThermalPrinter {
           let qtyLine = `  ${qty} x ${unitPrice.toFixed(2)}€`;
           if (discount > 0) qtyLine += ` (-${discount}%)`;
           const total = discount > 0 ? (lineTTC * (1 - discount / 100)).toFixed(2) : lineTTC.toFixed(2);
+          await this.bold(true);
           await this.line(qtyLine, `${total}€`);
+          await this.bold(false);
         }
       }
 
@@ -444,8 +449,10 @@ class ThermalPrinter {
         }
 
         // ── Totals ──
+        await this.bold(true);
         await this.line('Sous-total HT', `${(ticket.totalHT || 0).toFixed(2)}€`);
         await this.line('TVA', `${(ticket.totalTVA || 0).toFixed(2)}€`);
+        await this.bold(false);
 
         if (ticket.globalDiscount > 0) {
           await this.line('Remise', `-${ticket.globalDiscount.toFixed(2)}€`);
@@ -500,20 +507,39 @@ class ThermalPrinter {
 
       // ── Footer ──
       await this.alignCenter();
-      await this.fontSmall();
-      await this.text(`${co.sw || 'CaissePro'} v${co.ver || '6.1.0'}`);
-      await this.newline();
+      await this.fontNormal();
       await this.text('Garantie legale 2 ans');
       await this.newline();
+
+      // Footer message (thank you) — prominent
       if (s.footerMsg || co.footerMsg) {
+        await this.newline();
+        await this.bold(true);
+        await this.doubleSize();
         await this.text(s.footerMsg || co.footerMsg);
         await this.newline();
+        await this.normalSize();
+        await this.bold(false);
+      }
+
+      // Free text field — configurable custom message
+      if (s.ticketFreeText) {
+        await this.newline();
+        await this.bold(true);
+        const lines = s.ticketFreeText.split('\n');
+        for (const ln of lines) {
+          await this.text(ln);
+          await this.newline();
+        }
+        await this.bold(false);
       }
 
       if (ticket.saleNote) {
         await this.newline();
+        await this.bold(true);
         await this.text(`Note: ${ticket.saleNote}`);
         await this.newline();
+        await this.bold(false);
       }
 
       if (ticket.customerName) {
@@ -524,6 +550,9 @@ class ThermalPrinter {
         await this.bold(false);
       }
 
+      await this.fontSmall();
+      await this.text(`${co.sw || 'CaissePro'} v${co.ver || '6.1.0'}`);
+      await this.newline();
       await this.fontNormal();
 
       // EAN-13 barcode

@@ -507,11 +507,15 @@ function SalesScreen(){
         <div style={{textAlign:"center",background:C.fiscalLight,padding:6,borderRadius:6,margin:"4px 0"}}>
           <div style={{fontSize:8,color:C.fiscal,fontWeight:700}}>EMPREINTE NF525</div>
           <div style={{fontSize:11,fontWeight:700,color:C.fiscal,letterSpacing:2}}>{lastTk.fingerprint}</div></div>
-        <div style={{textAlign:"center",fontSize:8,color:C.textMuted}}>
-          {CO.sw} v{CO.ver} — Conforme NF525<br/>{settings.footerMsg||CO.footerMsg}</div>
-        {lastTk.saleNote&&<div style={{textAlign:"center",fontSize:9,color:C.text,marginTop:3,fontStyle:"italic"}}>Note: {lastTk.saleNote}</div>}
-        {lastTk.customerName&&<div style={{textAlign:"center",fontSize:9,color:C.accent,marginTop:3}}>Fidélité: +{Math.floor(lastTk.totalTTC||0)}pts</div>}
+        <div style={{textAlign:"center",fontSize:10,color:C.text,marginTop:4}}>Garantie légale 2 ans</div>
+        {(settings.footerMsg||CO.footerMsg)&&<div style={{textAlign:"center",fontSize:14,fontWeight:800,color:C.text,marginTop:6,padding:"6px 0"}}>
+          {settings.footerMsg||CO.footerMsg}</div>}
+        {settings.ticketFreeText&&<div style={{textAlign:"center",fontSize:11,fontWeight:600,color:C.text,marginTop:4,whiteSpace:"pre-line"}}>
+          {settings.ticketFreeText}</div>}
+        {lastTk.saleNote&&<div style={{textAlign:"center",fontSize:10,fontWeight:600,color:C.text,marginTop:4,fontStyle:"italic"}}>Note: {lastTk.saleNote}</div>}
+        {lastTk.customerName&&<div style={{textAlign:"center",fontSize:10,fontWeight:600,color:C.accent,marginTop:4}}>Fidélité: +{Math.floor(lastTk.totalTTC||0)}pts</div>}
         {lastTk.barcode&&<div style={{marginTop:6,display:"flex",justifyContent:"center"}}><EAN13Svg code={lastTk.barcode} width={160} height={45}/></div>}
+        <div style={{textAlign:"center",fontSize:7,color:C.textMuted,marginTop:4}}>{CO.sw} v{CO.ver} — Conforme NF525</div>
       </div>
       {/* Avoir remaining balance after sale */}
       {lastTk.avoirUsed&&lastTk.avoirUsed.remainingAfter>0&&(
