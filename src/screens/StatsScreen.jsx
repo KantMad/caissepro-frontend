@@ -37,18 +37,30 @@ function StatsScreen(){
   const pctChange=(cur,prev)=>{if(!prev)return null;const pct=((cur-prev)/prev*100);return pct;};
   const PctBadge=({cur,prev})=>{const p=pctChange(cur,prev);if(p===null||!dateFrom)return null;
     return<Badge color={p>=0?"#059669":C.danger}>{p>=0?"+":""}{p.toFixed(1)}%</Badge>;};
+  // Lookup maps: product_id→{sku,name}, variant_id→{colorCode}
+  const prodMap=useMemo(()=>{const m={};products.forEach(p=>{m[p.id]={sku:p.sku,name:p.name};(p.variants||[]).forEach(v=>{m[`v_${v.id}`]={colorCode:v.colorCode||"",color:v.color,size:v.size};});});return m;},[products]);
+  const enrichItem=(i)=>{
+    const pid=i.product_id||i.product?.id;const vid=i.variant_id||i.variant?.id;
+    const pm=pid?prodMap[pid]:null;const vm=vid?prodMap[`v_${vid}`]:null;
+    return{sku:i.product?.sku||pm?.sku||"",name:i.product?.name||i.product_name||pm?.name||"?",
+      colorCode:i.variant?.colorCode||vm?.colorCode||"",color:i.variant?.color||i.variant_color||vm?.color||"?",
+      size:i.variant?.size||i.variant_size||vm?.size||"?"};
+  };
   const fBestSellers=useMemo(()=>{const m={};fTickets.forEach(t=>(t.items||[]).forEach(i=>{
-    const k=i.product?.sku||i.product_name;if(!m[k])m[k]={name:i.product?.name||i.product_name,sku:k,qty:0,revenue:0,margin:0,colors:new Set()};
+    const e=enrichItem(i);const k=e.sku||e.name;
+    if(!m[k])m[k]={name:e.name,sku:e.sku,qty:0,revenue:0,margin:0,colors:new Set()};
     m[k].qty+=i.quantity;m[k].revenue+=(i.lineTTC||i.line_ttc||0);m[k].margin+=((i.lineHT||i.line_ht||0)-(i.product?.costPrice||i.cost_price||0)*i.quantity);
-    const cc=i.variant?.colorCode||i.variant_color_code;if(cc)m[k].colors.add(cc);}));
-    return Object.values(m).map(p=>({...p,colors:[...p.colors]})).sort((a,b)=>b.qty-a.qty);},[fTickets]);
+    if(e.colorCode)m[k].colors.add(e.colorCode);}));
+    return Object.values(m).map(p=>({...p,colors:[...p.colors]})).sort((a,b)=>b.qty-a.qty);},[fTickets,prodMap]);
   const fCommissions=useMemo(()=>{const m={};fTickets.forEach(t=>{
     const n=t.userName||t.user_name||"?";if(!m[n])m[n]={name:n,count:0,revenue:0,margin:0};
     m[n].count++;m[n].revenue+=(t.totalTTC||parseFloat(t.total_ttc)||0);m[n].margin+=(parseFloat(t.margin)||0);});
     return Object.values(m).sort((a,b)=>b.revenue-a.revenue).map(s=>({...s,commission:s.margin*0.05,goal:salesGoals[s.name]||0,goalProgress:salesGoals[s.name]?(s.revenue/salesGoals[s.name]*100):0}));},[fTickets,salesGoals]);
   const fByVariant=useMemo(()=>{const bySize={},byColor={};fTickets.forEach(t=>(t.items||[]).forEach(i=>{
-    const s=i.variant?.size||i.variant_size||"?";const c=i.variant?.color||i.variant_color||"?";
-    bySize[s]=(bySize[s]||0)+i.quantity;byColor[c]=(byColor[c]||0)+i.quantity;}));
+    const e=enrichItem(i);
+    bySize[e.size]=(bySize[e.size]||0)+i.quantity;
+    const colorLabel=e.colorCode?`${e.color} (${e.colorCode})`:e.color;
+    byColor[colorLabel]=(byColor[colorLabel]||0)+i.quantity;}));
     return{bySize:Object.entries(bySize).sort((a,b)=>b[1]-a[1]).map(([k,v])=>({name:k,qty:v})),
       byColor:Object.entries(byColor).sort((a,b)=>b[1]-a[1]).map(([k,v])=>({name:k,qty:v}))};
   },[fTickets]);
@@ -207,10 +219,9 @@ function StatsScreen(){
 
     {/* Détail variantes vendues */}
     {tab==="variantDetail"&&(()=>{const byProd={};fTickets.forEach(t=>(t.items||[]).forEach(i=>{
-      const pn=i.product?.name||i.product_name;const sku=i.product?.sku||i.product_sku||"";
-      const c=i.variant?.color||i.variant_color||"?";const cc=i.variant?.colorCode||i.variant_color_code||"";const s=i.variant?.size||i.variant_size||"?";
-      const pk=sku||pn;if(!byProd[pk])byProd[pk]={name:pn,sku,variants:{}};const vk=`${c}/${s}`;
-      if(!byProd[pk].variants[vk])byProd[pk].variants[vk]={color:c,colorCode:cc,size:s,qty:0,revenue:0};
+      const e=enrichItem(i);
+      const pk=e.sku||e.name;if(!byProd[pk])byProd[pk]={name:e.name,sku:e.sku,variants:{}};const vk=`${e.color}/${e.size}`;
+      if(!byProd[pk].variants[vk])byProd[pk].variants[vk]={color:e.color,colorCode:e.colorCode,size:e.size,qty:0,revenue:0};
       byProd[pk].variants[vk].qty+=i.quantity;byProd[pk].variants[vk].revenue+=(i.lineTTC||i.line_ttc||0);}));
       const prodList=Object.values(byProd).sort((a,b)=>{const aq=Object.values(a.variants).reduce((s,v)=>s+v.qty,0);
         const bq=Object.values(b.variants).reduce((s,v)=>s+v.qty,0);return bq-aq;});
