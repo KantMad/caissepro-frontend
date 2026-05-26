@@ -225,8 +225,21 @@ function StatsScreen(){
       byProd[pk].variants[vk].qty+=i.quantity;byProd[pk].variants[vk].revenue+=(i.lineTTC||i.line_ttc||0);}));
       const prodList=Object.values(byProd).sort((a,b)=>{const aq=Object.values(a.variants).reduce((s,v)=>s+v.qty,0);
         const bq=Object.values(b.variants).reduce((s,v)=>s+v.qty,0);return bq-aq;});
+      const exportVariantCSV=()=>{
+        const headers=["Produit","Reference","Code couleur","Libelle coloris","Taille","Quantite vendue","CA TTC"];
+        const rows=[];
+        prodList.forEach(p=>{Object.values(p.variants).sort((a,b)=>b.qty-a.qty).forEach(v=>{
+          rows.push([p.name,p.sku,v.colorCode,v.color,v.size,v.qty,v.revenue.toFixed(2)]);});});
+        const csv="﻿"+[headers.join(";"),...rows.map(r=>r.map(c=>`"${String(c==null?"":c).replace(/"/g,'""')}"`).join(";"))].join("\r\n");
+        const blob=new Blob([csv],{type:"text/csv;charset=utf-8;"});const url=URL.createObjectURL(blob);
+        const a=document.createElement("a");a.href=url;
+        const period=dateFrom&&dateTo?`_${dateFrom}_${dateTo}`:dateFrom?`_depuis_${dateFrom}`:"_tout";
+        a.download=`variantes_vendues${period}.csv`;a.click();URL.revokeObjectURL(url);
+      };
       return(<div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`}}>
-        <h3 style={{fontSize:14,fontWeight:700,marginBottom:10}}>Détail des variantes vendues</h3>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+          <h3 style={{fontSize:14,fontWeight:700,margin:0}}>Détail des variantes vendues</h3>
+          <Btn variant="outline" onClick={exportVariantCSV} style={{fontSize:11,gap:4}}><Download size={12}/> Export Excel</Btn></div>
         {prodList.slice(0,15).map(p=>{const vars=Object.values(p.variants).sort((a,b)=>b.qty-a.qty);
           const totalQty=vars.reduce((s,v)=>s+v.qty,0);
           return(<div key={p.sku||p.name} style={{marginBottom:14,padding:12,borderRadius:10,background:C.surfaceAlt}}>
