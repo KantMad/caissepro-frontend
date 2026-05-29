@@ -1352,15 +1352,23 @@ function AppProvider({children}){
     let avoir;
     try{
       const apiResult=await API.returns.create(apiPayload);
+      // Enrich items with product/variant detail for printing (sku, ean, colorCode)
+      const enrichedItemsForAvoir=items.map(i=>{
+        const prod=products.find(p=>p.id===i.product_id);
+        const vari=prod?.variants?.find(v=>v.id===i.variant_id);
+        return{...i,product:{id:i.product_id,name:i.product_name,sku:prod?.sku||""},
+          variant:{id:i.variant_id,color:i.variant_color,size:i.variant_size,ean:vari?.ean||"",colorCode:vari?.colorCode||""}};
+      });
       avoir={
         avoirNumber:apiResult.avoirNumber,seq:apiResult.seq,date:apiResult.date||new Date().toISOString(),
         originalTicket:ticket.ticketNumber,originalDate:ticket.date,
-        items,totalHT:apiResult.totalHT||totalHT,totalTVA:apiResult.totalTVA||totalTVA,
+        items:enrichedItemsForAvoir,totalHT:apiResult.totalHT||totalHT,totalTVA:apiResult.totalTVA||totalTVA,
         totalTTC:apiResult.totalTTC||totalTTC,remaining:apiResult.remaining||totalTTC,
         used:false,reason:reason||"",refundMethod,
         userId:currentUser?.id,userName:currentUser?.name,
         customerId:ticket.customerId,customerName:ticket.customerName,
-        hash:apiResult.hash||"",fingerprint:apiResult.fingerprint||""};
+        hash:apiResult.hash||"",fingerprint:apiResult.fingerprint||"",
+        barcode:apiResult.barcode||""};
       if(apiResult.seq)setAvoirSeq(apiResult.seq);
     }catch(e){
       // Erreur 409 = doublon ou depassement quantite détecté par le backend
@@ -1373,11 +1381,18 @@ function AppProvider({children}){
       const caisseId=currentStore?.id||cashReg?.id||"CAISSE-01";
       const lastAvoirHash=avoirs.length>0?(avoirs[0].hash||""):lastHash;
       const hash=await sha256(`${lastAvoirHash}|${seq}|AVOIR|${caisseId}|${avoirNumber}|${date}|${totalTTC.toFixed(2)}|${ticket.ticketNumber}`);
+      // Enrich items for offline avoir too
+      const offlineEnrichedItems=items.map(i=>{
+        const prod=products.find(p=>p.id===i.product_id);
+        const vari=prod?.variants?.find(v=>v.id===i.variant_id);
+        return{...i,product:{id:i.product_id,name:i.product_name,sku:prod?.sku||""},
+          variant:{id:i.variant_id,color:i.variant_color,size:i.variant_size,ean:vari?.ean||"",colorCode:vari?.colorCode||""}};
+      });
       avoir={avoirNumber,seq,date,originalTicket:ticket.ticketNumber,originalDate:ticket.date,
-        items,totalHT,totalTVA,totalTTC,remaining:totalTTC,used:false,reason:reason||"",refundMethod,
+        items:offlineEnrichedItems,totalHT,totalTVA,totalTTC,remaining:totalTTC,used:false,reason:reason||"",refundMethod,
         userId:currentUser?.id,userName:currentUser?.name,
         customerId:ticket.customerId,customerName:ticket.customerName,
-        hash,fingerprint:hash.slice(0,16).toUpperCase()};
+        hash,fingerprint:hash.slice(0,16).toUpperCase(),barcode:""};
       setAvoirSeq(seq);
       addPendingSync({type:"offlineAvoir",data:{...apiPayload,saleId:ticket.ticketNumber||ticket.id}});
       // Restock local en attendant la synchro backend

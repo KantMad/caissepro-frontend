@@ -52,9 +52,15 @@ function ReturnScreen(){
     // Try as avoir barcode
     const av=avoirs.find(a=>a.barcode===code);
     if(av){setAvoirLookup(code);notify(`Avoir ${av.avoirNumber} trouvé`,"info");return;}
-    // Try as product EAN — set search field
+    // Try as product EAN — auto-select the exact scanned variant
     const found=findByEAN(code);
-    if(found){setSearchProd(code);if(mode==="ticket")setMode("scan");notify(`${found.product.name} ${found.variant.color}/${found.variant.size} trouvé`,"info");return;}
+    if(found){
+      setSearchProd(code);
+      if(mode==="ticket")setMode("scan");
+      // Auto-add the exact scanned variant to returnItems
+      toggleItem({product:found.product,variant:found.variant,quantity:1,lineTTC:found.product.price,unit_price:found.product.price},found.variant,99);
+      notify(`${found.product.name} ${found.variant.color}/${found.variant.size} ajouté au retour`,"success");
+      return;}
     notify("Code-barres inconnu: "+code,"warn");
   },[tickets,avoirs,findByEAN,notify,mode]);
   useEffect(()=>{setScanOverride(handleReturnScan);return()=>clearScanOverride();},[setScanOverride,clearScanOverride,handleReturnScan]);
