@@ -223,7 +223,7 @@ function HistoryScreen(){
         <div style={{display:"flex",justifyContent:"space-between",fontWeight:700}}><span>N° {tkNum}</span><span>{tkDateStr}</span></div>
         <div style={{fontWeight:600}}>Caissier: {tkUser}{tkCust?` — Client: ${tkCust}`:""}</div>
         <div style={{borderTop:"1px dashed #999",margin:"4px 0"}}/>
-        {tkItems.map((i,k)=>{const sku=i.product?.sku||i.product_sku||i.sku||"";const ean=i.variant?.ean||i.variant_ean||i.ean||"";
+        {tkItems.map((i,k)=>{const sku=i.product?.sku||i.product_sku||i.sku||"";const ean=i.variant?.ean||i.variant_ean||i.ean||"";const colorCode=i.variant?.colorCode||i.variant_color_code||i.color_code||"";
           const name=i.product?.name||i.product_name||i.name||"Article";
           const color=i.variant?.color||i.variant_color||i.color||"";
           const size=i.variant?.size||i.variant_size||i.size||"";
@@ -231,9 +231,9 @@ function HistoryScreen(){
           const lineAmt=Number(i.lineTTC||i.line_ttc)||(Number(i.unit_price||i.unitTTC||0)*Number(i.quantity||1));
           const disc=Number(i.discount)||0;
           return(<div key={k}>
-          <div style={{display:"flex",justifyContent:"space-between",gap:8}}><span style={{flex:1,wordBreak:"break-word",lineHeight:1.3}}>{name}{!isCustom&&(color||size)?` (${color}/${size})`:""} x{i.quantity||1}{disc>0?` -${disc}${i.discountType==="amount"||i.discount_type==="amount"?"€":"%"}`:""}</span>
+          <div style={{display:"flex",justifyContent:"space-between",gap:8}}><span style={{flex:1,wordBreak:"break-word",lineHeight:1.3,fontWeight:600}}>{name}{!isCustom&&(color||size)?` (${color}/${size})`:""} x{i.quantity||1}{disc>0?` -${disc}${i.discountType==="amount"||i.discount_type==="amount"?"€":"%"}`:""}</span>
           <span style={{whiteSpace:"nowrap",fontWeight:800}}>{lineAmt.toFixed(2)}€</span></div>
-          {(sku||ean)&&<div style={{fontSize:9,color:"#888",fontWeight:600}}>{sku?`Réf: ${sku}`:""}{sku&&ean?" — ":""}{ean?`EAN: ${ean}`:""}</div>}
+          {!isCustom&&(sku||ean||colorCode)&&<div style={{fontSize:9,color:"#888",fontWeight:600}}>{sku?`Réf: ${sku}`:""}{sku&&colorCode?" — ":""}{colorCode||""}{(sku||colorCode)&&ean?" — ":""}{ean?`EAN: ${ean}`:""}</div>}
         </div>);})}
         <div style={{borderTop:"1px dashed #999",margin:"4px 0"}}/>
         {tkDisc>0&&<div style={{display:"flex",justifyContent:"space-between",color:"#059669",fontWeight:600}}><span>Remise</span><span>-{tkDisc.toFixed(2)}€</span></div>}
@@ -245,8 +245,8 @@ function HistoryScreen(){
         {tkFp&&<div style={{textAlign:"center",background:C.fiscalLight,padding:6,borderRadius:6,margin:"6px 0"}}>
           <div style={{fontSize:9,color:C.fiscal,fontWeight:800}}>EMPREINTE NF525</div>
           <div style={{fontSize:12,fontWeight:800,color:C.fiscal,letterSpacing:2}}>{tkFp}</div></div>}
-        {(tk.barcode)&&<div style={{marginTop:6,display:"flex",justifyContent:"center"}}><EAN13Svg code={tk.barcode} width={160} height={45}/></div>}
         <div style={{textAlign:"center",fontSize:11,fontWeight:600,color:C.text,marginTop:4}}>Garantie légale 2 ans</div>
+        {(tk.barcode)&&<div style={{marginTop:6,display:"flex",justifyContent:"center"}}><EAN13Svg code={tk.barcode} width={160} height={45}/></div>}
         {(settings.footerMsg||CO.footerMsg)&&<div style={{textAlign:"center",fontSize:15,fontWeight:800,color:C.text,marginTop:6,padding:"6px 0"}}>
           {settings.footerMsg||CO.footerMsg}</div>}
         {settings.ticketFreeText&&<div style={{textAlign:"center",fontSize:12,fontWeight:700,color:C.text,marginTop:4,whiteSpace:"pre-line"}}>
@@ -358,15 +358,15 @@ function HistoryScreen(){
         {avCust&&<div>Client: {avCust}</div>}
         <div>Motif: {avReason}</div>
         <div style={{borderTop:`1px dashed ${C.danger}`,margin:"4px 0"}}/>
-        {avItems.map((i,k)=>{const sku=i.product?.sku||i.product_sku||i.sku||"";const ean=i.variant?.ean||i.variant_ean||i.ean||"";
+        {avItems.map((i,k)=>{const sku=i.product?.sku||i.product_sku||i.sku||"";const ean=i.variant?.ean||i.variant_ean||i.ean||"";const colorCode=i.variant?.colorCode||i.variant_color_code||i.color_code||"";
           const name=i.product?.name||i.product_name||i.name||"?";
           const color=i.variant?.color||i.variant_color||i.color||"";
           const size=i.variant?.size||i.variant_size||i.size||"";
           const lineAmt=Number(i.lineTTC||i.line_ttc)||0;
           return(<div key={k}>
-          <div style={{display:"flex",justifyContent:"space-between"}}><span>{name}{(color||size)?` (${color}/${size})`:""} x{i.quantity||1}</span>
-          <span>-{lineAmt.toFixed(2)}€</span></div>
-          {(sku||ean)&&<div style={{fontSize:8,color:`${C.danger}99`}}>{sku?`Réf: ${sku}`:""}{sku&&ean?" — ":""}{ean?`EAN: ${ean}`:""}</div>}
+          <div style={{display:"flex",justifyContent:"space-between",fontWeight:600}}><span>{name}{(color||size)?` (${color}/${size})`:""} x{i.quantity||1}</span>
+          <span style={{fontWeight:800}}>-{lineAmt.toFixed(2)}€</span></div>
+          {(sku||ean||colorCode)&&<div style={{fontSize:9,color:`${C.danger}99`,fontWeight:600}}>{sku?`Réf: ${sku}`:""}{sku&&colorCode?" — ":""}{colorCode||""}{(sku||colorCode)&&ean?" — ":""}{ean?`EAN: ${ean}`:""}</div>}
         </div>);})}
         <div style={{borderTop:`1px dashed ${C.danger}`,margin:"4px 0"}}/>
         <div style={{display:"flex",justifyContent:"space-between",fontWeight:800,fontSize:14,color:C.danger}}><span>TOTAL AVOIR</span><span>-{avTTC.toFixed(2)}€</span></div>
@@ -374,7 +374,11 @@ function HistoryScreen(){
         {avFp&&<div style={{textAlign:"center",background:C.dangerLight,padding:6,borderRadius:6,margin:"6px 0"}}>
           <div style={{fontSize:9,color:C.danger,fontWeight:800}}>EMPREINTE NF525</div>
           <div style={{fontSize:12,fontWeight:800,color:C.danger,letterSpacing:2}}>{avFp}</div></div>}
+        <div style={{textAlign:"center",fontSize:10,fontWeight:600,color:C.text,marginTop:4}}>Garantie légale 2 ans</div>
         {(av.barcode)&&<div style={{marginTop:6,display:"flex",justifyContent:"center"}}><EAN13Svg code={av.barcode} width={160} height={45}/></div>}
+        {(settings.footerMsg||CO.footerMsg)&&<div style={{textAlign:"center",fontSize:13,fontWeight:800,color:C.text,marginTop:6,padding:"4px 0"}}>{settings.footerMsg||CO.footerMsg}</div>}
+        {settings.ticketFreeText&&<div style={{textAlign:"center",fontSize:11,fontWeight:600,color:C.text,marginTop:4,whiteSpace:"pre-line"}}>{settings.ticketFreeText}</div>}
+        <div style={{textAlign:"center",fontSize:8,color:C.textMuted,fontWeight:600,marginTop:4}}>{CO.sw} v{CO.ver} — Conforme NF525</div>
       </div>
       <Btn variant="outline" onClick={()=>thermalPrint("avoir",av)} style={{width:"100%",marginTop:10}}><Printer size={14}/> {printerConnected?"Ticket":"Imprimer"}</Btn>
       </>);

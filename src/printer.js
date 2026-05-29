@@ -405,10 +405,12 @@ class ThermalPrinter {
         await this.newline();
         await this.bold(false);
 
-        // Variant details
+        // Variant details + ref + colorCode
+        const colorCode = item.variant?.colorCode || item.variant_color_code || item.color_code || '';
         if (!isCustom && (color || size)) {
           let detail = `  ${color}/${size}`;
           if (!isGift && sku) detail += ` | Ref: ${sku}`;
+          if (!isGift && colorCode) detail += ` | ${colorCode}`;
           await this.bold(true); await this.text(detail); await this.newline(); await this.bold(false);
           if (!isGift && ean) {
             await this.fontSmall();
@@ -514,6 +516,16 @@ class ThermalPrinter {
       await this.newline();
       await this.bold(false);
 
+      // EAN-13 barcode (BEFORE footer text so text appears below barcode)
+      if (ticket.barcode) {
+        await this.newline();
+        await this.alignCenter();
+        await this.barcode(ticket.barcode);
+      }
+
+      // Footer text AFTER barcode
+      await this.alignCenter();
+
       // Footer message (thank you) — prominent
       if (s.footerMsg || co.footerMsg) {
         await this.newline();
@@ -553,17 +565,10 @@ class ThermalPrinter {
         await this.bold(false);
       }
 
-      await this.fontSmall();
+      await this.bold(true);
       await this.text(`${co.sw || 'CaissePro'} v${co.ver || '6.1.0'}`);
       await this.newline();
-      await this.fontNormal();
-
-      // EAN-13 barcode
-      if (ticket.barcode) {
-        await this.newline();
-        await this.alignCenter();
-        await this.barcode(ticket.barcode);
-      }
+      await this.bold(false);
 
       // Feed & cut
       await this.feed(4);
@@ -617,11 +622,21 @@ class ThermalPrinter {
 
       // Items
       for (const item of (avoir.items || [])) {
-        const name = item.product?.name || '?';
-        const sku = item.product?.sku || '';
-        const variant = item.variant ? ` (${item.variant.color}/${item.variant.size})` : '';
-        await this.bold(true); await this.line(`${name}${variant} x${item.quantity}`, `-${(item.lineTTC || 0).toFixed(2)}€`); await this.bold(false);
-        if (sku) { await this.fontSmall(); await this.bold(true); await this.line(`  Ref: ${sku}`); await this.bold(false); await this.fontNormal(); }
+        const name = item.product?.name || item.product_name || item.name || '?';
+        const sku = item.product?.sku || item.product_sku || item.sku || '';
+        const color = item.variant?.color || item.variant_color || item.color || '';
+        const colorCode = item.variant?.colorCode || item.variant_color_code || item.color_code || '';
+        const sz = item.variant?.size || item.variant_size || item.size || '';
+        const ean = item.variant?.ean || item.variant_ean || item.ean || '';
+        await this.bold(true); await this.text(name); await this.newline(); await this.bold(false);
+        if (color || sz) {
+          let detail = `  ${color}/${sz}`;
+          if (sku) detail += ` | Ref: ${sku}`;
+          if (colorCode) detail += ` | ${colorCode}`;
+          await this.bold(true); await this.text(detail); await this.newline(); await this.bold(false);
+          if (ean) { await this.fontSmall(); await this.text(`  EAN: ${ean}`); await this.newline(); await this.fontNormal(); }
+        }
+        await this.bold(true); await this.line(`  x${item.quantity || 1}`, `-${(item.lineTTC || item.line_ttc || 0).toFixed(2)}€`); await this.bold(false);
       }
 
       await this.separator('-');
@@ -646,12 +661,42 @@ class ThermalPrinter {
       await this.newline();
       await this.bold(false);
 
+      // Garantie
+      await this.bold(true);
+      await this.text('Garantie legale 2 ans');
+      await this.newline();
+      await this.bold(false);
+
       // EAN-13 barcode
       if (avoir.barcode) {
         await this.newline();
         await this.alignCenter();
         await this.barcode(avoir.barcode);
       }
+
+      // Footer text AFTER barcode
+      await this.alignCenter();
+      if (s.footerMsg || co.footerMsg) {
+        await this.newline();
+        await this.bold(true);
+        await this.doubleSize();
+        await this.text(s.footerMsg || co.footerMsg);
+        await this.newline();
+        await this.normalSize();
+        await this.bold(false);
+      }
+      if (s.ticketFreeText) {
+        await this.newline();
+        await this.bold(true);
+        const ftLines = s.ticketFreeText.split('\n');
+        for (const ln of ftLines) { await this.text(ln); await this.newline(); }
+        await this.bold(false);
+      }
+      await this.fontNormal();
+      await this.bold(true);
+      await this.text(`${co.sw || 'CaissePro'} v${co.ver || '6.1.0'}`);
+      await this.newline();
+      await this.bold(false);
 
       await this.feed(4);
       await this.cut();

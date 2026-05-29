@@ -506,9 +506,9 @@ function SalesScreen(){
         <div style={{display:"flex",justifyContent:"space-between",fontWeight:700}}><span>N° {lastTk.ticketNumber}</span><span>{new Date(lastTk.date||lastTk.createdAt||"").toLocaleString("fr-FR")}</span></div>
         <div style={{fontWeight:600}}>Caissier: {lastTk.userName}{lastTk.customerName?` — Client: ${lastTk.customerName}`:""}</div>
         <div style={{borderTop:"1px dashed #999",margin:"4px 0"}}/>
-        {(lastTk.items||[]).map((i,k)=>{const sku=i.product?.sku||i.product_sku||"";const ean=i.variant?.ean||i.variant_ean||"";return(<div key={k}>
-          <div style={{display:"flex",justifyContent:"space-between",gap:8}}><span style={{flex:1,wordBreak:"break-word",lineHeight:1.3}}>{i.product?.name||i.product_name}{i.isCustom||i.is_custom?"":`(${i.variant?.color||i.variant_color}/${i.variant?.size||i.variant_size})`} x{i.quantity}{i.discount>0?` -${i.discount}${i.discountType==="amount"?"€":"%"}`:""}</span><span style={{whiteSpace:"nowrap",fontWeight:800}}>{(i.lineTTC||i.line_ttc||((i.unit_price||0)*(i.quantity||1))||0).toFixed(2)}€</span></div>
-          {(sku||ean)&&<div style={{fontSize:9,color:"#888",fontWeight:600}}>{sku?`Réf: ${sku}`:""}{sku&&ean?" — ":""}{ean?`EAN: ${ean}`:""}</div>}
+        {(lastTk.items||[]).map((i,k)=>{const sku=i.product?.sku||i.product_sku||"";const ean=i.variant?.ean||i.variant_ean||"";const colorCode=i.variant?.colorCode||i.variant_color_code||i.color_code||"";const isC=i.isCustom||i.is_custom;return(<div key={k}>
+          <div style={{display:"flex",justifyContent:"space-between",gap:8}}><span style={{flex:1,wordBreak:"break-word",lineHeight:1.3,fontWeight:600}}>{i.product?.name||i.product_name}{isC?"":`(${i.variant?.color||i.variant_color}/${i.variant?.size||i.variant_size})`} x{i.quantity}{i.discount>0?` -${i.discount}${i.discountType==="amount"?"€":"%"}`:""}</span><span style={{whiteSpace:"nowrap",fontWeight:800}}>{(i.lineTTC||i.line_ttc||((i.unit_price||0)*(i.quantity||1))||0).toFixed(2)}€</span></div>
+          {!isC&&(sku||ean||colorCode)&&<div style={{fontSize:9,color:"#888",fontWeight:600}}>{sku?`Réf: ${sku}`:""}{sku&&colorCode?" — ":""}{colorCode||""}{(sku||colorCode)&&ean?" — ":""}{ean?`EAN: ${ean}`:""}</div>}
         </div>);})}
         <div style={{borderTop:"1px dashed #999",margin:"4px 0"}}/>
         {lastTk.promosApplied?.length>0&&lastTk.promosApplied.map((a,i)=><div key={i} style={{color:"#059669",fontSize:10,fontWeight:600}}>✓ {a}</div>)}
@@ -521,13 +521,13 @@ function SalesScreen(){
           <div style={{fontSize:9,color:C.fiscal,fontWeight:800}}>EMPREINTE NF525</div>
           <div style={{fontSize:12,fontWeight:800,color:C.fiscal,letterSpacing:2}}>{lastTk.fingerprint}</div></div>
         <div style={{textAlign:"center",fontSize:11,fontWeight:600,color:C.text,marginTop:4}}>Garantie légale 2 ans</div>
+        {lastTk.barcode&&<div style={{marginTop:6,display:"flex",justifyContent:"center"}}><EAN13Svg code={lastTk.barcode} width={160} height={45}/></div>}
         {(settings.footerMsg||CO.footerMsg)&&<div style={{textAlign:"center",fontSize:14,fontWeight:800,color:C.text,marginTop:6,padding:"6px 0"}}>
           {settings.footerMsg||CO.footerMsg}</div>}
         {settings.ticketFreeText&&<div style={{textAlign:"center",fontSize:11,fontWeight:600,color:C.text,marginTop:4,whiteSpace:"pre-line"}}>
           {settings.ticketFreeText}</div>}
         {lastTk.saleNote&&<div style={{textAlign:"center",fontSize:10,fontWeight:600,color:C.text,marginTop:4,fontStyle:"italic"}}>Note: {lastTk.saleNote}</div>}
         {lastTk.customerName&&<div style={{textAlign:"center",fontSize:10,fontWeight:600,color:C.accent,marginTop:4}}>Fidélité: +{Math.floor(lastTk.totalTTC||0)}pts</div>}
-        {lastTk.barcode&&<div style={{marginTop:6,display:"flex",justifyContent:"center"}}><EAN13Svg code={lastTk.barcode} width={160} height={45}/></div>}
         <div style={{textAlign:"center",fontSize:7,color:C.textMuted,marginTop:4}}>{CO.sw} v{CO.ver} — Conforme NF525</div>
       </div>
       {/* Avoir remaining balance after sale */}

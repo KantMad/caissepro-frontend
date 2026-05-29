@@ -249,15 +249,25 @@ class SunmiPrinterAdapter {
     for (const item of items) {
       if (!item) continue;
       const name = item.product?.name || item.product_name || item.name || '?';
+      const sku = item.product?.sku || item.product_sku || item.sku || '';
       const color = item.variant?.color || item.variant_color || '';
+      const colorCode = item.variant?.colorCode || item.variant_color_code || item.color_code || '';
       const sz = item.variant?.size || item.variant_size || '';
+      const ean = item.variant?.ean || item.variant_ean || item.ean || '';
       const qty = item.quantity || 1;
       const isCustom = item.isCustom || item.is_custom;
       const lineTTC = Number(item.lineTTC || item.line_ttc || 0) || (Number(item.unit_price || 0) * qty);
 
       bold(true);
-      text(`${name}${!isCustom && color ? ` (${color}/${sz})` : ''}\n`);
+      text(`${name}\n`);
       bold(false);
+      if (!isCustom && (color || sz)) {
+        text(`  ${color}/${sz}`);
+        if (sku) text(` | Ref: ${sku}`);
+        if (colorCode) text(` | ${colorCode}`);
+        text('\n');
+        if (ean) { size(20); text(`  EAN: ${ean}\n`); size(24); }
+      }
       if (isGift) {
         text(`  x${qty}\n`);
       } else {
@@ -312,20 +322,25 @@ class SunmiPrinterAdapter {
       cmds.push({ cmd: 'line', char: '=', len: 32 });
     }
 
-    // Footer
-    size(20); bold(true);
-    text(`${co.sw || 'CaissePro'} v${co.ver || '6.1.0'} - Conforme NF525\n`);
+    // Footer — garantie
+    align(1); size(20); bold(true);
+    text('Garantie legale 2 ans\n');
     bold(false);
-    if (s.footerMsg || co.footerMsg) { bold(true); text(`${s.footerMsg || co.footerMsg}\n`); bold(false); }
-    if (t.customerName || t.customer_name) {
-      text(`Fidelite: +${Math.floor(Number(t.totalTTC || t.total_ttc) || 0)}pts\n`);
-    }
 
     // EAN-13 barcode (Sunmi native printBarCode)
     if (t.barcode && t.barcode.length === 13) {
       align(1);
       cmds.push({ cmd: 'barcode', text: t.barcode, type: 2, height: 100, width: 2 });
     }
+
+    // Footer text AFTER barcode
+    align(1);
+    if (s.footerMsg || co.footerMsg) { size(24); bold(true); text(`${s.footerMsg || co.footerMsg}\n`); bold(false); }
+    if (s.ticketFreeText) { size(22); bold(true); const ftLines = s.ticketFreeText.split('\n'); for (const ln of ftLines) { text(ln + '\n'); } bold(false); }
+    if (t.customerName || t.customer_name) {
+      size(20); text(`Fidelite: +${Math.floor(Number(t.totalTTC || t.total_ttc) || 0)}pts\n`);
+    }
+    size(18); text(`${co.sw || 'CaissePro'} v${co.ver || '6.1.0'} - Conforme NF525\n`);
 
     // Feed and cut
     cmds.push({ cmd: 'feed', lines: 4 });
@@ -359,23 +374,46 @@ class SunmiPrinterAdapter {
     cmds.push({ cmd: 'line', char: '-', len: 32 });
     for (const item of (a.items || [])) {
       if (!item) continue;
-      const name = item.product?.name || item.product_name || '?';
-      const v = item.variant ? ` (${item.variant.color || ''}/${item.variant.size || ''})` : '';
-      bold(true); text(`${name}${v} x${item.quantity || 1}  -${fmt(item.lineTTC || item.line_ttc)} EUR\n`); bold(false);
+      const name = item.product?.name || item.product_name || item.name || '?';
+      const sku = item.product?.sku || item.product_sku || item.sku || '';
+      const color = item.variant?.color || item.variant_color || item.color || '';
+      const colorCode = item.variant?.colorCode || item.variant_color_code || item.color_code || '';
+      const sz = item.variant?.size || item.variant_size || item.size || '';
+      const ean = item.variant?.ean || item.variant_ean || item.ean || '';
+      bold(true); text(`${name}\n`); bold(false);
+      if (color || sz) {
+        text(`  ${color}/${sz}`);
+        if (sku) text(` | Ref: ${sku}`);
+        if (colorCode) text(` | ${colorCode}`);
+        text('\n');
+        if (ean) { size(20); text(`  EAN: ${ean}\n`); size(24); }
+      }
+      bold(true); text(`  x${item.quantity || 1}  -${fmt(item.lineTTC || item.line_ttc)} EUR\n`); bold(false);
     }
     cmds.push({ cmd: 'line', char: '-', len: 32 });
+    const refundLabels = { cash: 'Especes', card: 'Carte bancaire', avoir: 'Avoir client' };
     bold(true); size(32);
     text(`TOTAL AVOIR  -${fmt(a.totalTTC || a.total_ttc)} EUR\n`);
     size(24); bold(false);
+    bold(true); text(`Remboursement: ${refundLabels[a.refundMethod || a.refund_method] || a.refundMethod || a.refund_method || '?'}\n`); bold(false);
     cmds.push({ cmd: 'line', char: '=', len: 32 });
     align(1); size(22); bold(true);
     text(`EMPREINTE NF525\n${a.fingerprint || a.hash || '-'}\n`); bold(false);
+
+    // Garantie
+    size(20); bold(true); text('Garantie legale 2 ans\n'); bold(false);
 
     // EAN-13 barcode
     if (a.barcode && a.barcode.length === 13) {
       align(1);
       cmds.push({ cmd: 'barcode', text: a.barcode, type: 2, height: 100, width: 2 });
     }
+
+    // Footer text AFTER barcode
+    align(1);
+    if (s.footerMsg || co.footerMsg) { size(24); bold(true); text(`${s.footerMsg || co.footerMsg}\n`); bold(false); }
+    if (s.ticketFreeText) { size(22); bold(true); const ftLines = s.ticketFreeText.split('\n'); for (const ln of ftLines) { text(ln + '\n'); } bold(false); }
+    size(18); text(`${co.sw || 'CaissePro'} v${co.ver || '6.1.0'} - Conforme NF525\n`);
 
     cmds.push({ cmd: 'feed', lines: 4 });
     cmds.push({ cmd: 'cut' });
@@ -1062,9 +1100,20 @@ async function _textBasedPrint(adapter, type, data, settings, companyInfo, width
     lines.push(dsep);
     for (const item of (data.items || [])) {
       const name = item.product?.name || item.product_name || '?';
+      const sku = item.product?.sku || item.product_sku || item.sku || '';
+      const color = item.variant?.color || item.variant_color || '';
+      const sz = item.variant?.size || item.variant_size || '';
+      const colorCode = item.variant?.colorCode || item.variant_color_code || item.color_code || '';
       const qty = item.quantity || 1;
       const ttc = Number(item.lineTTC || item.line_ttc || (item.unit_price * qty)) || 0;
+      const isCustom = item.isCustom || item.is_custom;
       lines.push(pad(`${name} x${qty}`, `${ttc.toFixed(2)}E`));
+      if (!isCustom && (color || sz)) {
+        let detail = `  ${color}/${sz}`;
+        if (sku) detail += ` Ref:${sku}`;
+        if (colorCode) detail += ` ${colorCode}`;
+        lines.push(detail);
+      }
     }
     lines.push(dsep);
     lines.push(pad('Total HT', `${(data.totalHT || 0).toFixed(2)}E`));
@@ -1077,8 +1126,19 @@ async function _textBasedPrint(adapter, type, data, settings, companyInfo, width
     lines.push('AVOIR / NOTE DE CREDIT');
     lines.push(`N: ${data.avoirNumber || data.avoir_number || '?'}`);
     lines.push(`Date: ${new Date(data.date || data.createdAt || '').toLocaleString('fr-FR')}`);
+    if (data.reason) lines.push(`Motif: ${data.reason}`);
     lines.push(dsep);
-    lines.push(pad('TOTAL', `${(data.totalTTC || data.amount || 0).toFixed(2)}E`));
+    for (const item of (data.items || [])) {
+      const name = item.product?.name || item.product_name || item.name || '?';
+      const color = item.variant?.color || item.variant_color || item.color || '';
+      const sz = item.variant?.size || item.variant_size || item.size || '';
+      const sku = item.product?.sku || item.product_sku || item.sku || '';
+      const ttc = Number(item.lineTTC || item.line_ttc) || 0;
+      lines.push(pad(`${name} x${item.quantity || 1}`, `-${ttc.toFixed(2)}E`));
+      if (color || sz) { let d = `  ${color}/${sz}`; if (sku) d += ` Ref:${sku}`; lines.push(d); }
+    }
+    lines.push(dsep);
+    lines.push(pad('TOTAL AVOIR', `-${(data.totalTTC || data.amount || 0).toFixed(2)}E`));
     lines.push(sep);
     if (data.fingerprint) lines.push(`NF525: ${data.fingerprint}`);
   } else if (type === 'closure') {
