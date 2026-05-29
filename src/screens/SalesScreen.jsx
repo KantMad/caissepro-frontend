@@ -12,7 +12,7 @@ function SalesScreen(){
     gDisc,gDiscType,setCartGD,promoCode,setPromoCode,calcPromoDiscount,isOnline,findByEAN,offlineMode,
     parked,parkCart,restoreCart,removeParked,customers,addCustomer,selCust,setSelCust,perm,notify,
     stockAlerts,activePromos,avoirPayment,selectedAvoir,setSelectedAvoir,getLoyaltyTier,tickets,saleNote,setSaleNote,favorites,toggleFavorite,getLastPriceForCustomer,settings,
-    printerConnected,thermalPrint,pendingSync,clearPendingSync,users,currentUser,currentStore,avoirs,consumeAvoir,isAvoirExpired,addAudit,addJET,trainingMode,cartTotals,retoucheBons,addRetoucheBon,cashReg,closures,allCategories}=useApp();
+    printerConnected,thermalPrint,pendingSync,clearPendingSync,users,currentUser,currentStore,avoirs,consumeAvoir,isAvoirExpired,addAudit,addJET,trainingMode,cartTotals,retoucheBons,addRetoucheBon,cashReg,closures,allCategories,getVariantPhotos}=useApp();
   const categories=allCategories;
   const[search,setSearch]=useState("");const[cat,setCat]=useState("Tous");const[vm,setVm]=useState(null);const[selSeller,setSelSeller]=useState(null);
   const[dm,setDm]=useState(null);const[dv,setDv]=useState("");const[gm,setGm]=useState(false);const[gv,setGv]=useState("");const[gtp,setGtp]=useState("percentage");
@@ -188,7 +188,11 @@ function SalesScreen(){
           onMouseEnter={e=>{e.currentTarget.style.transform="translateY(-3px)";e.currentTarget.style.boxShadow=`0 8px 24px ${C.shadowMd}`;e.currentTarget.style.borderColor=cc+"55";}}
           onMouseLeave={e=>{e.currentTarget.style.transform="translateY(0)";e.currentTarget.style.boxShadow=`0 1px 3px ${C.shadow}`;e.currentTarget.style.borderColor=C.border;}}>
           <div style={{aspectRatio:"1.1",background:`${cc}06`,display:"flex",alignItems:"center",justifyContent:"center",position:"relative",borderBottom:`1px solid ${C.border}`}}>
-            <span style={{fontSize:32,opacity:0.7,filter:"grayscale(0.2)"}}>{catIcon(p.category,settings.categoryIcons)}</span>
+            {(()=>{const firstV=p.variants[0];const photos=firstV?getVariantPhotos(p,firstV):[];
+              return photos.length>0
+                ?<img src={photos[0].url} alt="" style={{width:"100%",height:"100%",objectFit:"cover",position:"absolute",inset:0}} loading="lazy"/>
+                :<span style={{fontSize:32,opacity:0.7,filter:"grayscale(0.2)"}}>{catIcon(p.category,settings.categoryIcons)}</span>;
+            })()}
             {ts<=0&&<div style={{position:"absolute",top:6,left:6,zIndex:2}}>
               <Badge color={C.danger}>{ts<0?`Stock ${ts}`:"Rupture"}</Badge></div>}
             {ha&&ts>0&&<div style={{position:"absolute",top:6,left:6}}><div style={{width:8,height:8,borderRadius:4,background:C.warn,boxShadow:`0 0 0 2px ${C.surface}`}}/></div>}
@@ -261,8 +265,13 @@ function SalesScreen(){
             onMouseEnter={e=>e.currentTarget.style.boxShadow=`0 3px 10px ${C.shadowMd}`}
             onMouseLeave={e=>e.currentTarget.style.boxShadow=`0 1px 3px ${C.shadow}`}>
             <div style={{display:"flex",gap:6,marginBottom:4}}>
-              <div style={{width:30,height:30,borderRadius:8,background:`${cc}10`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-                <span style={{fontSize:14}}>{i.isCustom?"📝":catIcon(i.product.category,settings.categoryIcons)}</span></div>
+              {(()=>{const photos=!i.isCustom&&i.variant?getVariantPhotos(i.product,i.variant):[];
+                return photos.length>0
+                  ?<div style={{width:36,height:36,borderRadius:8,overflow:"hidden",flexShrink:0,border:`1px solid ${C.border}`}}>
+                    <img src={photos[0].url} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}} loading="lazy"/></div>
+                  :<div style={{width:30,height:30,borderRadius:8,background:`${cc}10`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                    <span style={{fontSize:14}}>{i.isCustom?"📝":catIcon(i.product.category,settings.categoryIcons)}</span></div>;
+              })()}
               <div style={{flex:1,minWidth:0}}>
                 <div style={{fontSize:11,fontWeight:700,lineHeight:1.2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{i.product.name}{i.isCustom?" (divers)":""}</div>
                 {!i.isCustom&&<><div style={{display:"flex",gap:2,marginTop:2,flexWrap:"wrap"}}>

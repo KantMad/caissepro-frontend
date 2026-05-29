@@ -31,6 +31,8 @@ function AppProvider({children}){
   // Update API header when effective store changes
   useEffect(()=>{if(effectiveStoreId)setStoreId(effectiveStoreId);else clearStoreId();},[effectiveStoreId]);
   const[products,setProducts]=useState([]);
+  const[productPhotos,setProductPhotos]=useState([]);
+  const productPhotosMapRef=useRef(new Map()); // Map<"skuBase-colorKey", [{url, sortOrder}]>
   const[customers,setCustomers]=useState([]);
   const[cart,setCart]=useState([]);
   const[gDisc,setGDisc]=useState(0);const[gDiscType,setGDiscType]=useState("percentage");
@@ -190,6 +192,11 @@ function AppProvider({children}){
       // Auto-import sizes from products into size ranking
       autoImportSizesFromProducts(prods);
       setProducts(norm.products(prods));setCustomers(norm.customers(custs));setPromos(prms);setSettings(s=>({...s,...setts}));
+      // Load product photos
+      try{const photos=await API.productPhotos.list();setProductPhotos(photos||[]);
+        const m=new Map();for(const p of (photos||[])){const k=`${p.skuBase}-${p.colorKey}`;if(!m.has(k))m.set(k,[]);m.get(k).push({url:`${API.productPhotos.apiUrl}/uploads/products/${p.filename}`,sortOrder:p.sortOrder,id:p.id});}
+        m.forEach(v=>v.sort((a,b)=>a.sortOrder-b.sortOrder));productPhotosMapRef.current=m;
+      }catch(e){console.warn("Chargement photos produits echoue:",e.message);}
       // H4 fix: use callback form to avoid stale closure on users
       if(apiUsers?.length){const merged=[...apiUsers.map(u=>({id:u.id,name:u.name,role:u.role,pin:"****",apiSynced:true}))];
         setUsers(prev=>{const localOnly=prev.filter(lu=>!apiUsers.find(au=>au.name===lu.name));return[...merged,...localOnly];});}
@@ -1601,6 +1608,42 @@ function AppProvider({children}){
     }catch(e){console.warn("Sync écran client échoué:",e.message);}
   },[cart,settings.name,selCust,activePromos,calcPromoDiscount,getLoyaltyTier,effectiveStoreId,isOnline]);
 
+  // ══ PRODUCT PHOTOS — lookup helper ══
+  // Extract color key from variant EAN: "QMCHML_C001-752-S" → "752"
+  const getVariantPhotos=useCallback((product,variant)=>{
+    if(!product||!variant)return[];
+    const sku=product.sku||"";
+    const ean=variant.ean||"";
+    let colorKey="";
+    // Strategy 1: parse EAN if it follows {sku}-{colorKey}-{size} pattern
+    if(ean.startsWith(sku+"-")){
+      const rest=ean.slice(sku.length+1);
+      const parts=rest.split("-");
+      if(parts.length>=2)colorKey=parts[0];
+    }
+    // Strategy 2: try EAN with underscore separator
+    if(!colorKey&&ean.includes("_")){
+      const parts=ean.split("-");
+      if(parts.length>=3)colorKey=parts[parts.length-2]; // second-to-last = color
+    }
+    // Strategy 3: extract from sku-like reference patterns
+    if(!colorKey){
+      // Try any EAN that has at least 2 dashes: take the penultimate segment
+      const parts=ean.split("-");
+      if(parts.length>=3)colorKey=parts[parts.length-2];
+    }
+    if(!colorKey)return[];
+    const key=`${sku}-${colorKey}`;
+    return productPhotosMapRef.current.get(key)||[];
+  },[]);
+
+  const reloadProductPhotos=useCallback(async()=>{
+    try{const photos=await API.productPhotos.list();setProductPhotos(photos||[]);
+      const m=new Map();for(const p of (photos||[])){const k=`${p.skuBase}-${p.colorKey}`;if(!m.has(k))m.set(k,[]);m.get(k).push({url:`${API.productPhotos.apiUrl}/uploads/products/${p.filename}`,sortOrder:p.sortOrder,id:p.id});}
+      m.forEach(v=>v.sort((a,b)=>a.sortOrder-b.sortOrder));productPhotosMapRef.current=m;
+    }catch(e){console.warn("Reload photos echoue:",e.message);}
+  },[]);
+
   return<AppCtx.Provider value={{currentUser,login,logout,mode,setMode,offlineMode,
     stores,setStores,currentStore,setCurrentStore,selectStore,viewingStoreId,switchViewingStore,effectiveStoreId,
     products,setProducts,addProduct,customers,setCustomers,addCustomer,openCustomerDisplay,footfall,addFootfall,
@@ -1629,6 +1672,7 @@ function AppProvider({children}){
     cartTotals,allCategories,
     scanBarcode,setScanBarcode,
     setScanOverride,clearScanOverride,
+    productPhotos,getVariantPhotos,reloadProductPhotos,
   }}>{children}</AppCtx.Provider>;
 }
 

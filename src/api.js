@@ -268,5 +268,26 @@ export const backup = {
   downloadUrl: (filename) => `${API_URL}/api/backup/download/${encodeURIComponent(filename)}`,
 };
 
+// ══ Product Photos ══
+export const productPhotos = {
+  list: () => api('/api/product-photos'),
+  upload: async (files) => {
+    const formData = new FormData();
+    for (const file of files) formData.append('photos', file);
+    const headers = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    if (storeId) headers['X-Store-Id'] = storeId;
+    const res = await fetch(`${API_URL}/api/product-photos/upload`, {
+      method: 'POST', headers, body: formData,
+    });
+    if (!res.ok) { const err = await res.json().catch(() => ({ error: res.statusText })); throw new Error(err.error || `Erreur ${res.status}`); }
+    return res.json();
+  },
+  remove: (id) => api(`/api/product-photos/${id}`, { method: 'DELETE' }),
+  removeBulk: (skuBase, colorKey) => api(`/api/product-photos/bulk/${encodeURIComponent(skuBase)}/${encodeURIComponent(colorKey)}`, { method: 'DELETE' }),
+  photoUrl: (filename) => `${API_URL}/uploads/products/${filename}`,
+  apiUrl: API_URL,
+};
+
 // ══ Health ══
 export const health = () => api('/api/health');
