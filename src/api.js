@@ -36,13 +36,15 @@ async function api(path, options = {}) {
   const res = await fetch(`${API_URL}${path}`, { ...options, headers });
 
   if (!res.ok) {
-    // H2 fix: Auto-clear token on 401/403
-    if (res.status === 401 || res.status === 403) {
+    // H2 fix: Auto-clear token on 401 (session expired)
+    if (res.status === 401) {
       clearToken();
       if (onAuthExpired) onAuthExpired();
-      throw new Error(`Session expirée (${res.status}) — reconnectez-vous`);
+      throw new Error(`Session expirée — reconnectez-vous`);
     }
+    // 403 = permission denied, not session expired — don't clear token
     const err = await res.json().catch(() => ({ error: res.statusText }));
+    if (res.status === 403) throw new Error(err.error || `Permission refusée`);
     throw new Error(err.error || `Erreur ${res.status}`);
   }
 
