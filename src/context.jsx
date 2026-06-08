@@ -1375,7 +1375,8 @@ function AppProvider({children}){
       if(e.message?.includes("déjà")||e.message?.includes("deja")||e.message?.includes("dépasse")||e.message?.includes("depasse")){
         notify(e.message,"error");return null;}
       // Fallback offline
-      console.warn("Avoir API echoue, mode offline:",e.message);
+      console.error("Avoir API echoue, mode offline:",e.message,e);
+      notify("Erreur backend avoir: "+e.message+" — sauvegarde locale","warn");
       const seq=avoirSeq+1;const avoirNumber=`AV-${new Date().getFullYear()}-${String(seq).padStart(6,"0")}`;
       const date=new Date().toISOString();
       const caisseId=currentStore?.id||cashReg?.id||"CAISSE-01";
