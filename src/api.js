@@ -105,6 +105,7 @@ export const sales = {
   bySeller: () => api('/api/sales/stats/by-seller'),
   byDay: () => api('/api/sales/stats/by-day'),
   emailTicket: (saleId, to) => api(`/api/sales/${saleId}/email`, { method: 'POST', body: JSON.stringify({ to }) }),
+  reassignCustomer: (saleId, customerId) => api(`/api/sales/${saleId}/customer`, { method: 'PATCH', body: JSON.stringify({ customerId }) }),
 };
 
 // ══ Returns / Avoirs ══

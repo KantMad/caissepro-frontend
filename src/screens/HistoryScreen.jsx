@@ -405,13 +405,13 @@ function HistoryScreen(){
         <Btn onClick={async()=>{
           try{
             const custId=reassignCust?.id||null;const custName=reassignCust?`${reassignCust.firstName} ${reassignCust.lastName}`:null;
-            // M7 fix: properly handle API errors for reassignment
-            if(reassignModal.id){try{await API.sales.update?.(reassignModal.id,{customerId:custId});}catch(e){notify("Erreur serveur: "+e.message+" — modification locale uniquement","warn");}}
+            // Persist to backend
+            if(reassignModal.id){try{await API.sales.reassignCustomer(reassignModal.id,custId);}catch(e){console.warn("Erreur serveur reassign:",e.message);notify("Erreur serveur: "+e.message+" — modification locale uniquement","warn");}}
             // Update local ticket state
             setTickets(prev=>prev.map(t=>t.ticketNumber===reassignModal.ticketNumber?{...t,customerId:custId,customerName:custName}:t));
             notify(`Client ${custName||"retiré"} attribué au ticket ${reassignModal.ticketNumber}`,"success");
             setReassignModal(null);
-          }catch(e){notify("Erreur: "+e.message,"error");}
+          }catch(e){console.error("Erreur reassign client:",e);notify("Erreur: "+e.message,"error");}
         }} style={{width:"100%",height:40,marginTop:10,background:C.primary}}>Attribuer</Btn>
       </div>}
     </Modal>
