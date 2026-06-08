@@ -8,7 +8,7 @@ import { Modal, Btn, Input, Badge } from "../ui.jsx";
 import { useApp } from "../context.jsx";
 
 function HistoryScreen(){
-  const{tickets,avoirs,settings,processReturn,perm:p,printerConnected,thermalPrint,setSelectedAvoir,setMode,notify,customers,retoucheBons,updateRetoucheStatus,scanBarcode,setScanBarcode,trainingMode}=useApp();
+  const{tickets,setTickets,avoirs,settings,processReturn,perm:p,printerConnected,thermalPrint,setSelectedAvoir,setMode,notify,customers,retoucheBons,updateRetoucheStatus,scanBarcode,setScanBarcode,trainingMode}=useApp();
   const[tab,setTab]=useState("tickets");const[reprintTk,setReprintTk]=useState(null);const[reassignModal,setReassignModal]=useState(null);const[reassignCust,setReassignCust]=useState(null);
   const[search,setSearch]=useState("");const[dateFilter,setDateFilter]=useState("");const[retDateFrom,setRetDateFrom]=useState("");const[retDateTo,setRetDateTo]=useState("");const[retClientFilter,setRetClientFilter]=useState("");const[retStatusFilter,setRetStatusFilter]=useState("");
   // Pre-fill search from barcode scan
