@@ -336,7 +336,7 @@ function ReturnScreen(){
         {avCust&&<div>Client: {avCust}</div>}
         <div>Motif: {avReason}</div>
         <div style={{borderTop:`1px dashed ${C.danger}`,margin:"4px 0"}}/>
-        {avItems.map((i,k)=>{const sku=i.product?.sku||i.product_sku||i.sku||"";const ean=i.variant?.ean||i.variant_ean||i.ean||"";
+        {avItems.map((i,k)=>{const sku=i.product?.sku||i.product_sku||i.sku||"";const ean=i.variant?.ean||i.variant_ean||i.ean||"";const colorCode=i.variant?.colorCode||i.variant_color_code||i.color_code||"";
           const name=i.product?.name||i.product_name||i.name||"?";
           const color=i.variant?.color||i.variant_color||i.color||"";
           const size=i.variant?.size||i.variant_size||i.size||"";
@@ -344,7 +344,7 @@ function ReturnScreen(){
           return(<div key={k}>
           <div style={{display:"flex",justifyContent:"space-between"}}><span>{name}{(color||size)?` (${color}/${size})`:""} x{i.quantity||1}</span>
           <span>-{lineAmt.toFixed(2)}€</span></div>
-          {(sku||ean)&&<div style={{fontSize:8,color:`${C.danger}99`}}>{sku?`Réf: ${sku}`:""}{sku&&ean?" — ":""}{ean?`EAN: ${ean}`:""}</div>}
+          {(sku||ean||colorCode)&&<div style={{fontSize:8,color:`${C.danger}99`}}>{sku?`Réf: ${sku}`:""}{sku&&colorCode?" — ":""}{colorCode||""}{(sku||colorCode)&&ean?" — ":""}{ean?`EAN: ${ean}`:""}</div>}
         </div>);})}
         <div style={{borderTop:`1px dashed ${C.danger}`,margin:"4px 0"}}/>
         <div style={{display:"flex",justifyContent:"space-between",fontWeight:700,color:C.danger}}><span>TOTAL AVOIR</span><span>-{avTTC.toFixed(2)}€</span></div>
