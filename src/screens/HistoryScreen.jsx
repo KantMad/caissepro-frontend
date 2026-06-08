@@ -8,7 +8,7 @@ import { Modal, Btn, Input, Badge } from "../ui.jsx";
 import { useApp } from "../context.jsx";
 
 function HistoryScreen(){
-  const{tickets,setTickets,avoirs,settings,processReturn,perm:p,printerConnected,thermalPrint,setSelectedAvoir,setMode,notify,customers,retoucheBons,updateRetoucheStatus,scanBarcode,setScanBarcode,trainingMode}=useApp();
+  const{tickets,setTickets,avoirs,settings,processReturn,perm:p,printerConnected,thermalPrint,setSelectedAvoir,setMode,notify,customers,setCustomers,retoucheBons,updateRetoucheStatus,scanBarcode,setScanBarcode,trainingMode}=useApp();
   const[tab,setTab]=useState("tickets");const[reprintTk,setReprintTk]=useState(null);const[reassignModal,setReassignModal]=useState(null);const[reassignCust,setReassignCust]=useState(null);
   const[search,setSearch]=useState("");const[dateFilter,setDateFilter]=useState("");const[retDateFrom,setRetDateFrom]=useState("");const[retDateTo,setRetDateTo]=useState("");const[retClientFilter,setRetClientFilter]=useState("");const[retStatusFilter,setRetStatusFilter]=useState("");
   // Pre-fill search from barcode scan
@@ -405,10 +405,19 @@ function HistoryScreen(){
         <Btn onClick={async()=>{
           try{
             const custId=reassignCust?.id||null;const custName=reassignCust?`${reassignCust.firstName} ${reassignCust.lastName}`:null;
-            // Persist to backend
+            const oldCustId=reassignModal.customerId||reassignModal.customer_id||null;
+            const ticketTTC=parseFloat(reassignModal.totalTTC||reassignModal.total_ttc)||0;
+            const pts=Math.floor(ticketTTC);
+            // Persist to backend (recalculates points/totalSpent)
             if(reassignModal.id){try{await API.sales.reassignCustomer(reassignModal.id,custId);}catch(e){console.warn("Erreur serveur reassign:",e.message);notify("Erreur serveur: "+e.message+" — modification locale uniquement","warn");}}
             // Update local ticket state
             setTickets(prev=>prev.map(t=>t.ticketNumber===reassignModal.ticketNumber?{...t,customerId:custId,customerName:custName}:t));
+            // Update local customer stats (mirror backend logic)
+            setCustomers(prev=>prev.map(c=>{
+              if(c.id===oldCustId)return{...c,points:Math.max(0,(c.points||0)-pts),totalSpent:Math.max(0,(c.totalSpent||0)-ticketTTC)};
+              if(c.id===custId)return{...c,points:(c.points||0)+pts,totalSpent:(c.totalSpent||0)+ticketTTC};
+              return c;
+            }));
             notify(`Client ${custName||"retiré"} attribué au ticket ${reassignModal.ticketNumber}`,"success");
             setReassignModal(null);
           }catch(e){console.error("Erreur reassign client:",e);notify("Erreur: "+e.message,"error");}
