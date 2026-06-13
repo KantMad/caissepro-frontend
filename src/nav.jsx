@@ -10,6 +10,7 @@ import { CO, PERMS, C, initUsers } from "./constants.jsx";
 import { hashPin, verifyPin } from "./utils.jsx";
 import { Modal, Btn, Input, Badge, SC, ErrorBoundary, ToastContainer, ConfirmDialog } from "./ui.jsx";
 import { useApp } from "./context.jsx";
+import { useViewport } from "./useViewport.js";
 import {
   LoginScreen, CashRegControl, SalesScreen, StatsScreen, StockScreen,
   HistoryScreen, ReturnScreen, ClosureScreen, CustomersScreen, FiscalScreen,
@@ -20,10 +21,67 @@ import {
 
 function CashierNav({active,onNav}){
   const{currentUser,logout,isOnline,stockAlerts,clockIn,clockOut,pendingSync,clearPendingSync,openCustomerDisplay,currentStore}=useApp();
+  const vp=useViewport();
+  const[moreOpen,setMoreOpen]=useState(false);
   const items=[{id:"sales",l:"Vente",i:ShoppingCart},{id:"returns",l:"Retours",i:RotateCcw},{id:"stats",l:"Stats",i:BarChart3},{id:"stock",l:"Stock",i:Grid},
     {id:"products",l:"Produits",i:Package},{id:"history",l:"Tickets",i:Receipt},{id:"customers",l:"Clients",i:Users},{id:"giftcards",l:"Cadeaux",i:Gift},
     {id:"promos",l:"Promos",i:Zap},{id:"closure",l:"Cloture",i:Lock},{id:"footfall",l:"Entrees",i:Activity},
     {id:"audit",l:"Audit",i:Activity},{id:"fiscal",l:"NF525",i:Shield},{id:"settings",l:"Reglages",i:Settings},{id:"help",l:"Aide",i:HelpCircle}];
+
+  // ══ TÉLÉPHONE : barre d'onglets en bas (zone du pouce) + tiroir « Plus » ══
+  if(vp.isMobile){
+    const primary=[{id:"sales",l:"Vente",i:ShoppingCart},{id:"products",l:"Produits",i:Package},{id:"history",l:"Tickets",i:Receipt},{id:"returns",l:"Retours",i:RotateCcw}];
+    const moreItems=items.filter(it=>!primary.find(p=>p.id===it.id));
+    const moreActive=moreItems.some(m=>m.id===active);
+    const tab=(on)=>({flex:1,minWidth:0,height:"100%",border:"none",background:"transparent",cursor:"pointer",display:"flex",flexDirection:"column",
+      alignItems:"center",justifyContent:"center",gap:3,color:on?"#fff":"rgba(255,255,255,0.5)",fontFamily:"inherit",position:"relative"});
+    return(<>
+      <div style={{position:"fixed",left:0,right:0,bottom:0,height:"var(--bottomnav-h,60px)",zIndex:300,background:"#0F172A",
+        display:"flex",alignItems:"stretch",borderTop:"1px solid rgba(255,255,255,0.08)",boxShadow:"0 -4px 20px rgba(0,0,0,0.3)",
+        paddingBottom:"env(safe-area-inset-bottom,0px)"}}>
+        {primary.map(({id,l,i:I})=>(<button key={id} onClick={()=>onNav(id)} style={tab(active===id)}>
+          <I size={21}/><span style={{fontSize:10,fontWeight:active===id?700:500,letterSpacing:"-0.01em"}}>{l}</span>
+          {active===id&&<div style={{position:"absolute",top:0,width:28,height:3,borderRadius:2,background:C.primary}}/>}
+        </button>))}
+        <button onClick={()=>setMoreOpen(true)} style={tab(moreActive)}>
+          <Grid size={21}/><span style={{fontSize:10,fontWeight:moreActive?700:500}}>Plus</span>
+          {stockAlerts.length>0&&<span style={{position:"absolute",top:6,right:"22%",width:8,height:8,borderRadius:4,background:C.danger}}/>}
+        </button>
+      </div>
+      {moreOpen&&<div onClick={()=>setMoreOpen(false)} style={{position:"fixed",inset:0,zIndex:320,background:"rgba(15,23,42,0.5)",display:"flex",alignItems:"flex-end",animation:"fadeIn 0.2s ease"}}>
+        <div onClick={e=>e.stopPropagation()} style={{width:"100%",background:C.surface,borderRadius:"22px 22px 0 0",padding:"10px 16px calc(20px + env(safe-area-inset-bottom,0px))",maxHeight:"82vh",overflowY:"auto",animation:"slideUp 0.25s cubic-bezier(0.16,1,0.3,1)"}}>
+          <div style={{width:40,height:4,borderRadius:2,background:C.border,margin:"0 auto 14px"}}/>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
+            <div style={{display:"flex",alignItems:"center",gap:8}}>
+              <div style={{width:38,height:38,borderRadius:11,background:C.primary,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:700,fontSize:15}}>{currentUser?.name?.[0]}</div>
+              <div><div style={{fontSize:14,fontWeight:700,color:C.text}}>{currentUser?.name}</div>
+                {currentStore&&<div style={{fontSize:11,color:C.textMuted}}>{currentStore.name}</div>}</div></div>
+            <div style={{display:"flex",alignItems:"center",gap:5}}>
+              <div style={{width:8,height:8,borderRadius:4,background:isOnline?"#34D399":"#F87171"}}/>
+              <span style={{fontSize:11,color:C.textMuted,fontWeight:600}}>{isOnline?"En ligne":"Offline"}</span></div>
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8,marginBottom:14}}>
+            {moreItems.map(({id,l,i:I})=>(<button key={id} onClick={()=>{onNav(id);setMoreOpen(false);}} style={{position:"relative",border:`1px solid ${active===id?C.primary:C.border}`,
+              background:active===id?C.primaryLight:C.surfaceAlt,borderRadius:14,minHeight:72,cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:6,
+              color:active===id?C.primary:C.text,fontFamily:"inherit"}}>
+              <I size={22}/><span style={{fontSize:11,fontWeight:600}}>{l}</span>
+              {id==="stock"&&stockAlerts.length>0&&<span style={{position:"absolute",top:6,right:6,minWidth:16,height:16,padding:"0 4px",borderRadius:8,background:C.danger,color:"#fff",fontSize:9,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center"}}>{stockAlerts.length}</span>}
+            </button>))}
+          </div>
+          <div style={{display:"flex",gap:8,marginBottom:8}}>
+            <button onClick={()=>{clockIn();setMoreOpen(false);}} style={{flex:1,minHeight:48,borderRadius:12,border:"none",cursor:"pointer",background:"rgba(52,211,153,0.12)",color:"#059669",fontSize:13,fontWeight:700,fontFamily:"inherit"}}>Pointer entrée</button>
+            <button onClick={()=>{clockOut();setMoreOpen(false);}} style={{flex:1,minHeight:48,borderRadius:12,border:"none",cursor:"pointer",background:"rgba(248,113,113,0.12)",color:C.danger,fontSize:13,fontWeight:700,fontFamily:"inherit"}}>Pointer sortie</button>
+          </div>
+          <div style={{display:"flex",gap:8}}>
+            <button onClick={()=>{openCustomerDisplay();setMoreOpen(false);}} style={{flex:1,minHeight:48,borderRadius:12,border:"none",cursor:"pointer",background:"rgba(56,189,248,0.1)",color:"#0369A1",fontSize:13,fontWeight:700,fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:6}}><LayoutDashboard size={15}/> Écran client</button>
+            <button onClick={()=>{logout();}} style={{flex:1,minHeight:48,borderRadius:12,border:"none",cursor:"pointer",background:"rgba(248,113,113,0.1)",color:C.danger,fontSize:13,fontWeight:700,fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:6}}><LogOut size={15}/> Déconnexion</button>
+          </div>
+          {pendingSync.length>0&&<button onClick={()=>{clearPendingSync();setMoreOpen(false);}} style={{width:"100%",marginTop:8,minHeight:40,borderRadius:10,border:"none",cursor:"pointer",background:C.warnLight,color:"#92400E",fontSize:12,fontWeight:600,fontFamily:"inherit"}}>{pendingSync.length} synchro(s) en attente — vider</button>}
+        </div>
+      </div>}
+    </>);
+  }
+
   return(<div style={{width:"var(--nav-w,72px)",minWidth:"var(--nav-w,72px)",background:"#0F172A",display:"flex",flexDirection:"column",alignItems:"center",padding:"10px 0",gap:1}}>
     <div style={{width:38,height:38,borderRadius:10,background:C.primary,display:"flex",alignItems:"center",justifyContent:"center",
       color:"#fff",fontWeight:700,fontSize:14,marginBottom:4}}>{currentUser?.name?.[0]}</div>
@@ -65,6 +123,7 @@ function CashierNav({active,onNav}){
 
 function CashierInterface(){
   const{cashReg}=useApp();
+  const vp=useViewport();
   const[sr,setSr]=useState(()=>{try{return!localStorage.getItem("caissepro_cashreg");}catch(e){return true;}});
   const[sc,setScRaw]=useState(()=>{try{return sessionStorage.getItem("caissepro_screen")||"sales";}catch(e){return"sales";}});
   const setSc=useCallback((v)=>{setScRaw(v);try{sessionStorage.setItem("caissepro_screen",v);}catch(e){}},[]);
@@ -72,7 +131,8 @@ function CashierInterface(){
   const S={sales:SalesScreen,returns:ReturnScreen,stats:StatsScreen,stock:StockScreen,history:HistoryScreen,customers:CustomersScreen,
     giftcards:GiftCardScreen,promos:PromosScreen,products:ProductsScreen,closure:ClosureScreen,footfall:FootfallScreen,audit:AuditScreen,fiscal:FiscalScreen,settings:SettingsScreen,help:HelpCashierScreen};
   const Sc=S[sc]||SalesScreen;
-  return(<div style={{display:"flex",height:"100vh",fontFamily:"'DM Sans',system-ui,sans-serif"}}><CashierNav active={sc} onNav={setSc}/><div style={{flex:1,overflow:"hidden"}}><ErrorBoundary><Sc/></ErrorBoundary></div></div>);
+  return(<div style={{display:"flex",height:"100vh",fontFamily:"'DM Sans',system-ui,sans-serif"}}><CashierNav active={sc} onNav={setSc}/>
+    <div style={{flex:1,overflow:"hidden",paddingBottom:vp.isMobile?"var(--bottomnav-h,60px)":0}}><ErrorBoundary><Sc/></ErrorBoundary></div></div>);
 }
 
 /* ══════════ USERS SCREEN ══════════ */
@@ -151,14 +211,14 @@ function UsersScreen(){
   </div>);
 }
 
-function DashboardNav({active,onNav}){
+function DashboardNav({active,onNav,vp,mobileOpen,onCloseMobile}){
   const{logout,currentUser,stores,viewingStoreId,switchViewingStore,currentStore}=useApp();
   const sections=[
     {title:"",items:[{id:"overview",l:"Dashboard",i:LayoutDashboard}]},
     {title:"Commerce",items:[{id:"products",l:"Produits",i:Package},{id:"stock",l:"Stock",i:Grid},{id:"stats",l:"Statistiques",i:BarChart3},{id:"returns",l:"Retours & Avoirs",i:RotateCcw},{id:"exports",l:"Exports & Factures",i:Download}]},
     {title:"Relations",items:[{id:"customers",l:"Clients",i:Users},{id:"users",l:"Utilisateurs",i:UserIcon},{id:"giftcards",l:"Cartes cadeaux",i:Gift},{id:"promos",l:"Promotions",i:Zap},{id:"footfall",l:"Entrees",i:Activity}]},
     {title:"Systeme",items:[{id:"storesMgmt",l:"Magasins",i:Store},{id:"tva",l:"Taux de TVA",i:Percent},{id:"settings",l:"Parametres",i:Settings},{id:"fiscal",l:"Fiscal NF525",i:Shield},{id:"audit",l:"Journal d'audit",i:Activity},{id:"help",l:"Aide",i:HelpCircle}]}];
-  return(<div style={{width:240,background:"#0F172A",height:"100vh",display:"flex",flexDirection:"column"}}>
+  const inner=(<>
     <div style={{padding:"20px 20px 16px",borderBottom:"1px solid rgba(255,255,255,0.06)"}}>
       <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:16}}>
         <div style={{width:34,height:34,borderRadius:9,background:C.primary,display:"flex",alignItems:"center",justifyContent:"center"}}><Store size={17} color="#fff"/></div>
@@ -193,7 +253,14 @@ function DashboardNav({active,onNav}){
       <button onClick={logout} style={{width:"100%",display:"flex",alignItems:"center",gap:10,padding:"9px 12px",borderRadius:8,border:"none",cursor:"pointer",
         background:"rgba(248,113,113,0.06)",color:"#F87171",fontSize:12,fontWeight:500,textAlign:"left",fontFamily:"inherit",transition:"all 0.15s"}}
         onMouseEnter={e=>e.currentTarget.style.background="rgba(248,113,113,0.12)"} onMouseLeave={e=>e.currentTarget.style.background="rgba(248,113,113,0.06)"}>
-        <LogOut size={14}/> Deconnexion</button></div></div>);
+        <LogOut size={14}/> Deconnexion</button></div></>);
+  // Téléphone/tablette portrait : tiroir overlay coulissant
+  if(vp?.isMobile){
+    if(!mobileOpen)return null;
+    return(<div onClick={onCloseMobile} style={{position:"fixed",inset:0,zIndex:320,background:"rgba(15,23,42,0.5)",display:"flex",animation:"fadeIn 0.2s ease"}}>
+      <div onClick={e=>e.stopPropagation()} style={{width:268,maxWidth:"84%",background:"#0F172A",height:"100%",display:"flex",flexDirection:"column",animation:"slideInLeft 0.25s cubic-bezier(0.16,1,0.3,1)"}}>{inner}</div></div>);
+  }
+  return(<div style={{width:240,minWidth:240,background:"#0F172A",height:"100vh",display:"flex",flexDirection:"column"}}>{inner}</div>);
 }
 
 function DashOverview(){
@@ -446,12 +513,24 @@ function StoresManagementScreen(){
 }
 
 function DashboardInterface(){
+  const vp=useViewport();
+  const[drawerOpen,setDrawerOpen]=useState(false);
   const[sc,setScRaw]=useState(()=>{try{return sessionStorage.getItem("caissepro_dash_screen")||"overview";}catch(e){return"overview";}});
-  const setSc=useCallback((v)=>{setScRaw(v);try{sessionStorage.setItem("caissepro_dash_screen",v);}catch(e){}},[]);
+  const setSc=useCallback((v)=>{setScRaw(v);try{sessionStorage.setItem("caissepro_dash_screen",v);}catch(e){}setDrawerOpen(false);},[]);
   const S={overview:DashOverview,products:ProductsScreen,stock:StockScreen,stats:StatsScreen,returns:ReturnsHistoryScreen,customers:CustomersScreen,
     users:UsersScreen,storesMgmt:StoresManagementScreen,tva:TVAScreen,giftcards:GiftCardScreen,promos:PromosScreen,footfall:FootfallScreen,settings:SettingsScreen,fiscal:FiscalScreen,audit:AuditScreen,help:HelpDashboardScreen,exports:ExportsScreen};
   const Sc=S[sc]||DashOverview;
-  return(<div style={{display:"flex",height:"100vh",fontFamily:"'DM Sans',system-ui,sans-serif"}}><DashboardNav active={sc} onNav={setSc}/><div style={{flex:1,overflow:"hidden"}}><ErrorBoundary><Sc/></ErrorBoundary></div></div>);
+  const titles={overview:"Dashboard",products:"Produits",stock:"Stock",stats:"Statistiques",returns:"Retours & Avoirs",customers:"Clients",users:"Utilisateurs",storesMgmt:"Magasins",tva:"Taux de TVA",giftcards:"Cartes cadeaux",promos:"Promotions",footfall:"Entrées",settings:"Paramètres",fiscal:"Fiscal NF525",audit:"Journal d'audit",help:"Aide",exports:"Exports & Factures"};
+  if(vp.isMobile){
+    return(<div style={{display:"flex",flexDirection:"column",height:"100vh",fontFamily:"'DM Sans',system-ui,sans-serif"}}>
+      <div style={{display:"flex",alignItems:"center",gap:12,padding:"10px 14px",background:"#0F172A",flexShrink:0,boxShadow:"0 2px 12px rgba(0,0,0,0.2)"}}>
+        <button onClick={()=>setDrawerOpen(true)} style={{width:44,height:44,borderRadius:11,border:"none",cursor:"pointer",background:"rgba(255,255,255,0.08)",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"inherit"}}><Grid size={20}/></button>
+        <div style={{color:"#fff",fontSize:16,fontWeight:700,letterSpacing:"-0.3px"}}>{titles[sc]||"CaissePro"}</div>
+      </div>
+      <DashboardNav active={sc} onNav={setSc} vp={vp} mobileOpen={drawerOpen} onCloseMobile={()=>setDrawerOpen(false)}/>
+      <div style={{flex:1,overflow:"hidden"}}><ErrorBoundary><Sc/></ErrorBoundary></div></div>);
+  }
+  return(<div style={{display:"flex",height:"100vh",fontFamily:"'DM Sans',system-ui,sans-serif"}}><DashboardNav active={sc} onNav={setSc} vp={vp}/><div style={{flex:1,overflow:"hidden"}}><ErrorBoundary><Sc/></ErrorBoundary></div></div>);
 }
 
 function AppContent(){const{currentUser,mode}=useApp();if(!currentUser)return<LoginScreen/>;return mode==="cashier"?<CashierInterface/>:<DashboardInterface/>;}

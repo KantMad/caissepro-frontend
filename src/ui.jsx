@@ -2,24 +2,30 @@ import React, { Component } from "react";
 import { X, CheckCircle2, AlertTriangle, Activity } from "lucide-react";
 import { C } from "./constants.jsx";
 import { useApp } from "./context.jsx";
+import { useViewport } from "./useViewport.js";
 
-export const Modal=({open,onClose,title,sub,children,wide})=>{if(!open)return null;
+export const Modal=({open,onClose,title,sub,children,wide})=>{
+  const vp=useViewport();
+  if(!open)return null;
   // Detect Capacitor Android — backdropFilter crashes the WebView
   const isNative=!!(window.Capacitor?.isNativePlatform?.());
+  const phone=vp.isMobile;
   return(
-  <div style={{position:"fixed",top:0,left:0,right:0,bottom:0,zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center"}} onClick={onClose}>
+  <div style={{position:"fixed",top:0,left:0,right:0,bottom:0,zIndex:9999,display:"flex",alignItems:phone?"flex-end":"center",justifyContent:"center"}} onClick={onClose}>
     <div style={{position:"absolute",top:0,left:0,right:0,bottom:0,background:isNative?"rgba(15,23,42,0.6)":"rgba(15,23,42,0.5)",
       ...(isNative?{}:{backdropFilter:"blur(12px)",WebkitBackdropFilter:"blur(12px)"})}}/>
-    <div onClick={e=>e.stopPropagation()} style={{position:"relative",background:C.surface,borderRadius:20,padding:0,
-      width:wide?"820px":"480px",maxWidth:"94vw",maxHeight:"90vh",overflowY:"auto",
+    <div onClick={e=>e.stopPropagation()} style={{position:"relative",background:C.surface,borderRadius:phone?"22px 22px 0 0":20,padding:0,
+      width:phone?"100%":(wide?"820px":"480px"),maxWidth:phone?"100%":"94vw",maxHeight:phone?"94vh":"90vh",overflowY:"auto",
+      animation:phone?"slideUp 0.28s cubic-bezier(0.16,1,0.3,1)":"modalPop 0.2s ease-out",
       boxShadow:"0 24px 80px rgba(15,23,42,0.18), 0 0 0 1px rgba(15,23,42,0.05), inset 0 1px 0 rgba(255,255,255,0.8)"}}>
-      {title&&<div style={{padding:"24px 28px 0 28px",display:"flex",alignItems:"start",justifyContent:"space-between"}}>
-        <div><h2 style={{fontSize:18,fontWeight:700,marginBottom:sub?4:0,letterSpacing:"-0.4px",color:C.text}}>{title}</h2>
+      {phone&&<div style={{width:40,height:4,borderRadius:2,background:C.border,margin:"10px auto 0"}}/>}
+      {title&&<div style={{padding:phone?"14px 18px 0":"24px 28px 0 28px",display:"flex",alignItems:"start",justifyContent:"space-between"}}>
+        <div><h2 style={{fontSize:phone?17:18,fontWeight:700,marginBottom:sub?4:0,letterSpacing:"-0.4px",color:C.text}}>{title}</h2>
           {sub&&<p style={{fontSize:12,color:C.textMuted,marginTop:2,lineHeight:1.4}}>{sub}</p>}</div>
-        <button onClick={onClose} style={{background:C.surfaceAlt,border:`1px solid ${C.border}`,borderRadius:8,width:30,height:30,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginLeft:12,transition:"all 0.15s"}}
+        <button onClick={onClose} style={{background:C.surfaceAlt,border:`1px solid ${C.border}`,borderRadius:9,width:phone?40:32,height:phone?40:32,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginLeft:12,transition:"all 0.15s"}}
           onMouseEnter={e=>{e.currentTarget.style.background=C.dangerLight;e.currentTarget.style.borderColor=C.danger+"33";}} onMouseLeave={e=>{e.currentTarget.style.background=C.surfaceAlt;e.currentTarget.style.borderColor=C.border;}}>
-          <X size={14} color={C.textMuted}/></button></div>}
-      <div style={{padding:title?"20px 28px 28px":"28px"}}>{children}</div></div></div>);};
+          <X size={phone?18:15} color={C.textMuted}/></button></div>}
+      <div style={{padding:title?(phone?"16px 18px calc(22px + env(safe-area-inset-bottom,0px))":"20px 28px 28px"):(phone?"18px 18px calc(22px + env(safe-area-inset-bottom,0px))":"28px")}}>{children}</div></div></div>);};
 
 export const Btn=({children,onClick,variant="primary",disabled,style:s,...r})=>{
   const b={display:"inline-flex",alignItems:"center",justifyContent:"center",gap:7,border:"none",borderRadius:10,

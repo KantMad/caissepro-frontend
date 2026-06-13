@@ -5,9 +5,12 @@ import { CO, C, CAT_COLORS } from "../constants.jsx";
 import { catIcon, EAN13Svg, ean13SvgHtml } from "../utils.jsx";
 import { Modal, Btn, Input, Badge, Numpad } from "../ui.jsx";
 import { useApp } from "../context.jsx";
+import { useViewport } from "../useViewport.js";
 import hardwareManager from "../hardware.js";
 
 function SalesScreen(){
+  const vp=useViewport();
+  const[mobileCartOpen,setMobileCartOpen]=useState(false);
   const{products,cart,addToCart,addCustomItem,removeFromCart,voidSale,updateQty,updateItemDisc,clearCart,checkout,
     gDisc,gDiscType,setCartGD,promoCode,setPromoCode,calcPromoDiscount,isOnline,findByEAN,offlineMode,
     parked,parkCart,restoreCart,removeParked,customers,addCustomer,selCust,setSelCust,perm,notify,
@@ -25,6 +28,8 @@ function SalesScreen(){
   const[newCustModal,setNewCustModal]=useState(false);const[ncF,setNcF]=useState("");const[ncL,setNcL]=useState("");const[ncE,setNcE]=useState("");const[ncP,setNcP]=useState("");
   const[syncConfirm,setSyncConfirm]=useState(false);const[avoirSearch,setAvoirSearch]=useState("");
   const[clock,setClock]=useState(new Date());useEffect(()=>{const t=setInterval(()=>setClock(new Date()),30000);return()=>clearInterval(t);},[]);
+  // Téléphone : referme le panneau panier dès qu'il est vide (après encaissement)
+  useEffect(()=>{if(cart.length===0)setMobileCartOpen(false);},[cart.length]);
   const[codeInput,setCodeInput]=useState("");
   const[confirmVoid,setConfirmVoid]=useState(false);const[voidReason,setVoidReason]=useState("");
   const[showShortcuts,setShowShortcuts]=useState(false);const[confirmClear,setConfirmClear]=useState(false);
@@ -173,7 +178,7 @@ function SalesScreen(){
           fontSize:10,fontWeight:cat==="Favoris"?700:500,cursor:"pointer",whiteSpace:"nowrap",marginLeft:4,transition:"all 0.15s",
           boxShadow:cat==="Favoris"?`0 2px 8px ${C.accent}30`:"none"}}>
           <Star size={10} style={{verticalAlign:"middle"}}/> Favoris</button></div>
-      <div style={{flex:1,overflowY:"auto",paddingRight:4}}>
+      <div style={{flex:1,overflowY:"auto",paddingRight:4,paddingBottom:vp.isMobile&&cart.length>0?84:4}}>
         {filtered.length===0&&<div style={{textAlign:"center",padding:"50px 20px",color:C.textLight}}>
           <div style={{width:56,height:56,borderRadius:16,background:C.surfaceAlt,display:"inline-flex",alignItems:"center",justifyContent:"center",marginBottom:12}}>
             <Package size={26} style={{opacity:0.4}}/></div>
@@ -210,8 +215,27 @@ function SalesScreen(){
               <span style={{fontSize:10,fontWeight:600,color:ts>5?C.primary:ts>0?C.warn:C.danger,background:ts>5?C.primaryLight:ts>0?C.warnLight:C.dangerLight,padding:"2px 7px",borderRadius:6}}>{ts}</span></div>
           </div></div>);})}</div></div></div>
 
-    {/* Cart */}
-    <div style={{width:"var(--cart-w,380px)",minWidth:"var(--cart-w,380px)",background:C.surface,borderLeft:`1px solid ${C.border}`,display:"flex",flexDirection:"column",boxShadow:`-4px 0 20px ${C.shadow}`}}>
+    {/* Barre récap panier — téléphone uniquement */}
+    {vp.isMobile&&!mobileCartOpen&&cart.length>0&&(
+      <div style={{position:"fixed",left:0,right:0,bottom:"var(--bottomnav-h,60px)",zIndex:240,padding:"8px 12px",
+        background:C.surface,borderTop:`1px solid ${C.border}`,boxShadow:"0 -4px 18px rgba(15,23,42,0.12)",display:"flex",alignItems:"center",gap:10}}>
+        <div style={{position:"relative",width:42,height:42,borderRadius:12,background:C.primary,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:`0 4px 14px ${C.primary}30`}}>
+          <ShoppingCart size={19} color="#fff"/>
+          <span style={{position:"absolute",top:-5,right:-5,minWidth:18,height:18,padding:"0 4px",borderRadius:9,background:C.accent,color:"#fff",fontSize:10,fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center",border:`2px solid ${C.surface}`}}>{cart.reduce((s,i)=>s+i.quantity,0)}</span></div>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{fontSize:11,color:C.textMuted,fontWeight:600}}>{cart.reduce((s,i)=>s+i.quantity,0)} article{cart.reduce((s,i)=>s+i.quantity,0)>1?"s":""}</div>
+          <div style={{fontSize:19,fontWeight:900,color:C.primary,letterSpacing:"-0.6px"}}>{totals.tTTC.toFixed(2)}€</div></div>
+        <Btn onClick={()=>setMobileCartOpen(true)} style={{height:48,padding:"0 18px",fontSize:14,borderRadius:12,background:C.primary}}><Wallet size={16}/> Encaisser</Btn>
+      </div>)}
+
+    {/* Cart — inline (desktop/tablette) ou panneau plein écran (téléphone) */}
+    {(!vp.isMobile||mobileCartOpen)&&<>
+    {vp.isMobile&&<div onClick={()=>setMobileCartOpen(false)} style={{position:"fixed",inset:0,zIndex:250,background:"rgba(15,23,42,0.45)",animation:"fadeIn 0.2s ease"}}/>}
+    <div style={vp.isMobile
+      ?{position:"fixed",inset:0,zIndex:251,width:"100%",background:C.surface,display:"flex",flexDirection:"column",animation:"slideInRight 0.25s cubic-bezier(0.16,1,0.3,1)"}
+      :{width:"var(--cart-w,380px)",minWidth:"var(--cart-w,380px)",background:C.surface,borderLeft:`1px solid ${C.border}`,display:"flex",flexDirection:"column",boxShadow:`-4px 0 20px ${C.shadow}`}}>
+      {vp.isMobile&&<button onClick={()=>setMobileCartOpen(false)} style={{display:"flex",alignItems:"center",gap:8,padding:"12px 14px",border:"none",borderBottom:`1px solid ${C.border}`,background:C.surfaceAlt,cursor:"pointer",fontFamily:"inherit",fontSize:14,fontWeight:700,color:C.text,flexShrink:0}}>
+        <Minus size={0}/><span style={{fontSize:18}}>←</span> Retour aux produits</button>}
       {/* Cart header */}
       <div style={{padding:"var(--cart-pad,14px 16px 10px)",borderBottom:`1px solid ${C.border}`}}>
         <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
@@ -333,6 +357,7 @@ function SalesScreen(){
         </div>
       </div>
     </div>
+    </>}
 
     {/* MODALS */}
     <Modal open={!!vm} onClose={()=>setVm(null)} title="Choisir une variante" sub={vm?`${vm.name} — ${vm.price.toFixed(2)}€`:""}>
