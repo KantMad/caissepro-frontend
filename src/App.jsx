@@ -74,7 +74,16 @@ export default function App(){
       @media (max-width:1024px){:root{--cart-w:300px;--nav-w:64px;--pad:14px;--pad-sm:10px;--gap:10px;--gap-sm:6px;--radius:10px;--radius-sm:8px;--card-min:130px;--font-base:12px;--topbar-pad:8px 14px;--cart-pad:10px 14px 8px;--cart-item-pad:9px;--total-pad:10px;--btn-h:48px;--btn-font:13px}}
       /* ── Téléphone : nav passe en bas, panier en panneau plein écran ── */
       @media (max-width:640px){:root{--cart-w:100%;--nav-w:0px;--bottomnav-h:60px;--pad:12px;--pad-sm:10px;--gap:10px;--gap-sm:8px;--radius:14px;--radius-sm:10px;--card-min:150px;--font-base:13px;--topbar-pad:10px 12px;--cart-pad:14px 14px 10px;--cart-item-pad:12px;--total-pad:14px;--btn-h:52px;--btn-font:15px}
-        input,select,textarea{font-size:16px!important}/* évite le zoom auto iOS sur focus */}
+        input,select,textarea{font-size:16px!important}/* évite le zoom auto iOS sur focus */
+        /* ── Tableaux → cartes empilées (.rtable) ── */
+        .rtable thead{display:none}
+        .rtable,.rtable tbody,.rtable tr,.rtable td{display:block;width:100%}
+        .rtable tr{border:1px solid ${C.border};border-radius:12px;margin:0 0 10px;padding:8px 12px;background:${C.surface};box-shadow:0 1px 3px ${C.shadow}}
+        .rtable td{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:6px 0!important;border:0!important;text-align:right;min-height:0}
+        .rtable td::before{content:attr(data-label);font-weight:600;color:${C.textMuted};font-size:11px;text-align:left;white-space:nowrap;flex-shrink:0}
+        .rtable td:first-child{text-align:left;font-size:15px;font-weight:700;border-bottom:1px solid ${C.border}!important;padding-bottom:8px!important;margin-bottom:4px}
+        .rtable td:first-child::before{display:none}
+        .rtable td:empty{display:none}}
       @media (max-width:380px){:root{--card-min:130px}}`}</style>
   </AppProvider></ErrorBoundary>);
 }

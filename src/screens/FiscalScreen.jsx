@@ -118,16 +118,16 @@ function FiscalScreen(){
     {fiscalTab==="tva"&&<>
       <div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`}}>
         <h3 style={{fontSize:14,fontWeight:700,marginBottom:10}}>Déclaration TVA assistée</h3>
-        <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+        <table className="rtable" style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
           <thead><tr style={{borderBottom:`2px solid ${C.border}`}}>
             {["Taux","Base HT","TVA collectée"].map(h=>(<th key={h} style={{padding:8,textAlign:"left",fontSize:10,fontWeight:700,color:C.textMuted}}>{h}</th>))}</tr></thead>
           <tbody>{tvaSummary.map(t=>(<tr key={t.rate} style={{borderBottom:`1px solid ${C.border}`}}>
-            <td style={{padding:8,fontWeight:600}}>{t.rate}</td>
-            <td style={{padding:8}}>{t.baseHT.toFixed(2)}€</td>
-            <td style={{padding:8,fontWeight:700,color:C.primary}}>{t.tva.toFixed(2)}€</td></tr>))}
-          <tr style={{fontWeight:700}}><td style={{padding:8}}>TOTAL</td>
-            <td style={{padding:8}}>{tvaSummary.reduce((s,t)=>s+t.baseHT,0).toFixed(2)}€</td>
-            <td style={{padding:8,color:C.primary}}>{tvaSummary.reduce((s,t)=>s+t.tva,0).toFixed(2)}€</td></tr></tbody></table>
+            <td data-label="Taux" style={{padding:8,fontWeight:600}}>{t.rate}</td>
+            <td data-label="Base HT" style={{padding:8}}>{t.baseHT.toFixed(2)}€</td>
+            <td data-label="TVA collectée" style={{padding:8,fontWeight:700,color:C.primary}}>{t.tva.toFixed(2)}€</td></tr>))}
+          <tr style={{fontWeight:700}}><td data-label="Taux" style={{padding:8}}>TOTAL</td>
+            <td data-label="Base HT" style={{padding:8}}>{tvaSummary.reduce((s,t)=>s+t.baseHT,0).toFixed(2)}€</td>
+            <td data-label="TVA collectée" style={{padding:8,color:C.primary}}>{tvaSummary.reduce((s,t)=>s+t.tva,0).toFixed(2)}€</td></tr></tbody></table>
       </div>
     </>}
 

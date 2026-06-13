@@ -109,16 +109,16 @@ function StockScreen(){
         <div style={{fontSize:11,marginTop:4}}>Chaque scan ajoute +1. Vous pouvez aussi modifier la quantité manuellement.</div></div>}
 
       {batchItems.length>0&&<div style={{maxHeight:400,overflowY:"auto",marginBottom:12}}>
-        <table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
+        <table className="rtable" style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
           <thead><tr style={{borderBottom:`2px solid ${C.border}`,position:"sticky",top:0,background:C.surface}}>
             {["Produit","Variante","EAN","Stock actuel","Qté reçue",""].map(h=>(
               <th key={h} style={{padding:6,textAlign:"left",fontSize:9,fontWeight:700,color:C.textMuted}}>{h}</th>))}</tr></thead>
           <tbody>{batchItems.map((item,i)=>(<tr key={item.variantId} style={{borderBottom:`1px solid ${C.border}`,background:i===batchItems.length-1?`${C.primary}08`:"transparent"}}>
-            <td style={{padding:6,fontWeight:600}}>{item.name} <span style={{color:C.textMuted,fontSize:9}}>({item.sku})</span></td>
-            <td style={{padding:6}}>{item.color}/{item.size}</td>
-            <td style={{padding:6,fontSize:9,color:C.textMuted,fontFamily:"monospace"}}>{item.ean||"—"}</td>
-            <td style={{padding:6,color:C.textMuted}}>{item.currentStock}</td>
-            <td style={{padding:6}}>
+            <td data-label="Produit" style={{padding:6,fontWeight:600}}>{item.name} <span style={{color:C.textMuted,fontSize:9}}>({item.sku})</span></td>
+            <td data-label="Variante" style={{padding:6}}>{item.color}/{item.size}</td>
+            <td data-label="EAN" style={{padding:6,fontSize:9,color:C.textMuted,fontFamily:"monospace"}}>{item.ean||"—"}</td>
+            <td data-label="Stock actuel" style={{padding:6,color:C.textMuted}}>{item.currentStock}</td>
+            <td data-label="Qté reçue" style={{padding:6}}>
               <div style={{display:"flex",alignItems:"center",gap:4}}>
                 <button onClick={()=>setBatchItems(prev=>{const next=[...prev];if(next[i].qty>1)next[i]={...next[i],qty:next[i].qty-1};else next.splice(i,1);return next;})}
                   style={{width:24,height:24,borderRadius:6,border:`1.5px solid ${C.border}`,background:"transparent",cursor:"pointer",fontSize:14,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center"}}>-</button>
@@ -161,33 +161,33 @@ function StockScreen(){
         <Badge color={a.level==="rupture"?C.danger:C.warn}>{a.level==="rupture"?"RUPTURE":"BAS"}</Badge></div>))}</div>}
 
     {tab==="moves"&&<div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`}}>
-      <table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
+      <table className="rtable" style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
         <thead><tr style={{borderBottom:`2px solid ${C.border}`}}>
           {["Date","Type","Produit","Variante","Qté","Réf","User"].map(h=>(
             <th key={h} style={{padding:6,textAlign:"left",fontSize:9,fontWeight:700,color:C.textMuted}}>{h}</th>))}</tr></thead>
         <tbody>{stockMoves.slice(0,50).map(m=>(<tr key={m.id} style={{borderBottom:`1px solid ${C.border}`}}>
-          <td style={{padding:6,fontSize:10}}>{new Date(m.date).toLocaleString("fr-FR",{day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit"})}</td>
-          <td style={{padding:6}}><Badge color={m.qty>0?"#059669":C.danger}>{m.type}</Badge></td>
-          <td style={{padding:6,fontWeight:600}}>{m.productName}</td>
-          <td style={{padding:6,color:C.textMuted}}>{m.variantColor}/{m.variantSize}</td>
-          <td style={{padding:6,fontWeight:700,color:m.qty>0?"#059669":C.danger}}>{m.qty>0?"+":""}{m.qty}</td>
-          <td style={{padding:6,color:C.textMuted,fontSize:9}}>{m.ref}</td>
-          <td style={{padding:6,color:C.textMuted}}>{m.user}</td></tr>))}</tbody></table>
+          <td data-label="Date" style={{padding:6,fontSize:10}}>{new Date(m.date).toLocaleString("fr-FR",{day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit"})}</td>
+          <td data-label="Type" style={{padding:6}}><Badge color={m.qty>0?"#059669":C.danger}>{m.type}</Badge></td>
+          <td data-label="Produit" style={{padding:6,fontWeight:600}}>{m.productName}</td>
+          <td data-label="Variante" style={{padding:6,color:C.textMuted}}>{m.variantColor}/{m.variantSize}</td>
+          <td data-label="Qté" style={{padding:6,fontWeight:700,color:m.qty>0?"#059669":C.danger}}>{m.qty>0?"+":""}{m.qty}</td>
+          <td data-label="Réf" style={{padding:6,color:C.textMuted,fontSize:9}}>{m.ref}</td>
+          <td data-label="User" style={{padding:6,color:C.textMuted}}>{m.user}</td></tr>))}</tbody></table>
       {stockMoves.length===0&&<div style={{textAlign:"center",padding:20,color:C.textLight}}>Aucun mouvement</div>}
     </div>}
 
     {tab==="aging"&&<div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`}}>
       <h3 style={{fontSize:14,fontWeight:700,marginBottom:10}}>Vieillissement du stock</h3>
-      <table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
+      <table className="rtable" style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
         <thead><tr style={{borderBottom:`2px solid ${C.border}`}}>
           {["Produit","Stock","Valeur","Jours sans vente","Statut"].map(h=>(
             <th key={h} style={{padding:8,textAlign:"left",fontSize:9,fontWeight:700,color:C.textMuted}}>{h}</th>))}</tr></thead>
         <tbody>{stockAging.slice(0,20).map(p=>(<tr key={p.id} style={{borderBottom:`1px solid ${C.border}`}}>
-          <td style={{padding:8,fontWeight:600}}>{p.name} <span style={{color:C.textMuted,fontSize:10}}>({p.sku})</span></td>
-          <td style={{padding:8}}>{p.totalStock}</td>
-          <td style={{padding:8,color:C.primary,fontWeight:600}}>{p.totalValue.toFixed(2)}€</td>
-          <td style={{padding:8,fontWeight:700,color:p.daysSinceLastSale>30?C.danger:p.daysSinceLastSale>14?C.warn:C.primary}}>{p.daysSinceLastSale===999?"Jamais vendu":p.daysSinceLastSale+"j"}</td>
-          <td style={{padding:8}}><Badge color={p.daysSinceLastSale>60?C.danger:p.daysSinceLastSale>30?C.warn:"#059669"}>{p.daysSinceLastSale>60?"Critique":p.daysSinceLastSale>30?"À surveiller":"OK"}</Badge></td>
+          <td data-label="Produit" style={{padding:8,fontWeight:600}}>{p.name} <span style={{color:C.textMuted,fontSize:10}}>({p.sku})</span></td>
+          <td data-label="Stock" style={{padding:8}}>{p.totalStock}</td>
+          <td data-label="Valeur" style={{padding:8,color:C.primary,fontWeight:600}}>{p.totalValue.toFixed(2)}€</td>
+          <td data-label="Jours sans vente" style={{padding:8,fontWeight:700,color:p.daysSinceLastSale>30?C.danger:p.daysSinceLastSale>14?C.warn:C.primary}}>{p.daysSinceLastSale===999?"Jamais vendu":p.daysSinceLastSale+"j"}</td>
+          <td data-label="Statut" style={{padding:8}}><Badge color={p.daysSinceLastSale>60?C.danger:p.daysSinceLastSale>30?C.warn:"#059669"}>{p.daysSinceLastSale>60?"Critique":p.daysSinceLastSale>30?"À surveiller":"OK"}</Badge></td>
         </tr>))}</tbody></table></div>}
 
 
@@ -243,17 +243,17 @@ function StockScreen(){
       {/* Defective stock list */}
       <Input value={defSearch} onChange={e=>setDefSearch(e.target.value)} placeholder="Rechercher dans les défectueux..." style={{marginBottom:8,height:30,fontSize:11,padding:"4px 10px"}}/>
       {defectiveStock.length===0&&<div style={{textAlign:"center",padding:20,color:C.textLight}}>Aucun stock défectueux enregistré</div>}
-      {defectiveStock.length>0&&<table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
+      {defectiveStock.length>0&&<table className="rtable" style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
         <thead><tr style={{borderBottom:`2px solid ${C.border}`}}>
           {["Produit","Variante","EAN","Stock sain","Défectueux","Coût"].map(h=>(
             <th key={h} style={{padding:6,textAlign:"left",fontSize:9,fontWeight:700,color:C.textMuted}}>{h}</th>))}</tr></thead>
         <tbody>{defectiveStock.filter(d=>!defSearch||d.name.toLowerCase().includes(defSearch.toLowerCase())||d.sku?.toLowerCase().includes(defSearch.toLowerCase())||(d.ean||"").includes(defSearch)).map((d,i)=>(<tr key={i} style={{borderBottom:`1px solid ${C.border}`}}>
-          <td style={{padding:6,fontWeight:600}}>{d.name} <span style={{color:C.textMuted,fontSize:9}}>({d.sku})</span></td>
-          <td style={{padding:6}}>{d.color}/{d.size}</td>
-          <td style={{padding:6,fontSize:9,color:C.textMuted}}>{d.ean||"—"}</td>
-          <td style={{padding:6}}>{d.stock}</td>
-          <td style={{padding:6,fontWeight:700,color:C.danger}}>{d.defective}</td>
-          <td style={{padding:6,color:C.textMuted}}>{d.cost_price?`${(d.defective*parseFloat(d.cost_price)).toFixed(2)}€`:"—"}</td>
+          <td data-label="Produit" style={{padding:6,fontWeight:600}}>{d.name} <span style={{color:C.textMuted,fontSize:9}}>({d.sku})</span></td>
+          <td data-label="Variante" style={{padding:6}}>{d.color}/{d.size}</td>
+          <td data-label="EAN" style={{padding:6,fontSize:9,color:C.textMuted}}>{d.ean||"—"}</td>
+          <td data-label="Stock sain" style={{padding:6}}>{d.stock}</td>
+          <td data-label="Défectueux" style={{padding:6,fontWeight:700,color:C.danger}}>{d.defective}</td>
+          <td data-label="Coût" style={{padding:6,color:C.textMuted}}>{d.cost_price?`${(d.defective*parseFloat(d.cost_price)).toFixed(2)}€`:"—"}</td>
         </tr>))}</tbody></table>}
       {defectiveStock.length>0&&<div style={{marginTop:8,fontSize:10,color:C.textMuted,fontWeight:600}}>
         Total défectueux: {defectiveStock.reduce((s,d)=>s+d.defective,0)} unités

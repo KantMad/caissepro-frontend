@@ -151,22 +151,22 @@ function StatsScreen(){
         </tr>))}</tbody></table></div>}
 
     {tab==="seller"&&<div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`}}>
-      <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+      <table className="rtable" style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
         <thead><tr style={{borderBottom:`2px solid ${C.border}`}}>
           {["Vendeur","Nb ventes","Nb pièces","Panier moyen","Art./vente",mode!=="cashier"?"Marge":"","CA TTC",mode!=="cashier"?"Commission":"","Objectif","Progression"].filter(Boolean).map(h=>(
             <th key={h} style={{padding:8,textAlign:"left",fontSize:10,fontWeight:700,color:C.textMuted}}>{h}</th>))}</tr></thead>
         <tbody>{fCommissions.map(s=>(<tr key={s.name} style={{borderBottom:`1px solid ${C.border}`}}>
-          <td style={{padding:8,fontWeight:600}}>{s.name}</td>
-          <td style={{padding:8}}>{s.count}</td>
-          <td style={{padding:8,fontWeight:600}}>{s.totalItems||0}</td>
-          <td style={{padding:8,fontWeight:700,color:C.info}}>{(s.avgBasket||0).toFixed(2)}€</td>
-          <td style={{padding:8}}>{(s.avgItems||0).toFixed(1)}</td>
-          {mode!=="cashier"&&<td style={{padding:8,color:"#059669"}}>{s.margin.toFixed(2)}€</td>}
-          <td style={{padding:8,fontWeight:700,color:C.primary}}>{s.revenue.toFixed(2)}€</td>
-          {mode!=="cashier"&&<td style={{padding:8,color:C.accent,fontWeight:600}}>{s.commission.toFixed(2)}€</td>}
-          <td style={{padding:8}}><input type="number" value={s.goal||""} onChange={e=>setSellerGoal(s.name,parseFloat(e.target.value)||0)}
+          <td data-label="Vendeur" style={{padding:8,fontWeight:600}}>{s.name}</td>
+          <td data-label="Nb ventes" style={{padding:8}}>{s.count}</td>
+          <td data-label="Nb pièces" style={{padding:8,fontWeight:600}}>{s.totalItems||0}</td>
+          <td data-label="Panier moyen" style={{padding:8,fontWeight:700,color:C.info}}>{(s.avgBasket||0).toFixed(2)}€</td>
+          <td data-label="Art./vente" style={{padding:8}}>{(s.avgItems||0).toFixed(1)}</td>
+          {mode!=="cashier"&&<td data-label="Marge" style={{padding:8,color:"#059669"}}>{s.margin.toFixed(2)}€</td>}
+          <td data-label="CA TTC" style={{padding:8,fontWeight:700,color:C.primary}}>{s.revenue.toFixed(2)}€</td>
+          {mode!=="cashier"&&<td data-label="Commission" style={{padding:8,color:C.accent,fontWeight:600}}>{s.commission.toFixed(2)}€</td>}
+          <td data-label="Objectif" style={{padding:8}}><input type="number" value={s.goal||""} onChange={e=>setSellerGoal(s.name,parseFloat(e.target.value)||0)}
             style={{width:70,padding:"2px 6px",borderRadius:6,border:`1px solid ${C.border}`,fontSize:11,fontFamily:"inherit"}} placeholder="€"/></td>
-          <td style={{padding:8}}>{s.goal>0?<div style={{display:"flex",alignItems:"center",gap:6}}>
+          <td data-label="Progression" style={{padding:8}}>{s.goal>0?<div style={{display:"flex",alignItems:"center",gap:6}}>
             <div style={{flex:1,height:6,background:C.surfaceAlt,borderRadius:3,overflow:"hidden"}}>
               <div style={{width:`${Math.min(100,s.goalProgress)}%`,height:"100%",background:s.goalProgress>=100?"#059669":C.primary,borderRadius:3}}/></div>
             <span style={{fontSize:10,fontWeight:600,color:s.goalProgress>=100?"#059669":C.textMuted}}>{s.goalProgress.toFixed(0)}%</span></div>:"—"}</td>
@@ -186,14 +186,14 @@ function StatsScreen(){
 
     {tab==="collection"&&<div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`}}>
       <h3 style={{fontSize:14,fontWeight:700,marginBottom:10}}>Performance par collection</h3>
-      <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+      <table className="rtable" style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
         <thead><tr style={{borderBottom:`2px solid ${C.border}`}}>
           {["Collection","Qté vendue","CA TTC","Marge"].map(h=>(<th key={h} style={{padding:8,textAlign:"left",fontSize:10,fontWeight:700,color:C.textMuted}}>{h}</th>))}</tr></thead>
         <tbody>{fByCollection.map(s=>(<tr key={s.name} style={{borderBottom:`1px solid ${C.border}`}}>
-          <td style={{padding:8,fontWeight:600}}><Badge color={C.info}>{s.name}</Badge></td>
-          <td style={{padding:8}}>{s.qty}</td>
-          <td style={{padding:8,fontWeight:700,color:C.primary}}>{s.revenue.toFixed(2)}€</td>
-          <td style={{padding:8,color:"#059669"}}>{s.margin.toFixed(2)}€</td></tr>))}</tbody></table></div>}
+          <td data-label="Collection" style={{padding:8,fontWeight:600}}><Badge color={C.info}>{s.name}</Badge></td>
+          <td data-label="Qté vendue" style={{padding:8}}>{s.qty}</td>
+          <td data-label="CA TTC" style={{padding:8,fontWeight:700,color:C.primary}}>{s.revenue.toFixed(2)}€</td>
+          <td data-label="Marge" style={{padding:8,color:"#059669"}}>{s.margin.toFixed(2)}€</td></tr>))}</tbody></table></div>}
 
     {tab==="pay"&&<div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`}}>
       <ResponsiveContainer width="100%" height={220}><PieChart><Pie data={pieData} cx="50%" cy="50%" innerRadius={50} outerRadius={80} paddingAngle={3} dataKey="value">

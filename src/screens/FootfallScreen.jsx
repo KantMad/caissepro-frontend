@@ -65,16 +65,16 @@ function FootfallScreen(){
     <div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`,marginTop:14}}>
       <h3 style={{fontSize:14,fontWeight:700,marginBottom:10}}>Historique (7 derniers jours)</h3>
       {last7.length===0&&<div style={{color:C.textLight,fontSize:11}}>Aucune donnée</div>}
-      <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+      <table className="rtable" style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
         {last7.length>0&&<thead><tr style={{borderBottom:`2px solid ${C.border}`}}>
           {["Date","Entrées","Ventes","Conversion"].map(h=>(<th key={h} style={{padding:8,textAlign:"left",fontSize:10,fontWeight:700,color:C.textMuted}}>{h}</th>))}</tr></thead>}
         <tbody>{last7.map(f=>{const dayTickets=tickets.filter(t=>(t.date||t.createdAt||t.created_at||"").startsWith(f.date)).length;
           const conv=f.count>0?(dayTickets/f.count*100):0;
           return(<tr key={f.date} style={{borderBottom:`1px solid ${C.border}`}}>
-            <td style={{padding:8,fontWeight:600}}>{new Date(f.date).toLocaleDateString("fr-FR",{weekday:"short",day:"numeric",month:"short"})}</td>
-            <td style={{padding:8,fontWeight:700,color:C.primary}}>{f.count}</td>
-            <td style={{padding:8}}>{dayTickets}</td>
-            <td style={{padding:8,fontWeight:700,color:conv>=20?"#059669":conv>=10?C.warn:C.danger}}>{conv.toFixed(1)}%</td>
+            <td data-label="Date" style={{padding:8,fontWeight:600}}>{new Date(f.date).toLocaleDateString("fr-FR",{weekday:"short",day:"numeric",month:"short"})}</td>
+            <td data-label="Entrées" style={{padding:8,fontWeight:700,color:C.primary}}>{f.count}</td>
+            <td data-label="Ventes" style={{padding:8}}>{dayTickets}</td>
+            <td data-label="Conversion" style={{padding:8,fontWeight:700,color:conv>=20?"#059669":conv>=10?C.warn:C.danger}}>{conv.toFixed(1)}%</td>
           </tr>);})}</tbody></table>
     </div>
   </div>);

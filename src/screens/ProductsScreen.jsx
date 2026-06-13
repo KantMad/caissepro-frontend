@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { Trash2, Plus, Download, Save, Upload, Zap, ScanLine, Edit } from "lucide-react";
+import React, { useState, useRef } from "react";
+import { Trash2, Plus, Download, Save, Upload, Zap, ScanLine, Edit, X, Camera, Image } from "lucide-react";
 import * as API from "../api.js";
 import { DEFAULT_TVA_RATES, C } from "../constants.jsx";
 import { norm, printBarcodeLabels } from "../utils.jsx";
@@ -10,10 +10,12 @@ import CSVImportWizard from "./CSVImportWizard.jsx";
 
 function ProductsScreen(){
   const{products,setProducts,refreshProducts,addProduct,addAudit,notify,perm:p,exportCatalog,duplicateProduct,
-    updateProduct,deleteProduct,addVariantToProduct,deleteVariant,reorderVariants,updateProductPrice,settings,tvaRates,allCategories}=useApp();
+    updateProduct,deleteProduct,addVariantToProduct,deleteVariant,reorderVariants,updateProductPrice,settings,tvaRates,allCategories,productPhotos,reloadProductPhotos}=useApp();
   const categories=allCategories;
   const pm=settings.pricingMode||"TTC";
   const[search,setSearch]=useState("");const[importWizardOpen,setImportWizardOpen]=useState(false);
+  const[photoModal,setPhotoModal]=useState(false);const[uploading,setUploading]=useState(false);const[uploadResult,setUploadResult]=useState(null);
+  const photoFileRef=useRef(null);
   const[createModal,setCreateModal]=useState(false);
   const[editModal,setEditModal]=useState(null);
   const[addVarModal,setAddVarModal]=useState(null);
@@ -32,6 +34,7 @@ function ProductsScreen(){
       <h2 style={{fontSize:20,fontWeight:800,margin:0}}>Produits ({products.length})</h2>
       <div style={{display:"flex",gap:6}}>
         <Btn variant="outline" onClick={()=>setImportWizardOpen(true)} style={{fontSize:11}}><Upload size={12}/> CSV</Btn>
+        <Btn variant="outline" onClick={()=>setPhotoModal(true)} style={{fontSize:11}}><Image size={12}/> Photos</Btn>
         <Btn variant="outline" onClick={exportCatalog} style={{fontSize:11}}><Download size={12}/> Export</Btn>
         {p().canCreateProduct&&<Btn variant="outline" onClick={async()=>{
           let count=0;for(const prod of products){
@@ -47,22 +50,22 @@ function ProductsScreen(){
         {p().canCreateProduct&&<Btn onClick={()=>setCreateModal(true)} style={{fontSize:11,background:C.primary}}><Plus size={12}/> Nouveau</Btn>}</div></div>
     <Input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Rechercher par nom ou SKU…" style={{marginBottom:12,height:36,maxWidth:300}}/>
     <div style={{background:C.surface,borderRadius:14,border:`1.5px solid ${C.border}`,overflow:"hidden"}}>
-      <table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
+      <table className="rtable" style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
         <thead><tr style={{background:C.surfaceAlt}}>
           {["Produit","SKU","Collection",`Prix ${pm}`,"Coût","Marge","TVA","Stock","Var.","Actions"].map(h=>(
             <th key={h} style={{padding:"8px 10px",textAlign:"left",fontWeight:700,color:C.textMuted,fontSize:9,borderBottom:`2px solid ${C.border}`}}>{h}</th>))}</tr></thead>
         <tbody>{filtered.map(q=>{const ts=q.variants.reduce((s,v)=>s+v.stock,0);const mg=q.costPrice?((q.price-q.costPrice)/q.price*100):0;
           return(<tr key={q.id} style={{borderBottom:`1px solid ${C.border}`,cursor:"pointer"}} onClick={()=>openEdit(q)}>
-            <td style={{padding:"6px 10px",fontWeight:600}}>{q.name}</td>
-            <td style={{padding:"6px 10px",fontFamily:"monospace",color:C.textMuted}}>{q.sku}</td>
-            <td style={{padding:"6px 10px"}}><Badge color={C.info}>{q.collection||"—"}</Badge></td>
-            <td style={{padding:"6px 10px",fontWeight:700,color:C.primary}}>{q.price.toFixed(2)}€</td>
-            <td style={{padding:"6px 10px",color:C.textMuted}}>{q.costPrice?.toFixed(2)||"—"}€</td>
-            <td style={{padding:"6px 10px"}}><Badge color={mg>50?"#059669":mg>30?C.accent:C.danger}>{mg.toFixed(0)}%</Badge></td>
-            <td style={{padding:"6px 10px"}}>{(q.taxRate*100).toFixed(0)}%</td>
-            <td style={{padding:"6px 10px",fontWeight:700,color:ts<=5?C.danger:C.text}}>{ts}</td>
-            <td style={{padding:"6px 10px"}}>{q.variants.length}</td>
-            <td style={{padding:"6px 10px"}} onClick={e=>e.stopPropagation()}>
+            <td data-label="Produit" style={{padding:"6px 10px",fontWeight:600}}>{q.name}</td>
+            <td data-label="SKU" style={{padding:"6px 10px",fontFamily:"monospace",color:C.textMuted}}>{q.sku}</td>
+            <td data-label="Collection" style={{padding:"6px 10px"}}><Badge color={C.info}>{q.collection||"—"}</Badge></td>
+            <td data-label={`Prix ${pm}`} style={{padding:"6px 10px",fontWeight:700,color:C.primary}}>{q.price.toFixed(2)}€</td>
+            <td data-label="Coût" style={{padding:"6px 10px",color:C.textMuted}}>{q.costPrice?.toFixed(2)||"—"}€</td>
+            <td data-label="Marge" style={{padding:"6px 10px"}}><Badge color={mg>50?"#059669":mg>30?C.accent:C.danger}>{mg.toFixed(0)}%</Badge></td>
+            <td data-label="TVA" style={{padding:"6px 10px"}}>{(q.taxRate*100).toFixed(0)}%</td>
+            <td data-label="Stock" style={{padding:"6px 10px",fontWeight:700,color:ts<=5?C.danger:C.text}}>{ts}</td>
+            <td data-label="Variantes" style={{padding:"6px 10px"}}>{q.variants.length}</td>
+            <td data-label="Actions" style={{padding:"6px 10px"}} onClick={e=>e.stopPropagation()}>
               <div style={{display:"flex",gap:4}}>
                 <button onClick={()=>openEdit(q)} style={{background:"none",border:"none",cursor:"pointer",color:C.primary,fontSize:10,fontWeight:600}}>Modifier</button>
                 <button onClick={()=>duplicateProduct(q.id)} style={{background:"none",border:"none",cursor:"pointer",color:C.info,fontSize:10,fontWeight:600}}>Dupliquer</button>
