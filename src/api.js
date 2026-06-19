@@ -292,5 +292,10 @@ export const productPhotos = {
   apiUrl: API_URL,
 };
 
+// ══ Intégrations (gestlog) ══
+export const integrations = {
+  gestlogDeliveries: () => api('/api/integrations/gestlog/deliveries'),
+};
+
 // ══ Health ══
 export const health = () => api('/api/health');
