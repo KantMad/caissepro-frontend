@@ -49,8 +49,10 @@ class ThermalPrinter {
     this.writer = null;
     this.reader = null;
     this.connected = false;
-    this.connectionType = null; // 'serial' | 'usb'
+    this.connectionType = null; // 'serial' | 'usb' | 'bluetooth'
     this.usbDevice = null;
+    this.btDevice = null;       // Web Bluetooth device
+    this.btChar = null;         // caractéristique GATT d'écriture
     this.paperWidth = PAPER_48; // Default 80mm
     this.encoding = 'pc858';
     this._listeners = new Set();
@@ -62,10 +64,11 @@ class ThermalPrinter {
 
   // ── Connection ──
   get isSupported() {
-    return !!navigator.serial || !!navigator.usb;
+    return !!navigator.serial || !!navigator.usb || !!navigator.bluetooth;
   }
   get serialSupported() { return !!navigator.serial; }
   get usbSupported() { return !!navigator.usb; }
+  get bluetoothSupported() { return !!navigator.bluetooth; }
 
   async connectSerial(options = {}) {
     if (!navigator.serial) throw new Error("Web Serial API non supportée par ce navigateur");
@@ -105,6 +108,7 @@ class ThermalPrinter {
     try {
       this.usbDevice = await navigator.usb.requestDevice({
         filters: [
+          { classCode: 7 },     // Classe USB « imprimante » — couvre la plupart des ESC/POS
           { vendorId: 0x04B8 }, // Epson
           { vendorId: 0x0519 }, // Star Micronics
           { vendorId: 0x0DD4 }, // Custom
@@ -112,7 +116,12 @@ class ThermalPrinter {
           { vendorId: 0x0FE6 }, // Kontron/ICS
           { vendorId: 0x1FC9 }, // NXP (generic printers)
           { vendorId: 0x20D1 }, // Xiamen
-          { vendorId: 0x0483 }, // STMicroelectronics (used in some printers)
+          { vendorId: 0x0483 }, // STMicroelectronics
+          { vendorId: 0x0922 }, // Dymo
+          { vendorId: 0x2730 }, // Citizen Systems
+          { vendorId: 0x1A86 }, // QinHeng/CH340 (Xprinter & clones bon marché)
+          { vendorId: 0x067B }, // Prolific PL2303 (USB-série)
+          { vendorId: 0x6868 }, // Zjiang
         ]
       });
 
@@ -139,6 +148,69 @@ class ThermalPrinter {
     }
   }
 
+  async connectBluetooth() {
+    if (!navigator.bluetooth) throw new Error("Web Bluetooth non supporté par ce navigateur");
+    // Services GATT courants des imprimantes ESC/POS / modules BLE
+    const PRINT_SERVICES = [
+      0x18F0,
+      0xFFE0,
+      0xFF00,
+      '000018f0-0000-1000-8000-00805f9b34fb',
+      '0000ff00-0000-1000-8000-00805f9b34fb',
+      '49535343-fe7d-4ae5-8fa9-9fafd205e455', // ISSC/Microchip transparent UART
+      'e7810a71-73ae-499d-8c15-faa9aef0c3f2', // certains modules
+    ];
+    try {
+      this.btDevice = await navigator.bluetooth.requestDevice({
+        acceptAllDevices: true,
+        optionalServices: PRINT_SERVICES,
+      });
+      const server = await this.btDevice.gatt.connect();
+      // Cherche un service exposant une caractéristique d'écriture
+      let writeChar = null;
+      const services = await server.getPrimaryServices();
+      for (const svc of services) {
+        const chars = await svc.getCharacteristics();
+        for (const ch of chars) {
+          if (ch.properties.write || ch.properties.writeWithoutResponse) { writeChar = ch; break; }
+        }
+        if (writeChar) break;
+      }
+      if (!writeChar) throw new Error("Aucune caractéristique d'écriture trouvée sur l'imprimante");
+
+      this.btChar = writeChar;
+      this.connected = true;
+      this.connectionType = 'bluetooth';
+      this.paperWidth = PAPER_48;
+      this.btDevice.addEventListener('gattserverdisconnected', () => {
+        this.connected = false; this.connectionType = null; this.btChar = null;
+        this._emit('disconnected');
+      });
+      this._emit('connected', { type: 'bluetooth' });
+
+      await this._writeBLE(new Uint8Array(CMD.INIT));
+      await this._writeBLE(new Uint8Array(CHARSET_FRENCH));
+      await this._writeBLE(new Uint8Array(CODEPAGE_PC858));
+      return true;
+    } catch (e) {
+      this.connected = false;
+      if (e.name === 'NotFoundError') throw new Error("Aucune imprimante Bluetooth sélectionnée");
+      throw new Error(`Connexion Bluetooth échouée: ${e.message}`);
+    }
+  }
+
+  // BLE : écriture par paquets sous la MTU (≈ 512 o ; 180 par sécurité)
+  async _writeBLE(data) {
+    if (!this.connected || !this.btChar) return;
+    const arr = data instanceof Uint8Array ? data : new Uint8Array(data);
+    const CHUNK = 180;
+    for (let i = 0; i < arr.length; i += CHUNK) {
+      const slice = arr.slice(i, i + CHUNK);
+      if (this.btChar.properties.writeWithoutResponse) await this.btChar.writeValueWithoutResponse(slice);
+      else await this.btChar.writeValue(slice);
+    }
+  }
+
   async disconnect() {
     try {
       if (this.connectionType === 'serial' && this.port) {
@@ -148,6 +220,9 @@ class ThermalPrinter {
       } else if (this.connectionType === 'usb' && this.usbDevice) {
         await this.usbDevice.close();
         this.usbDevice = null;
+      } else if (this.connectionType === 'bluetooth' && this.btDevice) {
+        if (this.btDevice.gatt?.connected) this.btDevice.gatt.disconnect();
+        this.btDevice = null; this.btChar = null;
       }
     } catch (e) {
       console.warn("Printer disconnect warning:", e);
@@ -179,6 +254,7 @@ class ThermalPrinter {
   async send(data) {
     if (this.connectionType === 'serial') return this._write(data);
     if (this.connectionType === 'usb') return this._writeUSB(data);
+    if (this.connectionType === 'bluetooth') return this._writeBLE(data);
   }
 
   // ── Text encoding helper (handles French characters & €) ──

@@ -1045,7 +1045,7 @@ function BackupPanel({notify,addAudit}){
 }
 
 function SettingsScreen(){
-  const{settings,setSettings,saveSettingsToAPI,addAudit,theme,setTheme,clockEntries,priceHistory,printerConnected,printerType,connectPrinter,disconnectPrinter,thermalPrint,notify,users,hwId,hwProfile,switchHardware,hardwareProfiles,paymentId,paymentConfig,switchPayment,updatePaymentConfig,paymentProfiles,perm,effectiveStoreId,allCategories,products,updateProduct,productPhotos,reloadProductPhotos}=useApp();
+  const{settings,setSettings,saveSettingsToAPI,addAudit,theme,setTheme,clockEntries,priceHistory,printerConnected,printerType,connectPrinter,disconnectPrinter,thermalPrint,notify,users,hwId,hwProfile,switchHardware,hardwareProfiles,paymentId,paymentConfig,switchPayment,updatePaymentConfig,paymentProfiles,perm,effectiveStoreId,allCategories,products,updateProduct}=useApp();
   if(!perm().canSettings) return <div style={{padding:40,textAlign:"center",color:C.textMuted,fontSize:16,fontWeight:600}}>Accès refusé</div>;
   const[tab,setTab]=useState("general");
   const[expandedCat,setExpandedCat]=useState(null);
@@ -1057,7 +1057,7 @@ function SettingsScreen(){
   return(<div style={{height:"100%",overflowY:"auto",padding:"var(--pad,16px)",background:C.bg}}>
     <h2 style={{fontSize:20,fontWeight:800,marginBottom:10}}>Paramètres</h2>
     <div style={{display:"flex",gap:6,marginBottom:14,flexWrap:"wrap"}}>
-      {[{id:"general",l:"Général"},{id:"retouche",l:"✂️ Retouches"},{id:"pricing",l:"💰 Prix HT/TTC"},{id:"commission",l:"Commission"},{id:"stores",l:"Magasins"},{id:"photos",l:"📷 Photos"},{id:"printer",l:"Imprimante"},{id:"tpe",l:"Terminal paiement"},{id:"receipt",l:"Ticket"},{id:"screen2",l:"📺 Écran 2"},{id:"caticons",l:"🏷️ Catégories"},{id:"return",l:"Retours"},{id:"sizes",l:"📏 Ordre tailles"},{id:"theme",l:"Thème"},{id:"clock",l:"Pointages"},{id:"prices",l:"Historique prix"},{id:"backup",l:"Backup"},{id:"debug",l:"DEBUG"}].map(t=>(
+      {[{id:"general",l:"Général"},{id:"retouche",l:"✂️ Retouches"},{id:"pricing",l:"💰 Prix HT/TTC"},{id:"commission",l:"Commission"},{id:"stores",l:"Magasins"},{id:"printer",l:"Imprimante"},{id:"tpe",l:"Terminal paiement"},{id:"receipt",l:"Ticket"},{id:"screen2",l:"📺 Écran 2"},{id:"caticons",l:"🏷️ Catégories"},{id:"return",l:"Retours"},{id:"sizes",l:"📏 Ordre tailles"},{id:"theme",l:"Thème"},{id:"clock",l:"Pointages"},{id:"prices",l:"Historique prix"},{id:"backup",l:"Backup"},{id:"debug",l:"DEBUG"}].map(t=>(
         <button key={t.id} onClick={()=>setTab(t.id)} style={{padding:"5px 12px",borderRadius:8,border:`1.5px solid ${tab===t.id?C.primary:C.border}`,
           background:tab===t.id?C.primary:"transparent",color:tab===t.id?"#fff":C.text,fontSize:11,fontWeight:600,cursor:"pointer"}}>{t.l}</button>))}</div>
 
@@ -1191,82 +1191,6 @@ function SettingsScreen(){
         style={{width:"100%",height:40,background:C.primary}}><Save size={14}/> Enregistrer</Btn>
     </div>}
 
-    {tab==="photos"&&(()=>{
-      const fileRef=React.createRef();
-      const[uploading,setUploading]=React.useState(false);
-      const[uploadResult,setUploadResult]=React.useState(null);
-      // Group photos by skuBase+colorKey
-      const grouped={};
-      for(const p of (productPhotos||[])){const k=`${p.skuBase}|${p.colorKey}`;if(!grouped[k])grouped[k]={skuBase:p.skuBase,colorKey:p.colorKey,photos:[]};grouped[k].photos.push(p);}
-      for(const k of Object.keys(grouped))grouped[k].photos.sort((a,b)=>a.sortOrder-b.sortOrder);
-      const groups=Object.values(grouped).sort((a,b)=>a.skuBase.localeCompare(b.skuBase)||a.colorKey.localeCompare(b.colorKey));
-      const totalPhotos=(productPhotos||[]).length;
-      const totalProducts=new Set((productPhotos||[]).map(p=>p.skuBase)).size;
-      const handleUpload=async()=>{
-        const files=fileRef.current?.files;if(!files?.length){notify("Selectionnez des fichiers JPEG","warn");return;}
-        setUploading(true);setUploadResult(null);
-        try{const result=await API.productPhotos.upload(files);setUploadResult(result);
-          notify(`${result.imported} photo(s) importee(s)${result.skipped?`, ${result.skipped} ignoree(s)`:""}`,"success");
-          await reloadProductPhotos();
-        }catch(e){notify("Erreur upload: "+e.message,"error");}
-        setUploading(false);if(fileRef.current)fileRef.current.value="";
-      };
-      const handleDelete=async(id)=>{try{await API.productPhotos.remove(id);notify("Photo supprimee","success");await reloadProductPhotos();}catch(e){notify("Erreur: "+e.message,"error");}};
-      const handleDeleteGroup=async(skuBase,colorKey)=>{try{await API.productPhotos.removeBulk(skuBase,colorKey);notify("Photos supprimees","success");await reloadProductPhotos();}catch(e){notify("Erreur: "+e.message,"error");}};
-      return<div style={{maxWidth:800}}>
-        <div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.primary}22`,marginBottom:14}}>
-          <div style={{fontSize:14,fontWeight:700,marginBottom:8}}>Import de photos produits</div>
-          <div style={{fontSize:11,color:C.textMuted,marginBottom:10,lineHeight:1.5}}>
-            Nommez vos fichiers: <code style={{background:C.bg,padding:"2px 6px",borderRadius:4,fontWeight:600}}>SKU-COULEUR-NUMERO.jpg</code><br/>
-            Exemple: <code style={{background:C.bg,padding:"2px 6px",borderRadius:4}}>QMCHML_C001-752-1.jpg</code> = produit QMCHML_C001, couleur 752, photo 1/6<br/>
-            Format: JPEG, 1200x800px recommande, max 5 Mo/photo, max 6 photos par couleur
-          </div>
-          <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
-            <input ref={fileRef} type="file" accept=".jpg,.jpeg" multiple style={{fontSize:11,flex:1}}/>
-            <Btn onClick={handleUpload} disabled={uploading} style={{height:36,background:C.primary,minWidth:120}}>
-              {uploading?<span className="spin-loader"/>:<><Upload size={14}/> Importer</>}
-            </Btn>
-          </div>
-          {uploadResult&&<div style={{marginTop:10,fontSize:11,padding:10,borderRadius:8,background:uploadResult.errors?.length?C.dangerLight:C.successLight,border:`1px solid ${uploadResult.errors?.length?C.danger+"33":C.success+"33"}`}}>
-            <div style={{fontWeight:700}}>{uploadResult.imported} importee(s), {uploadResult.skipped} ignoree(s)</div>
-            {uploadResult.errors?.map((e,i)=><div key={i} style={{color:C.danger,marginTop:2}}>{e}</div>)}
-          </div>}
-        </div>
-        <div style={{fontSize:13,fontWeight:700,marginBottom:8}}>{totalPhotos} photo(s) pour {totalProducts} produit(s)</div>
-        {groups.length===0&&<div style={{textAlign:"center",padding:40,color:C.textMuted,fontSize:13}}>Aucune photo importee. Selectionnez des fichiers JPEG ci-dessus.</div>}
-        <div style={{display:"flex",flexDirection:"column",gap:12}}>
-          {groups.map(g=>{
-            const product=products.find(p=>p.sku===g.skuBase);
-            return<div key={`${g.skuBase}-${g.colorKey}`} style={{background:C.surface,borderRadius:12,padding:12,border:`1px solid ${C.border}`}}>
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-                <div>
-                  <span style={{fontWeight:700,fontSize:12}}>{g.skuBase}</span>
-                  <span style={{margin:"0 6px",color:C.textMuted}}>—</span>
-                  <span style={{fontWeight:600,fontSize:12,color:C.primary}}>Couleur {g.colorKey}</span>
-                  {product&&<span style={{fontSize:10,color:C.textMuted,marginLeft:8}}>{product.name}</span>}
-                </div>
-                <button onClick={()=>handleDeleteGroup(g.skuBase,g.colorKey)} style={{background:C.dangerLight,border:`1px solid ${C.danger}33`,color:C.danger,borderRadius:8,padding:"3px 8px",fontSize:10,fontWeight:600,cursor:"pointer"}}>
-                  <Trash2 size={11}/> Tout supprimer
-                </button>
-              </div>
-              <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-                {g.photos.map(p=>(
-                  <div key={p.id} style={{position:"relative",width:100,height:67,borderRadius:8,overflow:"hidden",border:`1px solid ${C.border}`}}>
-                    <img src={`${API.productPhotos.apiUrl}/uploads/products/${p.filename}`} alt={p.originalName||""} loading="lazy"
-                      style={{width:"100%",height:"100%",objectFit:"cover"}}/>
-                    <button onClick={()=>handleDelete(p.id)} style={{position:"absolute",top:2,right:2,background:"rgba(0,0,0,0.6)",color:"#fff",border:"none",borderRadius:"50%",width:18,height:18,fontSize:10,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>
-                      <X size={10}/>
-                    </button>
-                    <div style={{position:"absolute",bottom:2,left:2,background:"rgba(0,0,0,0.6)",color:"#fff",borderRadius:4,padding:"1px 4px",fontSize:8,fontWeight:700}}>{p.sortOrder}</div>
-                  </div>
-                ))}
-              </div>
-            </div>;
-          })}
-        </div>
-      </div>;
-    })()}
-
     {tab==="printer"&&<div style={{maxWidth:600}}>
       {/* Hardware selection */}
       <div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.primary}22`,marginBottom:14}}>
@@ -1298,7 +1222,7 @@ function SettingsScreen(){
         <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}>
           <div style={{width:12,height:12,borderRadius:6,background:printerConnected?"#059669":"#CCC",boxShadow:printerConnected?"0 0 8px #05966955":"none"}}/>
           <span style={{fontSize:14,fontWeight:700}}>{printerConnected?"Imprimante connectée":"Aucune imprimante"}</span>
-          {printerConnected&&<Badge color={C.primary}>{printerType==="serial"?"Web Serial":"WebUSB"}</Badge>}</div>
+          {printerConnected&&<Badge color={C.primary}>{printerType==="serial"?"Web Serial":printerType==="usb"?"WebUSB":printerType==="bluetooth"?"Bluetooth":printerType==="sunmi"?"Sunmi":printerType==="pax"?"PAX":printerType==="imin"?"iMin":printerType}</Badge>}</div>
         {printerConnected&&<div style={{fontSize:11,color:C.textMuted}}>L'impression ESC/POS est active. Les tickets seront envoyés directement a l'imprimante thermique.</div>}</div>
 
       {/* Diagnostic panel */}
@@ -1375,6 +1299,9 @@ function SettingsScreen(){
           {!!navigator.usb&&<Btn onClick={async()=>{setConnecting(true);await connectPrinter("usb");setConnecting(false);}}
             disabled={connecting} style={{height:44,background:C.info}}>
             <Printer size={14}/> {connecting?"Connexion…":"Connecter (USB)"}</Btn>}
+          {!!navigator.bluetooth&&<Btn onClick={async()=>{setConnecting(true);await connectPrinter("bluetooth");setConnecting(false);}}
+            disabled={connecting} style={{height:44,background:C.accent}}>
+            <Printer size={14}/> {connecting?"Connexion…":"Connecter (Bluetooth)"}</Btn>}
         </div>
 
         {/* Native POS printer (Sunmi/PAX/iMin) */}

@@ -1197,6 +1197,7 @@ function AppProvider({children}){
       }
       if(method==="serial")await printer.connectSerial(options);
       else if(method==="usb")await printer.connectUSB();
+      else if(method==="bluetooth")await printer.connectBluetooth();
       setPrinterConnected(true);setPrinterType(method);
       notify("Imprimante connectee ("+method+")","success");return true;
     }catch(e){notify(e.message,"danger");return false;}
