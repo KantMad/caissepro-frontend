@@ -43,12 +43,42 @@ jobs:
       - name: Make gradlew executable
         run: chmod +x android/gradlew
 
+      # Réutilise la même clé que l'APK déjà distribué → les MAJ s'installent par-dessus (pas de désinstallation).
+      - name: Restaurer la keystore debug (signature stable)
+        env:
+          KS: ${{ secrets.ANDROID_DEBUG_KEYSTORE_B64 }}
+        run: |
+          if [ -n "$KS" ]; then
+            mkdir -p ~/.android
+            echo "$KS" | base64 -d > ~/.android/debug.keystore
+            echo "Keystore debug restaurée (signature stable)."
+          else
+            echo "Pas de secret ANDROID_DEBUG_KEYSTORE_B64 — Gradle génère une clé (signature non stable entre builds)."
+          fi
+
       - name: Build APK (debug)
         working-directory: android
         run: ./gradlew assembleDebug
 
       - name: Rename APK
         run: mv android/app/build/outputs/apk/debug/app-debug.apk android/app/build/outputs/apk/debug/CaissePro.apk
+
+      # Publie l'APK sur le VPS → https://caisse.techincash.app/download/caissepro.apk
+      - name: Publier sur le VPS
+        env:
+          SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+        run: |
+          if [ -z "$SSH_KEY" ]; then
+            echo "Pas de secret VPS_SSH_KEY — publication VPS ignorée (APK dispo via GitHub Release)."
+            exit 0
+          fi
+          mkdir -p ~/.ssh
+          echo "$SSH_KEY" > ~/.ssh/id_deploy
+          chmod 600 ~/.ssh/id_deploy
+          scp -i ~/.ssh/id_deploy -o StrictHostKeyChecking=no \
+            android/app/build/outputs/apk/debug/CaissePro.apk \
+            ubuntu@51.77.149.138:/var/www/caissepro-apk/caissepro.apk
+          echo "Publié sur https://caisse.techincash.app/download/caissepro.apk"
 
       - name: Delete previous latest release
         run: gh release delete latest --yes 2>/dev/null || true
