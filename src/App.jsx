@@ -84,6 +84,11 @@ export default function App(){
         .rtable td:first-child{text-align:left;font-size:15px;font-weight:700;border-bottom:1px solid ${C.border}!important;padding-bottom:8px!important;margin-bottom:4px}
         .rtable td:first-child::before{display:none}
         .rtable td:empty{display:none}}
-      @media (max-width:380px){:root{--card-min:130px}}`}</style>
+      @media (max-width:380px){:root{--card-min:130px}}
+      /* ── Tactile (Sunmi, tablettes) : agrandir les contrôles du panier même sur grand écran ── */
+      @media (pointer:coarse){
+        .cart-panel button{min-height:42px}
+        .cart-panel input,.cart-panel select{min-height:42px;font-size:15px!important}
+      }`}</style>
   </AppProvider></ErrorBoundary>);
 }

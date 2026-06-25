@@ -231,7 +231,7 @@ function SalesScreen(){
     {/* Cart — inline (desktop/tablette) ou panneau plein écran (téléphone) */}
     {(!vp.isMobile||mobileCartOpen)&&<>
     {vp.isMobile&&<div onClick={()=>setMobileCartOpen(false)} style={{position:"fixed",inset:0,zIndex:250,background:"rgba(15,23,42,0.45)",animation:"fadeIn 0.2s ease"}}/>}
-    <div style={vp.isMobile
+    <div className="cart-panel" style={vp.isMobile
       ?{position:"fixed",inset:0,zIndex:251,width:"100%",background:C.surface,display:"flex",flexDirection:"column",animation:"slideInRight 0.25s cubic-bezier(0.16,1,0.3,1)"}
       :{width:"var(--cart-w,380px)",minWidth:"var(--cart-w,380px)",background:C.surface,borderLeft:`1px solid ${C.border}`,display:"flex",flexDirection:"column",boxShadow:`-4px 0 20px ${C.shadow}`}}>
       {vp.isMobile&&<button onClick={()=>setMobileCartOpen(false)} style={{display:"flex",alignItems:"center",gap:8,padding:"12px 14px",border:"none",borderBottom:`1px solid ${C.border}`,background:C.surfaceAlt,cursor:"pointer",fontFamily:"inherit",fontSize:14,fontWeight:700,color:C.text,flexShrink:0}}>
