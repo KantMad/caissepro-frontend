@@ -613,20 +613,22 @@ function AppProvider({children}){
       variant:i.variant?{id:i.variant.id,color:i.variant.color,size:i.variant.size}:null,
       discount:i.discount||0
     };});
-    const sHT=items.reduce((s,i)=>s+i.lineHT,0);
-    let gd=gDiscType==="percentage"?sHT*(gDisc/100):Math.min(gDisc,sHT);
+    const r2=(v)=>Math.round(v*100)/100;
+    const sHT=r2(items.reduce((s,i)=>s+i.lineHT,0));
+    let gd=gDiscType==="percentage"?r2(sHT*(gDisc/100)):Math.min(gDisc,sHT);
     const{promoDisc,applied}=calcPromoDiscount(cart);
-    gd+=promoDisc;gd=Math.min(gd,sHT);
-    const tHT=sHT-gd;
-    // NF525: distribuer la remise globale proportionnellement par taux de TVA
+    gd=r2(gd+promoDisc);gd=Math.min(gd,sHT);
     const discountRatio=sHT>0?(gd/sHT):0;
-    // M4 fix: round TVA per line to avoid cumulative rounding errors (NF525)
-    let tTVA=0;
-    items.forEach(i=>{
-      const adjHT=i.lineHT*(1-discountRatio);
-      tTVA+=Math.round(adjHT*(i.tax_rate||i.product?.taxRate||0.20)*100)/100;
-    });
-    const tTTC=Math.max(0,Math.round((tHT+tTVA-avoirPayment)*100)/100);
+    // NF525 : TTC = référence (somme des prix payés), HT/TVA DÉRIVÉS du TTC par groupe de taux
+    // → HT+TVA = TTC au centime, identique à cartTotals ET au backend create_sale.
+    const _groups={};
+    for(const i of items)_groups[i.tax_rate]=r2((_groups[i.tax_rate]||0)+r2(i.lineTTC));
+    let tHT=0,tTVA=0,netTTC=0;
+    for(const rk of Object.keys(_groups)){
+      const rate=parseFloat(rk);const gNet=r2(_groups[rk]*(1-discountRatio));const gHT=r2(gNet/(1+rate));
+      tHT=r2(tHT+gHT);tTVA=r2(tTVA+(gNet-gHT));netTTC=r2(netTTC+gNet);
+    }
+    const tTTC=Math.max(0,r2(netTTC-avoirPayment));
 
     // ── TPE: charge card payments via hardware terminal BEFORE finalizing ──
     const cardMethods=['card','amex','contactless'];
