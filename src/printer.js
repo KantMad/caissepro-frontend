@@ -1136,6 +1136,65 @@ class ThermalPrinter {
   }
 
   // ── Print retouche receipt (same format as sales receipt) ──
+  async printTenue(tenue, settings, companyInfo) {
+    if (!this.connected) throw new Error("Imprimante non connectee");
+    const s = settings || {};
+    const co = companyInfo || {};
+    try {
+      await this.send(CMD.INIT);
+      await this.send(CHARSET_FRENCH);
+      await this.send(CODEPAGE_PC858);
+      // Header
+      await this.alignCenter(); await this.doubleSize(); await this.bold(true);
+      await this.text(s.name || co.name || 'Ma Boutique'); await this.newline();
+      await this.normalSize(); await this.bold(false);
+      if (s.address) { await this.text(s.address); await this.newline(); }
+      if (s.postalCode || s.city) { await this.text(`${s.postalCode || ''} ${s.city || ''}`); await this.newline(); }
+      if (s.siret) { await this.text(`SIRET: ${s.siret}`); await this.newline(); }
+      await this.separator('=');
+      // Title
+      await this.alignCenter(); await this.doubleSize(); await this.bold(true);
+      await this.text('BON DE TENUE EMPLOYE'); await this.newline();
+      await this.normalSize(); await this.bold(false);
+      await this.separator('=');
+      // Info
+      await this.alignLeft(); await this.bold(true);
+      await this.line(`N° ${tenue.num}`, new Date(tenue.date || '').toLocaleString('fr-FR'));
+      await this.line(`Employe: ${tenue.employee || '?'}`);
+      await this.bold(false);
+      await this.separator('-');
+      // Items
+      let totalQty = 0;
+      for (const item of (tenue.items || [])) {
+        const qty = parseInt(item.quantity, 10) || 1; totalQty += qty;
+        const nm = item.productName || item.name || '?';
+        const color = item.variantColor || ''; const sz = item.variantSize || '';
+        const sku = item.sku || ''; const ean = item.ean || '';
+        await this.bold(true); await this.text(nm); await this.newline(); await this.bold(false);
+        if (color || sz) {
+          let d = `  ${color}/${sz}`; if (sku) d += ` | Ref: ${sku}`;
+          await this.text(d); await this.newline();
+          if (ean) { await this.fontSmall(); await this.text(`  EAN: ${ean}`); await this.newline(); await this.fontNormal(); }
+        }
+        await this.bold(true); await this.line(`  x${qty}`); await this.bold(false);
+      }
+      await this.separator('-');
+      // Total
+      await this.bold(true); await this.doubleSize();
+      await this.line('TOTAL', `${totalQty} pc`);
+      await this.normalSize(); await this.bold(false);
+      if (tenue.totalValue > 0) await this.line('Valeur (cout)', `${(tenue.totalValue || 0).toFixed(2)}€`);
+      await this.separator('=');
+      if (tenue.notes) { await this.bold(true); await this.text(`Notes: ${tenue.notes}`); await this.newline(); await this.bold(false); }
+      // Barcode EAN-13
+      if (tenue.barcode) { await this.newline(); await this.alignCenter(); await this.barcode(tenue.barcode); }
+      await this.alignCenter(); await this.text('Justificatif de sortie de stock'); await this.newline();
+      if (s.footerMsg || co.footerMsg) { await this.bold(true); await this.text(s.footerMsg || co.footerMsg); await this.newline(); await this.bold(false); }
+      await this.feed(4); await this.cut();
+      return true;
+    } catch (e) { throw e; }
+  }
+
   async printRetouche(bon, settings, companyInfo) {
     if (!this.connected) throw new Error("Imprimante non connectee");
 

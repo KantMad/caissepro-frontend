@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { Search, RotateCcw, CheckCircle2, AlertTriangle, Save, Upload, Trash2, User, Filter } from "lucide-react";
+import { Search, RotateCcw, CheckCircle2, AlertTriangle, Save, Upload, Trash2, User, Filter, Printer } from "lucide-react";
 import Papa from "papaparse";
 import * as API from "../api.js";
-import { C } from "../constants.jsx";
-import { norm } from "../utils.jsx";
+import { C, CO } from "../constants.jsx";
+import { norm, EAN13Svg } from "../utils.jsx";
 import { Modal, Btn, Input, Badge } from "../ui.jsx";
 import { useApp } from "../context.jsx";
 import { sortSizes } from "./_shared.js";
@@ -557,16 +557,25 @@ function TenuesTab({products,setProducts,users,tenUser,setTenUser,tenItems,setTe
   tenHistoryFilter,setTenHistoryFilter,tenScanRef,tenAddByEAN,resolveEAN,
   stockMoves,addStockMove,addAudit,notify,setScanOverride,clearScanOverride,findByEAN}){
 
+  const{addTenue,tenues,reloadTenues,thermalPrint,printerConnected,settings:appSettings}=useApp();
   const[manualSearch,setManualSearch]=useState("");
+  const[ticketModal,setTicketModal]=useState(null);   // tenue affichée en justificatif
+  const[histSearch,setHistSearch]=useState("");
+
+  // Charger l'historique des tenues depuis le backend à l'ouverture de l'onglet
+  useEffect(()=>{reloadTenues();},[reloadTenues]);
 
   // Register scan override when this tab is active
   useEffect(()=>{
     setScanOverride((code)=>{
+      // Si le code-barres correspond à un bon de tenue existant → ouvrir le justificatif
+      const found=(tenues||[]).find(t=>t.barcode===code);
+      if(found){setTicketModal(found);notify(`Bon tenue ${found.num} — ${found.employee}`,"info");return;}
       if(!tenUser){notify("Sélectionnez d'abord un employé avant de scanner","warn");return;}
       tenAddByEAN(code);
     });
     return()=>clearScanOverride();
-  },[setScanOverride,clearScanOverride,tenAddByEAN,tenUser,notify]);
+  },[setScanOverride,clearScanOverride,tenAddByEAN,tenUser,notify,tenues]);
 
   // Focus scan input on mount
   useEffect(()=>{if(tenScanRef.current)tenScanRef.current.focus();},[]);
@@ -584,32 +593,29 @@ function TenuesTab({products,setProducts,users,tenUser,setTenUser,tenItems,setTe
     setManualSearch("");
   };
 
-  const tenuesHistory=stockMoves.filter(m=>m.type==="TENUE");
-  const filteredHistory=tenHistoryFilter
-    ?tenuesHistory.filter(m=>(m.ref||"").toLowerCase().includes(tenHistoryFilter.toLowerCase()))
-    :tenuesHistory;
-  const employeeNames=[...new Set(tenuesHistory.map(m=>{const match=(m.ref||"").match(/Tenue (.+)/);return match?match[1]:null;}).filter(Boolean))];
+  const filteredTenues=(tenues||[]).filter(t=>{if(!histSearch.trim())return true;const q=histSearch.toLowerCase();
+    return (t.employee||"").toLowerCase().includes(q)||(t.num||"").toLowerCase().includes(q)||(t.barcode||"").includes(histSearch.trim());});
 
   const validateAll=async()=>{
     if(!tenUser){notify("Sélectionnez un employé","error");return;}
     if(tenItems.length===0){notify("Ajoutez au moins un article","error");return;}
     setTenSaving(true);
-    let ok=0,err=0;
-    for(const item of tenItems){
-      const prod=products.find(p=>p.id===item.productId);const vari=prod?.variants.find(v=>v.id===item.variantId);
-      if(!prod||!vari){err++;continue;}
-      try{await API.stock.adjust({productId:item.productId,variantId:item.variantId,quantity:-item.qty,reason:`Tenue employé: ${tenUser}`});ok++;}
-      catch(e){
-        setProducts(prev=>prev.map(p=>p.id===item.productId?{...p,variants:p.variants.map(v=>v.id===item.variantId?{...v,stock:Math.max(0,v.stock-item.qty)}:v)}:p));
-        ok++;
-      }
-      addStockMove("TENUE",prod,vari,-item.qty,`Tenue ${tenUser}`);
-      addAudit("TENUE",`${prod.name} ${vari?.color||""}/${vari?.size||""} x${item.qty} — ${tenUser}`);
-    }
-    // Refresh products
-    try{const prods=await API.products.list();setProducts(norm.products(prods));}catch(e){}
-    notify(`${ok} article(s) sorti(s) en tenue pour ${tenUser}${err>0?` (${err} erreur(s))`:""}`,"success");
-    setTenItems([]);setTenSaving(false);
+    try{
+      const items=tenItems.map(item=>{const prod=products.find(p=>p.id===item.productId);
+        return{productId:item.productId,variantId:item.variantId,productName:item.name||prod?.name||"",
+          variantColor:item.color||"",variantSize:item.size||"",ean:item.ean||"",sku:item.sku||prod?.sku||"",
+          quantity:item.qty,unitCost:parseFloat(prod?.costPrice)||0};});
+      const saved=await addTenue(tenUser,items,"");
+      // Décrément stock local immédiat (déjà fait côté backend)
+      setProducts(prev=>prev.map(p=>{const its=tenItems.filter(i=>i.productId===p.id);if(!its.length)return p;
+        return{...p,variants:p.variants.map(v=>{const mi=its.find(i=>i.variantId===v.id);return mi?{...v,stock:Math.max(0,v.stock-mi.qty)}:v;})};}));
+      addAudit("TENUE",`Bon ${saved.num} — ${tenUser} — ${tenItems.reduce((s,i)=>s+i.qty,0)} pièce(s)`);
+      notify(`Bon tenue ${saved.num} créé pour ${tenUser}`,"success");
+      setTicketModal(saved);     // ouvrir le justificatif imprimable
+      setTenItems([]);
+      try{const prods=await API.products.list();setProducts(norm.products(prods));}catch(e){}
+    }catch(e){notify("Erreur création bon tenue: "+e.message,"error");}
+    finally{setTenSaving(false);}
   };
 
   return(<div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`}}>
@@ -693,31 +699,58 @@ function TenuesTab({products,setProducts,users,tenUser,setTenUser,tenItems,setTe
       style={{width:"100%",height:44,background:C.accent,opacity:(!tenUser||tenItems.length===0)?0.5:1}}>
       {tenSaving?"Enregistrement...":tenItems.length>0?`Valider ${tenItems.reduce((s,i)=>s+i.qty,0)} pièce(s) pour ${tenUser||"…"}`:"Sortir en tenue employé"}</Btn>
 
-    {/* ══ Historique tenues ══ */}
+    {/* ══ Bons de tenue (backend) — recherche + scan ══ */}
     <div style={{marginTop:20,borderTop:`1.5px solid ${C.border}`,paddingTop:14}}>
-      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
-        <h4 style={{fontSize:13,fontWeight:700,margin:0}}>Historique tenues</h4>
-        <span style={{fontSize:10,color:C.textMuted}}>({filteredHistory.length} sortie(s))</span>
-        <div style={{flex:1}}/>
-        <Filter size={12} color={C.textMuted}/>
-        <select value={tenHistoryFilter} onChange={e=>setTenHistoryFilter(e.target.value)}
-          style={{padding:"4px 8px",borderRadius:6,border:`1px solid ${C.border}`,fontSize:10,fontFamily:"inherit",minWidth:120}}>
-          <option value="">Tous les employés</option>
-          {employeeNames.map(n=>(<option key={n} value={n}>{n}</option>))}
-        </select>
+      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10,flexWrap:"wrap"}}>
+        <h4 style={{fontSize:13,fontWeight:700,margin:0}}>Bons de tenue</h4>
+        <span style={{fontSize:10,color:C.textMuted}}>({filteredTenues.length})</span>
+        <div style={{flex:1,minWidth:160}}>
+          <Input value={histSearch} onChange={e=>setHistSearch(e.target.value)}
+            placeholder="Rechercher (employé, n°) ou scanner le code-barres…" style={{height:34,fontSize:11}}/>
+        </div>
       </div>
-      {filteredHistory.length===0&&<div style={{color:C.textLight,fontSize:11,textAlign:"center",padding:10}}>Aucune sortie tenue{tenHistoryFilter?` pour "${tenHistoryFilter}"`:""}</div>}
-      <div style={{maxHeight:300,overflowY:"auto"}}>
-        {filteredHistory.slice(0,50).map((m,i)=>(<div key={i} style={{display:"flex",alignItems:"center",gap:8,padding:"7px 0",borderBottom:`1px solid ${C.border}`,fontSize:11}}>
-          <span style={{color:C.textMuted,fontSize:9,minWidth:65}}>{new Date(m.date).toLocaleDateString("fr-FR",{day:"2-digit",month:"2-digit",year:"2-digit"})}</span>
-          <User size={11} color={C.accent}/>
-          <span style={{color:C.accent,fontWeight:600,minWidth:70}}>{(m.ref||"").replace("Tenue ","")}</span>
-          <span style={{fontWeight:600}}>{m.productName}</span>
-          <span style={{color:C.textMuted}}>{m.variantColor}/{m.variantSize}</span>
-          <span style={{fontWeight:700,color:C.danger}}>x{Math.abs(m.qty)}</span>
-        </div>))}
+      {filteredTenues.length===0&&<div style={{color:C.textLight,fontSize:11,textAlign:"center",padding:10}}>Aucun bon de tenue{histSearch?` pour "${histSearch}"`:""}</div>}
+      <div style={{maxHeight:320,overflowY:"auto",display:"flex",flexDirection:"column",gap:4}}>
+        {filteredTenues.slice(0,80).map(t=>(
+          <button key={t.id||t.num} onClick={()=>setTicketModal(t)}
+            style={{display:"flex",alignItems:"center",gap:8,padding:"8px 10px",borderRadius:8,border:`1px solid ${C.border}`,background:C.surface,cursor:"pointer",fontSize:11,textAlign:"left",fontFamily:"inherit"}}
+            onMouseEnter={e=>e.currentTarget.style.borderColor=C.accent} onMouseLeave={e=>e.currentTarget.style.borderColor=C.border}>
+            <span style={{color:C.textMuted,fontSize:9,minWidth:62}}>{t.date?new Date(t.date).toLocaleDateString("fr-FR",{day:"2-digit",month:"2-digit",year:"2-digit"}):"—"}</span>
+            <span style={{fontFamily:"monospace",fontWeight:700,color:C.accent,minWidth:96}}>{t.num}</span>
+            <User size={11} color={C.accent}/>
+            <span style={{fontWeight:600,flex:1}}>{t.employee}</span>
+            <Badge color={C.info}>{t.totalQty} pc</Badge>
+            <Printer size={12} color={C.textMuted}/>
+          </button>))}
       </div>
     </div>
+
+    {/* ══ Justificatif imprimable ══ */}
+    <Modal open={!!ticketModal} onClose={()=>setTicketModal(null)} title={`Bon de tenue ${ticketModal?.num||""}`}>
+      {ticketModal&&<>
+        <div data-print-receipt style={{fontFamily:"'Courier New',monospace",fontSize:12,fontWeight:500,background:"#FAFAF8",borderRadius:10,padding:16,border:`1px solid ${C.border}`}}>
+          <div style={{textAlign:"center",fontWeight:800,fontSize:14,marginBottom:4}}>{appSettings?.name||CO.name}</div>
+          {(appSettings?.siret||CO.siret)&&<div style={{textAlign:"center",fontSize:10,color:C.textMuted}}>SIRET: {appSettings?.siret||CO.siret}</div>}
+          <div style={{borderTop:`1px dashed ${C.border}`,margin:"6px 0"}}/>
+          <div style={{textAlign:"center",fontWeight:800,fontSize:13}}>BON DE TENUE EMPLOYÉ</div>
+          <div style={{borderTop:`1px dashed ${C.border}`,margin:"6px 0"}}/>
+          <div>N° {ticketModal.num}</div>
+          <div>Date: {ticketModal.date?new Date(ticketModal.date).toLocaleString("fr-FR"):"—"}</div>
+          <div>Employé: <strong>{ticketModal.employee}</strong></div>
+          <div style={{borderTop:`1px dashed ${C.border}`,margin:"6px 0"}}/>
+          {(ticketModal.items||[]).map((it,k)=>(<div key={k} style={{marginBottom:3}}>
+            <div style={{display:"flex",justifyContent:"space-between"}}><span style={{fontWeight:600}}>{it.productName}{(it.variantColor||it.variantSize)?` (${it.variantColor}/${it.variantSize})`:""}</span><span style={{fontWeight:700}}>x{it.quantity}</span></div>
+            {(it.sku||it.ean)&&<div style={{fontSize:9,color:C.textMuted}}>{it.sku?`Réf: ${it.sku}`:""}{it.sku&&it.ean?" — ":""}{it.ean?`EAN: ${it.ean}`:""}</div>}
+          </div>))}
+          <div style={{borderTop:`1px dashed ${C.border}`,margin:"6px 0"}}/>
+          <div style={{display:"flex",justifyContent:"space-between",fontWeight:800}}><span>TOTAL</span><span>{ticketModal.totalQty} pièce(s)</span></div>
+          {ticketModal.totalValue>0&&<div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:C.textMuted}}><span>Valeur (coût)</span><span>{Number(ticketModal.totalValue).toFixed(2)}€</span></div>}
+          <div style={{textAlign:"center",fontSize:10,color:C.textMuted,marginTop:6}}>Justificatif de sortie de stock</div>
+          {ticketModal.barcode&&<div style={{marginTop:8,display:"flex",justifyContent:"center"}}><EAN13Svg code={ticketModal.barcode} width={180} height={50}/></div>}
+        </div>
+        <Btn onClick={()=>thermalPrint("tenue",ticketModal)} style={{width:"100%",marginTop:12,background:C.accent,height:44}}><Printer size={14}/> {printerConnected?"Imprimer le ticket":"Imprimer / Aperçu"}</Btn>
+      </>}
+    </Modal>
   </div>);
 }
 

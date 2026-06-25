@@ -604,6 +604,95 @@ class SunmiPrinterAdapter {
     } catch (e) { throw e; }
   }
 
+  // ── Tenue employé (sortie de stock) ──
+  _buildTenueBatch(tenue, settings, companyInfo) {
+    const s = settings || {};
+    const co = companyInfo || {};
+    const fmt = (v) => { const n = Number(v); return isNaN(n) ? '0.00' : n.toFixed(2); };
+    const cmds = [];
+    const text = (txt) => cmds.push({ cmd: 'text', text: txt });
+    const bold = (on) => cmds.push({ cmd: 'bold', enabled: on });
+    const size = (v) => cmds.push({ cmd: 'size', value: v });
+    const align = (v) => cmds.push({ cmd: 'align', value: v });
+
+    align(1); size(32); bold(true);
+    text((s.name || co.name || 'Ma Boutique') + '\n');
+    size(24); bold(false);
+    if (s.address) text(s.address + '\n');
+    if (s.postalCode || s.city) text(`${s.postalCode || ''} ${s.city || ''}\n`);
+    if (s.siret) text(`SIRET: ${s.siret}\n`);
+    cmds.push({ cmd: 'line', char: '=', len: 32 });
+
+    align(1); size(32); bold(true);
+    text('BON DE TENUE EMPLOYE\n');
+    size(24); bold(false);
+    cmds.push({ cmd: 'line', char: '=', len: 32 });
+
+    align(0); bold(true);
+    let dateStr = '';
+    try { dateStr = new Date(tenue.date || Date.now()).toLocaleString('fr-FR'); } catch (e) {}
+    text(`N: ${tenue.num || '?'}\n`);
+    text(`Date: ${dateStr}\n`);
+    text(`Employe: ${tenue.employee || '?'}\n`);
+    bold(false);
+    cmds.push({ cmd: 'line', char: '-', len: 32 });
+
+    let totalQty = 0;
+    for (const item of (tenue.items || [])) {
+      const name = item.productName || item.name || '?';
+      const color = item.variantColor || item.color || '';
+      const sz = item.variantSize || item.size || '';
+      const sku = item.sku || '';
+      const ean = item.ean || '';
+      const qty = parseInt(item.quantity, 10) || 1;
+      totalQty += qty;
+      bold(true); text(`${name}\n`); bold(false);
+      if (color || sz) { text(`  ${color}/${sz}`); if (sku) text(` | Ref: ${sku}`); text('\n'); }
+      if (ean) { size(20); text(`  EAN: ${ean}\n`); size(24); }
+      bold(true); text(`  x${qty}\n`); bold(false);
+    }
+    cmds.push({ cmd: 'line', char: '-', len: 32 });
+
+    bold(true); size(28);
+    text(`TOTAL: ${totalQty} piece(s)\n`);
+    size(24); bold(false);
+    if (tenue.totalValue > 0) text(`Valeur (cout): ${fmt(tenue.totalValue)} EUR\n`);
+    cmds.push({ cmd: 'line', char: '=', len: 32 });
+
+    if (tenue.notes) { size(22); bold(true); text(`Notes: ${tenue.notes}\n`); bold(false); size(24); }
+
+    align(1); size(20); bold(true);
+    text('Justificatif de sortie de stock\n'); bold(false);
+    text(`${co.sw || 'CaissePro'} v${co.ver || '6.1.0'}\n`);
+    if (s.footerMsg || co.footerMsg) { bold(true); text(`${s.footerMsg || co.footerMsg}\n`); bold(false); }
+
+    if (tenue.barcode && tenue.barcode.length === 13) {
+      align(1);
+      cmds.push({ cmd: 'barcode', text: tenue.barcode, type: 2, height: 100, width: 2 });
+    }
+    cmds.push({ cmd: 'feed', lines: 4 });
+    cmds.push({ cmd: 'cut' });
+    return cmds;
+  }
+
+  async printTenue(tenue, settings, companyInfo) {
+    if (this._isCapacitor && this._bridge) {
+      const commands = this._buildTenueBatch(tenue, settings, companyInfo);
+      if (this._bridge.printRaw) { await this._bridge.printRaw({ commands }); }
+      else if (this._bridge.printBatch) { await this._bridge.printBatch({ commands }); }
+      return true;
+    }
+    try {
+      await this._cap('printerInit', {});
+      await this.printText('BON DE TENUE EMPLOYE\n');
+      await this.printText(`N: ${tenue?.num || '?'}\nEmploye: ${tenue?.employee || '?'}\n`);
+      for (const item of (tenue?.items || [])) { await this.printText(`${item.productName || ''} ${item.variantColor || ''}/${item.variantSize || ''} x${item.quantity || 1}\n`); }
+      await this._cap('lineWrap', { lines: 4 });
+      try { await this._cap('cutPaper', {}); } catch (e) {}
+      return true;
+    } catch (e) { throw e; }
+  }
+
   // ── Register Open ──
   _buildRegisterOpenBatch(data, settings, companyInfo) {
     const s = settings || {};
@@ -910,6 +999,9 @@ class PAXPrinterAdapter {
   async printRetouche(bon, settings, companyInfo) {
     return await _textBasedPrint(this, 'retouche', bon, settings, companyInfo, 32);
   }
+  async printTenue(tenue, settings, companyInfo) {
+    return await _textBasedPrint(this, 'tenue', tenue, settings, companyInfo, 32);
+  }
   async printRegisterOpen(data, settings, companyInfo) {
     return await _textBasedPrint(this, 'registerOpen', data, settings, companyInfo, 32);
   }
@@ -954,6 +1046,7 @@ class iMinPrinterAdapter {
   async printAvoir(avoir, s, co) { return await _textBasedPrint(this, 'avoir', avoir, s, co, 48); }
   async printClosure(c, s, co) { return await _textBasedPrint(this, 'closure', c, s, co, 48); }
   async printRetouche(bon, s, co) { return await _textBasedPrint(this, 'retouche', bon, s, co, 48); }
+  async printTenue(t, s, co) { return await _textBasedPrint(this, 'tenue', t, s, co, 48); }
   async printRegisterOpen(data, s, co) { return await _textBasedPrint(this, 'registerOpen', data, s, co, 48); }
   async printRegisterClose(data, s, co) { return await _textBasedPrint(this, 'registerClose', data, s, co, 48); }
   async printGiftCard(gc, s, co) { return await _textBasedPrint(this, 'giftcard', gc, s, co, 48); }
@@ -1032,6 +1125,26 @@ class BrowserPrintAdapter {
     }
     h += `<div class="sep"></div><div class="row bold"><span>TOTAL</span><span>${(bon.total || 0).toFixed(2)} EUR TTC</span></div>`;
     if (bon.dateRetrait || bon.pickup_date) h += `<div class="center">Retrait: ${new Date(bon.dateRetrait || bon.pickup_date).toLocaleDateString('fr-FR')}</div>`;
+    return this._printViaIframe(h);
+  }
+
+  async printTenue(tenue, settings, companyInfo) {
+    const s = settings || {}; const co = companyInfo || {};
+    let h = `<div class="center bold big">${s.name || co.name || 'Ma Boutique'}</div><div class="sep"></div>`;
+    h += `<div class="center bold big">BON DE TENUE EMPLOYE</div>`;
+    h += `<div class="center">N: ${tenue.num || tenue.tenue_number || '?'}</div>`;
+    h += `<div class="center">Employe: ${tenue.employee || '?'}</div><div class="sep"></div>`;
+    let tq = 0;
+    for (const item of (tenue.items || [])) {
+      const qty = parseInt(item.quantity, 10) || 1; tq += qty;
+      const nm = item.productName || item.product_name || item.name || '?';
+      const cs = [item.variantColor || item.variant_color || '', item.variantSize || item.variant_size || ''].filter(Boolean).join('/');
+      h += `<div class="row"><span>${nm}${cs ? ' (' + cs + ')' : ''}</span><span>x${qty}</span></div>`;
+    }
+    h += `<div class="sep"></div><div class="row bold"><span>TOTAL</span><span>${tq} piece(s)</span></div>`;
+    if (tenue.totalValue > 0) h += `<div class="row"><span>Valeur (cout)</span><span>${(tenue.totalValue || 0).toFixed(2)} EUR</span></div>`;
+    h += `<div class="center small">Justificatif de sortie de stock</div>`;
+    if (tenue.barcode) h += `<div class="center small">Code: ${tenue.barcode}</div>`;
     return this._printViaIframe(h);
   }
 
@@ -1162,6 +1275,25 @@ async function _textBasedPrint(adapter, type, data, settings, companyInfo, width
     lines.push(dsep);
     lines.push(pad('TOTAL', `${(data.total || 0).toFixed(2)}E TTC`));
     if (data.dateRetrait || data.pickup_date) lines.push(`Retrait: ${new Date(data.dateRetrait || data.pickup_date).toLocaleDateString('fr-FR')}`);
+  } else if (type === 'tenue') {
+    header();
+    lines.push('BON DE TENUE EMPLOYE');
+    lines.push(`N: ${data.num || data.tenue_number || '?'}`);
+    lines.push(`Employe: ${data.employee || '?'}`);
+    lines.push(dsep);
+    let tq = 0;
+    for (const item of (data.items || [])) {
+      const qty = parseInt(item.quantity, 10) || 1; tq += qty;
+      const nm = item.productName || item.product_name || item.name || '?';
+      const cs = [item.variantColor || item.variant_color || '', item.variantSize || item.variant_size || ''].filter(Boolean).join('/');
+      lines.push(pad(`${nm}${cs ? ' ' + cs : ''}`, `x${qty}`));
+      if (item.ean) lines.push(`  EAN: ${item.ean}`);
+    }
+    lines.push(dsep);
+    lines.push(pad('TOTAL', `${tq} piece(s)`));
+    if (data.totalValue > 0) lines.push(pad('Valeur (cout)', `${(data.totalValue || 0).toFixed(2)}E`));
+    lines.push('Justificatif de sortie de stock');
+    if (data.barcode) lines.push(`Code: ${data.barcode}`);
   } else if (type === 'registerOpen') {
     header();
     lines.push('OUVERTURE DE CAISSE');

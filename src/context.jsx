@@ -67,6 +67,7 @@ function AppProvider({children}){
   const[parked,setParked]=useState(()=>{try{const s=localStorage.getItem("caissepro_parked");return s?JSON.parse(s):[];}catch(e){return[];}});
   useEffect(()=>{try{localStorage.setItem("caissepro_parked",JSON.stringify(parked));}catch(e){}},[parked]);
   const[retoucheBons,setRetoucheBons]=useState(()=>{try{const s=localStorage.getItem("caissepro_retouches");return s?JSON.parse(s):[];}catch(e){return[];}});
+  const[tenues,setTenues]=useState(()=>{try{const s=localStorage.getItem("caissepro_tenues");return s?JSON.parse(s):[];}catch(e){return[];}});
   useEffect(()=>{try{localStorage.setItem("caissepro_retouches",JSON.stringify(retoucheBons.slice(0,500)));}catch(e){}},[retoucheBons]);
   const[selCust,setSelCust]=useState(null);
   const[stockMoves,setStockMoves]=useState(()=>{try{const s=localStorage.getItem("caissepro_stockmoves");return s?JSON.parse(s):[];}catch(e){return[];}});
@@ -129,6 +130,25 @@ function AppProvider({children}){
   },[addPendingSync]);
   const updateRetoucheStatus=useCallback(async(id,status)=>{
     try{await API.retouches.updateStatus(id,status);setRetoucheBons(prev=>prev.map(b=>b.id===id?{...b,status}:b));return true;}catch(e){console.warn("Retouche status update failed:",e.message);return false;}
+  },[]);
+  // ══ Tenues employé : normalisation backend(snake/camel)→front ══
+  const _mapTenue=(t)=>({id:t.id,num:t.tenue_number||t.num,barcode:t.barcode||"",employee:t.employee||"",
+    totalQty:t.total_qty??t.totalQty??0,totalValue:parseFloat(t.total_value??t.totalValue??0)||0,
+    notes:t.notes||"",date:t.created_at||t.date,userName:t.user_name||t.userName||"",
+    items:(t.items||[]).map(i=>({productName:i.productName||i.product_name||"",variantColor:i.variantColor||i.variant_color||"",
+      variantSize:i.variantSize||i.variant_size||"",ean:i.ean||"",quantity:i.quantity||i.qty||1,
+      unitCost:parseFloat(i.unitCost??i.unit_cost??0)||0,sku:i.sku||""}))});
+  const addTenue=useCallback(async(employee,items,notes)=>{
+    const saved=await API.tenues.create({employee,items,notes:notes||""});
+    const mapped=_mapTenue(saved);
+    setTenues(prev=>{const next=[mapped,...prev].slice(0,500);try{localStorage.setItem("caissepro_tenues",JSON.stringify(next));}catch(e){}return next;});
+    return mapped;
+  },[]);
+  const reloadTenues=useCallback(async(q)=>{
+    try{const data=await API.tenues.list(q?{q}:{});const mapped=(data||[]).map(_mapTenue);
+      if(!q){setTenues(mapped.slice(0,500));try{localStorage.setItem("caissepro_tenues",JSON.stringify(mapped.slice(0,500)));}catch(e){}}
+      return mapped;
+    }catch(e){console.warn("Chargement tenues échoué:",e.message);return[];}
   },[]);
   const[tvaRates,setTvaRates]=useState([...DEFAULT_TVA_RATES]);
   useEffect(()=>{TVA_RATES=tvaRates;},[tvaRates]);
@@ -213,6 +233,7 @@ function AppProvider({children}){
       try{const clockData=await API.audit.clock();if(clockData?.length)setClockEntries(clockData);}catch(e){/* keep localStorage clock */}
       try{const phData=await API.pricehistory.list({limit:500});if(phData?.length)setPriceHistory(phData);}catch(e){/* keep localStorage */}
       try{const retData=await API.retouches.list();if(retData?.length)setRetoucheBons(retData.map(r=>({id:r.id,num:r.retouche_number,shortCode:r.short_code||(r.retouche_number||"").slice(-4)||"",client:r.client||"",phone:r.phone||"",seller:r.seller||"",items:(r.items||[]).map(i=>({desc:i.description||i.desc||"",price:i.price})),dateRetrait:r.date_retrait,total:parseFloat(r.total_ttc)||0,barcode:r.barcode,date:r.created_at,status:r.status})));}catch(e){/* keep localStorage retouches */}
+      try{await reloadTenues();}catch(e){/* keep localStorage tenues */}
     }catch(e){
       console.warn("Chargement données échoué:",e.message);
       if(e.message?.includes("401")||e.message?.includes("Unauthorized")){setCurrentUser(null);API.clearToken();}
@@ -1042,6 +1063,7 @@ function AppProvider({children}){
   const ticketsRef=useRef(tickets);ticketsRef.current=tickets;
   const retoucheBonsRef=useRef(retoucheBons);retoucheBonsRef.current=retoucheBons;
   const avoirsRef=useRef(avoirs);avoirsRef.current=avoirs;
+  const tenuesRef=useRef(tenues);tenuesRef.current=tenues;
   const[scanBarcode,setScanBarcode]=useState(null);
   // ══ Scan override: screens can register a callback to intercept barcode scans ══
   const scanOverrideRef=useRef(null);
@@ -1069,6 +1091,8 @@ function AppProvider({children}){
         if(currentMode==="cashier"){notifyRef.current(`Bon retouche ${rb.num} — allez dans Historique pour le consulter`,"info");}
         else{setScanBarcode(code);notifyRef.current(`Bon retouche ${rb.num} trouvé`,"info");setMode("history");}
         return;}
+      const tn=tenuesRef.current.find(t=>t.barcode===code);
+      if(tn){setScanBarcode(code);notifyRef.current(`Bon tenue ${tn.num} — ${tn.employee}`,"info");return;}
       notifyRef.current("Code-barres inconnu: "+code,"error");
     });
     return()=>{s.stop();off();};},[]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -1114,7 +1138,7 @@ function AppProvider({children}){
     }
     // Try HAL native printer first (Sunmi/PAX/iMin) — only for methods the HAL supports
     if(halPrinter&&halPrinter.connected){
-      const halMethod=type==="receipt"?"printReceipt":type==="avoir"?"printAvoir":type==="giftcard"?"printGiftCard":type==="retouche"?"printRetouche":type==="register-open"?"printRegisterOpen":type==="register-close"?"printRegisterClose":type==="closure"?"printClosure":type==="test"?"testPrint":type==="drawer"?"openDrawer":null;
+      const halMethod=type==="receipt"?"printReceipt":type==="avoir"?"printAvoir":type==="giftcard"?"printGiftCard":type==="retouche"?"printRetouche":type==="tenue"?"printTenue":type==="register-open"?"printRegisterOpen":type==="register-close"?"printRegisterClose":type==="closure"?"printClosure":type==="test"?"testPrint":type==="drawer"?"openDrawer":null;
       if(halMethod&&typeof halPrinter[halMethod]==="function"){
         try{
           await halPrinter[halMethod](data,settings,CO);
@@ -1129,6 +1153,7 @@ function AppProvider({children}){
         else if(type==="avoir")await printer.printAvoir(data,settings,CO);
         else if(type==="giftcard")await printer.printGiftCard(data,settings,CO);
         else if(type==="retouche")await printer.printRetouche(data,settings,CO);
+        else if(type==="tenue")await printer.printTenue(data,settings,CO);
         else if(type==="register-open")await printer.printRegisterOpen(data,settings,CO);
         else if(type==="register-close")await printer.printRegisterClose(data,settings,CO);
         else if(type==="closure")await printer.printClosure(data,settings,CO);
@@ -1668,7 +1693,7 @@ function AppProvider({children}){
     promoCode,setPromoCode,calcPromoDiscount,
     cashReg,openReg,closeReg,isOnline,tickets,setTickets,tSeq,lastHash,gt,audit,jet,closures,avoirs,consumeAvoir,isAvoirExpired,
     checkout,createClosure,exportArchive,exportFEC,exportCSVReport,exportCustomerRGPD,addAudit,addJET,
-    promos,setPromos,activePromos,parked,parkCart,restoreCart,removeParked,retoucheBons,addRetoucheBon,updateRetoucheStatus,selCust,setSelCust,
+    promos,setPromos,activePromos,parked,parkCart,restoreCart,removeParked,retoucheBons,addRetoucheBon,updateRetoucheStatus,tenues,addTenue,reloadTenues,selCust,setSelCust,
     stockAlerts,stockMoves,addStockMove,receiveStock,receiveBatchStock,
     refreshProducts,findByEAN,perm,settings,setSettings,saveSettingsToAPI,getLoyaltyTier,avoirPayment,selectedAvoir,setSelectedAvoir,
     bestSellers,salesBySeller,salesByVariant,caEvolution,salesByCollection,

@@ -520,6 +520,95 @@ class SunmiPrinterAdapter {
     } catch (e) { throw e; }
   }
 
+  // ── Tenue employé (sortie de stock) ──
+  _buildTenueBatch(tenue, settings, companyInfo) {
+    const s = settings || {};
+    const co = companyInfo || {};
+    const fmt = (v) => { const n = Number(v); return isNaN(n) ? '0.00' : n.toFixed(2); };
+    const cmds = [];
+    const text = (txt) => cmds.push({ cmd: 'text', text: txt });
+    const bold = (on) => cmds.push({ cmd: 'bold', enabled: on });
+    const size = (v) => cmds.push({ cmd: 'size', value: v });
+    const align = (v) => cmds.push({ cmd: 'align', value: v });
+
+    align(1); size(32); bold(true);
+    text((s.name || co.name || 'Ma Boutique') + '\n');
+    size(24); bold(false);
+    if (s.address) text(s.address + '\n');
+    if (s.postalCode || s.city) text(`${s.postalCode || ''} ${s.city || ''}\n`);
+    if (s.siret) text(`SIRET: ${s.siret}\n`);
+    cmds.push({ cmd: 'line', char: '=', len: 32 });
+
+    align(1); size(32); bold(true);
+    text('BON DE TENUE EMPLOYE\n');
+    size(24); bold(false);
+    cmds.push({ cmd: 'line', char: '=', len: 32 });
+
+    align(0); bold(true);
+    let dateStr = '';
+    try { dateStr = new Date(tenue.date || Date.now()).toLocaleString('fr-FR'); } catch (e) {}
+    text(`N: ${tenue.num || '?'}\n`);
+    text(`Date: ${dateStr}\n`);
+    text(`Employe: ${tenue.employee || '?'}\n`);
+    bold(false);
+    cmds.push({ cmd: 'line', char: '-', len: 32 });
+
+    let totalQty = 0;
+    for (const item of (tenue.items || [])) {
+      const name = item.productName || item.name || '?';
+      const color = item.variantColor || item.color || '';
+      const sz = item.variantSize || item.size || '';
+      const sku = item.sku || '';
+      const ean = item.ean || '';
+      const qty = parseInt(item.quantity, 10) || 1;
+      totalQty += qty;
+      bold(true); text(`${name}\n`); bold(false);
+      if (color || sz) { text(`  ${color}/${sz}`); if (sku) text(` | Ref: ${sku}`); text('\n'); }
+      if (ean) { size(20); text(`  EAN: ${ean}\n`); size(24); }
+      bold(true); text(`  x${qty}\n`); bold(false);
+    }
+    cmds.push({ cmd: 'line', char: '-', len: 32 });
+
+    bold(true); size(28);
+    text(`TOTAL: ${totalQty} piece(s)\n`);
+    size(24); bold(false);
+    if (tenue.totalValue > 0) text(`Valeur (cout): ${fmt(tenue.totalValue)} EUR\n`);
+    cmds.push({ cmd: 'line', char: '=', len: 32 });
+
+    if (tenue.notes) { size(22); bold(true); text(`Notes: ${tenue.notes}\n`); bold(false); size(24); }
+
+    align(1); size(20); bold(true);
+    text('Justificatif de sortie de stock\n'); bold(false);
+    text(`${co.sw || 'CaissePro'} v${co.ver || '6.1.0'}\n`);
+    if (s.footerMsg || co.footerMsg) { bold(true); text(`${s.footerMsg || co.footerMsg}\n`); bold(false); }
+
+    if (tenue.barcode && tenue.barcode.length === 13) {
+      align(1);
+      cmds.push({ cmd: 'barcode', text: tenue.barcode, type: 2, height: 100, width: 2 });
+    }
+    cmds.push({ cmd: 'feed', lines: 4 });
+    cmds.push({ cmd: 'cut' });
+    return cmds;
+  }
+
+  async printTenue(tenue, settings, companyInfo) {
+    if (this._isCapacitor && this._bridge) {
+      const commands = this._buildTenueBatch(tenue, settings, companyInfo);
+      if (this._bridge.printRaw) { await this._bridge.printRaw({ commands }); }
+      else if (this._bridge.printBatch) { await this._bridge.printBatch({ commands }); }
+      return true;
+    }
+    try {
+      await this._cap('printerInit', {});
+      await this.printText('BON DE TENUE EMPLOYE\n');
+      await this.printText(`N: ${tenue?.num || '?'}\nEmploye: ${tenue?.employee || '?'}\n`);
+      for (const item of (tenue?.items || [])) { await this.printText(`${item.productName || ''} ${item.variantColor || ''}/${item.variantSize || ''} x${item.quantity || 1}\n`); }
+      await this._cap('lineWrap', { lines: 4 });
+      try { await this._cap('cutPaper', {}); } catch (e) {}
+      return true;
+    } catch (e) { throw e; }
+  }
+
   // ── Register Open ──
   _buildRegisterOpenBatch(data, settings, companyInfo) {
     const s = settings || {};

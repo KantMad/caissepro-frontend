@@ -251,6 +251,14 @@ export const retouches = {
   updateStatus: (id, status) => api(`/api/retouches/${id}/status`, { method: 'PUT', body: JSON.stringify({ status }) }),
 };
 
+// ══ Tenues employé ══
+export const tenues = {
+  list: (params) => api('/api/tenues?' + new URLSearchParams(params || {})),
+  get: (id) => api(`/api/tenues/${id}`),
+  byBarcode: (code) => api(`/api/tenues/barcode/${encodeURIComponent(code)}`),
+  create: (data) => api('/api/tenues', { method: 'POST', body: JSON.stringify(data) }),
+};
+
 // ══ Barcodes ══
 export const barcodes = {
   lookup: (code) => api(`/api/barcodes/${encodeURIComponent(code)}`),
