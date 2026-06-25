@@ -555,22 +555,33 @@ function AppProvider({children}){
   const cartTotals=useMemo(()=>{
     if(!cart.length)return{sHT:0,gd:0,promoDisc:0,applied:[],tHT:0,tTVA:0,tTTC:0};
     const pm=settings.pricingMode||"TTC";
-    const sHT=Math.round(cart.reduce((s,i)=>{const raw=i.discountType==="amount"?i.product.price*i.quantity-((i.discount||0)*i.quantity):i.product.price*i.quantity*(1-i.discount/100);
-      return s+(pm==="TTC"?raw/(1+(i.product.taxRate||0.20)):raw);},0)*100)/100;
-    let gd=gDiscType==="percentage"?Math.round(sHT*(gDisc/100)*100)/100:Math.min(gDisc,sHT);
-    const{promoDisc,applied}=calcPromoDiscount(cart);
-    gd=Math.round((gd+promoDisc)*100)/100;gd=Math.min(gd,sHT);
-    const tHT=Math.round((sHT-gd)*100)/100;
-    const discountRatio=sHT>0?(gd/sHT):0;
-    let tTVA=0;
-    cart.forEach(i=>{
-      const raw=i.discountType==="amount"?i.product.price*i.quantity-((i.discount||0)*i.quantity):i.product.price*i.quantity*(1-i.discount/100);
-      const lHT=pm==="TTC"?raw/(1+(i.product.taxRate||0.20)):raw;
-      const adjHT=lHT*(1-discountRatio);
-      tTVA+=Math.round(adjHT*(i.product.taxRate||0.20)*100)/100;
+    const r2=(v)=>Math.round(v*100)/100;
+    // Ligne TTC réelle (prix payé par le client) + taux, par article
+    const lines=cart.map(i=>{
+      const rate=i.product.taxRate||0.20;
+      const raw=i.discountType==="amount"?i.product.price*i.quantity-((i.discount||0)*i.quantity):i.product.price*i.quantity*(1-(i.discount||0)/100);
+      const lineTTC=r2(pm==="TTC"?raw:raw*(1+rate));
+      return{rate,lineTTC};
     });
-    tTVA=Math.round(tTVA*100)/100;
-    const tTTC=Math.max(0,Math.round((tHT+tTVA-avoirPayment)*100)/100);
+    // Sous-total HT indicatif (avant remise globale)
+    const sHT=r2(lines.reduce((s,l)=>s+l.lineTTC/(1+l.rate),0));
+    // Remise globale (HT) + promos
+    let gd=gDiscType==="percentage"?r2(sHT*(gDisc/100)):Math.min(gDisc,sHT);
+    const{promoDisc,applied}=calcPromoDiscount(cart);
+    gd=r2(gd+promoDisc);gd=Math.min(gd,sHT);
+    const discountRatio=sHT>0?(gd/sHT):0;
+    // ── NF525 : TTC = référence (prix payé). HT/TVA DÉRIVÉS du TTC par groupe de taux ──
+    // garantit HT + TVA = TTC au centime (pas de dérive d'arrondi ligne par ligne).
+    const groups={};
+    for(const l of lines)groups[l.rate]=r2((groups[l.rate]||0)+l.lineTTC);
+    let tHT=0,tTVA=0,netTTC=0;
+    for(const rk of Object.keys(groups)){
+      const rate=parseFloat(rk);
+      const gNet=r2(groups[rk]*(1-discountRatio));     // TTC du groupe après remise
+      const gHT=r2(gNet/(1+rate));
+      tHT=r2(tHT+gHT);tTVA=r2(tTVA+(gNet-gHT));netTTC=r2(netTTC+gNet);
+    }
+    const tTTC=Math.max(0,r2(netTTC-avoirPayment));
     return{sHT,gd,promoDisc,applied,tHT,tTVA,tTTC};
   },[cart,gDisc,gDiscType,calcPromoDiscount,avoirPayment,settings.pricingMode]);
 
