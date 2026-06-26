@@ -245,7 +245,12 @@ function AppProvider({children}){
       try{const salesData=await API.sales.list({limit:200});if(salesData?.length)setTickets(salesData.map(s=>({...s,ticketNumber:s.ticket_number,totalHT:parseFloat(s.total_ht),totalTVA:parseFloat(s.total_tva),totalTTC:parseFloat(s.total_ttc),date:s.created_at,userName:s.user_name,paymentMethod:s.payment_method,customerName:s.customer_name,fingerprint:s.fingerprint})));}catch(e){console.warn("Chargement ventes échoué:",e.message);}
       try{const closData=await API.fiscal.closures();if(closData?.length)setClosures(closData.map(c=>({...c,type:c.closure_type,totalHT:parseFloat(c.total_ht),totalTVA:parseFloat(c.total_tva),totalTTC:parseFloat(c.total_ttc),totalMargin:parseFloat(c.total_margin||0),date:c.created_at,userName:c.user_name})));}catch(e){console.warn("Chargement clôtures échoué:",e.message);}
       // Load avoirs from server
-      try{const avoirsData=await API.returns.list({limit:500});if(avoirsData?.length)setAvoirs(norm.avoirs(avoirsData));}catch(e){/* keep localStorage avoirs */}
+      try{const avoirsData=await API.returns.list({limit:500});if(avoirsData?.length){
+        const backend=norm.avoirs(avoirsData);const nums=new Set(backend.map(a=>a.avoirNumber));
+        // Fusion (anti-perte) : on conserve les avoirs OFFLINE (sans code-barres backend)
+        // pas encore présents côté serveur, au lieu d'écraser toute la liste locale.
+        setAvoirs(prev=>{const localUnsynced=(prev||[]).filter(a=>a.avoirNumber&&!nums.has(a.avoirNumber)&&!a.barcode);return[...backend,...localUnsynced];});
+      }}catch(e){/* keep localStorage avoirs */}
       try{const ctr=await API.returns.counter();if(ctr?.seq)setAvoirSeq(ctr.seq);}catch(e){console.warn("Chargement compteur avoirs échoué:",e.message);}
       // LS-04/05/06/07: reload audit, JET, stock movements, clock from API
       try{const auditData=await API.audit.list({limit:1000});if(auditData?.length)setAudit(auditData);}catch(e){/* keep localStorage audit */}
