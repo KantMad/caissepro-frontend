@@ -312,6 +312,11 @@ class SunmiPrinterAdapter {
     bold(true); size(32);
     text(`TOTAL AVOIR  -${fmt(a.totalTTC || a.total_ttc)} EUR\n`);
     size(24); bold(false);
+    const _avRem = a.remaining;
+    if (_avRem != null && Number(_avRem) < (Number(a.totalTTC || a.total_ttc) - 0.001)) {
+      cmds.push({ cmd: 'line', char: '-', len: 32 });
+      bold(true); size(28); text(`SOLDE RESTANT  ${fmt(_avRem)} EUR\n`); size(24); bold(false);
+    }
     bold(true); text(`Remboursement: ${refundLabels[a.refundMethod || a.refund_method] || a.refundMethod || a.refund_method || '?'}\n`); bold(false);
     cmds.push({ cmd: 'line', char: '=', len: 32 });
     align(1); size(22); bold(true);

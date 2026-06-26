@@ -725,6 +725,10 @@ class ThermalPrinter {
       await this.line('TOTAL AVOIR', `-${(avoir.totalTTC || 0).toFixed(2)}€`);
       await this.normalSize();
       await this.bold(false);
+      if (avoir.remaining != null && Number(avoir.remaining) < (Number(avoir.totalTTC || 0) - 0.001)) {
+        await this.separator('-');
+        await this.bold(true); await this.line('SOLDE RESTANT', `${Number(avoir.remaining).toFixed(2)}€`); await this.bold(false);
+      }
       await this.bold(true); await this.line('Remboursement:', refundLabels[avoir.refundMethod] || avoir.refundMethod); await this.bold(false);
 
       await this.separator('=');

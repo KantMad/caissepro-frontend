@@ -396,6 +396,11 @@ class SunmiPrinterAdapter {
     bold(true); size(32);
     text(`TOTAL AVOIR  -${fmt(a.totalTTC || a.total_ttc)} EUR\n`);
     size(24); bold(false);
+    const _avRem = a.remaining;
+    if (_avRem != null && Number(_avRem) < (Number(a.totalTTC || a.total_ttc) - 0.001)) {
+      cmds.push({ cmd: 'line', char: '-', len: 32 });
+      bold(true); size(28); text(`SOLDE RESTANT  ${fmt(_avRem)} EUR\n`); size(24); bold(false);
+    }
     bold(true); text(`Remboursement: ${refundLabels[a.refundMethod || a.refund_method] || a.refundMethod || a.refund_method || '?'}\n`); bold(false);
     cmds.push({ cmd: 'line', char: '=', len: 32 });
     align(1); size(22); bold(true);
@@ -1176,7 +1181,8 @@ class BrowserPrintAdapter {
   async printAvoir(avoir, settings, companyInfo) {
     const el = document.querySelector('[data-print-receipt]');
     if (el) return this._printViaIframe(el.innerHTML);
-    return this._printViaIframe(`<div class="center bold big">AVOIR</div><div class="center">${avoir.avoirNumber}</div><div class="sep"></div><div class="center bold big">${(avoir.totalTTC||0).toFixed(2)} EUR</div>`);
+    const _rem = (avoir.remaining != null && Number(avoir.remaining) < (Number(avoir.totalTTC || 0) - 0.001)) ? `<div class="sep"></div><div class="center bold">SOLDE RESTANT: ${Number(avoir.remaining).toFixed(2)} EUR</div>` : '';
+    return this._printViaIframe(`<div class="center bold big">AVOIR</div><div class="center">${avoir.avoirNumber}</div><div class="sep"></div><div class="center bold big">${(avoir.totalTTC||0).toFixed(2)} EUR</div>${_rem}`);
   }
 
   async printClosure(closure, settings, companyInfo) {
@@ -1339,6 +1345,9 @@ async function _textBasedPrint(adapter, type, data, settings, companyInfo, width
     }
     lines.push(dsep);
     lines.push(pad('TOTAL AVOIR', `-${(data.totalTTC || data.amount || 0).toFixed(2)}E`));
+    if (data.remaining != null && Number(data.remaining) < (Number(data.totalTTC || data.amount || 0) - 0.001)) {
+      lines.push(pad('SOLDE RESTANT', `${Number(data.remaining).toFixed(2)}E`));
+    }
     lines.push(sep);
     if (data.fingerprint) lines.push(`NF525: ${data.fingerprint}`);
   } else if (type === 'closure') {

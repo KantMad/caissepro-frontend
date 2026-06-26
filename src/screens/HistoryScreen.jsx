@@ -93,18 +93,26 @@ function HistoryScreen(){
         <Btn variant="outline" disabled={page>=totalPages-1} onClick={()=>setPage(p=>p+1)} style={{fontSize:10,padding:"4px 10px"}}>Suivant</Btn>
       </div>}</>)}
 
-    {tab==="avoirs"&&(avoirs.length?avoirs.map((a,idx)=>(
+    {tab==="avoirs"&&(avoirs.length?avoirs.map((a,idx)=>{
+      const total=Number(a.totalTTC)||0;const rem=a.remaining!=null?Number(a.remaining):total;
+      const partial=rem<total-0.001;const epuise=rem<=0.001;
+      return(
       <div key={a.avoirNumber||a.id||idx} onClick={()=>setAvoirDetail(a)} style={{display:"flex",alignItems:"center",gap:10,padding:10,borderRadius:10,
-        background:C.surface,border:`1.5px solid ${C.danger}33`,marginBottom:5,cursor:"pointer"}}>
-        <RotateCcw size={14} color={C.danger}/>
+        background:C.surface,border:`1.5px solid ${epuise?C.border:C.danger}33`,marginBottom:5,cursor:"pointer",opacity:epuise?0.7:1}}>
+        <RotateCcw size={14} color={epuise?C.textLight:C.danger}/>
         <div style={{flex:1}}>
           <div style={{fontSize:11,fontWeight:700,color:C.danger}}>{a.avoirNumber} <Badge color={C.textMuted}>Réf: {a.originalTicket}</Badge>
+            {partial&&!epuise&&<Badge color={C.fiscal}>Partiel</Badge>}{epuise&&<Badge color={C.textLight}>Épuisé</Badge>}
             {a.customerName&&<Badge color={C.accent}>{a.customerName}</Badge>}</div>
           <div style={{fontSize:9,color:C.textMuted}}>{new Date(a.date).toLocaleString("fr-FR")} — {a.userName} — {a.reason||"Sans motif"}</div></div>
-        <div style={{textAlign:"right"}}><div style={{fontSize:13,fontWeight:700,color:C.danger}}>-{(a.totalTTC||0).toFixed(2)}€</div>
+        <div style={{textAlign:"right"}}>
+          {partial?<>
+            <div style={{fontSize:9,color:C.textMuted,textDecoration:"line-through"}}>-{total.toFixed(2)}€</div>
+            <div style={{fontSize:14,fontWeight:800,color:epuise?C.textLight:C.fiscal}}>{epuise?"Épuisé":`Solde ${rem.toFixed(2)}€`}</div>
+          </>:<div style={{fontSize:13,fontWeight:700,color:C.danger}}>-{total.toFixed(2)}€</div>}
           <div style={{fontSize:7,color:C.fiscal,fontFamily:"monospace"}}>{a.fingerprint}</div></div>
-      </div>
-    )):<div style={{textAlign:"center",padding:30,color:C.textLight}}>Aucun avoir</div>)}
+      </div>);
+    }):<div style={{textAlign:"center",padding:30,color:C.textLight}}>Aucun avoir</div>)}
 
     {tab==="retouches"&&(()=>{
       const retClients=[...new Set(retoucheBons.map(b=>b.client).filter(Boolean))].sort();
@@ -343,6 +351,8 @@ function HistoryScreen(){
         const avCust=av.customerName||av.customer_name||"";
         const avReason=av.reason||"";
         const avTTC=Number(av.totalTTC||av.total_ttc)||0;
+        const avRem=av.remaining!=null?Number(av.remaining):avTTC;
+        const avPartial=avRem<avTTC-0.001;
         const avItems=av.items||[];
         const avRefund=av.refundMethod||av.refund_method||"?";
         const avFp=av.fingerprint||av.fiscal_fingerprint||"";
@@ -370,6 +380,7 @@ function HistoryScreen(){
         </div>);})}
         <div style={{borderTop:`1px dashed ${C.danger}`,margin:"4px 0"}}/>
         <div style={{display:"flex",justifyContent:"space-between",fontWeight:800,fontSize:14,color:C.danger}}><span>TOTAL AVOIR</span><span>-{avTTC.toFixed(2)}€</span></div>
+        {avPartial&&<div style={{display:"flex",justifyContent:"space-between",fontWeight:800,fontSize:14,color:C.fiscal,marginTop:3,background:`${C.fiscal}12`,borderRadius:6,padding:"4px 6px"}}><span>{avRem<=0.001?"AVOIR ÉPUISÉ":"SOLDE RESTANT"}</span><span>{avRem.toFixed(2)}€</span></div>}
         <div style={{fontWeight:700}}>Remboursement: {({cash:"Espèces",card:"Carte bancaire",avoir:"Avoir client"})[avRefund]||avRefund}</div>
         {avFp&&<div style={{textAlign:"center",background:C.dangerLight,padding:6,borderRadius:6,margin:"6px 0"}}>
           <div style={{fontSize:9,color:C.danger,fontWeight:800}}>EMPREINTE NF525</div>
