@@ -16,6 +16,7 @@ beforeAll(() => {
 import {
   escapeHtml, getPriceHT, getPriceTTC, catIcon, variantKey,
   getSizeRank, generateEAN13, norm, hashPin, verifyPin,
+  ean13SvgHtml, autoImportSizesFromProducts,
 } from "./utils.jsx";
 
 describe("escapeHtml", () => {
@@ -126,6 +127,32 @@ describe("norm.product", () => {
     expect(p.taxRate).toBe(0.055);
     expect(p.variants).toHaveLength(1);
     expect(p.variants[0].stock).toBe(5);
+  });
+});
+
+describe("ean13SvgHtml", () => {
+  it("renvoie '' pour un code invalide", () => {
+    expect(ean13SvgHtml("")).toBe("");
+    expect(ean13SvgHtml("123")).toBe("");
+    expect(ean13SvgHtml(null)).toBe("");
+  });
+  it("génère un SVG contenant des barres et le code pour un EAN-13 valide", () => {
+    const code = generateEAN13("204", 42); // 13 chiffres valides
+    const html = ean13SvgHtml(code);
+    expect(html).toContain("<svg");
+    expect(html).toContain("<rect");
+    expect(html).toContain(code);
+  });
+});
+
+describe("autoImportSizesFromProducts", () => {
+  it("attribue le rang numérique à une taille chiffrée", () => {
+    autoImportSizesFromProducts([{ variants: [{ size: "42" }] }]);
+    expect(getSizeRank("42")).toBe(42);
+  });
+  it("ne plante pas sur une liste vide / nulle", () => {
+    expect(() => autoImportSizesFromProducts([])).not.toThrow();
+    expect(() => autoImportSizesFromProducts(null)).not.toThrow();
   });
 });
 

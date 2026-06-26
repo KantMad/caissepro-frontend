@@ -21,6 +21,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Tests unitaires (Vitest)
+        run: npm run test
+
       - name: Build (Vite)
         run: npm run build
         env:

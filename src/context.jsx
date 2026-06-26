@@ -6,6 +6,7 @@ import hardwareManager from "./hardware.js";
 import { CO, DEFAULT_TVA_RATES, PERMS, initProducts, initUsers, initCustomers, LOYALTY_TIERS, initPromos, C, categories as defaultCategories } from "./constants.jsx";
 import { hashPin, verifyPin, sha256, norm, loadVariantOrderFromSettings, autoImportSizesFromProducts, generateEAN13, DEFAULT_CAT_ICONS } from "./utils.jsx";
 import { computeTotals } from "./lib/totals.js";
+import { getLoyaltyTier as loyaltyTierOf } from "./lib/loyalty.js";
 import Papa from "papaparse";
 
 /* ══════════ CONTEXT ══════════ */
@@ -1011,10 +1012,7 @@ function AppProvider({children}){
   },[notify]);
 
   // Loyalty tier for customer
-  const getLoyaltyTier=useCallback((points)=>{
-    const tiers=settings.loyaltyTiers||LOYALTY_TIERS;
-    let tier=tiers[0];tiers.forEach(t=>{if(points>=t.minPoints)tier=t;});return tier;
-  },[settings]);
+  const getLoyaltyTier=useCallback((points)=>loyaltyTierOf(points,settings.loyaltyTiers),[settings]);
 
   // Alerts
   const stockAlerts=useMemo(()=>{const a=[];products.forEach(p=>p.variants.forEach(v=>{

@@ -6,3 +6,4 @@ dist/
 .env
 .env.*
 android/.idea/
+.vitest-result.json
