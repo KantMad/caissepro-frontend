@@ -556,11 +556,14 @@ function SalesScreen(){
           <div style={{fontSize:22,fontWeight:900,color:C.fiscal,letterSpacing:"-0.5px"}}>{lastTk.avoirUsed.remainingAfter.toFixed(2)}EUR</div>
           <Btn onClick={async()=>{
             const av=lastTk.avoirUsed;
+            // Même avoir (immuable) : on récupère son code-barres + empreinte NF525 d'origine
+            const full=avoirs.find(a=>a.avoirNumber===av.avoirNumber)||{};
             try{
               await thermalPrint("avoir",{
                 avoirNumber:av.avoirNumber,totalTTC:av.remainingAfter,totalHT:av.remainingAfter,totalTVA:0,
-                remaining:av.remainingAfter,barcode:av.barcode,refundMethod:"avoir",
-                reason:"Solde restant sur avoir",originalTicket:lastTk.ticketNumber,
+                remaining:av.remainingAfter,barcode:full.barcode||av.barcode||"",
+                fingerprint:full.fingerprint||full.hash||"",hash:full.hash||"",
+                refundMethod:"avoir",reason:"Solde restant sur avoir",originalTicket:lastTk.ticketNumber,
                 date:new Date().toISOString(),userName:lastTk.userName,customerName:lastTk.customerName,items:[]});
             }catch(e){notify(e.message||"Erreur d'impression","danger");}
           }} variant="outline" style={{marginTop:8,borderColor:C.fiscal,color:C.fiscal,borderRadius:10,fontSize:12}}>
