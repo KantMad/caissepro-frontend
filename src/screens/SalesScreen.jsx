@@ -145,15 +145,6 @@ function SalesScreen(){
           <div style={{width:6,height:6,borderRadius:3,background:C.primary,marginRight:5,flexShrink:0}}/>
           <span style={{fontSize:13,fontWeight:600,color:C.text}}>{new Date().toLocaleDateString("fr-FR",{weekday:"short",day:"numeric",month:"short"})}</span>
           <span style={{fontSize:13,fontWeight:700,color:C.primary,fontVariantNumeric:"tabular-nums"}}>{clock.toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"})}</span></div>
-        <div style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:"var(--gap,10px)"}}>
-          <span style={{fontSize:11,color:C.textMuted}}>{todayTickets.length} vente{todayTickets.length>1?"s":""}</span>
-          <span style={{fontSize:13,fontWeight:700,color:C.primary,letterSpacing:"-0.3px"}}>{todayCA.toFixed(2)}€</span>
-          {stockAlerts.length>0&&<Badge color={C.danger}>{stockAlerts.length}</Badge>}
-          <span style={{fontSize:9,color:printerConnected?"#059669":C.textLight,display:"flex",alignItems:"center",gap:3,padding:"2px 6px",borderRadius:6,
-            background:printerConnected?"#05966908":C.surfaceAlt}}>
-            <Printer size={9}/> {printerConnected?"ESC/POS":"-"}</span>
-          <span style={{fontSize:9,color:C.textMuted,cursor:"pointer",display:"flex",alignItems:"center",gap:3,padding:"2px 6px",borderRadius:6,background:C.surfaceAlt}} onClick={()=>setShowShortcuts(true)}>
-            ? Raccourcis</span></div>
       </div>
       <div style={{display:"flex",gap:"var(--gap-sm,6px)",marginBottom:"var(--gap,10px)"}}>
         <div style={{position:"relative",flex:1}}>
