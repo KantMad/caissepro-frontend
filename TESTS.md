@@ -1,11 +1,11 @@
 # Tests unitaires — état du front
 
 > **Document généré automatiquement** par `npm run test:doc` (ne pas éditer à la main).
-> Dernière exécution : 2026-06-26 08:51 UTC
+> Dernière exécution : 2026-06-26 08:59 UTC
 
 ## Résultat global
 
-- ✅ **65/65 tests passés** — 5 fichier(s)
+- ✅ **76/76 tests passés** — 7 fichier(s)
 
 ## Comment lancer
 
@@ -17,11 +17,33 @@ npm run test:doc    # régénère ce document depuis les résultats réels
 
 ## Périmètre
 
-Tests **unitaires** des fonctions **pures / logiques** (calculs fiscaux, normalisations,
-EAN-13, tri, fidélité). Hors périmètre (relèveraient de tests d'intégration) : composants
-React, handlers d'événements, wrappers API, provider `context.jsx`.
+- **Tests unitaires** des fonctions **pures / logiques** : calculs fiscaux NF525
+  (`lib/totals`), promotions (`lib/promos`), fidélité (`lib/loyalty`), EAN-13,
+  normalizers, hash PIN, tri des tailles (`utils`, `_shared`).
+- **Tests d'intégration** du `AppProvider` (jsdom) : flux **panier** (ajout, remises,
+  quantités) et **paiement** (checkout online → payload, offline → ticket recalculé).
+
+Restent hors périmètre : le rendu visuel des écrans et les wrappers réseau `api.js`
+(testés indirectement via les mocks d'intégration).
 
 ## Détail par fichier
+
+### `src/cart-flow.test.jsx` — 8/8 ✅
+
+- ✅ Flux panier (intégration provider) › panier vide au départ → totaux à zéro
+- ✅ Flux panier (intégration provider) › ajoute 2× un article à 209 → TTC = 418.00 (HT+TVA cohérents)
+- ✅ Flux panier (intégration provider) › deux produits distincts → deux lignes, total additionné
+- ✅ Flux panier (intégration provider) › remise de ligne -50% → total divisé par 2
+- ✅ Flux panier (intégration provider) › remise globale 10% sur 2×209 → 376.20
+- ✅ Flux panier (intégration provider) › updateQty met à jour la quantité et le total
+- ✅ Flux panier (intégration provider) › article personnalisé (addCustomItem) apparaît dans le panier
+- ✅ Flux panier (intégration provider) › clearCart remet tout à zéro
+
+### `src/checkout-flow.test.jsx` — 3/3 ✅
+
+- ✅ Paiement — mode online (API OK) › envoie le bon payload et vide le panier
+- ✅ Paiement — mode offline (API échoue → fallback local) › recalcule le ticket localement (TTC ancré) et le conserve
+- ✅ Paiement — mode offline (API échoue → fallback local) › multi-taux offline reste cohérent (HT+TVA=TTC)
 
 ### `src/lib/loyalty.test.js` — 8/8 ✅
 

@@ -48,9 +48,14 @@ npm run test:doc    # régénère ce document depuis les résultats réels
 
 ## Périmètre
 
-Tests **unitaires** des fonctions **pures / logiques** (calculs fiscaux, normalisations,
-EAN-13, tri, fidélité). Hors périmètre (relèveraient de tests d'intégration) : composants
-React, handlers d'événements, wrappers API, provider \`context.jsx\`.
+- **Tests unitaires** des fonctions **pures / logiques** : calculs fiscaux NF525
+  (\`lib/totals\`), promotions (\`lib/promos\`), fidélité (\`lib/loyalty\`), EAN-13,
+  normalizers, hash PIN, tri des tailles (\`utils\`, \`_shared\`).
+- **Tests d'intégration** du \`AppProvider\` (jsdom) : flux **panier** (ajout, remises,
+  quantités) et **paiement** (checkout online → payload, offline → ticket recalculé).
+
+Restent hors périmètre : le rendu visuel des écrans et les wrappers réseau \`api.js\`
+(testés indirectement via les mocks d'intégration).
 
 ## Détail par fichier
 `;
