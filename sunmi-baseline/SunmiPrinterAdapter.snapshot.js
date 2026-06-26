@@ -214,6 +214,7 @@ class SunmiPrinterAdapter {
       text(`TOTAL TTC    ${fmt(t.totalTTC || t.total_ttc)} EUR\n`);
       size(24); bold(false);
 
+      text('\n'); // marge entre les totaux et le paiement
       // Payment
       const ml = { cash: 'ESP', card: 'CB', amex: 'AMEX', giftcard: 'CAD', cheque: 'CHQ', avoir: 'AVOIR' };
       const payments = t.payments || [];

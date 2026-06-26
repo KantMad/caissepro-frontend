@@ -541,6 +541,7 @@ class ThermalPrinter {
         await this.normalSize();
         await this.bold(false);
 
+        await this.newline(); // marge entre les totaux et le paiement
         await this.separator('-');
 
         // ── Payment ──
