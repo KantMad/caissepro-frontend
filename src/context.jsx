@@ -5,6 +5,7 @@ import printer from "./printer.js";
 import hardwareManager from "./hardware.js";
 import { CO, DEFAULT_TVA_RATES, PERMS, initProducts, initUsers, initCustomers, LOYALTY_TIERS, initPromos, C, categories as defaultCategories } from "./constants.jsx";
 import { hashPin, verifyPin, sha256, norm, loadVariantOrderFromSettings, autoImportSizesFromProducts, generateEAN13, DEFAULT_CAT_ICONS } from "./utils.jsx";
+import { computeTotals } from "./lib/totals.js";
 import Papa from "papaparse";
 
 /* ══════════ CONTEXT ══════════ */
@@ -554,35 +555,10 @@ function AppProvider({children}){
   // ══ FE-05: Single source of truth for cart totals (used by both context and screens) ══
   const cartTotals=useMemo(()=>{
     if(!cart.length)return{sHT:0,gd:0,promoDisc:0,applied:[],tHT:0,tTVA:0,tTTC:0};
-    const pm=settings.pricingMode||"TTC";
-    const r2=(v)=>Math.round(v*100)/100;
-    // Ligne TTC réelle (prix payé par le client) + taux, par article
-    const lines=cart.map(i=>{
-      const rate=i.product.taxRate||0.20;
-      const raw=i.discountType==="amount"?i.product.price*i.quantity-((i.discount||0)*i.quantity):i.product.price*i.quantity*(1-(i.discount||0)/100);
-      const lineTTC=r2(pm==="TTC"?raw:raw*(1+rate));
-      return{rate,lineTTC};
-    });
-    // Sous-total HT indicatif (avant remise globale)
-    const sHT=r2(lines.reduce((s,l)=>s+l.lineTTC/(1+l.rate),0));
-    // Remise globale (HT) + promos
-    let gd=gDiscType==="percentage"?r2(sHT*(gDisc/100)):Math.min(gDisc,sHT);
     const{promoDisc,applied}=calcPromoDiscount(cart);
-    gd=r2(gd+promoDisc);gd=Math.min(gd,sHT);
-    const discountRatio=sHT>0?(gd/sHT):0;
-    // ── NF525 : TTC = référence (prix payé). HT/TVA DÉRIVÉS du TTC par groupe de taux ──
-    // garantit HT + TVA = TTC au centime (pas de dérive d'arrondi ligne par ligne).
-    const groups={};
-    for(const l of lines)groups[l.rate]=r2((groups[l.rate]||0)+l.lineTTC);
-    let tHT=0,tTVA=0,netTTC=0;
-    for(const rk of Object.keys(groups)){
-      const rate=parseFloat(rk);
-      const gNet=r2(groups[rk]*(1-discountRatio));     // TTC du groupe après remise
-      const gHT=r2(gNet/(1+rate));
-      tHT=r2(tHT+gHT);tTVA=r2(tTVA+(gNet-gHT));netTTC=r2(netTTC+gNet);
-    }
-    const tTTC=Math.max(0,r2(netTTC-avoirPayment));
-    return{sHT,gd,promoDisc,applied,tHT,tTVA,tTTC};
+    const lines=cart.map(i=>({price:i.product.price,quantity:i.quantity,taxRate:i.product.taxRate,discount:i.discount,discountType:i.discountType}));
+    const t=computeTotals(lines,{pricingMode:settings.pricingMode,gDisc,gDiscType,promoDisc,avoirPayment});
+    return{...t,promoDisc,applied};
   },[cart,gDisc,gDiscType,calcPromoDiscount,avoirPayment,settings.pricingMode]);
 
   // ══ CHECKOUT — API ou fallback local ══
@@ -613,22 +589,10 @@ function AppProvider({children}){
       variant:i.variant?{id:i.variant.id,color:i.variant.color,size:i.variant.size}:null,
       discount:i.discount||0
     };});
-    const r2=(v)=>Math.round(v*100)/100;
-    const sHT=r2(items.reduce((s,i)=>s+i.lineHT,0));
-    let gd=gDiscType==="percentage"?r2(sHT*(gDisc/100)):Math.min(gDisc,sHT);
+    // Totaux via la source unique (identique à cartTotals) — TTC ancré, HT/TVA dérivés
     const{promoDisc,applied}=calcPromoDiscount(cart);
-    gd=r2(gd+promoDisc);gd=Math.min(gd,sHT);
-    const discountRatio=sHT>0?(gd/sHT):0;
-    // NF525 : TTC = référence (somme des prix payés), HT/TVA DÉRIVÉS du TTC par groupe de taux
-    // → HT+TVA = TTC au centime, identique à cartTotals ET au backend create_sale.
-    const _groups={};
-    for(const i of items)_groups[i.tax_rate]=r2((_groups[i.tax_rate]||0)+r2(i.lineTTC));
-    let tHT=0,tTVA=0,netTTC=0;
-    for(const rk of Object.keys(_groups)){
-      const rate=parseFloat(rk);const gNet=r2(_groups[rk]*(1-discountRatio));const gHT=r2(gNet/(1+rate));
-      tHT=r2(tHT+gHT);tTVA=r2(tTVA+(gNet-gHT));netTTC=r2(netTTC+gNet);
-    }
-    const tTTC=Math.max(0,r2(netTTC-avoirPayment));
+    const _lines=cart.map(i=>({price:i.product.price,quantity:i.quantity,taxRate:i.product.taxRate,discount:i.discount,discountType:i.discountType}));
+    const{sHT,gd,tHT,tTVA,tTTC}=computeTotals(_lines,{pricingMode:pm,gDisc,gDiscType,promoDisc,avoirPayment});
 
     // ── TPE: charge card payments via hardware terminal BEFORE finalizing ──
     const cardMethods=['card','amex','contactless'];
