@@ -78,7 +78,10 @@ function SalesScreen(){
     if(g>0)payments.push({method:"giftcard",amount:g});if(chq>0)payments.push({method:"cheque",amount:chq});if(avoirPayment>0)payments.push({method:"avoir",amount:avoirPayment});
     if(!payments.length)return;setBusy(true);try{const t=await checkout(payments,selSeller);if(t){setLastTk({...t});setPayModal(false);setTkModal(true);setSelSeller(null);}}finally{setBusy(false);setCashGiven("");}};
   const quickPay=async(method)=>{if(!cart.length||busy)return;setBusy(true);
-    const payments=[{method,amount:totals.tTTC}];if(avoirPayment>0)payments.push({method:"avoir",amount:avoirPayment});
+    // Ne pas envoyer de paiement à 0€ (ex: avoir couvrant tout le panier → tTTC=0)
+    const payments=[{method,amount:totals.tTTC}].filter(p=>p.amount>0);
+    if(avoirPayment>0&&method!=="avoir")payments.push({method:"avoir",amount:avoirPayment});
+    else if(avoirPayment>0&&method==="avoir"&&!payments.length)payments.push({method:"avoir",amount:avoirPayment});
     try{const t=await checkout(payments,selSeller);if(t){setLastTk({...t});setTkModal(true);setSelSeller(null);}}finally{setBusy(false);setCashGiven("");}};
   const change=cashGiven?Math.max(0,parseFloat(cashGiven)-totals.tTTC):0;
   const maxDisc=perm().maxDiscount;
@@ -323,6 +326,7 @@ function SalesScreen(){
               <span style={{fontWeight:700,color:C.fiscal}}>-{avoirPayment.toFixed(2)}€</span>
               <button onClick={()=>setSelectedAvoir(null)} style={{background:"none",border:"none",cursor:"pointer",padding:2,color:C.danger,fontSize:9,fontWeight:700}} title="Annuler l'avoir">X</button>
             </span></div>}
+          {selectedAvoir&&((selectedAvoir.remaining||0)-avoirPayment)>0.001&&<div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:3,background:`${C.fiscal}10`,borderRadius:6,padding:"3px 6px"}}><span style={{color:C.fiscal,display:"flex",alignItems:"center",gap:3,fontWeight:700}}><RotateCcw size={9}/> Reste sur avoir</span><span style={{fontWeight:800,color:C.fiscal}}>{((selectedAvoir.remaining||0)-avoirPayment).toFixed(2)}€</span></div>}
           <div style={{borderTop:`2px solid ${C.border}`,paddingTop:6,marginTop:4,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
             <span style={{fontSize:14,fontWeight:800}}>Total TTC</span>
             <span style={{fontSize:20,fontWeight:900,color:C.primary,letterSpacing:"-0.8px"}}>{totals.tTTC.toFixed(2)}€</span></div></div>
@@ -550,25 +554,15 @@ function SalesScreen(){
         <div style={{background:C.fiscalLight||"#FFF7ED",border:`2px solid ${C.fiscal}`,borderRadius:12,padding:14,marginTop:12,textAlign:"center"}}>
           <div style={{fontSize:11,fontWeight:600,color:C.fiscal,marginBottom:4}}>Solde restant sur avoir {lastTk.avoirUsed.avoirNumber}</div>
           <div style={{fontSize:22,fontWeight:900,color:C.fiscal,letterSpacing:"-0.5px"}}>{lastTk.avoirUsed.remainingAfter.toFixed(2)}EUR</div>
-          <Btn onClick={()=>{
+          <Btn onClick={async()=>{
             const av=lastTk.avoirUsed;
-            const w=window.open("","_blank","width=400,height=400");if(!w)return;
-            w.document.write(`<!DOCTYPE html><html><head><title>Avoir — Solde restant</title>
-              <style>body{font-family:'Courier New',monospace;font-size:12px;padding:20px;max-width:300px;margin:0 auto;text-align:center;}
-              h2{font-size:14px;margin:4px 0;}hr{border:none;border-top:1px dashed #333;margin:8px 0;}
-              .big{font-size:28px;font-weight:900;margin:12px 0;}.no-print{margin-top:16px;}</style></head><body>
-              <h2>${settings.name||"CaissePro"}</h2>
-              <div>${settings.address||""}, ${settings.postalCode||""} ${settings.city||""}</div><hr>
-              <h2>AVOIR — SOLDE RESTANT</h2>
-              <div>N° ${av.avoirNumber}</div>
-              <div class="big">${av.remainingAfter.toFixed(2)} EUR</div>
-              <div>Montant utilise: ${av.amount.toFixed(2)} EUR</div>
-              <div>Ticket: ${lastTk.ticketNumber}</div>
-              <div>${new Date().toLocaleString("fr-FR")}</div><hr>
-              <div style="font-size:10px;">Presentez ce bon lors de votre prochain achat.</div>
-              ${av.barcode?ean13SvgHtml(av.barcode,160,45):""}
-              <div class="no-print"><button onclick="window.print()" style="padding:8px 20px;background:#047857;color:#fff;border:none;border-radius:8px;font-size:13px;cursor:pointer;">Imprimer</button></div>
-              </body></html>`);w.document.close();
+            try{
+              await thermalPrint("avoir",{
+                avoirNumber:av.avoirNumber,totalTTC:av.remainingAfter,totalHT:av.remainingAfter,totalTVA:0,
+                remaining:av.remainingAfter,barcode:av.barcode,refundMethod:"avoir",
+                reason:"Solde restant sur avoir",originalTicket:lastTk.ticketNumber,
+                date:new Date().toISOString(),userName:lastTk.userName,customerName:lastTk.customerName,items:[]});
+            }catch(e){notify(e.message||"Erreur d'impression","danger");}
           }} variant="outline" style={{marginTop:8,borderColor:C.fiscal,color:C.fiscal,borderRadius:10,fontSize:12}}>
             <Printer size={14}/> Imprimer le solde restant</Btn>
         </div>
