@@ -6,7 +6,7 @@ import { CO, C } from "../constants.jsx";
 import { EAN13Svg, ean13SvgHtml } from "../utils.jsx";
 import { Modal, Btn, Input, Badge } from "../ui.jsx";
 import { useApp } from "../context.jsx";
-import { getPaymentLabel } from "../lib/formatters.js";
+import { getPaymentLabel, getAvoirRemaining, isAvoirPartiallyUsed } from "../lib/formatters.js";
 
 function HistoryScreen(){
   const{tickets,setTickets,avoirs,settings,processReturn,perm:p,printerConnected,thermalPrint,setSelectedAvoir,setMode,notify,customers,setCustomers,retoucheBons,updateRetoucheStatus,scanBarcode,setScanBarcode,trainingMode}=useApp();
@@ -95,8 +95,8 @@ function HistoryScreen(){
       </div>}</>)}
 
     {tab==="avoirs"&&(avoirs.length?avoirs.map((a,idx)=>{
-      const total=Number(a.totalTTC)||0;const rem=a.remaining!=null?Number(a.remaining):total;
-      const partial=rem<total-0.001;const epuise=rem<=0.001;
+      const total=Number(a.totalTTC)||0;const rem=getAvoirRemaining(a);
+      const partial=isAvoirPartiallyUsed(a);const epuise=rem<=0.001;
       return(
       <div key={a.avoirNumber||a.id||idx} onClick={()=>setAvoirDetail(a)} style={{display:"flex",alignItems:"center",gap:10,padding:10,borderRadius:10,
         background:C.surface,border:`1.5px solid ${epuise?C.border:C.danger}33`,marginBottom:5,cursor:"pointer",opacity:epuise?0.7:1}}>
@@ -382,7 +382,7 @@ function HistoryScreen(){
         <div style={{borderTop:`1px dashed ${C.danger}`,margin:"4px 0"}}/>
         <div style={{display:"flex",justifyContent:"space-between",fontWeight:800,fontSize:14,color:C.danger}}><span>TOTAL AVOIR</span><span>-{avTTC.toFixed(2)}€</span></div>
         {avPartial&&<div style={{display:"flex",justifyContent:"space-between",fontWeight:800,fontSize:14,color:C.fiscal,marginTop:3,background:`${C.fiscal}12`,borderRadius:6,padding:"4px 6px"}}><span>{avRem<=0.001?"AVOIR ÉPUISÉ":"SOLDE RESTANT"}</span><span>{avRem.toFixed(2)}€</span></div>}
-        <div style={{fontWeight:700}}>Remboursement: {({cash:"Espèces",card:"Carte bancaire",avoir:"Avoir client"})[avRefund]||avRefund}</div>
+        <div style={{fontWeight:700}}>Remboursement: {getPaymentLabel(avRefund,"refund")}</div>
         {avFp&&<div style={{textAlign:"center",background:C.dangerLight,padding:6,borderRadius:6,margin:"6px 0"}}>
           <div style={{fontSize:9,color:C.danger,fontWeight:800}}>EMPREINTE NF525</div>
           <div style={{fontSize:12,fontWeight:800,color:C.danger,letterSpacing:2}}>{avFp}</div></div>}

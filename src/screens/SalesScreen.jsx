@@ -5,7 +5,7 @@ import { CO, C, CAT_COLORS } from "../constants.jsx";
 import { catIcon, EAN13Svg, ean13SvgHtml } from "../utils.jsx";
 import { Modal, Btn, Input, Badge, Numpad } from "../ui.jsx";
 import { useApp } from "../context.jsx";
-import { getPaymentLabel } from "../lib/formatters.js";
+import { getPaymentLabel, getAvoirRemaining } from "../lib/formatters.js";
 import { useViewport } from "../useViewport.js";
 import hardwareManager from "../hardware.js";
 
@@ -513,7 +513,7 @@ function SalesScreen(){
             boxShadow:"0 8px 32px rgba(47,158,85,0.35)",marginBottom:10,border:"3px solid rgba(47,158,85,0.2)"}}><CheckCircle2 size={36} color="#fff"/></div>
           <div style={{fontSize:11,fontWeight:600,color:"#059669",textTransform:"uppercase",letterSpacing:"1px",marginBottom:4}}>Vente confirmée</div>
           <div style={{fontSize:28,fontWeight:900,color:"#059669",letterSpacing:"-1px"}}>{(lastTk.totalTTC||0).toFixed(2)}€</div>
-          <div style={{fontSize:12,color:C.textMuted,marginTop:2}}>Paiement {({cash:"Espèces",card:"CB",amex:"American Express",giftcard:"Cadeau",MIXTE:"Mixte",cheque:"Chèque"})[lastTk.paymentMethod]||lastTk.paymentMethod}</div></div>
+          <div style={{fontSize:12,color:C.textMuted,marginTop:2}}>Paiement {getPaymentLabel(lastTk.paymentMethod,"full")}</div></div>
         <div data-print-receipt style={{fontFamily:"'Courier New',monospace",fontSize:12,fontWeight:500,background:"#FAFAF8",borderRadius:12,padding:18,border:`1px solid ${C.border}`,boxShadow:`inset 0 1px 3px ${C.shadow}`}}>
         <div style={{textAlign:"center",marginBottom:8}}>
           {settings.receiptLogo&&<div style={{marginBottom:4}}><img src={settings.receiptLogo} alt="" style={{maxHeight:40,maxWidth:180,objectFit:"contain"}}/></div>}
@@ -629,10 +629,10 @@ function SalesScreen(){
           onMouseEnter={e=>e.currentTarget.style.borderColor=C.accent} onMouseLeave={e=>e.currentTarget.style.borderColor=`${C.accent}25`}>
           <Gift size={24} color={C.accent} style={{marginBottom:6}}/><div style={{fontSize:13,fontWeight:700,color:C.text}}>Carte cadeau</div><div style={{fontSize:10,color:C.textMuted}}>Saisir le montant manuellement</div></button>
         <button onClick={()=>{setPayMethodModal(false);setAvoirSelectModal(true);}}
-          style={{padding:16,borderRadius:14,border:`2px solid ${C.fiscal}25`,background:avoirs.filter(a=>!a.used&&(a.remaining||a.totalTTC)>0).length?`${C.fiscal}06`:`${C.border}08`,cursor:"pointer",textAlign:"center",transition:"all 0.15s",opacity:avoirs.filter(a=>!a.used&&(a.remaining||a.totalTTC)>0).length?1:0.5}}
+          style={{padding:16,borderRadius:14,border:`2px solid ${C.fiscal}25`,background:avoirs.filter(a=>!a.used&&getAvoirRemaining(a)>0).length?`${C.fiscal}06`:`${C.border}08`,cursor:"pointer",textAlign:"center",transition:"all 0.15s",opacity:avoirs.filter(a=>!a.used&&getAvoirRemaining(a)>0).length?1:0.5}}
           onMouseEnter={e=>e.currentTarget.style.borderColor=C.fiscal} onMouseLeave={e=>e.currentTarget.style.borderColor=`${C.fiscal}25`}>
           <RotateCcw size={24} color={C.fiscal} style={{marginBottom:6}}/><div style={{fontSize:13,fontWeight:700,color:C.text}}>Avoir</div>
-          <div style={{fontSize:10,color:C.textMuted}}>{avoirs.filter(a=>!a.used&&(a.remaining||a.totalTTC)>0).length} avoir(s) dispo.</div></button>
+          <div style={{fontSize:10,color:C.textMuted}}>{avoirs.filter(a=>!a.used&&getAvoirRemaining(a)>0).length} avoir(s) dispo.</div></button>
       </div>
       <div style={{borderTop:`1px solid ${C.border}`,paddingTop:10}}>
         <button onClick={()=>{setPayMethodModal(false);openPay();}} style={{width:"100%",padding:14,borderRadius:14,border:`2px solid ${C.fiscal}25`,background:`${C.fiscal}06`,cursor:"pointer",textAlign:"center",transition:"all 0.15s",display:"flex",alignItems:"center",justifyContent:"center",gap:10}}
@@ -644,7 +644,7 @@ function SalesScreen(){
 
     {/* AVOIR SELECTION MODAL */}
     <Modal open={avoirSelectModal} onClose={()=>{setAvoirSelectModal(false);setAvoirSearch("");}} title="Paiement par avoir" sub={`Total: ${totals.tTTC.toFixed(2)}EUR`}>
-      {(()=>{const available=avoirs.filter(a=>!a.used&&(a.remaining??a.totalTTC)>0&&!(isAvoirExpired?.(a)));
+      {(()=>{const available=avoirs.filter(a=>!a.used&&getAvoirRemaining(a)>0&&!(isAvoirExpired?.(a)));
         const shown=avoirSearch?available.filter(a=>(a.avoirNumber||"").toLowerCase().includes(avoirSearch.toLowerCase())||
           (a.customerName||"").toLowerCase().includes(avoirSearch.toLowerCase())||(a.originalTicket||"").toLowerCase().includes(avoirSearch.toLowerCase())||(a.barcode||"").includes(avoirSearch)):available;
         return<div style={{display:"flex",flexDirection:"column",gap:8}}>
@@ -655,7 +655,7 @@ function SalesScreen(){
             <RotateCcw size={28} color={C.border} style={{marginBottom:8}}/>
             <div style={{fontSize:13,fontWeight:700,marginBottom:2}}>Aucun avoir{avoirSearch?" pour cette recherche":" disponible"}</div>
             <div style={{fontSize:11}}>Les avoirs sont generes lors des retours en caisse.</div></div>}
-          {shown.map(a=>{const rem=a.remaining??a.totalTTC??0;const rawTotal=totals.tTTC+avoirPayment;const canApply=Math.min(rem,rawTotal);
+          {shown.map(a=>{const rem=getAvoirRemaining(a);const rawTotal=totals.tTTC+avoirPayment;const canApply=Math.min(rem,rawTotal);
             const expiryDate=new Date(new Date(a.date).setMonth(new Date(a.date).getMonth()+(settings.returnPolicy?.avoirExpiryMonths||12)));
             return(<div key={a.avoirNumber} style={{padding:14,borderRadius:14,border:`2px solid ${C.fiscal}25`,background:C.surfaceAlt,display:"flex",alignItems:"center",gap:12}}>
               <div style={{flex:1}}>

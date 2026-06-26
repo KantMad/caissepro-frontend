@@ -3,6 +3,7 @@ import { Search, RotateCcw, Save, Check } from "lucide-react";
 import { C } from "../constants.jsx";
 import { Btn, Input, Badge } from "../ui.jsx";
 import { useApp } from "../context.jsx";
+import { getAvoirRemaining, formatAmount } from "../lib/formatters.js";
 
 function ReturnsHistoryScreen(){
   const{avoirs,tickets,notify,settings,setSettings,saveSettingsToAPI,addAudit,isAvoirExpired}=useApp();
@@ -154,7 +155,7 @@ function ReturnsHistoryScreen(){
             {a.originalTicket&&<span style={{fontSize:10,color:C.textMuted,fontFamily:"monospace"}}>Ticket: {a.originalTicket}</span>}
             {a.customerName&&<span style={{fontSize:10,color:C.accent}}>Client: {a.customerName}</span>}
             {expired&&<Badge color={C.danger}>Expire</Badge>}
-            {a.refundMethod==="avoir"&&!a.used&&!expired&&<Badge color={C.fiscal}>Solde: {(a.remaining??a.totalTTC??0).toFixed(2)}EUR</Badge>}
+            {a.refundMethod==="avoir"&&!a.used&&!expired&&<Badge color={C.fiscal}>Solde: {formatAmount(getAvoirRemaining(a))}EUR</Badge>}
             {a.used&&<Badge color={C.textMuted}>Utilise</Badge>}</div>
           <div style={{fontSize:11,color:C.textMuted,marginTop:2}}>
             {(a.items||[]).map(it=>`${it.product?.name||it.product_name||"?"}${it.variant?(" ("+((it.variant?.color||it.variant_color||"")+"/"+(it.variant?.size||it.variant_size||""))+")"):""} x${it.quantity||it.qty||1}`).join(", ")}

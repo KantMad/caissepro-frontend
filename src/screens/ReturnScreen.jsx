@@ -5,6 +5,7 @@ import { CO, C } from "../constants.jsx";
 import { verifyPin, EAN13Svg } from "../utils.jsx";
 import { Modal, Btn, Input, Badge } from "../ui.jsx";
 import { useApp } from "../context.jsx";
+import { getPaymentLabel, getAvoirRemaining, formatAmount } from "../lib/formatters.js";
 
 function ReturnScreen(){
   const{tickets,products,processReturn,findByEAN,avoirs,settings,notify,printerConnected,thermalPrint,setSelectedAvoir,setMode:setAppMode,users,currentUser,addAudit,isAvoirExpired,setScanOverride,clearScanOverride}=useApp();
@@ -235,7 +236,7 @@ function ReturnScreen(){
                 <span style={{fontSize:11,fontWeight:700,fontFamily:"monospace"}}>{a.avoirNumber}</span>
                 <Badge color={a.refundMethod==="avoir"?C.primary:a.refundMethod==="cash"?C.accent:a.refundMethod==="card"?C.info:"#8B5CF6"}>
                   {({avoir:"Avoir",cash:"ESP",card:"CB",exchange:"ECH"})[a.refundMethod]||a.refundMethod}</Badge>
-                {isAvoirType&&!a.used&&!expired&&<Badge color={C.fiscal}>Solde: {(a.remaining??a.totalTTC??0).toFixed(2)}EUR</Badge>}
+                {isAvoirType&&!a.used&&!expired&&<Badge color={C.fiscal}>Solde: {formatAmount(getAvoirRemaining(a))}EUR</Badge>}
                 {a.used&&<Badge color={C.textMuted}>Utilise</Badge>}
                 {expired&&<Badge color={C.danger}>Expire</Badge>}</div>
               <div style={{fontSize:9,color:C.textMuted,marginTop:1}}>
@@ -348,7 +349,7 @@ function ReturnScreen(){
         </div>);})}
         <div style={{borderTop:`1px dashed ${C.danger}`,margin:"4px 0"}}/>
         <div style={{display:"flex",justifyContent:"space-between",fontWeight:700,color:C.danger}}><span>TOTAL AVOIR</span><span>-{avTTC.toFixed(2)}€</span></div>
-        <div>Remboursement: {({cash:"Espèces",card:"Carte bancaire",avoir:"Avoir client"})[avRefund]||avRefund}</div>
+        <div>Remboursement: {getPaymentLabel(avRefund,"refund")}</div>
         {avFp&&<div style={{textAlign:"center",background:C.dangerLight,padding:6,borderRadius:6,margin:"6px 0"}}>
           <div style={{fontSize:8,color:C.danger,fontWeight:700}}>EMPREINTE NF525</div>
           <div style={{fontSize:11,fontWeight:700,color:C.danger,letterSpacing:2}}>{avFp}</div></div>}
