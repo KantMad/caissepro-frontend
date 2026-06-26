@@ -238,7 +238,7 @@ function SalesScreen(){
         <Minus size={0}/><span style={{fontSize:18}}>←</span> Retour aux produits</button>}
       {/* Cart header */}
       <div className="cart-header" style={{padding:"var(--cart-pad,14px 16px 10px)",borderBottom:`1px solid ${C.border}`}}>
-        <div style={{display:"flex",alignItems:"center",gap:14,marginBottom:6}}>
+        <div style={{display:"flex",alignItems:"center",gap:18,marginBottom:6}}>
           <div style={{width:34,height:34,borderRadius:10,background:C.primary,display:"flex",alignItems:"center",justifyContent:"center",
             boxShadow:`0 4px 14px ${C.primary}25`,flexShrink:0}}><ShoppingCart size={16} color="#fff"/></div>
           <div style={{flex:1,minWidth:0}}><div style={{fontSize:14,fontWeight:800,letterSpacing:"-0.3px"}}>Panier</div>
