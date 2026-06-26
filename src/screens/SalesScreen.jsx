@@ -184,7 +184,7 @@ function SalesScreen(){
             <Package size={26} style={{opacity:0.4}}/></div>
           <div style={{fontSize:14,fontWeight:700,marginBottom:4,color:C.text}}>Aucun produit trouvé</div>
           <div style={{fontSize:12}}>Essayez un autre terme de recherche</div></div>}
-        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(var(--card-min,155px),1fr))",gap:"var(--gap,10px)"}}>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(var(--prod-cols,4),1fr)",gap:"var(--gap,10px)"}}>
         {filtered.map(p=>{const ts=p.variants.reduce((s,v)=>s+v.stock,0);const ha=p.variants.some(v=>v.stock<=(v.stockAlert||5));
           const cc=CAT_COLORS[p.category]||C.primary;
           return(<div key={p.id} onClick={()=>p.variants.length===1?addToCart(p,p.variants[0]):setVm(p)}
@@ -237,24 +237,23 @@ function SalesScreen(){
       {vp.isMobile&&<button onClick={()=>setMobileCartOpen(false)} style={{display:"flex",alignItems:"center",gap:8,padding:"12px 14px",border:"none",borderBottom:`1px solid ${C.border}`,background:C.surfaceAlt,cursor:"pointer",fontFamily:"inherit",fontSize:14,fontWeight:700,color:C.text,flexShrink:0}}>
         <Minus size={0}/><span style={{fontSize:18}}>←</span> Retour aux produits</button>}
       {/* Cart header */}
-      <div style={{padding:"var(--cart-pad,14px 16px 10px)",borderBottom:`1px solid ${C.border}`}}>
-        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
+      <div className="cart-header" style={{padding:"var(--cart-pad,14px 16px 10px)",borderBottom:`1px solid ${C.border}`}}>
+        <div style={{display:"flex",alignItems:"center",gap:14,marginBottom:6}}>
           <div style={{width:34,height:34,borderRadius:10,background:C.primary,display:"flex",alignItems:"center",justifyContent:"center",
             boxShadow:`0 4px 14px ${C.primary}25`,flexShrink:0}}><ShoppingCart size={16} color="#fff"/></div>
           <div style={{flex:1,minWidth:0}}><div style={{fontSize:14,fontWeight:800,letterSpacing:"-0.3px"}}>Panier</div>
             <div style={{fontSize:11,color:C.text,fontWeight:800}}>{cart.reduce((s,i)=>s+i.quantity,0)} pièce{cart.reduce((s,i)=>s+i.quantity,0)>1?"s":""}</div></div>
-          <Btn variant="outline" onClick={parkCart} disabled={!cart.length} style={{padding:"4px 8px",borderRadius:8,fontSize:8,fontWeight:700,gap:3,position:"relative"}} title="Mettre en attente"><Pause size={11}/> Attente
-            {parked.length>0&&<span style={{position:"absolute",top:-5,right:-5,width:14,height:14,borderRadius:7,background:C.danger,color:"#fff",fontSize:7,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center"}}>{parked.length}</span>}</Btn>
           {perm().canVoid&&<Btn variant="ghost" onClick={()=>{if(cart.length)setConfirmVoid(true);}} disabled={!cart.length} style={{padding:"4px 6px",color:C.danger,borderRadius:8}} title="Annuler"><XOctagon size={12}/></Btn>}
         </div>
 
-        {/* Seller selection */}
+        {/* Seller selection + Attente */}
         <div style={{display:"flex",gap:4,marginBottom:5}}>
           <select value={selSeller||""} onChange={e=>setSelSeller(e.target.value||null)} style={{flex:1,height:28,fontSize:10,padding:"3px 6px",borderRadius:8,border:`1px solid ${C.border}`,fontFamily:"inherit",background:C.surface,color:selSeller?C.text:C.textMuted}}>
             <option value="">Vendeur: {currentUser?.name} (moi)</option>
             {users.filter(u=>u.name!==currentUser?.name&&u.role!=="admin").map(u=>(<option key={u.id} value={u.name}>{u.name}</option>))}
           </select>
-          <Input value={saleNote} onChange={e=>setSaleNote(e.target.value)} placeholder="Note…" style={{flex:1,height:28,fontSize:10,padding:"3px 8px",borderRadius:8}}/>
+          <Btn variant="outline" onClick={parkCart} disabled={!cart.length} style={{padding:"0 12px",borderRadius:8,fontSize:11,fontWeight:700,gap:5,position:"relative",whiteSpace:"nowrap"}} title="Mettre en attente"><Pause size={13}/> Attente
+            {parked.length>0&&<span style={{position:"absolute",top:-5,right:-5,width:14,height:14,borderRadius:7,background:C.danger,color:"#fff",fontSize:7,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center"}}>{parked.length}</span>}</Btn>
         </div>
 
         {/* Customer */}
