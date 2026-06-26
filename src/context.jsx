@@ -71,6 +71,7 @@ function AppProvider({children}){
   useEffect(()=>{try{localStorage.setItem("caissepro_parked",JSON.stringify(parked));}catch(e){}},[parked]);
   const[retoucheBons,setRetoucheBons]=useState(()=>{try{const s=localStorage.getItem("caissepro_retouches");return s?JSON.parse(s):[];}catch(e){return[];}});
   const[tenues,setTenues]=useState(()=>{try{const s=localStorage.getItem("caissepro_tenues");return s?JSON.parse(s):[];}catch(e){return[];}});
+  const[cashMovements,setCashMovements]=useState(()=>{try{const s=localStorage.getItem("caissepro_cashmoves");return s?JSON.parse(s):[];}catch(e){return[];}});
   useEffect(()=>{try{localStorage.setItem("caissepro_retouches",JSON.stringify(retoucheBons.slice(0,500)));}catch(e){}},[retoucheBons]);
   const[selCust,setSelCust]=useState(null);
   const[stockMoves,setStockMoves]=useState(()=>{try{const s=localStorage.getItem("caissepro_stockmoves");return s?JSON.parse(s):[];}catch(e){return[];}});
@@ -152,6 +153,23 @@ function AppProvider({children}){
       if(!q){setTenues(mapped.slice(0,500));try{localStorage.setItem("caissepro_tenues",JSON.stringify(mapped.slice(0,500)));}catch(e){}}
       return mapped;
     }catch(e){console.warn("Chargement tenues échoué:",e.message);return[];}
+  },[]);
+  // ══ Tiroir-caisse : apports (in) / prélèvements (out) — NF525, motif obligatoire ══
+  const addCashMovement=useCallback(async(direction,amount,reason)=>{
+    const amt=parseFloat(amount)||0;
+    if(direction!=="in"&&direction!=="out")throw new Error("Direction invalide");
+    if(!(amt>0))throw new Error("Montant invalide");
+    if(!reason||!String(reason).trim())throw new Error("Motif requis (NF525)");
+    // Le backend journalise déjà ce mouvement (audit_log CASH_IN/CASH_OUT) → pas de double log local
+    const saved=await API.cashMovements.create({direction,amount:amt,reason:String(reason).trim()});
+    setCashMovements(prev=>{const next=[saved,...prev].slice(0,500);try{localStorage.setItem("caissepro_cashmoves",JSON.stringify(next));}catch(e){}return next;});
+    return saved;
+  },[]);
+  const reloadCashMovements=useCallback(async(params)=>{
+    try{const data=await API.cashMovements.list(params||{});
+      setCashMovements((data||[]).slice(0,500));try{localStorage.setItem("caissepro_cashmoves",JSON.stringify((data||[]).slice(0,500)));}catch(e){}
+      return data||[];
+    }catch(e){console.warn("Chargement mouvements caisse échoué:",e.message);return[];}
   },[]);
   const[tvaRates,setTvaRates]=useState([...DEFAULT_TVA_RATES]);
   useEffect(()=>{TVA_RATES=tvaRates;},[tvaRates]);
@@ -237,6 +255,7 @@ function AppProvider({children}){
       try{const phData=await API.pricehistory.list({limit:500});if(phData?.length)setPriceHistory(phData);}catch(e){/* keep localStorage */}
       try{const retData=await API.retouches.list();if(retData?.length)setRetoucheBons(retData.map(r=>({id:r.id,num:r.retouche_number,shortCode:r.short_code||(r.retouche_number||"").slice(-4)||"",client:r.client||"",phone:r.phone||"",seller:r.seller||"",items:(r.items||[]).map(i=>({desc:i.description||i.desc||"",price:i.price})),dateRetrait:r.date_retrait,total:parseFloat(r.total_ttc)||0,barcode:r.barcode,date:r.created_at,status:r.status})));}catch(e){/* keep localStorage retouches */}
       try{await reloadTenues();}catch(e){/* keep localStorage tenues */}
+      try{await reloadCashMovements();}catch(e){/* keep localStorage cash movements */}
     }catch(e){
       console.warn("Chargement données échoué:",e.message);
       if(e.message?.includes("401")||e.message?.includes("Unauthorized")){setCurrentUser(null);API.clearToken();}
@@ -833,6 +852,10 @@ function AppProvider({children}){
       const pt=tickets.filter(t=>(t.date||t.createdAt||t.created_at||"").startsWith(today));
       const cash=pt.reduce((s,t)=>s+(t.payments?.filter(p=>p.method==="cash").reduce((a,p)=>a+p.amount,0)||0),0);
       const card=pt.reduce((s,t)=>s+(t.payments?.filter(p=>p.method==="card").reduce((a,p)=>a+p.amount,0)||0),0);
+      // Tiroir-caisse : apports/prélèvements du jour (hors CA, mais impactent le fond théorique)
+      const movesToday=(cashMovements||[]).filter(m=>(m.created_at||m.date||"").startsWith(today));
+      const cashIn=movesToday.filter(m=>m.direction==="in").reduce((s,m)=>s+(parseFloat(m.amount)||0),0);
+      const cashOut=movesToday.filter(m=>m.direction==="out").reduce((s,m)=>s+(parseFloat(m.amount)||0),0);
       const totalTTC=pt.reduce((s,t)=>s+(t.totalTTC||parseFloat(t.total_ttc)||0),0);
       const totalHT=pt.reduce((s,t)=>s+(t.totalHT||parseFloat(t.total_ht)||0),0);
       const totalTVA=pt.reduce((s,t)=>s+(t.totalTVA||parseFloat(t.total_tva)||0),0);
@@ -851,7 +874,8 @@ function AppProvider({children}){
       const avoirLocal=pt.reduce((s,t)=>s+(t.payments?.filter(p=>p.method==="avoir").reduce((a,p)=>a+p.amount,0)||0),0);
       const cl={id:`cl-${Date.now()}`,type,period:today,date:clDate,
         ticketCount:pt.length,totalHT,totalTVA,totalTTC,totalMargin,
-        expectedCash:(cashReg?.openingAmount||0)+cash,actualCash:aCash,actualCard:aCard,
+        expectedCash:(cashReg?.openingAmount||0)+cash+cashIn-cashOut,actualCash:aCash,actualCard:aCard,
+        cashIn,cashOut,
         grandTotal:newGt,userName:currentUser?.name,
         hash:clHash,fingerprint:clFingerprint,
         byPayment:{cash,card,cheque:chequeLocal,giftcard:giftcardLocal,amex:amexLocal,avoir:avoirLocal},
@@ -860,7 +884,7 @@ function AppProvider({children}){
       addPendingSync({type:"offlineClosure",data:{type,actualCash:aCash,actualCard:aCard,offlineId:cl.id,offlineDate:clDate}});
       notify("Clôture enregistrée (hors-ligne) — synchro en attente","warn");return cl;
     }
-  },[addAudit,tickets,closures,gt,cashReg,currentUser,notify,addPendingSync]);
+  },[addAudit,tickets,closures,gt,cashReg,currentUser,notify,addPendingSync,cashMovements]);
 
   // Exports — via API
   const exportFEC=useCallback(async()=>{try{await API.fiscal.fec();addJET("EXPORT","Export FEC");addAudit("FEC","Export fichier FEC");}catch(e){notify("Erreur: "+e.message,"error");}},[notify,addJET,addAudit]);
@@ -1071,7 +1095,7 @@ function AppProvider({children}){
     }
     // Try HAL native printer first (Sunmi/PAX/iMin) — only for methods the HAL supports
     if(halPrinter&&halPrinter.connected){
-      const halMethod=type==="receipt"?"printReceipt":type==="avoir"?"printAvoir":type==="giftcard"?"printGiftCard":type==="retouche"?"printRetouche":type==="tenue"?"printTenue":type==="register-open"?"printRegisterOpen":type==="register-close"?"printRegisterClose":type==="closure"?"printClosure":type==="test"?"testPrint":type==="drawer"?"openDrawer":null;
+      const halMethod=type==="receipt"?"printReceipt":type==="avoir"?"printAvoir":type==="giftcard"?"printGiftCard":type==="retouche"?"printRetouche":type==="tenue"?"printTenue":type==="cash-movement"?"printCashMovement":type==="register-open"?"printRegisterOpen":type==="register-close"?"printRegisterClose":type==="closure"?"printClosure":type==="test"?"testPrint":type==="drawer"?"openDrawer":null;
       if(halMethod&&typeof halPrinter[halMethod]==="function"){
         try{
           await halPrinter[halMethod](data,settings,CO);
@@ -1087,6 +1111,7 @@ function AppProvider({children}){
         else if(type==="giftcard")await printer.printGiftCard(data,settings,CO);
         else if(type==="retouche")await printer.printRetouche(data,settings,CO);
         else if(type==="tenue")await printer.printTenue(data,settings,CO);
+        else if(type==="cash-movement")await printer.printCashMovement(data,settings,CO);
         else if(type==="register-open")await printer.printRegisterOpen(data,settings,CO);
         else if(type==="register-close")await printer.printRegisterClose(data,settings,CO);
         else if(type==="closure")await printer.printClosure(data,settings,CO);
@@ -1626,7 +1651,7 @@ function AppProvider({children}){
     promoCode,setPromoCode,calcPromoDiscount,
     cashReg,openReg,closeReg,isOnline,tickets,setTickets,tSeq,lastHash,gt,audit,jet,closures,avoirs,consumeAvoir,isAvoirExpired,
     checkout,createClosure,exportArchive,exportFEC,exportCSVReport,exportCustomerRGPD,addAudit,addJET,
-    promos,setPromos,activePromos,parked,parkCart,restoreCart,removeParked,retoucheBons,addRetoucheBon,updateRetoucheStatus,tenues,addTenue,reloadTenues,selCust,setSelCust,
+    promos,setPromos,activePromos,parked,parkCart,restoreCart,removeParked,retoucheBons,addRetoucheBon,updateRetoucheStatus,tenues,addTenue,reloadTenues,cashMovements,addCashMovement,reloadCashMovements,selCust,setSelCust,
     stockAlerts,stockMoves,addStockMove,receiveStock,receiveBatchStock,
     refreshProducts,findByEAN,perm,settings,setSettings,saveSettingsToAPI,getLoyaltyTier,avoirPayment,selectedAvoir,setSelectedAvoir,
     bestSellers,salesBySeller,salesByVariant,caEvolution,salesByCollection,

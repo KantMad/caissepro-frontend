@@ -694,6 +694,73 @@ class SunmiPrinterAdapter {
     } catch (e) { throw e; }
   }
 
+  // ── Cash movement (apport / prélèvement) ──
+  _buildCashMovementBatch(mv, settings, companyInfo) {
+    const s = settings || {};
+    const co = companyInfo || {};
+    const isIn = mv.direction === 'in';
+    const amt = (Number(mv.amount) || 0).toFixed(2);
+    const cmds = [];
+    const text = (txt) => cmds.push({ cmd: 'text', text: txt });
+    const bold = (on) => cmds.push({ cmd: 'bold', enabled: on });
+    const size = (v) => cmds.push({ cmd: 'size', value: v });
+    const align = (v) => cmds.push({ cmd: 'align', value: v });
+
+    align(1); size(32); bold(true);
+    text((s.name || co.name || 'Ma Boutique') + '\n');
+    size(24); bold(false);
+    if (s.siret) text(`SIRET: ${s.siret}\n`);
+    cmds.push({ cmd: 'line', char: '=', len: 32 });
+
+    align(1); size(32); bold(true);
+    text((isIn ? 'APPORT DE CAISSE' : 'PRELEVEMENT CAISSE') + '\n');
+    size(24); bold(false);
+    cmds.push({ cmd: 'line', char: '=', len: 32 });
+
+    align(0); bold(true);
+    let dateStr = '';
+    try { dateStr = new Date(mv.date || mv.created_at || Date.now()).toLocaleString('fr-FR'); } catch (e) {}
+    text(`N: ${mv.movement_number || mv.movementNumber || '-'}\n`);
+    text(`Date: ${dateStr}\n`);
+    text(`Operateur: ${mv.userName || mv.user_name || '?'}\n`);
+    bold(false);
+    text(`Motif: ${mv.reason || '-'}\n`);
+    cmds.push({ cmd: 'line', char: '-', len: 32 });
+
+    bold(true); size(32);
+    text(`${isIn ? 'MONTANT +' : 'MONTANT -'}  ${amt} EUR\n`);
+    size(24); bold(false);
+    cmds.push({ cmd: 'line', char: '=', len: 32 });
+
+    if (mv.barcode && mv.barcode.length === 13) {
+      align(1);
+      cmds.push({ cmd: 'barcode', text: mv.barcode, type: 2, height: 100, width: 2 });
+    }
+    align(1); size(20);
+    text('Mouvement hors CA - Conforme NF525\n');
+    text(`${co.sw || 'CaissePro'} v${co.ver || '6.1.0'}\n`);
+    cmds.push({ cmd: 'feed', lines: 4 });
+    cmds.push({ cmd: 'cut' });
+    return cmds;
+  }
+
+  async printCashMovement(mv, settings, companyInfo) {
+    if (this._isCapacitor && this._bridge) {
+      const commands = this._buildCashMovementBatch(mv, settings, companyInfo);
+      if (this._bridge.printRaw) { await this._bridge.printRaw({ commands }); }
+      else if (this._bridge.printBatch) { await this._bridge.printBatch({ commands }); }
+      return true;
+    }
+    try {
+      await this._cap('printerInit', {});
+      await this.printText((mv?.direction === 'in' ? 'APPORT DE CAISSE' : 'PRELEVEMENT CAISSE') + '\n');
+      await this.printText(`Montant: ${(Number(mv?.amount) || 0).toFixed(2)} EUR\nMotif: ${mv?.reason || '-'}\n`);
+      await this._cap('lineWrap', { lines: 4 });
+      try { await this._cap('cutPaper', {}); } catch (e) {}
+      return true;
+    } catch (e) { throw e; }
+  }
+
   // ── Register Open ──
   _buildRegisterOpenBatch(data, settings, companyInfo) {
     const s = settings || {};
@@ -1003,6 +1070,9 @@ class PAXPrinterAdapter {
   async printTenue(tenue, settings, companyInfo) {
     return await _textBasedPrint(this, 'tenue', tenue, settings, companyInfo, 32);
   }
+  async printCashMovement(mv, settings, companyInfo) {
+    return await _textBasedPrint(this, 'cashmove', mv, settings, companyInfo, 32);
+  }
   async printRegisterOpen(data, settings, companyInfo) {
     return await _textBasedPrint(this, 'registerOpen', data, settings, companyInfo, 32);
   }
@@ -1048,6 +1118,7 @@ class iMinPrinterAdapter {
   async printClosure(c, s, co) { return await _textBasedPrint(this, 'closure', c, s, co, 48); }
   async printRetouche(bon, s, co) { return await _textBasedPrint(this, 'retouche', bon, s, co, 48); }
   async printTenue(t, s, co) { return await _textBasedPrint(this, 'tenue', t, s, co, 48); }
+  async printCashMovement(mv, s, co) { return await _textBasedPrint(this, 'cashmove', mv, s, co, 48); }
   async printRegisterOpen(data, s, co) { return await _textBasedPrint(this, 'registerOpen', data, s, co, 48); }
   async printRegisterClose(data, s, co) { return await _textBasedPrint(this, 'registerClose', data, s, co, 48); }
   async printGiftCard(gc, s, co) { return await _textBasedPrint(this, 'giftcard', gc, s, co, 48); }
@@ -1146,6 +1217,21 @@ class BrowserPrintAdapter {
     if (tenue.totalValue > 0) h += `<div class="row"><span>Valeur (cout)</span><span>${(tenue.totalValue || 0).toFixed(2)} EUR</span></div>`;
     h += `<div class="center small">Justificatif de sortie de stock</div>`;
     if (tenue.barcode) h += `<div class="center small">Code: ${tenue.barcode}</div>`;
+    return this._printViaIframe(h);
+  }
+
+  async printCashMovement(mv, settings, companyInfo) {
+    const s = settings || {}; const co = companyInfo || {};
+    const isIn = mv.direction === 'in';
+    let h = `<div class="center bold big">${s.name || co.name || 'Ma Boutique'}</div><div class="sep"></div>`;
+    h += `<div class="center bold big">${isIn ? 'APPORT DE CAISSE' : 'PRELEVEMENT CAISSE'}</div><div class="sep"></div>`;
+    h += `<div class="row"><span>N</span><span>${mv.movement_number || mv.movementNumber || '-'}</span></div>`;
+    h += `<div class="row"><span>Date</span><span>${new Date(mv.date || mv.created_at || '').toLocaleString('fr-FR')}</span></div>`;
+    h += `<div class="row"><span>Operateur</span><span>${mv.userName || mv.user_name || '?'}</span></div>`;
+    h += `<div>Motif: ${mv.reason || '-'}</div><div class="sep"></div>`;
+    h += `<div class="row bold big"><span>${isIn ? 'MONTANT +' : 'MONTANT -'}</span><span>${(Number(mv.amount) || 0).toFixed(2)} EUR</span></div>`;
+    if (mv.barcode) h += `<div class="center small">Code: ${mv.barcode}</div>`;
+    h += `<div class="center small">Mouvement hors CA - Conforme NF525</div>`;
     return this._printViaIframe(h);
   }
 
@@ -1295,6 +1381,17 @@ async function _textBasedPrint(adapter, type, data, settings, companyInfo, width
     if (data.totalValue > 0) lines.push(pad('Valeur (cout)', `${(data.totalValue || 0).toFixed(2)}E`));
     lines.push('Justificatif de sortie de stock');
     if (data.barcode) lines.push(`Code: ${data.barcode}`);
+  } else if (type === 'cashmove') {
+    header();
+    lines.push(data.direction === 'in' ? 'APPORT DE CAISSE' : 'PRELEVEMENT CAISSE');
+    lines.push(`N: ${data.movement_number || data.movementNumber || '-'}`);
+    lines.push(`Date: ${new Date(data.date || data.created_at || '').toLocaleString('fr-FR')}`);
+    lines.push(`Operateur: ${data.userName || data.user_name || '?'}`);
+    lines.push(`Motif: ${data.reason || '-'}`);
+    lines.push(dsep);
+    lines.push(pad(data.direction === 'in' ? 'MONTANT +' : 'MONTANT -', `${(Number(data.amount) || 0).toFixed(2)}E`));
+    if (data.barcode) lines.push(`Code: ${data.barcode}`);
+    lines.push('Mouvement hors CA - NF525');
   } else if (type === 'registerOpen') {
     header();
     lines.push('OUVERTURE DE CAISSE');

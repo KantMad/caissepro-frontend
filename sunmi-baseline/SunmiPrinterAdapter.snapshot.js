@@ -610,6 +610,73 @@ class SunmiPrinterAdapter {
     } catch (e) { throw e; }
   }
 
+  // ── Cash movement (apport / prélèvement) ──
+  _buildCashMovementBatch(mv, settings, companyInfo) {
+    const s = settings || {};
+    const co = companyInfo || {};
+    const isIn = mv.direction === 'in';
+    const amt = (Number(mv.amount) || 0).toFixed(2);
+    const cmds = [];
+    const text = (txt) => cmds.push({ cmd: 'text', text: txt });
+    const bold = (on) => cmds.push({ cmd: 'bold', enabled: on });
+    const size = (v) => cmds.push({ cmd: 'size', value: v });
+    const align = (v) => cmds.push({ cmd: 'align', value: v });
+
+    align(1); size(32); bold(true);
+    text((s.name || co.name || 'Ma Boutique') + '\n');
+    size(24); bold(false);
+    if (s.siret) text(`SIRET: ${s.siret}\n`);
+    cmds.push({ cmd: 'line', char: '=', len: 32 });
+
+    align(1); size(32); bold(true);
+    text((isIn ? 'APPORT DE CAISSE' : 'PRELEVEMENT CAISSE') + '\n');
+    size(24); bold(false);
+    cmds.push({ cmd: 'line', char: '=', len: 32 });
+
+    align(0); bold(true);
+    let dateStr = '';
+    try { dateStr = new Date(mv.date || mv.created_at || Date.now()).toLocaleString('fr-FR'); } catch (e) {}
+    text(`N: ${mv.movement_number || mv.movementNumber || '-'}\n`);
+    text(`Date: ${dateStr}\n`);
+    text(`Operateur: ${mv.userName || mv.user_name || '?'}\n`);
+    bold(false);
+    text(`Motif: ${mv.reason || '-'}\n`);
+    cmds.push({ cmd: 'line', char: '-', len: 32 });
+
+    bold(true); size(32);
+    text(`${isIn ? 'MONTANT +' : 'MONTANT -'}  ${amt} EUR\n`);
+    size(24); bold(false);
+    cmds.push({ cmd: 'line', char: '=', len: 32 });
+
+    if (mv.barcode && mv.barcode.length === 13) {
+      align(1);
+      cmds.push({ cmd: 'barcode', text: mv.barcode, type: 2, height: 100, width: 2 });
+    }
+    align(1); size(20);
+    text('Mouvement hors CA - Conforme NF525\n');
+    text(`${co.sw || 'CaissePro'} v${co.ver || '6.1.0'}\n`);
+    cmds.push({ cmd: 'feed', lines: 4 });
+    cmds.push({ cmd: 'cut' });
+    return cmds;
+  }
+
+  async printCashMovement(mv, settings, companyInfo) {
+    if (this._isCapacitor && this._bridge) {
+      const commands = this._buildCashMovementBatch(mv, settings, companyInfo);
+      if (this._bridge.printRaw) { await this._bridge.printRaw({ commands }); }
+      else if (this._bridge.printBatch) { await this._bridge.printBatch({ commands }); }
+      return true;
+    }
+    try {
+      await this._cap('printerInit', {});
+      await this.printText((mv?.direction === 'in' ? 'APPORT DE CAISSE' : 'PRELEVEMENT CAISSE') + '\n');
+      await this.printText(`Montant: ${(Number(mv?.amount) || 0).toFixed(2)} EUR\nMotif: ${mv?.reason || '-'}\n`);
+      await this._cap('lineWrap', { lines: 4 });
+      try { await this._cap('cutPaper', {}); } catch (e) {}
+      return true;
+    } catch (e) { throw e; }
+  }
+
   // ── Register Open ──
   _buildRegisterOpenBatch(data, settings, companyInfo) {
     const s = settings || {};

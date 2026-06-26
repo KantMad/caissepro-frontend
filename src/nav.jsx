@@ -16,7 +16,7 @@ import {
   HistoryScreen, ReturnScreen, ClosureScreen, CustomersScreen, FiscalScreen,
   AuditScreen, CSVImportWizard, ProductsScreen, ReturnsHistoryScreen,
   SettingsScreen, GiftCardScreen, PromosScreen, FootfallScreen,
-  HelpCashierScreen, HelpDashboardScreen, ExportsScreen, GestlogDeliveriesScreen
+  HelpCashierScreen, HelpDashboardScreen, ExportsScreen, GestlogDeliveriesScreen, TiroirCaisseScreen
 } from "./screens.jsx";
 
 function CashierNav({active,onNav}){
@@ -24,13 +24,13 @@ function CashierNav({active,onNav}){
   const vp=useViewport();
   const[moreOpen,setMoreOpen]=useState(false);
   const items=[{id:"sales",l:"Vente",i:ShoppingCart},{id:"returns",l:"Retours",i:RotateCcw},{id:"stats",l:"Stats",i:BarChart3},{id:"stock",l:"Stock",i:Grid},
-    {id:"products",l:"Produits",i:Package},{id:"history",l:"Tickets",i:Receipt},{id:"customers",l:"Clients",i:Users},{id:"giftcards",l:"Cadeaux",i:Gift},
+    {id:"cashdrawer",l:"Tiroir-caisse",i:Wallet},{id:"history",l:"Tickets",i:Receipt},{id:"customers",l:"Clients",i:Users},{id:"giftcards",l:"Cadeaux",i:Gift},
     {id:"promos",l:"Promos",i:Zap},{id:"closure",l:"Cloture",i:Lock},{id:"footfall",l:"Entrees",i:Activity},
     {id:"audit",l:"Audit",i:Activity},{id:"fiscal",l:"NF525",i:Shield},{id:"settings",l:"Reglages",i:Settings},{id:"help",l:"Aide",i:HelpCircle}];
 
   // ══ TÉLÉPHONE : barre d'onglets en bas (zone du pouce) + tiroir « Plus » ══
   if(vp.isMobile){
-    const primary=[{id:"sales",l:"Vente",i:ShoppingCart},{id:"products",l:"Produits",i:Package},{id:"history",l:"Tickets",i:Receipt},{id:"returns",l:"Retours",i:RotateCcw}];
+    const primary=[{id:"sales",l:"Vente",i:ShoppingCart},{id:"cashdrawer",l:"Tiroir",i:Wallet},{id:"history",l:"Tickets",i:Receipt},{id:"returns",l:"Retours",i:RotateCcw}];
     const moreItems=items.filter(it=>!primary.find(p=>p.id===it.id));
     const moreActive=moreItems.some(m=>m.id===active);
     const tab=(on)=>({flex:1,minWidth:0,height:"100%",border:"none",background:"transparent",cursor:"pointer",display:"flex",flexDirection:"column",
@@ -129,7 +129,7 @@ function CashierInterface(){
   const setSc=useCallback((v)=>{setScRaw(v);try{sessionStorage.setItem("caissepro_screen",v);}catch(e){}},[]);
   if(sr&&!cashReg)return<CashRegControl onSkip={()=>setSr(false)} onDone={()=>setSr(false)}/>;
   const S={sales:SalesScreen,returns:ReturnScreen,stats:StatsScreen,stock:StockScreen,history:HistoryScreen,customers:CustomersScreen,
-    giftcards:GiftCardScreen,promos:PromosScreen,products:ProductsScreen,closure:ClosureScreen,footfall:FootfallScreen,audit:AuditScreen,fiscal:FiscalScreen,settings:SettingsScreen,help:HelpCashierScreen};
+    giftcards:GiftCardScreen,promos:PromosScreen,cashdrawer:TiroirCaisseScreen,closure:ClosureScreen,footfall:FootfallScreen,audit:AuditScreen,fiscal:FiscalScreen,settings:SettingsScreen,help:HelpCashierScreen};
   const Sc=S[sc]||SalesScreen;
   return(<div style={{display:"flex",height:"100vh",fontFamily:"'DM Sans',system-ui,sans-serif"}}><CashierNav active={sc} onNav={setSc}/>
     <div style={{flex:1,overflow:"hidden",paddingBottom:vp.isMobile?"var(--bottomnav-h,60px)":0}}><ErrorBoundary><Sc/></ErrorBoundary></div></div>);

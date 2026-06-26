@@ -1196,6 +1196,44 @@ class ThermalPrinter {
     } catch (e) { throw e; }
   }
 
+  async printCashMovement(mv, settings, companyInfo) {
+    if (!this.connected) throw new Error("Imprimante non connectee");
+    const s = settings || {};
+    const co = companyInfo || {};
+    const isIn = mv.direction === 'in';
+    const amt = parseFloat(mv.amount) || 0;
+    await this.send(CMD.INIT);
+    await this.send(CHARSET_FRENCH);
+    await this.send(CODEPAGE_PC858);
+    // Header
+    await this.alignCenter(); await this.doubleSize(); await this.bold(true);
+    await this.text(s.name || co.name || 'Ma Boutique'); await this.newline();
+    await this.normalSize(); await this.bold(false);
+    if (s.siret) { await this.text(`SIRET: ${s.siret}`); await this.newline(); }
+    await this.separator('=');
+    // Title
+    await this.alignCenter(); await this.doubleSize(); await this.bold(true);
+    await this.text(isIn ? 'APPORT DE CAISSE' : 'PRELEVEMENT CAISSE'); await this.newline();
+    await this.normalSize(); await this.bold(false);
+    await this.separator('=');
+    // Info
+    await this.alignLeft();
+    await this.line(`N: ${mv.movement_number || mv.movementNumber || '-'}`, new Date(mv.date || mv.created_at || '').toLocaleString('fr-FR'));
+    await this.line(`Operateur: ${mv.userName || mv.user_name || '?'}`);
+    await this.text(`Motif: ${mv.reason || '-'}`); await this.newline();
+    await this.separator('-');
+    // Montant
+    await this.bold(true); await this.doubleSize();
+    await this.line(isIn ? 'MONTANT +' : 'MONTANT -', `${amt.toFixed(2)}€`);
+    await this.normalSize(); await this.bold(false);
+    await this.separator('=');
+    // Barcode EAN-13
+    if (mv.barcode) { await this.newline(); await this.alignCenter(); await this.barcode(mv.barcode); }
+    await this.alignCenter(); await this.fontSmall(); await this.text('Mouvement hors CA - Conforme NF525'); await this.newline(); await this.fontNormal();
+    await this.feed(4); await this.cut();
+    return true;
+  }
+
   async printRetouche(bon, settings, companyInfo) {
     if (!this.connected) throw new Error("Imprimante non connectee");
 

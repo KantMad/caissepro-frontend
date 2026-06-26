@@ -259,6 +259,12 @@ export const tenues = {
   create: (data) => api('/api/tenues', { method: 'POST', body: JSON.stringify(data) }),
 };
 
+// ══ Cash movements (tiroir-caisse : apports / prélèvements) ══
+export const cashMovements = {
+  list: (params) => api('/api/cash-movements?' + new URLSearchParams(params || {})),
+  create: (data) => api('/api/cash-movements', { method: 'POST', body: JSON.stringify(data) }),
+};
+
 // ══ Barcodes ══
 export const barcodes = {
   lookup: (code) => api(`/api/barcodes/${encodeURIComponent(code)}`),
