@@ -6,6 +6,7 @@ import { CO, C } from "../constants.jsx";
 import { EAN13Svg, ean13SvgHtml } from "../utils.jsx";
 import { Modal, Btn, Input, Badge } from "../ui.jsx";
 import { useApp } from "../context.jsx";
+import { getPaymentLabel } from "../lib/formatters.js";
 
 function HistoryScreen(){
   const{tickets,setTickets,avoirs,settings,processReturn,perm:p,printerConnected,thermalPrint,setSelectedAvoir,setMode,notify,customers,setCustomers,retoucheBons,updateRetoucheStatus,scanBarcode,setScanBarcode,trainingMode}=useApp();
@@ -249,7 +250,7 @@ function HistoryScreen(){
         <div style={{display:"flex",justifyContent:"space-between",fontWeight:600}}><span>TVA</span><span>{tkTVA.toFixed(2)}€</span></div>
         <div style={{display:"flex",justifyContent:"space-between",fontSize:14,fontWeight:800,marginTop:6}}><span>TOTAL TTC</span><span>{tkTTC.toFixed(2)}€</span></div>
         <div style={{borderTop:"1px dashed #999",margin:"10px 0"}}/>
-        <div style={{fontWeight:700}}>Paiement: {tkPayments.map(pm=>`${({cash:"ESP",card:"CB",amex:"AMEX",giftcard:"CAD",cheque:"CHQ",avoir:"AVOIR"})[pm.method]||pm.method} ${(Number(pm.amount)||0).toFixed(2)}€`).join(" + ")||tkPayMethod}</div>
+        <div style={{fontWeight:700}}>Paiement: {tkPayments.map(pm=>`${getPaymentLabel(pm.method,"short")} ${(Number(pm.amount)||0).toFixed(2)}€`).join(" + ")||tkPayMethod}</div>
         {tkFp&&<div style={{textAlign:"center",background:C.fiscalLight,padding:6,borderRadius:6,margin:"6px 0"}}>
           <div style={{fontSize:9,color:C.fiscal,fontWeight:800}}>EMPREINTE NF525</div>
           <div style={{fontSize:12,fontWeight:800,color:C.fiscal,letterSpacing:2}}>{tkFp}</div></div>}

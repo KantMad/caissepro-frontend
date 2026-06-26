@@ -8,6 +8,7 @@ import { hashPin, verifyPin, sha256, norm, loadVariantOrderFromSettings, autoImp
 import { computeTotals } from "./lib/totals.js";
 import { getLoyaltyTier as loyaltyTierOf } from "./lib/loyalty.js";
 import { calcPromoDiscount as calcPromos } from "./lib/promos.js";
+import { aggregatePaymentsByMethod } from "./lib/formatters.js";
 import Papa from "papaparse";
 
 /* ══════════ CONTEXT ══════════ */
@@ -855,8 +856,8 @@ function AppProvider({children}){
       console.warn("Closure API failed, local fallback:",e.message);
       const today=new Date().toISOString().split("T")[0];
       const pt=tickets.filter(t=>(t.date||t.createdAt||t.created_at||"").startsWith(today));
-      const cash=pt.reduce((s,t)=>s+(t.payments?.filter(p=>p.method==="cash").reduce((a,p)=>a+p.amount,0)||0),0);
-      const card=pt.reduce((s,t)=>s+(t.payments?.filter(p=>p.method==="card").reduce((a,p)=>a+p.amount,0)||0),0);
+      const byMethod=aggregatePaymentsByMethod(pt);
+      const cash=byMethod.cash,card=byMethod.card;
       // Tiroir-caisse : apports/prélèvements du jour (hors CA, mais impactent le fond théorique)
       const movesToday=(cashMovements||[]).filter(m=>(m.created_at||m.date||"").startsWith(today));
       const cashIn=movesToday.filter(m=>m.direction==="in").reduce((s,m)=>s+(parseFloat(m.amount)||0),0);
@@ -872,11 +873,8 @@ function AppProvider({children}){
       const hashInput=`${lastClosureHash}|Z-${type}|${today}|${totalTTC.toFixed(2)}|${newGt.toFixed(2)}|${pt.length}`;
       const clHash=await sha256(hashInput);
       const clFingerprint=clHash.slice(0,16).toUpperCase();
-      // Paiements par méthode
-      const chequeLocal=pt.reduce((s,t)=>s+(t.payments?.filter(p=>p.method==="cheque").reduce((a,p)=>a+p.amount,0)||0),0);
-      const giftcardLocal=pt.reduce((s,t)=>s+(t.payments?.filter(p=>p.method==="giftcard").reduce((a,p)=>a+p.amount,0)||0),0);
-      const amexLocal=pt.reduce((s,t)=>s+(t.payments?.filter(p=>p.method==="amex").reduce((a,p)=>a+p.amount,0)||0),0);
-      const avoirLocal=pt.reduce((s,t)=>s+(t.payments?.filter(p=>p.method==="avoir").reduce((a,p)=>a+p.amount,0)||0),0);
+      // Paiements par méthode (via le helper aggregatePaymentsByMethod)
+      const chequeLocal=byMethod.cheque,giftcardLocal=byMethod.giftcard,amexLocal=byMethod.amex,avoirLocal=byMethod.avoir;
       const cl={id:`cl-${Date.now()}`,type,period:today,date:clDate,
         ticketCount:pt.length,totalHT,totalTVA,totalTTC,totalMargin,
         expectedCash:(cashReg?.openingAmount||0)+cash+cashIn-cashOut,actualCash:aCash,actualCard:aCard,

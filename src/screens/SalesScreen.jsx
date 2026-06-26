@@ -5,6 +5,7 @@ import { CO, C, CAT_COLORS } from "../constants.jsx";
 import { catIcon, EAN13Svg, ean13SvgHtml } from "../utils.jsx";
 import { Modal, Btn, Input, Badge, Numpad } from "../ui.jsx";
 import { useApp } from "../context.jsx";
+import { getPaymentLabel } from "../lib/formatters.js";
 import { useViewport } from "../useViewport.js";
 import hardwareManager from "../hardware.js";
 
@@ -535,7 +536,7 @@ function SalesScreen(){
         <div style={{display:"flex",justifyContent:"space-between",fontWeight:600}}><span>TVA</span><span>{(lastTk.totalTVA||0).toFixed(2)}€</span></div>
         <div style={{display:"flex",justifyContent:"space-between",fontSize:14,fontWeight:800,marginTop:6}}><span>TOTAL TTC</span><span>{(lastTk.totalTTC||0).toFixed(2)}€</span></div>
         <div style={{borderTop:"1px dashed #999",margin:"10px 0"}}/>
-        <div style={{fontWeight:700}}>Paiement: {lastTk.payments?.map(p=>`${({cash:"ESP",card:"CB",amex:"AMEX",giftcard:"CAD",cheque:"CHQ",avoir:"AVOIR"})[p.method]||p.method} ${(p.amount||0).toFixed(2)}€`).join(" + ")}</div>
+        <div style={{fontWeight:700}}>Paiement: {lastTk.payments?.map(p=>`${getPaymentLabel(p.method,"short")} ${(p.amount||0).toFixed(2)}€`).join(" + ")}</div>
         <div style={{textAlign:"center",background:C.fiscalLight,padding:6,borderRadius:6,margin:"4px 0"}}>
           <div style={{fontSize:9,color:C.fiscal,fontWeight:800}}>EMPREINTE NF525</div>
           <div style={{fontSize:12,fontWeight:800,color:C.fiscal,letterSpacing:2}}>{lastTk.fingerprint}</div></div>
