@@ -1,11 +1,11 @@
 # Tests unitaires — état du front
 
 > **Document généré automatiquement** par `npm run test:doc` (ne pas éditer à la main).
-> Dernière exécution : 2026-06-26 08:45 UTC
+> Dernière exécution : 2026-06-26 08:51 UTC
 
 ## Résultat global
 
-- ✅ **49/49 tests passés** — 4 fichier(s)
+- ✅ **65/65 tests passés** — 5 fichier(s)
 
 ## Comment lancer
 
@@ -34,6 +34,23 @@ React, handlers d'événements, wrappers API, provider `context.jsx`.
 - ✅ getLoyaltyTier (paliers par défaut Bronze/Argent/Or/Platine) › points falsy/undefined → Bronze
 - ✅ getLoyaltyTier (paliers par défaut Bronze/Argent/Or/Platine) › respecte des paliers personnalisés
 
+### `src/lib/promos.test.js` — 14/14 ✅
+
+- ✅ calcPromoDiscount › aucune promo → 0
+- ✅ calcPromoDiscount › panier vide → 0
+- ✅ calcPromoDiscount › remise catégorie en % (10% du HT)
+- ✅ calcPromoDiscount › remise catégorie en montant €
+- ✅ calcPromoDiscount › remise SKU ciblée
+- ✅ calcPromoDiscount › remise couleur
+- ✅ calcPromoDiscount › remise collection
+- ✅ calcPromoDiscount › destockage stock faible : stock <= seuil et > 0 (rupture exclue)
+- ✅ calcPromoDiscount › min_qty : remise seulement si la quantité matching atteint le seuil
+- ✅ calcPromoDiscount › qty_discount : remise sur tout le panier au-dessus du seuil
+- ✅ calcPromoDiscount › code promo : seulement si le code saisi correspond (insensible à la casse)
+- ✅ calcPromoDiscount › la remise totale est plafonnée au total HT
+- ✅ calcPromoDiscount › mode HT : remise calculée sur le prix HT direct
+- ✅ calcPromoDiscount › supporte les clés snake_case (promo_type/target_type/min_qty)
+
 ### `src/lib/totals.test.js` — 16/16 ✅
 
 - ✅ round2 › arrondit au centime
@@ -59,7 +76,7 @@ React, handlers d'événements, wrappers API, provider `context.jsx`.
 - ✅ sortVariantsBySize › groupe par couleur (alpha) puis trie les tailles
 - ✅ sortVariantsBySize › ne modifie pas le tableau d'origine (copie)
 
-### `src/utils.test.js` — 22/22 ✅
+### `src/utils.test.js` — 24/24 ✅
 
 - ✅ escapeHtml › échappe les caractères dangereux
 - ✅ escapeHtml › renvoie '' pour falsy
@@ -81,5 +98,7 @@ React, handlers d'événements, wrappers API, provider `context.jsx`.
 - ✅ ean13SvgHtml › génère un SVG contenant des barres et le code pour un EAN-13 valide
 - ✅ autoImportSizesFromProducts › attribue le rang numérique à une taille chiffrée
 - ✅ autoImportSizesFromProducts › ne plante pas sur une liste vide / nulle
+- ✅ sha256 › hash hex déterministe de 64 caractères
+- ✅ loadVariantOrderFromSettings / getVariantOrderMap › charge l'ordre des variantes depuis les settings
 - ✅ hashPin / verifyPin › hash déterministe et vérifiable
 - ✅ hashPin / verifyPin › rejette un hash vide ou ****

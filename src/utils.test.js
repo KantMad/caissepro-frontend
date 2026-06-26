@@ -17,6 +17,7 @@ import {
   escapeHtml, getPriceHT, getPriceTTC, catIcon, variantKey,
   getSizeRank, generateEAN13, norm, hashPin, verifyPin,
   ean13SvgHtml, autoImportSizesFromProducts,
+  sha256, getVariantOrderMap, loadVariantOrderFromSettings,
 } from "./utils.jsx";
 
 describe("escapeHtml", () => {
@@ -153,6 +154,22 @@ describe("autoImportSizesFromProducts", () => {
   it("ne plante pas sur une liste vide / nulle", () => {
     expect(() => autoImportSizesFromProducts([])).not.toThrow();
     expect(() => autoImportSizesFromProducts(null)).not.toThrow();
+  });
+});
+
+describe("sha256", () => {
+  it("hash hex déterministe de 64 caractères", async () => {
+    const h = await sha256("caissepro");
+    expect(h).toMatch(/^[0-9a-f]{64}$/);
+    expect(await sha256("caissepro")).toBe(h);
+    expect(await sha256("autre")).not.toBe(h);
+  });
+});
+
+describe("loadVariantOrderFromSettings / getVariantOrderMap", () => {
+  it("charge l'ordre des variantes depuis les settings", () => {
+    loadVariantOrderFromSettings({ variantOrderMap: { SKU9: ["bleu|m", "bleu|l"] } });
+    expect(getVariantOrderMap().SKU9).toEqual(["bleu|m", "bleu|l"]);
   });
 });
 
