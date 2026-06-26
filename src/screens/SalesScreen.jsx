@@ -141,10 +141,10 @@ function SalesScreen(){
       <div style={{display:"flex",alignItems:"center",gap:"var(--gap,10px)",marginBottom:"var(--gap,10px)",padding:"var(--topbar-pad,10px 16px)",
         background:C.surface,borderRadius:"var(--radius-sm,10px)",border:`1px solid ${C.border}`,
         boxShadow:`0 1px 3px ${C.shadow}`}}>
-        <div style={{display:"flex",alignItems:"center",gap:6}}>
-          <div style={{width:6,height:6,borderRadius:3,background:C.primary}}/>
-          <span style={{fontSize:11,fontWeight:600,color:C.text}}>{new Date().toLocaleDateString("fr-FR",{weekday:"short",day:"numeric",month:"short"})}</span>
-          <span style={{fontSize:11,fontWeight:700,color:C.primary,fontVariantNumeric:"tabular-nums"}}>{clock.toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"})}</span></div>
+        <div style={{display:"flex",alignItems:"center",gap:8}}>
+          <div style={{width:6,height:6,borderRadius:3,background:C.primary,marginRight:5,flexShrink:0}}/>
+          <span style={{fontSize:13,fontWeight:600,color:C.text}}>{new Date().toLocaleDateString("fr-FR",{weekday:"short",day:"numeric",month:"short"})}</span>
+          <span style={{fontSize:13,fontWeight:700,color:C.primary,fontVariantNumeric:"tabular-nums"}}>{clock.toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"})}</span></div>
         <div style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:"var(--gap,10px)"}}>
           <span style={{fontSize:11,color:C.textMuted}}>{todayTickets.length} vente{todayTickets.length>1?"s":""}</span>
           <span style={{fontSize:13,fontWeight:700,color:C.primary,letterSpacing:"-0.3px"}}>{todayCA.toFixed(2)}€</span>
