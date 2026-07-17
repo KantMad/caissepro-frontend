@@ -855,23 +855,55 @@ class SunmiPrinterAdapter {
     if (data.storeName) text(`Magasin: ${data.storeName}\n`);
     bold(false);
     cmds.push({ cmd: 'line', char: '-', len: 32 });
+    const pad17 = (l) => (l + '                 ').slice(0, 17);
+    const bp = data.byPayment || {};
     bold(true); size(26); text('ACTIVITE\n'); size(24); bold(false);
-    bold(true); text(`Nb ventes        ${data.salesCount || 0}\n`);
+    bold(true); text(`Nb ventes        ${data.ticketCount ?? data.salesCount ?? 0}\n`);
     size(28); text(`CA TTC           ${fmt(data.totalTTC || data.totalCA)} EUR\n`); size(24);
     text(`Total HT         ${fmt(data.totalHT)} EUR\n`);
     text(`Total TVA        ${fmt(data.totalTVA)} EUR\n`);
     if (data.avgBasket) text(`Panier moyen     ${fmt(data.avgBasket)} EUR\n`);
     bold(false);
+    // ── Paiements : ventilation par methode ──
     cmds.push({ cmd: 'line', char: '-', len: 32 });
-    bold(true); size(26); text('PAIEMENTS\n'); size(24);
-    if (data.cashTotal != null) text(`Especes          ${fmt(data.cashTotal)} EUR\n`);
-    if (data.cardTotal != null) text(`CB               ${fmt(data.cardTotal)} EUR\n`);
-    bold(false);
+    bold(true); size(26); text('PAIEMENTS\n'); size(24); bold(false);
+    const payLbl = { cash: 'Especes', card: 'CB', amex: 'AMEX', contactless: 'Sans contact', giftcard: 'Cadeau', cheque: 'Cheque', avoir: 'Avoir' };
+    let anyPay = false;
+    for (const k of Object.keys(payLbl)) {
+      const v = Number(bp[k]) || 0;
+      if (v !== 0) { text(`${pad17(payLbl[k])}${fmt(v)} EUR\n`); anyPay = true; }
+    }
+    if (!anyPay && data.cashTotal != null) { text(`${pad17('Especes')}${fmt(data.cashTotal)} EUR\n`); anyPay = true; }
+    if (!anyPay && data.cardTotal != null) { text(`${pad17('CB')}${fmt(data.cardTotal)} EUR\n`); anyPay = true; }
+    if (!anyPay) text('Aucun encaissement\n');
+    // ── Remboursements (avoirs emis) ──
+    if (data.returnCount || data.totalReturns) {
+      cmds.push({ cmd: 'line', char: '-', len: 32 });
+      bold(true); size(26); text('REMBOURSEMENTS\n'); size(24); bold(false);
+      text(`${pad17('Nb avoirs')}${data.returnCount || 0}\n`);
+      text(`${pad17('Total avoirs')}-${fmt(data.totalReturns)} EUR\n`);
+      if (data.netRevenue != null) { bold(true); text(`${pad17('CA net')}${fmt(data.netRevenue)} EUR\n`); bold(false); }
+    }
+    // ── Mouvements de tiroir (hors CA) ──
+    if (data.cashIn || data.cashOut) {
+      cmds.push({ cmd: 'line', char: '-', len: 32 });
+      bold(true); size(26); text('MOUVEMENTS DE CAISSE\n'); size(24); bold(false);
+      text(`${pad17('Apports')}+${fmt(data.cashIn)} EUR\n`);
+      text(`${pad17('Prelevements')}-${fmt(data.cashOut)} EUR\n`);
+    }
+    // ── Controle ──
     cmds.push({ cmd: 'line', char: '-', len: 32 });
     bold(true); size(26); text('CONTROLE\n'); size(24);
-    text(`Fond ouverture   ${fmt(data.openingAmount)} EUR\n`);
-    if (data.actualCash != null) text(`Especes comptees ${fmt(data.actualCash)} EUR\n`);
-    if (data.actualCard != null) text(`CB comptees      ${fmt(data.actualCard)} EUR\n`);
+    text(`${pad17('Fond ouverture')}${fmt(data.openingAmount)} EUR\n`);
+    // Especes theoriques = fond + ventes especes + apports - prelevements
+    const theo = (Number(data.openingAmount) || 0) + (Number(bp.cash) || 0) + (Number(data.cashIn) || 0) - (Number(data.cashOut) || 0);
+    text(`${pad17('Especes theoriq.')}${fmt(theo)} EUR\n`);
+    if (data.actualCash != null) {
+      text(`${pad17('Especes comptees')}${fmt(data.actualCash)} EUR\n`);
+      const diff = (Number(data.actualCash) || 0) - theo;
+      text(`${pad17('Ecart')}${diff >= 0 ? '+' : ''}${fmt(diff)} EUR\n`);
+    }
+    if (data.actualCard != null) text(`${pad17('CB comptees')}${fmt(data.actualCard)} EUR\n`);
     bold(false);
     cmds.push({ cmd: 'line', char: '=', len: 32 });
     align(1); size(20); bold(true);
@@ -1255,9 +1287,44 @@ class BrowserPrintAdapter {
     const el = document.querySelector('[data-print-receipt]');
     if (el) return this._printViaIframe(el.innerHTML);
     const s = settings || {}; const co = companyInfo || {};
+    const bp = data.byPayment || {};
+    const payLbl = { cash: 'Especes', card: 'CB', amex: 'AMEX', contactless: 'Sans contact', giftcard: 'Cadeau', cheque: 'Cheque', avoir: 'Avoir' };
+    const row = (l, v) => `<div class="row"><span>${l}</span><span>${v}</span></div>`;
     let h = `<div class="center bold big">${s.name || co.name || 'Ma Boutique'}</div><div class="sep"></div>`;
-    h += `<div class="center bold big">CLOTURE DE CAISSE</div><div class="sep"></div>`;
-    h += `<div class="row bold"><span>CA TTC:</span><span>${(data.totalTTC || data.totalCA || 0).toFixed(2)} EUR</span></div>`;
+    h += `<div class="center bold big">FERMETURE DE CAISSE</div><div class="sep"></div>`;
+    h += `<div class="bold">ACTIVITE</div>`;
+    h += row('Nb ventes', `${data.ticketCount ?? data.salesCount ?? 0}`);
+    h += `<div class="row bold"><span>CA TTC</span><span>${(data.totalTTC || data.totalCA || 0).toFixed(2)} EUR</span></div>`;
+    h += row('Total HT', `${(data.totalHT || 0).toFixed(2)} EUR`);
+    h += row('Total TVA', `${(data.totalTVA || 0).toFixed(2)} EUR`);
+    h += `<div class="sep"></div><div class="bold">PAIEMENTS</div>`;
+    let anyPay = false;
+    for (const k of Object.keys(payLbl)) {
+      const v = Number(bp[k]) || 0;
+      if (v !== 0) { h += row(payLbl[k], `${v.toFixed(2)} EUR`); anyPay = true; }
+    }
+    if (!anyPay) h += `<div>Aucun encaissement</div>`;
+    if (data.returnCount || data.totalReturns) {
+      h += `<div class="sep"></div><div class="bold">REMBOURSEMENTS</div>`;
+      h += row('Nb avoirs', `${data.returnCount || 0}`);
+      h += row('Total avoirs', `-${(data.totalReturns || 0).toFixed(2)} EUR`);
+      if (data.netRevenue != null) h += `<div class="row bold"><span>CA net</span><span>${(data.netRevenue || 0).toFixed(2)} EUR</span></div>`;
+    }
+    if (data.cashIn || data.cashOut) {
+      h += `<div class="sep"></div><div class="bold">MOUVEMENTS DE CAISSE</div>`;
+      h += row('Apports', `+${(data.cashIn || 0).toFixed(2)} EUR`);
+      h += row('Prelevements', `-${(data.cashOut || 0).toFixed(2)} EUR`);
+    }
+    h += `<div class="sep"></div><div class="bold">CONTROLE</div>`;
+    h += row('Fond ouverture', `${(data.openingAmount || 0).toFixed(2)} EUR`);
+    const theo = (Number(data.openingAmount) || 0) + (Number(bp.cash) || 0) + (Number(data.cashIn) || 0) - (Number(data.cashOut) || 0);
+    h += row('Especes theoriques', `${theo.toFixed(2)} EUR`);
+    if (data.actualCash != null) {
+      h += row('Especes comptees', `${(Number(data.actualCash) || 0).toFixed(2)} EUR`);
+      const d = (Number(data.actualCash) || 0) - theo;
+      h += `<div class="row bold"><span>Ecart</span><span>${d >= 0 ? '+' : ''}${d.toFixed(2)} EUR</span></div>`;
+    }
+    h += `<div class="sep"></div><div class="center small">Document obligatoire - a conserver</div>`;
     return this._printViaIframe(h);
   }
 
@@ -1411,9 +1478,47 @@ async function _textBasedPrint(adapter, type, data, settings, companyInfo, width
   } else if (type === 'registerClose') {
     header();
     lines.push('FERMETURE DE CAISSE');
-    lines.push(`Date: ${new Date(data.date || '').toLocaleString('fr-FR')}`);
+    lines.push(`Date: ${new Date(data.closeDate || data.date || '').toLocaleString('fr-FR')}`);
+    if (data.userName) lines.push(`Caissier: ${data.userName}`);
     lines.push(dsep);
+    lines.push('ACTIVITE');
+    lines.push(pad('Nb ventes', `${data.ticketCount ?? data.salesCount ?? 0}`));
     lines.push(pad('CA TTC', `${(data.totalTTC || data.totalCA || 0).toFixed(2)}E`));
+    lines.push(pad('Total HT', `${(data.totalHT || 0).toFixed(2)}E`));
+    lines.push(pad('Total TVA', `${(data.totalTVA || 0).toFixed(2)}E`));
+    const bpT = data.byPayment || {};
+    const payLblT = { cash: 'Especes', card: 'CB', amex: 'AMEX', contactless: 'Sans contact', giftcard: 'Cadeau', cheque: 'Cheque', avoir: 'Avoir' };
+    lines.push(dsep);
+    lines.push('PAIEMENTS');
+    let anyPayT = false;
+    for (const k of Object.keys(payLblT)) {
+      const v = Number(bpT[k]) || 0;
+      if (v !== 0) { lines.push(pad(payLblT[k], `${v.toFixed(2)}E`)); anyPayT = true; }
+    }
+    if (!anyPayT) lines.push('Aucun encaissement');
+    if (data.returnCount || data.totalReturns) {
+      lines.push(dsep);
+      lines.push('REMBOURSEMENTS');
+      lines.push(pad('Nb avoirs', `${data.returnCount || 0}`));
+      lines.push(pad('Total avoirs', `-${(data.totalReturns || 0).toFixed(2)}E`));
+      if (data.netRevenue != null) lines.push(pad('CA net', `${(data.netRevenue || 0).toFixed(2)}E`));
+    }
+    if (data.cashIn || data.cashOut) {
+      lines.push(dsep);
+      lines.push('MOUVEMENTS DE CAISSE');
+      lines.push(pad('Apports', `+${(data.cashIn || 0).toFixed(2)}E`));
+      lines.push(pad('Prelevements', `-${(data.cashOut || 0).toFixed(2)}E`));
+    }
+    lines.push(dsep);
+    lines.push('CONTROLE');
+    lines.push(pad('Fond ouverture', `${(data.openingAmount || 0).toFixed(2)}E`));
+    const theoT = (Number(data.openingAmount) || 0) + (Number(bpT.cash) || 0) + (Number(data.cashIn) || 0) - (Number(data.cashOut) || 0);
+    lines.push(pad('Especes theoriq.', `${theoT.toFixed(2)}E`));
+    if (data.actualCash != null) {
+      lines.push(pad('Especes comptees', `${(Number(data.actualCash) || 0).toFixed(2)}E`));
+      const d = (Number(data.actualCash) || 0) - theoT;
+      lines.push(pad('Ecart', `${d >= 0 ? '+' : ''}${d.toFixed(2)}E`));
+    }
   } else if (type === 'giftcard') {
     header();
     lines.push('CARTE CADEAU');

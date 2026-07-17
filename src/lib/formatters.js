@@ -41,6 +41,32 @@ export const filterByToday = (items) => {
   return (items || []).filter((i) => getDateField(i).startsWith(today));
 };
 
+// ── Clôtures : normalisation snake_case (backend) → camelCase ──
+// Le backend renvoie ticket_count/total_ttc/... ; les écrans et l'impression
+// attendent du camelCase. Sans ça, le ticket de fermeture affiche 0 partout.
+export const normClosure = (c) => {
+  if (!c) return c;
+  const num = (...vals) => { for (const v of vals) if (v != null) return Number(v) || 0; return 0; };
+  return {
+    ...c,
+    type: c.type ?? c.closure_type,
+    ticketCount: num(c.ticketCount, c.ticket_count),
+    totalHT: num(c.totalHT, c.total_ht),
+    totalTVA: num(c.totalTVA, c.total_tva),
+    totalTTC: num(c.totalTTC, c.total_ttc),
+    totalMargin: num(c.totalMargin, c.total_margin),
+    grandTotal: num(c.grandTotal, c.grand_total),
+    expectedCash: num(c.expectedCash, c.expected_cash),
+    actualCash: c.actualCash ?? c.actual_cash ?? null,
+    actualCard: c.actualCard ?? c.actual_card ?? null,
+    cashIn: num(c.cashIn, c.cash_in),
+    cashOut: num(c.cashOut, c.cash_out),
+    byPayment: c.byPayment ?? {},
+    date: c.date ?? c.created_at,
+    userName: c.userName ?? c.user_name,
+  };
+};
+
 // ── Agrégation des paiements par méthode (clôtures, stats) ──
 export const PAYMENT_METHODS = ["cash", "card", "cheque", "giftcard", "amex", "avoir"];
 export const aggregatePaymentsByMethod = (tickets) => {

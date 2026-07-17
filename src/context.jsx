@@ -8,7 +8,7 @@ import { hashPin, verifyPin, sha256, norm, loadVariantOrderFromSettings, autoImp
 import { computeTotals } from "./lib/totals.js";
 import { getLoyaltyTier as loyaltyTierOf } from "./lib/loyalty.js";
 import { calcPromoDiscount as calcPromos } from "./lib/promos.js";
-import { aggregatePaymentsByMethod } from "./lib/formatters.js";
+import { aggregatePaymentsByMethod, normClosure } from "./lib/formatters.js";
 import Papa from "papaparse";
 
 /* ══════════ CONTEXT ══════════ */
@@ -244,7 +244,7 @@ function AppProvider({children}){
         setUsers(prev=>{const localOnly=prev.filter(lu=>!apiUsers.find(au=>au.name===lu.name));return[...merged,...localOnly];});}
       // Load tickets and closures from backend
       try{const salesData=await API.sales.list({limit:200});if(salesData?.length)setTickets(salesData.map(s=>({...s,ticketNumber:s.ticket_number,totalHT:parseFloat(s.total_ht),totalTVA:parseFloat(s.total_tva),totalTTC:parseFloat(s.total_ttc),date:s.created_at,userName:s.user_name,paymentMethod:s.payment_method,customerName:s.customer_name,fingerprint:s.fingerprint})));}catch(e){console.warn("Chargement ventes échoué:",e.message);}
-      try{const closData=await API.fiscal.closures();if(closData?.length)setClosures(closData.map(c=>({...c,type:c.closure_type,totalHT:parseFloat(c.total_ht),totalTVA:parseFloat(c.total_tva),totalTTC:parseFloat(c.total_ttc),totalMargin:parseFloat(c.total_margin||0),date:c.created_at,userName:c.user_name})));}catch(e){console.warn("Chargement clôtures échoué:",e.message);}
+      try{const closData=await API.fiscal.closures();if(closData?.length)setClosures(closData.map(normClosure));}catch(e){console.warn("Chargement clôtures échoué:",e.message);}
       // Load avoirs from server
       try{const avoirsData=await API.returns.list({limit:500});if(avoirsData?.length){
         const backend=norm.avoirs(avoirsData);const nums=new Set(backend.map(a=>a.avoirNumber));
@@ -847,8 +847,10 @@ function AppProvider({children}){
 
   // Closures — via API
   const createClosure=useCallback(async(type,aCash,aCard)=>{
-    try{const cl=await API.fiscal.closure({type,actualCash:aCash,actualCard:aCard});
-      if(!cl||cl.error){throw new Error(cl?.error||"Réponse invalide du serveur");}
+    try{const raw=await API.fiscal.closure({type,actualCash:aCash,actualCard:aCard});
+      if(!raw||raw.error){throw new Error(raw?.error||"Réponse invalide du serveur");}
+      // Normalisation snake_case → camelCase : sans ça le ticket de fermeture affiche 0 partout
+      const cl=normClosure(raw);
       setClosures(p=>[cl,...p]);
       if(cl.grandTotal)setGt(parseFloat(cl.grandTotal));
       addAudit("CLOTURE",`Z ${type}`);notify("Clôture enregistrée","success");return cl;}catch(e){

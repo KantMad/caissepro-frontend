@@ -1065,22 +1065,37 @@ class ThermalPrinter {
         if ((data.byPayment.avoir || 0) > 0) await this.line('Avoirs utilises', `${data.byPayment.avoir.toFixed(2)} EUR`);
       }
 
+      // Mouvements de tiroir (hors CA, mais impactent le fond)
+      if (data.cashIn || data.cashOut) {
+        await this.separator('-');
+        await this.bold(true);
+        await this.text('MOUVEMENTS DE CAISSE');
+        await this.newline();
+        await this.bold(false);
+        await this.line('Apports', `+${(data.cashIn || 0).toFixed(2)} EUR`);
+        await this.line('Prelevements', `-${(data.cashOut || 0).toFixed(2)} EUR`);
+      }
+
       await this.separator('-');
 
-      // Cash control
+      // Cash control — especes theoriques = fond + ventes especes + apports - prelevements
+      const theoCash = (Number(data.openingAmount) || 0) + (Number(data.byPayment?.cash) || 0)
+        + (Number(data.cashIn) || 0) - (Number(data.cashOut) || 0);
       await this.bold(true);
       await this.text('CONTROLE CAISSE');
       await this.newline();
       await this.bold(false);
       await this.line('Fond ouverture', `${(data.openingAmount || 0).toFixed(2)} EUR`);
       await this.line('+ Encaissements ESP', `${(data.byPayment?.cash || 0).toFixed(2)} EUR`);
+      if (data.cashIn) await this.line('+ Apports', `${(data.cashIn || 0).toFixed(2)} EUR`);
+      if (data.cashOut) await this.line('- Prelevements', `${(data.cashOut || 0).toFixed(2)} EUR`);
       await this.bold(true);
-      await this.line('= Especes attendues', `${(data.expectedCash || 0).toFixed(2)} EUR`);
+      await this.line('= Especes attendues', `${theoCash.toFixed(2)} EUR`);
       await this.bold(false);
 
       if (data.actualCash != null) {
         await this.line('Especes comptees', `${parseFloat(data.actualCash).toFixed(2)} EUR`);
-        const cashDiff = parseFloat(data.actualCash) - (data.expectedCash || 0);
+        const cashDiff = parseFloat(data.actualCash) - theoCash;
         await this.bold(true);
         await this.line('Ecart especes', `${cashDiff >= 0 ? '+' : ''}${cashDiff.toFixed(2)} EUR`);
         await this.bold(false);

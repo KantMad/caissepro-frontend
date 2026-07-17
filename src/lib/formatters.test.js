@@ -1,8 +1,41 @@
 import { describe, it, expect } from "vitest";
 import {
   formatAmount, getPaymentLabel, getAvoirRemaining, isAvoirPartiallyUsed,
-  filterByToday, getTodayDate, aggregatePaymentsByMethod,
+  filterByToday, getTodayDate, aggregatePaymentsByMethod, normClosure,
 } from "./formatters.js";
+
+describe("normClosure", () => {
+  it("mappe la réponse backend snake_case → camelCase (bug ticket de fermeture à 0)", () => {
+    const c = normClosure({
+      closure_type: "daily", ticket_count: 3, total_ht: "100.5", total_tva: "20.1",
+      total_ttc: "120.6", grand_total: "500", expected_cash: "60", actual_cash: "58",
+      cashIn: 10, cashOut: 5, byPayment: { cash: 60, card: 60.6 },
+      created_at: "2026-07-16T12:00:00Z", user_name: "Admin",
+    });
+    expect(c.type).toBe("daily");
+    expect(c.ticketCount).toBe(3);
+    expect(c.totalTTC).toBe(120.6);
+    expect(c.totalHT).toBe(100.5);
+    expect(c.expectedCash).toBe(60);
+    expect(c.actualCash).toBe("58");
+    expect(c.cashIn).toBe(10);
+    expect(c.cashOut).toBe(5);
+    expect(c.byPayment.cash).toBe(60);
+    expect(c.userName).toBe("Admin");
+  });
+  it("conserve le camelCase déjà normalisé (chemin hors-ligne)", () => {
+    const c = normClosure({ ticketCount: 2, totalTTC: 50, byPayment: { cash: 50 } });
+    expect(c.ticketCount).toBe(2);
+    expect(c.totalTTC).toBe(50);
+    expect(c.byPayment.cash).toBe(50);
+  });
+  it("valeurs manquantes → 0 (pas undefined)", () => {
+    const c = normClosure({});
+    expect(c.ticketCount).toBe(0);
+    expect(c.totalTTC).toBe(0);
+    expect(c.byPayment).toEqual({});
+  });
+});
 
 describe("formatAmount", () => {
   it("formate à 2 décimales", () => {
