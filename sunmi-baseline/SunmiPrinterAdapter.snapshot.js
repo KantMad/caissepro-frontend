@@ -773,32 +773,78 @@ class SunmiPrinterAdapter {
     cmds.push({ cmd: 'line', char: '-', len: 32 });
     const pad17 = (l) => (l + '                 ').slice(0, 17);
     const bp = data.byPayment || {};
-    bold(true); size(26); text('ACTIVITE\n'); size(24); bold(false);
-    bold(true); text(`Nb ventes        ${data.ticketCount ?? data.salesCount ?? 0}\n`);
-    size(28); text(`CA TTC           ${fmt(data.totalTTC || data.totalCA)} EUR\n`); size(24);
-    text(`Total HT         ${fmt(data.totalHT)} EUR\n`);
-    text(`Total TVA        ${fmt(data.totalTVA)} EUR\n`);
-    if (data.avgBasket) text(`Panier moyen     ${fmt(data.avgBasket)} EUR\n`);
-    bold(false);
-    // ── Paiements : ventilation par methode ──
+    const bpc = data.byPaymentCount || {};
+    const ratePct = (r) => { const p = (Number(r) || 0) * 100; return (p % 1 === 0 ? p.toFixed(0) : p.toFixed(1)) + '%'; };
+    // ── Ventes ──
+    bold(true); size(26); text('VENTES\n'); size(24); bold(false);
+    bold(true); text(`${pad17('Nb ventes')}${data.ticketCount ?? data.salesCount ?? 0}\n`); bold(false);
+    text(`${pad17('CA HT')}${fmt(data.totalHT)} EUR\n`);
+    bold(true); size(28); text(`${pad17('CA TTC')}${fmt(data.totalTTC || data.totalCA)} EUR\n`); size(24); bold(false);
+    if (data.avgItemsPerSale) text(`${pad17('Nb art. moyen')}${data.avgItemsPerSale}\n`);
+    if (data.avgBasketHT) text(`${pad17('Panier moyen HT')}${fmt(data.avgBasketHT)} EUR\n`);
+    if (data.avgBasketTTC) text(`${pad17('Panier moyen TTC')}${fmt(data.avgBasketTTC)} EUR\n`);
+    // ── Retours ──
+    const ret = data.returns || null;
+    if ((ret && (ret.count || ret.totalTTC)) || data.returnCount || data.totalReturns) {
+      cmds.push({ cmd: 'line', char: '-', len: 32 });
+      bold(true); size(26); text('RETOURS\n'); size(24); bold(false);
+      text(`${pad17('Nb avoirs')}${ret?.count ?? data.returnCount ?? 0}\n`);
+      if (ret?.itemCount != null) text(`${pad17('Nb articles ret.')}${ret.itemCount}\n`);
+      if (ret?.totalHT != null) text(`${pad17('Montant HT')}-${fmt(ret.totalHT)} EUR\n`);
+      text(`${pad17('Montant TTC')}-${fmt(ret?.totalTTC ?? data.totalReturns)} EUR\n`);
+      if (data.netRevenue != null) { bold(true); text(`${pad17('CA net TTC')}${fmt(data.netRevenue)} EUR\n`); bold(false); }
+    }
+    // ── TVA ventilee par taux ──
     cmds.push({ cmd: 'line', char: '-', len: 32 });
-    bold(true); size(26); text('PAIEMENTS\n'); size(24); bold(false);
+    bold(true); size(26); text('TVA\n'); size(24); bold(false);
+    const tvaRates = data.tvaByRate || [];
+    if (tvaRates.length) {
+      for (const t of tvaRates) {
+        text(`${pad17('Base TVA ' + ratePct(t.rate))}${fmt(t.baseHT)} EUR\n`);
+        text(`${pad17('Montant TVA ' + ratePct(t.rate))}${fmt(t.tva)} EUR\n`);
+      }
+    }
+    bold(true); text(`${pad17('Total TVA')}${fmt(data.totalTVA)} EUR\n`); bold(false);
+    // ── Ventilation HT par vendeur ──
+    const sellers = Object.keys(data.bySeller || {});
+    if (sellers.length) {
+      cmds.push({ cmd: 'line', char: '-', len: 32 });
+      bold(true); size(26); text('VENTILATION HT PAR VENDEUR\n'); size(24); bold(false);
+      for (const s2 of sellers) text(`${pad17(s2.slice(0, 16))}${fmt(data.bySeller[s2])} EUR\n`);
+    }
+    // ── Reglements entrants (montant + nombre) ──
+    cmds.push({ cmd: 'line', char: '-', len: 32 });
+    bold(true); size(26); text('REGLEMENTS ENTRANTS\n'); size(24); bold(false);
     const payLbl = { cash: 'Especes', card: 'CB', amex: 'AMEX', contactless: 'Sans contact', giftcard: 'Cadeau', cheque: 'Cheque', avoir: 'Avoir' };
     let anyPay = false;
     for (const k of Object.keys(payLbl)) {
       const v = Number(bp[k]) || 0;
-      if (v !== 0) { text(`${pad17(payLbl[k])}${fmt(v)} EUR\n`); anyPay = true; }
+      if (v !== 0) { const n = bpc[k] ? `(x${bpc[k]})` : ''; text(`${pad17(payLbl[k] + n)}${fmt(v)} EUR\n`); anyPay = true; }
     }
     if (!anyPay && data.cashTotal != null) { text(`${pad17('Especes')}${fmt(data.cashTotal)} EUR\n`); anyPay = true; }
-    if (!anyPay && data.cardTotal != null) { text(`${pad17('CB')}${fmt(data.cardTotal)} EUR\n`); anyPay = true; }
     if (!anyPay) text('Aucun encaissement\n');
-    // ── Remboursements (avoirs emis) ──
-    if (data.returnCount || data.totalReturns) {
+    // ── Remises ──
+    const dsc = data.discounts;
+    if (dsc && (dsc.globalTotal || dsc.lineTotal)) {
       cmds.push({ cmd: 'line', char: '-', len: 32 });
-      bold(true); size(26); text('REMBOURSEMENTS\n'); size(24); bold(false);
-      text(`${pad17('Nb avoirs')}${data.returnCount || 0}\n`);
-      text(`${pad17('Total avoirs')}-${fmt(data.totalReturns)} EUR\n`);
-      if (data.netRevenue != null) { bold(true); text(`${pad17('CA net')}${fmt(data.netRevenue)} EUR\n`); bold(false); }
+      bold(true); size(26); text('REMISES\n'); size(24); bold(false);
+      if (dsc.globalTotal) text(`${pad17('Sur ticket (x' + dsc.globalCount + ')')}${fmt(dsc.globalTotal)} EUR\n`);
+      if (dsc.lineTotal) text(`${pad17('Sur ligne (x' + dsc.lineCount + ')')}${fmt(dsc.lineTotal)} EUR\n`);
+    }
+    // ── Annulations ──
+    const can = data.cancellations;
+    if (can && (can.voidedLines || can.abandonedCarts)) {
+      cmds.push({ cmd: 'line', char: '-', len: 32 });
+      bold(true); size(26); text('ANNULATIONS\n'); size(24); bold(false);
+      text(`${pad17('Lignes supprimees')}${can.voidedLines || 0}\n`);
+      text(`${pad17('Paniers abandonn.')}${can.abandonedCarts || 0}\n`);
+    }
+    // ── Detail des ventes TTC par categorie ──
+    const cats = data.byCategory || [];
+    if (cats.length) {
+      cmds.push({ cmd: 'line', char: '-', len: 32 });
+      bold(true); size(26); text('VENTES TTC PAR CATEGORIE\n'); size(24); bold(false);
+      for (const c2 of cats) text(`${pad17((c2.category || '?').slice(0, 12) + ' (x' + (c2.qty || 0) + ')')}${fmt(c2.totalTTC)} EUR\n`);
     }
     // ── Mouvements de tiroir (hors CA) ──
     if (data.cashIn || data.cashOut) {

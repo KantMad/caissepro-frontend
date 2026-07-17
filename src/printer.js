@@ -1048,21 +1048,69 @@ class ThermalPrinter {
       await this.bold(true);
       await this.line('Total TTC', `${(data.totalTTC || 0).toFixed(2)} EUR`);
       await this.bold(false);
+      if (data.avgItemsPerSale) await this.line('Nb articles moyen', String(data.avgItemsPerSale));
+      if (data.avgBasketHT) await this.line('Panier moyen HT', `${data.avgBasketHT.toFixed(2)} EUR`);
+      if (data.avgBasketTTC) await this.line('Panier moyen TTC', `${data.avgBasketTTC.toFixed(2)} EUR`);
+
+      // TVA ventilee par taux
+      const pctR = (r) => { const p = (Number(r) || 0) * 100; return (p % 1 === 0 ? p.toFixed(0) : p.toFixed(1)) + '%'; };
+      if ((data.tvaByRate || []).length) {
+        await this.separator('-');
+        await this.bold(true); await this.text('TVA'); await this.newline(); await this.bold(false);
+        for (const t of data.tvaByRate) {
+          await this.line(`Base TVA ${pctR(t.rate)}`, `${(t.baseHT || 0).toFixed(2)} EUR`);
+          await this.line(`Montant TVA ${pctR(t.rate)}`, `${(t.tva || 0).toFixed(2)} EUR`);
+        }
+      }
+
+      // Ventilation HT par vendeur
+      const sellerKeys = Object.keys(data.bySeller || {});
+      if (sellerKeys.length) {
+        await this.separator('-');
+        await this.bold(true); await this.text('VENTILATION HT PAR VENDEUR'); await this.newline(); await this.bold(false);
+        for (const sk of sellerKeys) await this.line(sk, `${(data.bySeller[sk] || 0).toFixed(2)} EUR`);
+      }
 
       await this.separator('-');
 
-      // Payment breakdown
+      // Payment breakdown (montant + nombre)
       await this.bold(true);
-      await this.text('VENTILATION PAIEMENTS');
+      await this.text('REGLEMENTS ENTRANTS');
       await this.newline();
       await this.bold(false);
       if (data.byPayment) {
-        await this.line('Especes', `${(data.byPayment.cash || 0).toFixed(2)} EUR`);
-        await this.line('Carte bancaire', `${(data.byPayment.card || 0).toFixed(2)} EUR`);
-        if ((data.byPayment.cheque || 0) > 0) await this.line('Cheques', `${data.byPayment.cheque.toFixed(2)} EUR`);
-        if ((data.byPayment.giftcard || 0) > 0) await this.line('Cartes cadeaux', `${data.byPayment.giftcard.toFixed(2)} EUR`);
-        if ((data.byPayment.amex || 0) > 0) await this.line('American Express', `${data.byPayment.amex.toFixed(2)} EUR`);
-        if ((data.byPayment.avoir || 0) > 0) await this.line('Avoirs utilises', `${data.byPayment.avoir.toFixed(2)} EUR`);
+        const bpc = data.byPaymentCount || {};
+        const lbls = { cash: 'Especes', card: 'Carte bancaire', amex: 'American Express', contactless: 'Sans contact', giftcard: 'Cartes cadeaux', cheque: 'Cheques', avoir: 'Avoirs utilises' };
+        for (const k of Object.keys(lbls)) {
+          const v = Number(data.byPayment[k]) || 0;
+          if (v !== 0) await this.line(lbls[k] + (bpc[k] ? `(x${bpc[k]})` : ''), `${v.toFixed(2)} EUR`);
+        }
+      }
+
+      // Remises
+      const dscP = data.discounts;
+      if (dscP && (dscP.globalTotal || dscP.lineTotal)) {
+        await this.separator('-');
+        await this.bold(true); await this.text('REMISES'); await this.newline(); await this.bold(false);
+        if (dscP.globalTotal) await this.line(`Sur ticket (x${dscP.globalCount})`, `${dscP.globalTotal.toFixed(2)} EUR`);
+        if (dscP.lineTotal) await this.line(`Sur ligne (x${dscP.lineCount})`, `${dscP.lineTotal.toFixed(2)} EUR`);
+      }
+
+      // Annulations
+      const canP = data.cancellations;
+      if (canP && (canP.voidedLines || canP.abandonedCarts)) {
+        await this.separator('-');
+        await this.bold(true); await this.text('ANNULATIONS'); await this.newline(); await this.bold(false);
+        await this.line('Lignes supprimees', String(canP.voidedLines || 0));
+        await this.line('Paniers abandonnes', String(canP.abandonedCarts || 0));
+      }
+
+      // Detail par categorie
+      const catsP = data.byCategory || [];
+      if (catsP.length) {
+        await this.separator('-');
+        await this.bold(true); await this.text('VENTES TTC PAR CATEGORIE'); await this.newline(); await this.bold(false);
+        for (const c2 of catsP) await this.line(`${c2.category} (x${c2.qty || 0})`, `${(c2.totalTTC || 0).toFixed(2)} EUR`);
       }
 
       // Mouvements de tiroir (hors CA, mais impactent le fond)

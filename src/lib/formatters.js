@@ -62,6 +62,18 @@ export const normClosure = (c) => {
     cashIn: num(c.cashIn, c.cash_in),
     cashOut: num(c.cashOut, c.cash_out),
     byPayment: c.byPayment ?? {},
+    // Détails du Z (backend) — défauts sûrs pour le chemin hors-ligne
+    byPaymentCount: c.byPaymentCount ?? {},
+    tvaByRate: c.tvaByRate ?? [],
+    bySeller: c.bySeller ?? {},
+    byCategory: c.byCategory ?? [],
+    discounts: c.discounts ?? null,
+    cancellations: c.cancellations ?? null,
+    returns: c.returns ?? null,
+    itemCount: num(c.itemCount),
+    avgItemsPerSale: num(c.avgItemsPerSale),
+    avgBasketHT: num(c.avgBasketHT),
+    avgBasketTTC: num(c.avgBasketTTC),
     date: c.date ?? c.created_at,
     userName: c.userName ?? c.user_name,
   };
