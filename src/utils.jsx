@@ -176,7 +176,9 @@ export const norm={
       product:i.product||{id:i.product_id,name:i.product_name||i.name,sku:i.sku||i.product_sku||""},
       variant:i.variant||{id:i.variant_id,color:i.variant_color,size:i.variant_size,ean:i.ean||i.variant_ean||"",colorCode:i.color_code||i.colorCode||""},
       quantity:i.quantity||i.qty||1,
-      lineTTC:parseFloat(i.lineTTC??i.line_ttc??((i.unit_price||0)*(i.quantity||1)))||0})),
+      lineTTC:parseFloat(i.lineTTC??i.line_ttc??((i.unit_price||0)*(i.quantity||1)))||0,
+      lineHT:parseFloat(i.lineHT??i.line_ht??0)||0,
+      lineTVA:parseFloat(i.lineTVA??i.line_tva??0)||0})),
     payments:s.payments||[]}},
   sales(list){return(list||[]).map(norm.sale)},
 };

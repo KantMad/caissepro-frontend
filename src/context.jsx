@@ -764,13 +764,13 @@ function AppProvider({children}){
   // ══ P2: TVA summary — utilise les montants pré-calculés si disponibles ══
   const tvaSummary=useMemo(()=>{const byRate={};
     tickets.forEach(t=>{
-      const gd=t.globalDiscount||0;const tHT=t.totalHT||0;const rawHT=(t.items||[]).reduce((s,i)=>s+(i.lineHT||i.line_ht||0),0);
+      const gd=t.globalDiscount||0;const tHT=t.totalHT||0;const rawHT=(t.items||[]).reduce((s,i)=>s+(i.lineHT),0);
       const discRatio=rawHT>0?gd/rawHT:0;
       (t.items||[]).forEach(i=>{
         const taxR=i.product?.taxRate||i.tax_rate||0.20;const r=(taxR*100).toFixed(1)+"%";
         if(!byRate[r])byRate[r]={rate:r,baseHT:0,tva:0};
         // Utiliser lineHT pré-calculé (déjà correct pour TTC/HT) puis appliquer la remise globale proportionnellement
-        const lHT=(i.lineHT||i.line_ht||0)*(1-discRatio);
+        const lHT=(i.lineHT)*(1-discRatio);
         byRate[r].baseHT+=lHT;byRate[r].tva+=lHT*taxR;});});
     return Object.values(byRate);},[tickets]);
 
@@ -795,13 +795,13 @@ function AppProvider({children}){
   // Best sellers
   const bestSellers=useMemo(()=>{const m={};tickets.forEach(t=>(t.items||[]).forEach(i=>{
     const k=i.product?.sku||i.product_name;if(!m[k])m[k]={name:i.product?.name||i.product_name,sku:k,qty:0,revenue:0,margin:0};
-    m[k].qty+=i.quantity;m[k].revenue+=(i.lineTTC||i.line_ttc||0);m[k].margin+=((i.lineHT||i.line_ht||0)-(i.product?.costPrice||i.cost_price||0)*i.quantity);}));
+    m[k].qty+=i.quantity;m[k].revenue+=(i.lineTTC);m[k].margin+=((i.lineHT)-(i.product?.costPrice||i.cost_price||0)*i.quantity);}));
     return Object.values(m).sort((a,b)=>b.qty-a.qty);},[tickets]);
 
   // Sales by seller
   const salesBySeller=useMemo(()=>{const m={};tickets.forEach(t=>{
     const n=t.sellerName||t.seller_name||t.userName||t.user_name||"?";if(!m[n])m[n]={name:n,count:0,revenue:0,margin:0,totalItems:0,customers:new Set()};
-    m[n].count++;m[n].revenue+=(t.totalTTC||parseFloat(t.total_ttc)||0);m[n].margin+=(parseFloat(t.margin)||0);
+    m[n].count++;m[n].revenue+=(t.totalTTC);m[n].margin+=(parseFloat(t.margin)||0);
     m[n].totalItems+=(t.items||[]).reduce((s,i)=>s+i.quantity,0);
     if(t.customerId||t.customer_id)m[n].customers.add(t.customerId||t.customer_id);});
     return Object.values(m).map(s=>({...s,avgBasket:s.count?s.revenue/s.count:0,avgItems:s.count?s.totalItems/s.count:0,
@@ -819,13 +819,13 @@ function AppProvider({children}){
   // CA evolution (by day)
   const caEvolution=useMemo(()=>{const m={};tickets.forEach(t=>{
     const d=new Date(t.date||t.createdAt||t.created_at).toLocaleDateString("fr-FR",{day:"2-digit",month:"short"});
-    m[d]=(m[d]||0)+(t.totalTTC||parseFloat(t.total_ttc)||0);});
+    m[d]=(m[d]||0)+(t.totalTTC);});
     return Object.entries(m).reverse().map(([d,v])=>({date:d,ca:Math.round(v*100)/100}));},[tickets]);
 
   // Sales by collection
   const salesByCollection=useMemo(()=>{const m={};tickets.forEach(t=>(t.items||[]).forEach(i=>{
     const col=i.product?.collection||"Sans collection";if(!m[col])m[col]={name:col,qty:0,revenue:0,margin:0};
-    m[col].qty+=i.quantity;m[col].revenue+=(i.lineTTC||i.line_ttc||0);m[col].margin+=((i.lineHT||i.line_ht||0)-(i.product?.costPrice||i.cost_price||0)*i.quantity);}));
+    m[col].qty+=i.quantity;m[col].revenue+=(i.lineTTC);m[col].margin+=((i.lineHT)-(i.product?.costPrice||i.cost_price||0)*i.quantity);}));
     return Object.values(m).sort((a,b)=>b.revenue-a.revenue);},[tickets]);
 
   // ══ P3: Commission calculation (5% of margin) ══
@@ -864,9 +864,9 @@ function AppProvider({children}){
       const movesToday=(cashMovements||[]).filter(m=>(m.created_at||m.date||"").startsWith(today));
       const cashIn=movesToday.filter(m=>m.direction==="in").reduce((s,m)=>s+(parseFloat(m.amount)||0),0);
       const cashOut=movesToday.filter(m=>m.direction==="out").reduce((s,m)=>s+(parseFloat(m.amount)||0),0);
-      const totalTTC=pt.reduce((s,t)=>s+(t.totalTTC||parseFloat(t.total_ttc)||0),0);
-      const totalHT=pt.reduce((s,t)=>s+(t.totalHT||parseFloat(t.total_ht)||0),0);
-      const totalTVA=pt.reduce((s,t)=>s+(t.totalTVA||parseFloat(t.total_tva)||0),0);
+      const totalTTC=pt.reduce((s,t)=>s+(t.totalTTC),0);
+      const totalHT=pt.reduce((s,t)=>s+(t.totalHT),0);
+      const totalTVA=pt.reduce((s,t)=>s+(t.totalTVA),0);
       const totalMargin=pt.reduce((s,t)=>s+(parseFloat(t.margin)||0),0);
       const newGt=gt+totalTTC;
       // NF525: SHA-256 hash chain pour clôtures
@@ -907,9 +907,9 @@ function AppProvider({children}){
     const entete=tickets.map(t=>({
       NUM_TICKET:t.ticketNumber||t.ticket_number,SEQ:t.seq,DATE:t.date||t.createdAt,
       TYPE:"VENTE",ID_CAISSE:caisseId,ID_SOC:socId,
-      TOTAL_HT:(t.totalHT||parseFloat(t.total_ht)||0).toFixed(2),
-      TOTAL_TVA:(t.totalTVA||parseFloat(t.total_tva)||0).toFixed(2),
-      TOTAL_TTC:(t.totalTTC||parseFloat(t.total_ttc)||0).toFixed(2),
+      TOTAL_HT:(t.totalHT).toFixed(2),
+      TOTAL_TVA:(t.totalTVA).toFixed(2),
+      TOTAL_TTC:(t.totalTTC).toFixed(2),
       REMISE_GLOBALE:(t.globalDiscount||0).toFixed(2),
       MODE_PAIEMENT:t.paymentMethod||"",VENDEUR:t.sellerName||t.seller_name||t.userName||"",
       CLIENT:t.customerName||"",CLIENT_ID:t.customerId||"",
@@ -920,14 +920,14 @@ function AppProvider({children}){
         PRODUIT:i.product?.name||i.product_name||"",SKU:i.product?.sku||i.product_sku||"",
         VARIANTE_COULEUR:i.variant?.color||i.variant_color||"",VARIANTE_TAILLE:i.variant?.size||i.variant_size||"",
         EAN:i.variant?.ean||"",QUANTITE:i.quantity,
-        PU_HT:((i.lineHT||i.line_ht||0)/i.quantity).toFixed(4),TAUX_TVA:((i.tax_rate||i.product?.taxRate||0.20)*100).toFixed(2),
+        PU_HT:((i.lineHT)/i.quantity).toFixed(4),TAUX_TVA:((i.tax_rate||i.product?.taxRate||0.20)*100).toFixed(2),
         REMISE_LIGNE:(i.discount_amount||0).toFixed(2),REMISE_PCT:(i.discount_percent||0).toFixed(2),
-        TOTAL_HT:(i.lineHT||i.line_ht||0).toFixed(2),TOTAL_TVA:(i.lineTVA||i.line_tva||0).toFixed(2),
-        TOTAL_TTC:(i.lineTTC||i.line_ttc||0).toFixed(2)});}));
+        TOTAL_HT:(i.lineHT).toFixed(2),TOTAL_TVA:(i.lineTVA||i.line_tva||0).toFixed(2),
+        TOTAL_TTC:(i.lineTTC).toFixed(2)});}));
     // 3. TVA (breakdown par taux)
     const tvaRows=[];tickets.forEach(t=>{const byRate={};(t.items||[]).forEach(i=>{
       const r=((i.tax_rate||i.product?.taxRate||0.20)*100).toFixed(1);
-      if(!byRate[r])byRate[r]={ht:0,tva:0};byRate[r].ht+=(i.lineHT||i.line_ht||0);byRate[r].tva+=(i.lineTVA||i.line_tva||0);});
+      if(!byRate[r])byRate[r]={ht:0,tva:0};byRate[r].ht+=(i.lineHT);byRate[r].tva+=(i.lineTVA||i.line_tva||0);});
       Object.entries(byRate).forEach(([rate,v])=>{tvaRows.push({NUM_TICKET:t.ticketNumber||t.ticket_number,TAUX:rate,BASE_HT:v.ht.toFixed(2),MONTANT_TVA:v.tva.toFixed(2)});});});
     // 4. Pied (ticket footers/totals)
     const pieds=tickets.map(t=>({
@@ -953,7 +953,7 @@ function AppProvider({children}){
       TOTAL_TTC:(t.totalTTC||0).toFixed(2),GT_CUMULE:(t.grandTotal||0).toFixed(2)}));
     // 10. GTJ (grand total journalier)
     const byDay={};tickets.forEach(t=>{const d=(t.date||t.createdAt||"").slice(0,10);if(!byDay[d])byDay[d]={ttc:0,count:0};
-      byDay[d].ttc+=(t.totalTTC||parseFloat(t.total_ttc)||0);byDay[d].count++;});
+      byDay[d].ttc+=(t.totalTTC);byDay[d].count++;});
     const gtjRows=Object.entries(byDay).sort().map(([d,v])=>({DATE:d,NB_TICKETS:v.count,TOTAL_TTC:v.ttc.toFixed(2)}));
 
     // Générer les CSVs et empaqueter
