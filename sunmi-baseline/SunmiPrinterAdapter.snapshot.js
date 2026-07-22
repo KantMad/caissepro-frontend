@@ -222,6 +222,7 @@ class SunmiPrinterAdapter {
         const payStr = payments.map(p => `${ml[p.method] || p.method || '?'} ${fmt(p.amount)} EUR`).join(' + ');
         bold(true); text(`Paiement: ${payStr}\n`); bold(false);
       }
+      if (t.saleNote || t.sale_note) text(`Note: ${t.saleNote || t.sale_note}\n`);
       cmds.push({ cmd: 'line', char: '=', len: 32 });
 
       // NF525
@@ -255,7 +256,7 @@ class SunmiPrinterAdapter {
     if (s.footerMsg || co.footerMsg) { size(24); bold(true); text(`${s.footerMsg || co.footerMsg}\n`); bold(false); }
     if (s.ticketFreeText) { size(22); bold(true); const ftLines = s.ticketFreeText.split('\n'); for (const ln of ftLines) { text(ln + '\n'); } bold(false); }
     if (t.customerName || t.customer_name) {
-      size(20); text(`Fidelite: +${Math.floor(Number(t.totalTTC || t.total_ttc) || 0)}pts\n`);
+      size(20); text(`Fidelite: +${Math.round(Number(t.totalTTC || t.total_ttc) || 0)}pts\n`);
     }
     size(18); text(`${co.sw || 'CaissePro'} v${co.ver || '6.1.0'} - Conforme NF525\n`);
 

@@ -640,7 +640,7 @@ class ThermalPrinter {
       if (ticket.customerName) {
         await this.newline();
         await this.bold(true);
-        await this.text(`Fidelite: +${Math.floor(ticket.totalTTC || 0)}pts`);
+        await this.text(`Fidelite: +${Math.round(ticket.totalTTC || 0)}pts`);
         await this.newline();
         await this.bold(false);
       }

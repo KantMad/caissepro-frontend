@@ -548,7 +548,7 @@ function SalesScreen(){
         {settings.ticketFreeText&&<div style={{textAlign:"center",fontSize:11,fontWeight:600,color:C.text,marginTop:4,whiteSpace:"pre-line"}}>
           {settings.ticketFreeText}</div>}
         {lastTk.saleNote&&<div style={{textAlign:"center",fontSize:10,fontWeight:600,color:C.text,marginTop:4,fontStyle:"italic"}}>Note: {lastTk.saleNote}</div>}
-        {lastTk.customerName&&<div style={{textAlign:"center",fontSize:10,fontWeight:600,color:C.accent,marginTop:4}}>Fidélité: +{Math.floor(lastTk.totalTTC||0)}pts</div>}
+        {lastTk.customerName&&<div style={{textAlign:"center",fontSize:10,fontWeight:600,color:C.accent,marginTop:4}}>Fidélité: +{Math.round(lastTk.totalTTC||0)}pts</div>}
         <div style={{textAlign:"center",fontSize:7,color:C.textMuted,marginTop:4}}>{CO.sw} v{CO.ver} — Conforme NF525</div>
       </div>
       {/* Avoir remaining balance after sale */}

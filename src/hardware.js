@@ -306,6 +306,7 @@ class SunmiPrinterAdapter {
         const payStr = payments.map(p => `${ml[p.method] || p.method || '?'} ${fmt(p.amount)} EUR`).join(' + ');
         bold(true); text(`Paiement: ${payStr}\n`); bold(false);
       }
+      if (t.saleNote || t.sale_note) text(`Note: ${t.saleNote || t.sale_note}\n`);
       cmds.push({ cmd: 'line', char: '=', len: 32 });
 
       // NF525
@@ -339,7 +340,7 @@ class SunmiPrinterAdapter {
     if (s.footerMsg || co.footerMsg) { size(24); bold(true); text(`${s.footerMsg || co.footerMsg}\n`); bold(false); }
     if (s.ticketFreeText) { size(22); bold(true); const ftLines = s.ticketFreeText.split('\n'); for (const ln of ftLines) { text(ln + '\n'); } bold(false); }
     if (t.customerName || t.customer_name) {
-      size(20); text(`Fidelite: +${Math.floor(Number(t.totalTTC || t.total_ttc) || 0)}pts\n`);
+      size(20); text(`Fidelite: +${Math.round(Number(t.totalTTC || t.total_ttc) || 0)}pts\n`);
     }
     size(18); text(`${co.sw || 'CaissePro'} v${co.ver || '6.1.0'} - Conforme NF525\n`);
 
@@ -1470,9 +1471,11 @@ async function _textBasedPrint(adapter, type, data, settings, companyInfo, width
       }
     }
     lines.push(dsep);
+    if (Number(data.globalDiscount || data.global_discount || 0) > 0) lines.push(pad('Remise', `-${Number(data.globalDiscount || data.global_discount).toFixed(2)}E`));
     lines.push(pad('Total HT', `${(data.totalHT || 0).toFixed(2)}E`));
     lines.push(pad('TVA', `${(data.totalTVA || 0).toFixed(2)}E`));
     lines.push(pad('TOTAL TTC', `${(data.totalTTC || 0).toFixed(2)}E`));
+    if (data.saleNote || data.sale_note) lines.push(`Note: ${data.saleNote || data.sale_note}`);
     lines.push(sep);
     lines.push(`NF525: ${data.fingerprint || '-'}`);
   } else if (type === 'avoir') {
@@ -1672,7 +1675,9 @@ function _generateReceiptHTML(ticket, settings, companyInfo) {
     h += `<div class="row"><span>${name} x${item.quantity || 1}</span><span>${ttc.toFixed(2)}EUR</span></div>`;
   }
   h += '<div class="sep"></div>';
+  if (Number(ticket.globalDiscount || ticket.global_discount || 0) > 0) h += `<div class="row"><span>Remise</span><span>-${Number(ticket.globalDiscount || ticket.global_discount).toFixed(2)}EUR</span></div>`;
   h += `<div class="row bold big"><span>TOTAL TTC</span><span>${(ticket.totalTTC || 0).toFixed(2)}EUR</span></div>`;
+  if (ticket.saleNote || ticket.sale_note) h += `<div>Note: ${ticket.saleNote || ticket.sale_note}</div>`;
   h += '<div class="sep"></div>';
   h += `<div class="center small">NF525: ${ticket.fingerprint || '-'}</div>`;
   return h;

@@ -264,9 +264,9 @@ function HistoryScreen(){
       </div>
       <div style={{display:"flex",gap:8,marginTop:10,flexWrap:"wrap"}}>
         <Btn variant="outline" onClick={()=>thermalPrint("receipt",tk)} style={{flex:1}}><Printer size={14}/> {printerConnected?"Ticket":"Réimprimer"}</Btn>
-        <Btn variant="outline" onClick={()=>{
+        <Btn variant="outline" onClick={async()=>{
           const giftTk={...tk,_giftCard:true};
-          const printed=thermalPrint("receipt",giftTk);
+          const printed=await thermalPrint("receipt",giftTk);
           if(!printed){const w=window.open("","_blank","width=400,height=600");if(!w)return;
             w.document.write(`<html><head><title>Ticket cadeau</title><style>body{font-family:'Courier New',monospace;font-size:12px;padding:10px;max-width:300px;margin:0 auto;}h2{text-align:center;font-size:14px;margin:4px 0;}hr{border:none;border-top:1px dashed #333;margin:6px 0;}.center{text-align:center;}</style></head><body>`+
             `<h2>${settings.name||CO.name}</h2><div class="center">${settings.address||""}, ${settings.postalCode||""} ${settings.city||""}</div><hr>`+
