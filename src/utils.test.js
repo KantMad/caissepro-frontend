@@ -119,6 +119,38 @@ describe("norm.avoir", () => {
   });
 });
 
+describe("norm.sale", () => {
+  it("mappe la forme API (snake_case) → camelCase", () => {
+    const s = norm.sale({
+      ticket_number: "2026-000042", total_ht: "100.5", total_tva: "20.1", total_ttc: "120.6",
+      created_at: "2026-07-16T12:00:00Z", user_name: "Sova", seller_name: "Sova",
+      payment_method: "card", customer_name: "Jean Martin", global_discount: "5",
+      items: [{ product_name: "Chemise", variant_color: "Bleu", variant_size: "M", qty: 2, line_ttc: "60.3", ean: "123" }],
+    });
+    expect(s.ticketNumber).toBe("2026-000042");
+    expect(s.totalTTC).toBe(120.6);
+    expect(s.totalHT).toBe(100.5);
+    expect(s.userName).toBe("Sova");
+    expect(s.sellerName).toBe("Sova");
+    expect(s.paymentMethod).toBe("card");
+    expect(s.customerName).toBe("Jean Martin");
+    expect(s.globalDiscount).toBe(5);
+    expect(s.date).toBe("2026-07-16T12:00:00Z");
+    expect(s.items[0].product.name).toBe("Chemise");
+    expect(s.items[0].variant.color).toBe("Bleu");
+    expect(s.items[0].quantity).toBe(2);
+    expect(s.items[0].lineTTC).toBe(60.3);
+  });
+  it("préserve la forme checkout (camelCase) — idempotent", () => {
+    const camel = norm.sale({ ticketNumber: "TK-1", totalTTC: 50, paymentMethod: "cash", date: "2026-01-01", items: [], payments: [{ method: "cash", amount: 50 }] });
+    const again = norm.sale(camel);
+    expect(again.ticketNumber).toBe("TK-1");
+    expect(again.totalTTC).toBe(50);
+    expect(again.paymentMethod).toBe("cash");
+    expect(again.payments[0].amount).toBe(50);
+  });
+});
+
 describe("norm.product", () => {
   it("parse price/cost/tax et conserve les variantes", () => {
     const p = norm.product({ sku: "SKU1", name: "T-shirt", price: "19.9", cost_price: "8", tax_rate: "0.055",

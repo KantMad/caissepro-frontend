@@ -47,7 +47,7 @@ function AppProvider({children}){
   // H5/RGPD: tickets in localStorage contain customerName only (no email/phone/notes)
   // Full customer PII is server-side only, never cached locally
   // L3: localStorage capped at 500 tickets — server is source of truth for full history
-  const[tickets,setTickets]=useState(()=>{try{const s=localStorage.getItem("caissepro_tickets");return s?JSON.parse(s):[];}catch(e){return[];}});
+  const[tickets,setTickets]=useState(()=>{try{const s=localStorage.getItem("caissepro_tickets");return s?norm.sales(JSON.parse(s)):[];}catch(e){return[];}});
   useEffect(()=>{try{localStorage.setItem("caissepro_tickets",JSON.stringify(tickets.slice(0,500)));}catch(e){}},[tickets]);
   // ══ NF525 Fiscal chain — localStorage is CACHE only, server is source of truth ══
   // On login, these are always overwritten by server values (see login() and loadAllData())
@@ -243,7 +243,7 @@ function AppProvider({children}){
       if(apiUsers?.length){const merged=[...apiUsers.map(u=>({id:u.id,name:u.name,role:u.role,pin:"****",apiSynced:true}))];
         setUsers(prev=>{const localOnly=prev.filter(lu=>!apiUsers.find(au=>au.name===lu.name));return[...merged,...localOnly];});}
       // Load tickets and closures from backend
-      try{const salesData=await API.sales.list({limit:200});if(salesData?.length)setTickets(salesData.map(s=>({...s,ticketNumber:s.ticket_number,totalHT:parseFloat(s.total_ht),totalTVA:parseFloat(s.total_tva),totalTTC:parseFloat(s.total_ttc),date:s.created_at,userName:s.user_name,paymentMethod:s.payment_method,customerName:s.customer_name,fingerprint:s.fingerprint})));}catch(e){console.warn("Chargement ventes échoué:",e.message);}
+      try{const salesData=await API.sales.list({limit:200});if(salesData?.length)setTickets(norm.sales(salesData));}catch(e){console.warn("Chargement ventes échoué:",e.message);}
       try{const closData=await API.fiscal.closures();if(closData?.length)setClosures(closData.map(normClosure));}catch(e){console.warn("Chargement clôtures échoué:",e.message);}
       // Load avoirs from server
       try{const avoirsData=await API.returns.list({limit:500});if(avoirsData?.length){
@@ -432,7 +432,7 @@ function AppProvider({children}){
         API.stock.alerts().catch(()=>null),
       ]);
       if(prods)setProducts(norm.products(prods));
-      if(apiSales&&Array.isArray(apiSales))setTickets(apiSales.map(s=>({...s,ticketNumber:s.ticketNumber||s.ticket_number,totalHT:parseFloat(s.total_ht||s.totalHT)||0,totalTVA:parseFloat(s.total_tva||s.totalTVA)||0,totalTTC:parseFloat(s.total_ttc||s.totalTTC)||0,date:s.date||s.created_at,userName:s.userName||s.user_name,paymentMethod:s.paymentMethod||s.payment_method,customerName:s.customerName||s.customer_name,fingerprint:s.fingerprint})).sort((a,b)=>new Date(b.date||b.createdAt||0)-new Date(a.date||a.createdAt||0)).slice(0,500));
+      if(apiSales&&Array.isArray(apiSales))setTickets(norm.sales(apiSales).sort((a,b)=>new Date(b.date||0)-new Date(a.date||0)).slice(0,500));
       if(setts)setSettings(s=>({...s,...setts}));
       if(closData?.length)setClosures(closData.map(c=>({...c,type:c.closure_type,totalHT:parseFloat(c.total_ht),totalTVA:parseFloat(c.total_tva),totalTTC:parseFloat(c.total_ttc),totalMargin:parseFloat(c.total_margin||0),date:c.created_at,userName:c.user_name})));
       else setClosures([]);
