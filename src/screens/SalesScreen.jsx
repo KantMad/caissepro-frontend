@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect } from "react";
 import { ShoppingCart, Search, Trash2, Percent, CreditCard, Banknote, Gift, Plus, Minus, Wallet, Package, RotateCcw, Users, FileText, CheckCircle2, AlertTriangle, WifiOff, Pause, Play, Printer, Star, Zap, ScanLine, Split, Mail, XOctagon, Edit } from "lucide-react";
 import printer from "../printer.js";
+import * as API from "../api.js";
 import { CO, C, CAT_COLORS } from "../constants.jsx";
 import { catIcon, EAN13Svg, ean13SvgHtml } from "../utils.jsx";
 import { Modal, Btn, Input, Badge, Numpad } from "../ui.jsx";

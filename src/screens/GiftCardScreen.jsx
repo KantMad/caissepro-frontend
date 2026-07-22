@@ -7,7 +7,7 @@ import { Btn, Input } from "../ui.jsx";
 import { useApp } from "../context.jsx";
 
 function GiftCardScreen(){
-  const{giftCards,createGiftCard,checkGiftCard,settings,notify,perm}=useApp();
+  const{giftCards,createGiftCard,checkGiftCard,settings,notify,perm,printerConnected,thermalPrint}=useApp();
   if(!perm().canCreateProduct) return <div style={{padding:40,textAlign:"center",color:C.textMuted,fontSize:16,fontWeight:600}}>Accès refusé</div>;
   const[amount,setAmount]=useState("");const[custName,setCustName]=useState("");
   const[checkCode,setCheckCode]=useState("");const[checkResult,setCheckResult]=useState(null);

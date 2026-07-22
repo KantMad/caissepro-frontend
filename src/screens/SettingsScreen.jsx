@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import { Trash2, CreditCard, Plus, XCircle, RotateCcw, Euro, AlertTriangle, Save, Activity, Printer, Box, Star, Grid, ScanLine, Check, X, Scissors, Monitor, Wifi, Code, Receipt, Upload } from "lucide-react";
+import { Trash2, CreditCard, Plus, XCircle, RotateCcw, Euro, AlertTriangle, Save, Activity, Printer, Box, Star, Grid, ScanLine, Check, X, Scissors, Monitor, Wifi, Code, Receipt, Upload, Zap } from "lucide-react";
 import * as API from "../api.js";
 import printer from "../printer.js";
 import { C, setHighContrast, isHighContrast } from "../constants.jsx";

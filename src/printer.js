@@ -473,6 +473,7 @@ class ThermalPrinter {
         const isCustom = item.isCustom || item.is_custom;
         const lineTTC = item.lineTTC || item.line_ttc || (item.unit_price * qty);
         const discount = item.discount || 0;
+        const discountType = item.discountType || item.discount_type || "percent";
 
         // Product name line
         await this.bold(true);
@@ -501,10 +502,12 @@ class ThermalPrinter {
           await this.text(`  x${qty}`);
           await this.newline();
         } else {
+          // lineTTC est DÉJÀ net de remise (calculé dans cartTotals/_doCheckout) :
+          // ne pas ré-appliquer la remise ici, sinon total faux et != TOTAL TTC.
           const unitPrice = lineTTC / qty;
           let qtyLine = `  ${qty} x ${unitPrice.toFixed(2)}€`;
-          if (discount > 0) qtyLine += ` (-${discount}%)`;
-          const total = discount > 0 ? (lineTTC * (1 - discount / 100)).toFixed(2) : lineTTC.toFixed(2);
+          if (discount > 0) qtyLine += discountType === "amount" ? ` (-${Number(discount).toFixed(2)}€)` : ` (-${discount}%)`;
+          const total = lineTTC.toFixed(2);
           await this.bold(true);
           await this.line(qtyLine, `${total}€`);
           await this.bold(false);

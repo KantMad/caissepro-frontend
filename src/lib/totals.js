@@ -4,6 +4,14 @@
 //  HT et TVA sont DÉRIVÉS du TTC par groupe de taux, ce qui garantit
 //  HT + TVA = TTC au centime près (pas de dérive d'arrondi ligne par ligne).
 //  Source unique utilisée par cartTotals (aperçu) ET _doCheckout (vente).
+//
+//  ATTENTION (avoir) : tHT/tTVA décrivent l'ASSIETTE TAXABLE des biens vendus
+//  (= netTTC, avant avoir) — c'est la valeur fiscale de la vente (le backend
+//  enregistre bien cette valeur pleine). tTTC, lui, est le MONTANT DÛ = netTTC
+//  − avoirPayment (un avoir est un moyen de paiement, pas une réduction
+//  d'assiette). Donc quand un avoir sert de paiement : tHT + tTVA = netTTC ≠ tTTC.
+//  L'aperçu panier (SalesScreen, FE-03) réduit proportionnellement HT/TVA affichés
+//  pour la cohérence visuelle ; la donnée fiscale reste la valeur pleine.
 // ════════════════════════════════════════════════════════════
 
 export const round2 = (v) => Math.round((Number(v) || 0) * 100) / 100;
