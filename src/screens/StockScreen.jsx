@@ -9,7 +9,13 @@ import { useApp } from "../context.jsx";
 import { sortSizes } from "./_shared.js";
 
 function StockScreen(){
-  const{products,setProducts,stockAlerts,stockMoves,receiveStock,receiveBatchStock,stockAging,reorderSuggestions,adjustStock,notify,findByEAN,users,addStockMove,addAudit,settings,perm,defectiveStock,loadDefectiveStock,receiveDefectiveStock,adjustDefectiveStock,setScanOverride,clearScanOverride}=useApp();
+  const{products,setProducts,stockAlerts,stockMoves,receiveStock,receiveBatchStock,stockAging,reorderSuggestions,adjustStock,notify,findByEAN,users,addStockMove,addAudit,settings,perm,defectiveStock,loadDefectiveStock,receiveDefectiveStock,adjustDefectiveStock,setScanOverride,clearScanOverride,mode}=useApp();
+  // Valorisation du stock au PRIX D'ACHAT (cost_price de l'import) — DASHBOARD uniquement
+  const stockValuation=useMemo(()=>{let value=0,units=0,valued=0,unvalued=0;
+    (products||[]).forEach(p=>{const cost=parseFloat(p.costPrice)||0;(p.variants||[]).forEach(v=>{const st=parseInt(v.stock)||0;if(st<=0)return;units+=st;if(cost>0){value+=st*cost;valued+=st;}else unvalued+=st;});});
+    return{value:Math.round(value*100)/100,units,valued,unvalued};
+  },[products]);
+  const isDashboard=mode!=="cashier";
   if(!perm().canCreateProduct)return<div style={{padding:40,textAlign:"center",color:"#94a3b8",fontSize:16,fontWeight:600}}>Accès réservé aux administrateurs</div>;
   const[sel,setSel]=useState(products[0]?.id||"");const[tab,setTab]=useState("matrix");
   const[rcModal,setRcModal]=useState(false);const[rcProd,setRcProd]=useState("");const[rcVar,setRcVar]=useState("");const[rcQty,setRcQty]=useState("");const[rcSup,setRcSup]=useState("");
@@ -62,6 +68,13 @@ function StockScreen(){
       {stockAlerts.length>0&&<Badge color={C.danger}>{stockAlerts.length} alertes</Badge>}
       <div style={{flex:1}}/>
       <Btn variant="outline" onClick={()=>setTab("reception")}><Upload size={14}/> Réception</Btn></div>
+    {isDashboard&&<div style={{display:"flex",alignItems:"center",gap:16,flexWrap:"wrap",background:`${C.primary}0D`,border:`1.5px solid ${C.primary}22`,borderRadius:12,padding:"12px 16px",marginBottom:12}}>
+      <div><div style={{fontSize:10,fontWeight:700,color:C.textMuted,textTransform:"uppercase",letterSpacing:"0.5px"}}>Valeur du stock (prix d'achat)</div>
+        <div style={{fontSize:24,fontWeight:900,color:C.primary,letterSpacing:"-0.6px"}}>{stockValuation.value.toFixed(2)}€</div></div>
+      <div style={{height:34,width:1,background:C.border}}/>
+      <div><div style={{fontSize:10,fontWeight:700,color:C.textMuted}}>Unités en stock</div><div style={{fontSize:16,fontWeight:800}}>{stockValuation.units}</div></div>
+      {stockValuation.unvalued>0&&<div style={{fontSize:10,color:C.warn||"#B45309",fontWeight:600,maxWidth:220}}>⚠ {stockValuation.unvalued} unité(s) sans prix d'achat renseigné (non valorisées). Complétez le coût à l'import.</div>}
+    </div>}
     <div style={{display:"flex",gap:6,marginBottom:12}}>
       {[{id:"matrix",l:"Matrice"},{id:"reception",l:"Réception"},{id:"alerts",l:"Alertes"},{id:"moves",l:"Mouvements"},{id:"inventory",l:"Inventaire"},{id:"adjust",l:"Ajustement"},{id:"defective",l:"Défectueux"},{id:"tenues",l:"Tenues"},{id:"transfers",l:"Transferts"},{id:"aging",l:"Vieillissement"}].map(t=>(
         <button key={t.id} onClick={()=>setTab(t.id)} style={{padding:"5px 12px",borderRadius:8,border:`1.5px solid ${tab===t.id?C.primary:C.border}`,

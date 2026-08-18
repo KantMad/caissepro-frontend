@@ -5,6 +5,7 @@ import * as API from "../api.js";
 import { C } from "../constants.jsx";
 import { Btn, Input, Badge, SC } from "../ui.jsx";
 import { useApp } from "../context.jsx";
+import { getPaymentLabel } from "../lib/formatters.js";
 
 function StatsScreen(){
   const{tickets,products,avoirs,bestSellers:allBestSellers,salesBySeller,salesByVariant,caEvolution,salesByCollection,exportCSVReport,perm,commissions,salesGoals,setSellerGoal,settings,mode}=useApp();
@@ -86,6 +87,12 @@ function StatsScreen(){
   const pieData=[...new Set(fTickets.map(t=>t.paymentMethod||t.payment_method))].map(m=>({name:({cash:"Espèces",card:"CB",amex:"Amex",giftcard:"Cadeau",MIXTE:"Mixte",avoir:"Avoir"})[m]||m,
     value:Math.round(fTickets.filter(t=>(t.paymentMethod||t.payment_method)===m).reduce((s,t)=>s+(t.totalTTC||parseFloat(t.total_ttc)||0),0)*100)/100}));
   const pieColors=[C.info,C.primary,C.accent,C.fiscal,C.warn];
+  // Règlements par méthode réelle (MIXTE ventilé sur chaque paiement) : nombre + montant TTC
+  const fByPayment=useMemo(()=>{const m={};let allC=0,allA=0;
+    fTickets.forEach(t=>(t.payments||[]).forEach(p=>{const k=p.method||"?";if(!m[k])m[k]={method:k,count:0,amount:0};
+      m[k].count++;m[k].amount+=(parseFloat(p.amount)||0);allC++;allA+=(parseFloat(p.amount)||0);}));
+    return{rows:Object.values(m).map(r=>({...r,amount:Math.round(r.amount*100)/100})).sort((a,b)=>b.amount-a.amount),totalCount:allC,totalAmount:Math.round(allA*100)/100};
+  },[fTickets]);
   const byHour=useMemo(()=>{const h=Array(24).fill(0);fTickets.forEach(t=>{const hr=new Date(t.date||t.createdAt||t.created_at).getHours();
     h[hr]+=(t.totalTTC||parseFloat(t.total_ttc)||0);});return h.map((v,i)=>({hour:`${i}h`,ca:Math.round(v*100)/100})).filter(x=>x.ca>0);},[fTickets]);
   const byDow=useMemo(()=>{const days=["Dim","Lun","Mar","Mer","Jeu","Ven","Sam"];const d=Array(7).fill(0);
@@ -199,8 +206,23 @@ function StatsScreen(){
           <td data-label="Marge" style={{padding:8,color:"#059669"}}>{s.margin.toFixed(2)}€</td></tr>))}</tbody></table></div>}
 
     {tab==="pay"&&<div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`}}>
-      <ResponsiveContainer width="100%" height={220}><PieChart><Pie data={pieData} cx="50%" cy="50%" innerRadius={50} outerRadius={80} paddingAngle={3} dataKey="value">
-        {pieData.map((d,i)=><Cell key={i} fill={pieColors[i%pieColors.length]}/>)}</Pie><Tooltip formatter={v=>`${v.toFixed(2)}€`}/><Legend/></PieChart></ResponsiveContainer></div>}
+      <h3 style={{fontSize:14,fontWeight:800,margin:"0 0 10px"}}>Règlements par mode de paiement</h3>
+      <table className="rtable" style={{width:"100%",borderCollapse:"collapse",fontSize:12,marginBottom:16}}>
+        <thead><tr style={{borderBottom:`2px solid ${C.border}`}}>
+          {["Mode de règlement","Nombre","Montant TTC","Part"].map(h=>(<th key={h} style={{padding:8,textAlign:h==="Mode de règlement"?"left":"right",fontSize:10,fontWeight:700,color:C.textMuted}}>{h}</th>))}</tr></thead>
+        <tbody>{fByPayment.rows.map(r=>(<tr key={r.method} style={{borderBottom:`1px solid ${C.border}`}}>
+          <td data-label="Mode" style={{padding:8,fontWeight:600}}>{getPaymentLabel(r.method,"full")}</td>
+          <td data-label="Nombre" style={{padding:8,textAlign:"right"}}>{r.count}</td>
+          <td data-label="Montant TTC" style={{padding:8,textAlign:"right",fontWeight:700,color:C.primary}}>{r.amount.toFixed(2)}€</td>
+          <td data-label="Part" style={{padding:8,textAlign:"right",color:C.textMuted}}>{fByPayment.totalAmount?((r.amount/fByPayment.totalAmount)*100).toFixed(1):"0.0"}%</td>
+        </tr>))}
+        {fByPayment.rows.length===0&&<tr><td colSpan={4} style={{padding:20,textAlign:"center",color:C.textLight}}>Aucun règlement sur la période</td></tr>}</tbody>
+        {fByPayment.rows.length>0&&<tfoot><tr style={{borderTop:`2px solid ${C.border}`,fontWeight:800}}>
+          <td style={{padding:8}}>Total</td><td style={{padding:8,textAlign:"right"}}>{fByPayment.totalCount}</td>
+          <td style={{padding:8,textAlign:"right",color:C.primary}}>{fByPayment.totalAmount.toFixed(2)}€</td><td style={{padding:8,textAlign:"right"}}>100%</td></tr></tfoot>}
+      </table>
+      {pieData.length>0&&<ResponsiveContainer width="100%" height={220}><PieChart><Pie data={pieData} cx="50%" cy="50%" innerRadius={50} outerRadius={80} paddingAngle={3} dataKey="value">
+        {pieData.map((d,i)=><Cell key={i} fill={pieColors[i%pieColors.length]}/>)}</Pie><Tooltip formatter={v=>`${v.toFixed(2)}€`}/><Legend/></PieChart></ResponsiveContainer>}</div>}
 
     {/* Comparaison de périodes */}
     {tab==="compare"&&(()=>{const pctCA=pctChange(stats.tTTC,prevStats.tTTC);const pctCount=pctChange(stats.count,prevStats.count);
