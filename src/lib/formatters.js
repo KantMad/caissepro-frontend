@@ -79,6 +79,19 @@ export const normClosure = (c) => {
   };
 };
 
+// ── Commission vendeur (sur le HT) bornée par plancher/plafond ──
+// raw = baseHT × taux ; commission = clamp(raw, plancher, plafond).
+// cap=0 → pas de plafond. floor=0 → pas de plancher.
+export const computeCommission = (baseHT, rate, floor = 0, cap = 0) => {
+  const raw = (Number(baseHT) || 0) * (Number(rate) || 0);
+  const f = Number(floor) || 0, c = Number(cap) || 0;
+  let commission = raw;
+  if (c > 0) commission = Math.min(commission, c);
+  commission = Math.max(commission, f);
+  const r2 = (v) => Math.round(v * 100) / 100;
+  return { raw: r2(raw), commission: r2(commission), capped: c > 0 && raw > c, floored: raw < f };
+};
+
 // ── Agrégation des paiements par méthode (clôtures, stats) ──
 export const PAYMENT_METHODS = ["cash", "card", "cheque", "giftcard", "amex", "avoir"];
 export const aggregatePaymentsByMethod = (tickets) => {

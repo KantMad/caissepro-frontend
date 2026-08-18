@@ -8,7 +8,7 @@ import { hashPin, verifyPin, sha256, norm, loadVariantOrderFromSettings, autoImp
 import { computeTotals } from "./lib/totals.js";
 import { getLoyaltyTier as loyaltyTierOf } from "./lib/loyalty.js";
 import { calcPromoDiscount as calcPromos } from "./lib/promos.js";
-import { aggregatePaymentsByMethod, normClosure } from "./lib/formatters.js";
+import { aggregatePaymentsByMethod, normClosure, computeCommission } from "./lib/formatters.js";
 import Papa from "papaparse";
 
 /* ══════════ CONTEXT ══════════ */
@@ -800,8 +800,8 @@ function AppProvider({children}){
 
   // Sales by seller
   const salesBySeller=useMemo(()=>{const m={};tickets.forEach(t=>{
-    const n=t.sellerName||t.seller_name||t.userName||t.user_name||"?";if(!m[n])m[n]={name:n,count:0,revenue:0,margin:0,totalItems:0,customers:new Set()};
-    m[n].count++;m[n].revenue+=(t.totalTTC);m[n].margin+=(parseFloat(t.margin)||0);
+    const n=t.sellerName||t.seller_name||t.userName||t.user_name||"?";if(!m[n])m[n]={name:n,count:0,revenue:0,ht:0,margin:0,totalItems:0,customers:new Set()};
+    m[n].count++;m[n].revenue+=(t.totalTTC);m[n].ht+=(t.totalHT||0);m[n].margin+=(parseFloat(t.margin)||0);
     m[n].totalItems+=(t.items||[]).reduce((s,i)=>s+i.quantity,0);
     if(t.customerId||t.customer_id)m[n].customers.add(t.customerId||t.customer_id);});
     return Object.values(m).map(s=>({...s,avgBasket:s.count?s.revenue/s.count:0,avgItems:s.count?s.totalItems/s.count:0,
@@ -829,11 +829,26 @@ function AppProvider({children}){
     return Object.values(m).sort((a,b)=>b.revenue-a.revenue);},[tickets]);
 
   // ══ P3: Commission calculation (5% of margin) ══
+  // Commissions : sur le HT (pas la marge), calculées sur la période en cours
+  // (mensuelle ou annuelle, configurable par vendeur), bornées par un plancher
+  // et un plafond (défaut global surchargeable par vendeur). Clés par NOM vendeur.
   const commissions=useMemo(()=>{
-    return salesBySeller.map(s=>{const commRate=settings.commissionRates?.[s.name]||settings.defaultCommissionRate||0.05;
-      return{...s,commissionRate:commRate,commission:s.margin*commRate,goal:salesGoals[s.name]||0,
-      goalProgress:salesGoals[s.name]?(s.revenue/salesGoals[s.name]*100):0};});
-  },[salesBySeller,salesGoals,settings]);
+    const now=new Date();const curMonth=now.toISOString().slice(0,7);const curYear=now.toISOString().slice(0,4);
+    return salesBySeller.map(s=>{
+      const rate=settings.commissionRates?.[s.name]??settings.defaultCommissionRate??0.05;
+      const period=settings.commissionPeriods?.[s.name]||settings.defaultCommissionPeriod||"monthly";
+      const floor=parseFloat(settings.commissionFloors?.[s.name]??settings.defaultCommissionFloor??0)||0;
+      const cap=parseFloat(settings.commissionCaps?.[s.name]??settings.defaultCommissionCap??0)||0;
+      // HT du vendeur sur la période courante
+      const plen=period==="annual"?4:7;const pkey=period==="annual"?curYear:curMonth;
+      const periodHT=tickets.filter(t=>((t.sellerName||t.userName||"?")===s.name)&&(t.date||"").slice(0,plen)===pkey)
+        .reduce((a,t)=>a+(t.totalHT||0),0);
+      const cc=computeCommission(periodHT,rate,floor,cap);
+      return{...s,commissionRate:rate,commissionPeriod:period,commissionBaseHT:periodHT,
+        commissionFloor:floor,commissionCap:cap,commissionRaw:cc.raw,commission:cc.commission,
+        commissionCapped:cc.capped,commissionFloored:cc.floored,
+        goal:salesGoals[s.name]||0,goalProgress:salesGoals[s.name]?(s.revenue/salesGoals[s.name]*100):0};});
+  },[salesBySeller,tickets,salesGoals,settings]);
 
   // ══ P3: Last price paid by customer ══
   const getLastPriceForCustomer=useCallback((customerId,productId)=>{

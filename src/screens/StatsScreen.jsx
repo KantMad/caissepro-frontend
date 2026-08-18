@@ -58,12 +58,15 @@ function StatsScreen(){
     m[n].count++;m[n].revenue+=(t.totalTTC||parseFloat(t.total_ttc)||0);m[n].margin+=(parseFloat(t.margin)||0);
     m[n].totalItems+=(t.items||[]).reduce((s,i)=>s+(parseInt(i.quantity)||0),0);
     if(t.customerId||t.customer_id)m[n].customers.add(t.customerId||t.customer_id);});
-    const commRate=settings?.defaultCommissionRate||0.05;
     return Object.values(m).sort((a,b)=>b.revenue-a.revenue).map(s=>{
-      const rate=settings?.commissionRates?.[s.name]||commRate;
+      // Commission = celle calculée par le context (sur le HT, période + plancher/plafond)
+      const comm=(commissions||[]).find(c=>c.name===s.name);
       return{...s,avgBasket:s.count?s.revenue/s.count:0,avgItems:s.count?s.totalItems/s.count:0,
-        uniqueCustomers:s.customers?.size||0,commission:s.margin*rate,
-        goal:salesGoals[s.name]||0,goalProgress:salesGoals[s.name]?(s.revenue/salesGoals[s.name]*100):0};});},[fTickets,salesGoals,settings]);
+        uniqueCustomers:s.customers?.size||0,
+        commission:comm?comm.commission:0,commissionRate:comm?comm.commissionRate:(settings?.defaultCommissionRate||0.05),
+        commissionBaseHT:comm?comm.commissionBaseHT:0,commissionPeriod:comm?comm.commissionPeriod:"monthly",
+        commissionCapped:comm?.commissionCapped,commissionFloored:comm?.commissionFloored,
+        goal:salesGoals[s.name]||0,goalProgress:salesGoals[s.name]?(s.revenue/salesGoals[s.name]*100):0};});},[fTickets,salesGoals,settings,commissions]);
   const fByVariant=useMemo(()=>{const bySize={},byColor={};fTickets.forEach(t=>(t.items||[]).forEach(i=>{
     const e=enrichItem(i);
     bySize[e.size]=(bySize[e.size]||0)+i.quantity;
@@ -163,7 +166,7 @@ function StatsScreen(){
           <td data-label="Art./vente" style={{padding:8}}>{(s.avgItems||0).toFixed(1)}</td>
           {mode!=="cashier"&&<td data-label="Marge" style={{padding:8,color:"#059669"}}>{s.margin.toFixed(2)}€</td>}
           <td data-label="CA TTC" style={{padding:8,fontWeight:700,color:C.primary}}>{s.revenue.toFixed(2)}€</td>
-          {mode!=="cashier"&&<td data-label="Commission" style={{padding:8,color:C.accent,fontWeight:600}}>{s.commission.toFixed(2)}€</td>}
+          {mode!=="cashier"&&<td data-label="Commission" style={{padding:8,color:C.accent,fontWeight:600}} title={`HT ${(s.commissionBaseHT||0).toFixed(2)}€ × ${((s.commissionRate||0)*100).toFixed(1)}% — ${s.commissionPeriod==="annual"?"annuel":"mensuel"}`}>{s.commission.toFixed(2)}€{s.commissionCapped&&<span style={{fontSize:8,color:C.warn||"#B45309",marginLeft:3}}>plaf.</span>}{s.commissionFloored&&<span style={{fontSize:8,color:C.info||"#0284C7",marginLeft:3}}>planch.</span>}</td>}
           <td data-label="Objectif" style={{padding:8}}><input type="number" value={s.goal||""} onChange={e=>setSellerGoal(s.name,parseFloat(e.target.value)||0)}
             style={{width:70,padding:"2px 6px",borderRadius:6,border:`1px solid ${C.border}`,fontSize:11,fontFamily:"inherit"}} placeholder="€"/></td>
           <td data-label="Progression" style={{padding:8}}>{s.goal>0?<div style={{display:"flex",alignItems:"center",gap:6}}>

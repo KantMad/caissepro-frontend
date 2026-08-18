@@ -1146,27 +1146,52 @@ function SettingsScreen(){
           seul le calcul de la TVA sur les tickets change.</div></div>
     </div>}
 
-    {tab==="commission"&&<div style={{maxWidth:550}}>
+    {tab==="commission"&&(()=>{
+      const setNum=(field,key,val)=>setSettings(s=>({...s,[field]:{...s[field],[key]:val===""?undefined:parseFloat(val)}}));
+      const defPeriod=settings.defaultCommissionPeriod||"monthly";
+      return<div style={{maxWidth:640}}>
       <div style={{background:C.primaryLight,borderRadius:16,padding:20,border:`1.5px solid ${C.primary}22`,marginBottom:16}}>
-        <h3 style={{fontSize:16,fontWeight:800,margin:"0 0 4px"}}>Taux de commission</h3>
-        <p style={{fontSize:11,color:C.textMuted,margin:0}}>Configurez le taux de commission sur la marge pour chaque vendeur. Par défaut : {((settings.defaultCommissionRate||0.05)*100).toFixed(1)}%</p></div>
-      <div style={{marginBottom:14}}>
-        <label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>Taux par défaut (%)</label>
-        <Input type="number" step="0.5" min="0" max="100" value={((settings.defaultCommissionRate||0.05)*100).toFixed(1)}
-          onChange={e=>setSettings(s=>({...s,defaultCommissionRate:parseFloat(e.target.value)/100||0.05}))}
-          style={{width:120}}/></div>
-      <div style={{fontSize:12,fontWeight:700,marginBottom:8}}>Taux par vendeur</div>
-      <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:14}}>
-        {(users||[]).map(u=>(<div key={u.id||u.name} style={{display:"flex",alignItems:"center",gap:10,padding:10,borderRadius:10,background:C.surfaceAlt,border:`1px solid ${C.border}`}}>
-          <span style={{flex:1,fontSize:12,fontWeight:600}}>{u.name}</span>
-          <Input type="number" step="0.5" min="0" max="100"
-            value={settings.commissionRates?.[u.id||u.name]!=null?(settings.commissionRates[u.id||u.name]*100).toFixed(1):""}
-            onChange={e=>{const val=e.target.value;const key=u.id||u.name;setSettings(s=>({...s,commissionRates:{...s.commissionRates,[key]:val?parseFloat(val)/100:undefined}}));}}
-            placeholder={((settings.defaultCommissionRate||0.05)*100).toFixed(1)}
-            style={{width:80,textAlign:"right"}}/><span style={{fontSize:11,color:C.textMuted}}>%</span></div>))}
+        <h3 style={{fontSize:16,fontWeight:800,margin:"0 0 4px"}}>Commission vendeur — sur le HT</h3>
+        <p style={{fontSize:11,color:C.textMuted,margin:0}}>La commission = <b>HT des ventes du vendeur × taux</b>, calculée sur la période choisie, puis bornée par le plancher et le plafond. Une valeur par vendeur remplace le défaut global.</p></div>
+
+      {/* Défauts globaux */}
+      <div style={{fontSize:12,fontWeight:700,marginBottom:8}}>Défauts (tous les vendeurs)</div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:16}}>
+        <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>Taux (%)</label>
+          <Input type="number" step="0.5" min="0" max="100" value={((settings.defaultCommissionRate||0.05)*100).toFixed(1)}
+            onChange={e=>setSettings(s=>({...s,defaultCommissionRate:parseFloat(e.target.value)/100||0.05}))}/></div>
+        <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>Période</label>
+          <select value={defPeriod} onChange={e=>setSettings(s=>({...s,defaultCommissionPeriod:e.target.value}))}
+            style={{width:"100%",height:38,borderRadius:10,border:`1.5px solid ${C.border}`,padding:"0 10px",fontFamily:"inherit",background:C.surface}}>
+            <option value="monthly">Mensuelle</option><option value="annual">Annuelle</option></select></div>
+        <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>Plancher (€) — 0 = aucun</label>
+          <Input type="number" step="10" min="0" value={settings.defaultCommissionFloor??""} placeholder="0"
+            onChange={e=>setSettings(s=>({...s,defaultCommissionFloor:e.target.value===""?undefined:parseFloat(e.target.value)}))}/></div>
+        <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>Plafond (€) — 0 = aucun</label>
+          <Input type="number" step="10" min="0" value={settings.defaultCommissionCap??""} placeholder="0"
+            onChange={e=>setSettings(s=>({...s,defaultCommissionCap:e.target.value===""?undefined:parseFloat(e.target.value)}))}/></div>
       </div>
-      <Btn onClick={()=>{saveSettingsToAPI(settings);addAudit("CONFIG","Taux de commission mis à jour");notify("Taux de commission sauvegardés","success");}} style={{width:"100%",height:40,background:C.primary}}><Save size={14}/> Enregistrer</Btn>
-    </div>}
+
+      {/* Par vendeur (surcharges) */}
+      <div style={{fontSize:12,fontWeight:700,marginBottom:6}}>Par vendeur <span style={{fontWeight:400,color:C.textMuted}}>(vide = défaut global)</span></div>
+      <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:14}}>
+        {(users||[]).map(u=>{const k=u.name;return(<div key={u.id||u.name} style={{display:"grid",gridTemplateColumns:"1.4fr 0.8fr 1fr 0.9fr 0.9fr",gap:6,alignItems:"center",padding:8,borderRadius:10,background:C.surfaceAlt,border:`1px solid ${C.border}`}}>
+          <span style={{fontSize:12,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis"}}>{u.name}</span>
+          <Input type="number" step="0.5" min="0" max="100" title="Taux %"
+            value={settings.commissionRates?.[k]!=null?(settings.commissionRates[k]*100).toFixed(1):""}
+            onChange={e=>{const v=e.target.value;setSettings(s=>({...s,commissionRates:{...s.commissionRates,[k]:v?parseFloat(v)/100:undefined}}));}}
+            placeholder={((settings.defaultCommissionRate||0.05)*100).toFixed(1)} style={{textAlign:"right",padding:"6px 8px"}}/>
+          <select value={settings.commissionPeriods?.[k]||""} onChange={e=>setSettings(s=>({...s,commissionPeriods:{...s.commissionPeriods,[k]:e.target.value||undefined}}))}
+            title="Période" style={{height:34,borderRadius:8,border:`1px solid ${C.border}`,padding:"0 4px",fontFamily:"inherit",background:C.surface,fontSize:11}}>
+            <option value="">déf.</option><option value="monthly">Mens.</option><option value="annual">Ann.</option></select>
+          <Input type="number" step="10" min="0" title="Plancher €" value={settings.commissionFloors?.[k]??""}
+            onChange={e=>setNum("commissionFloors",k,e.target.value)} placeholder="planch." style={{textAlign:"right",padding:"6px 6px"}}/>
+          <Input type="number" step="10" min="0" title="Plafond €" value={settings.commissionCaps?.[k]??""}
+            onChange={e=>setNum("commissionCaps",k,e.target.value)} placeholder="plaf." style={{textAlign:"right",padding:"6px 6px"}}/>
+        </div>);})}
+      </div>
+      <Btn onClick={()=>{saveSettingsToAPI(settings);addAudit("CONFIG","Commissions mises à jour");notify("Commissions sauvegardées","success");}} style={{width:"100%",height:40,background:C.primary}}><Save size={14}/> Enregistrer</Btn>
+    </div>;})()}
 
     {tab==="stores"&&<div style={{maxWidth:600}}>
       <div style={{background:C.primaryLight,borderRadius:16,padding:20,border:`1.5px solid ${C.primary}22`,marginBottom:16}}>

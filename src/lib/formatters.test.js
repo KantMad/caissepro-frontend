@@ -1,8 +1,36 @@
 import { describe, it, expect } from "vitest";
 import {
   formatAmount, getPaymentLabel, getAvoirRemaining, isAvoirPartiallyUsed,
-  filterByToday, getTodayDate, aggregatePaymentsByMethod, normClosure,
+  filterByToday, getTodayDate, aggregatePaymentsByMethod, normClosure, computeCommission,
 } from "./formatters.js";
+
+describe("computeCommission (sur le HT, plancher/plafond)", () => {
+  it("commission = baseHT × taux quand dans les bornes", () => {
+    const r = computeCommission(1000, 0.05, 0, 0);
+    expect(r.raw).toBe(50);
+    expect(r.commission).toBe(50);
+    expect(r.capped).toBe(false);
+    expect(r.floored).toBe(false);
+  });
+  it("plafond appliqué", () => {
+    const r = computeCommission(10000, 0.05, 0, 300); // raw 500 > cap 300
+    expect(r.raw).toBe(500);
+    expect(r.commission).toBe(300);
+    expect(r.capped).toBe(true);
+  });
+  it("plancher appliqué", () => {
+    const r = computeCommission(100, 0.05, 50, 0); // raw 5 < floor 50
+    expect(r.commission).toBe(50);
+    expect(r.floored).toBe(true);
+  });
+  it("plancher prioritaire si plancher > plafond (mauvaise config)", () => {
+    const r = computeCommission(1000, 0.05, 80, 60); // raw 50 -> cap 50 -> floor 80
+    expect(r.commission).toBe(80);
+  });
+  it("valeurs invalides → 0", () => {
+    expect(computeCommission(undefined, undefined).commission).toBe(0);
+  });
+});
 
 describe("normClosure", () => {
   it("mappe la réponse backend snake_case → camelCase (bug ticket de fermeture à 0)", () => {
