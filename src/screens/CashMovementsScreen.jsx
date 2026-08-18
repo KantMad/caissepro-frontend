@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from "react";
 import { Wallet, Download, ArrowDownCircle, ArrowUpCircle, RefreshCw } from "lucide-react";
-import * as XLSX from "xlsx";
 import * as API from "../api.js";
 import { C } from "../constants.jsx";
 import { Btn, Input, Badge } from "../ui.jsx";
@@ -37,24 +36,10 @@ export default function CashMovementsScreen() {
 
   const exportXLSX = () => {
     if (!rows.length) { notify("Aucun mouvement à exporter", "warn"); return; }
-    const data = rows.map(m => ({
-      "Date": new Date(m.created_at || m.date).toLocaleString("fr-FR"),
-      "N°": m.movement_number || "",
-      "Type": kindLabel(m),
-      "Sens": m.direction === "in" ? "Entrée" : "Sortie",
-      "Montant (€)": parseFloat(m.amount) || 0,
-      "Motif": m.reason || "",
-      "Détail monnaie": denomStr(m),
-      "Opérateur": m.user_name || "",
-      "Code-barres": m.barcode || "",
-      "Empreinte NF525": m.hash ? m.hash.slice(0, 16).toUpperCase() : "",
-    }));
-    const ws = XLSX.utils.json_to_sheet(data);
-    ws["!cols"] = [{ wch: 18 }, { wch: 16 }, { wch: 16 }, { wch: 8 }, { wch: 12 }, { wch: 28 }, { wch: 30 }, { wch: 14 }, { wch: 15 }, { wch: 18 }];
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Mouvements caisse");
-    XLSX.writeFile(wb, `tiroir-caisse_${from}_au_${to}.xlsx`);
-    notify("Export Excel généré", "success");
+    // Le fichier est généré et servi par le backend → téléchargement par navigation
+    // directe (fonctionne aussi depuis l'APK/WebView, sans en-têtes d'auth).
+    const url = API.cashMovements.exportUrl({ from: from + "T00:00:00", to: to + "T23:59:59", ...(kind ? { kind } : {}) });
+    window.open(url, "_blank");
   };
 
   return (

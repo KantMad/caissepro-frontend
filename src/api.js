@@ -264,6 +264,12 @@ export const tenues = {
 export const cashMovements = {
   list: (params) => api('/api/cash-movements?' + new URLSearchParams(params || {})),
   create: (data) => api('/api/cash-movements', { method: 'POST', body: JSON.stringify(data) }),
+  // URL d'export Excel (.xlsx) servie par le backend — token/store en query pour
+  // un téléchargement direct (compatible WebView APK, sans en-têtes).
+  exportUrl: (params = {}) => {
+    const q = new URLSearchParams({ token: getToken() || '', store_id: getStoreId() || '', ...params });
+    return `${API_URL}/api/cash-movements/export?${q.toString()}`;
+  },
 };
 
 // ══ Barcodes ══
