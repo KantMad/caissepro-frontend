@@ -262,6 +262,7 @@ function AppProvider({children}){
       try{const retData=await API.retouches.list();if(retData?.length)setRetoucheBons(retData.map(r=>({id:r.id,num:r.retouche_number,shortCode:r.short_code||(r.retouche_number||"").slice(-4)||"",client:r.client||"",phone:r.phone||"",seller:r.seller||"",items:(r.items||[]).map(i=>({desc:i.description||i.desc||"",price:i.price})),dateRetrait:r.date_retrait,total:parseFloat(r.total_ttc)||0,barcode:r.barcode,date:r.created_at,status:r.status})));}catch(e){/* keep localStorage retouches */}
       try{await reloadTenues();}catch(e){/* keep localStorage tenues */}
       try{await reloadCashMovements();}catch(e){/* keep localStorage cash movements */}
+      try{await reloadCommissions();}catch(e){/* base commissions : repli calcul local */}
     }catch(e){
       console.warn("Chargement données échoué:",e.message);
       if(e.message?.includes("401")||e.message?.includes("Unauthorized")){setCurrentUser(null);API.clearToken();}
@@ -790,6 +791,12 @@ function AppProvider({children}){
 
   // ══ P3: Sales goals by seller ══
   const[salesGoals,setSalesGoals]=useState({});
+  // Base HT des commissions par vendeur (mois + année), agrégée côté serveur
+  const[commissionBase,setCommissionBase]=useState([]);
+  const reloadCommissions=useCallback(async()=>{
+    try{const data=await API.sales.commissions();setCommissionBase(Array.isArray(data)?data:[]);return data;}
+    catch(e){console.warn("Chargement commissions échoué:",e.message);return[];}
+  },[]);
   const setSellerGoal=useCallback((userName,goal)=>{setSalesGoals(p=>({...p,[userName]:goal}));},[]);
 
   // Best sellers
@@ -833,22 +840,32 @@ function AppProvider({children}){
   // (mensuelle ou annuelle, configurable par vendeur), bornées par un plancher
   // et un plafond (défaut global surchargeable par vendeur). Clés par NOM vendeur.
   const commissions=useMemo(()=>{
-    const now=new Date();const curMonth=now.toISOString().slice(0,7);const curYear=now.toISOString().slice(0,4);
-    return salesBySeller.map(s=>{
-      const rate=settings.commissionRates?.[s.name]??settings.defaultCommissionRate??0.05;
-      const period=settings.commissionPeriods?.[s.name]||settings.defaultCommissionPeriod||"monthly";
-      const floor=parseFloat(settings.commissionFloors?.[s.name]??settings.defaultCommissionFloor??0)||0;
-      const cap=parseFloat(settings.commissionCaps?.[s.name]??settings.defaultCommissionCap??0)||0;
-      // HT du vendeur sur la période courante
-      const plen=period==="annual"?4:7;const pkey=period==="annual"?curYear:curMonth;
-      const periodHT=tickets.filter(t=>((t.sellerName||t.userName||"?")===s.name)&&(t.date||"").slice(0,plen)===pkey)
-        .reduce((a,t)=>a+(t.totalHT||0),0);
+    // Base HT par vendeur : SERVEUR (mois+année exacts, tout l'historique) prioritaire ;
+    // repli sur les tickets chargés si le backend n'a pas répondu.
+    let base;
+    if(commissionBase.length){
+      base=commissionBase.map(b=>({name:b.seller,monthHT:parseFloat(b.month_ht)||0,yearHT:parseFloat(b.year_ht)||0,count:parseInt(b.year_count)||0}));
+    }else{
+      const now=new Date();const curMonth=now.toISOString().slice(0,7);const curYear=now.toISOString().slice(0,4);
+      const m={};
+      tickets.forEach(t=>{const n=t.sellerName||t.userName||"?";if(!m[n])m[n]={name:n,monthHT:0,yearHT:0,count:0};
+        const d=t.date||"";if(d.slice(0,7)===curMonth)m[n].monthHT+=(t.totalHT||0);
+        if(d.slice(0,4)===curYear){m[n].yearHT+=(t.totalHT||0);m[n].count++;}});
+      base=Object.values(m);
+    }
+    return base.map(b=>{
+      const rate=settings.commissionRates?.[b.name]??settings.defaultCommissionRate??0.05;
+      const period=settings.commissionPeriods?.[b.name]||settings.defaultCommissionPeriod||"monthly";
+      const floor=parseFloat(settings.commissionFloors?.[b.name]??settings.defaultCommissionFloor??0)||0;
+      const cap=parseFloat(settings.commissionCaps?.[b.name]??settings.defaultCommissionCap??0)||0;
+      const periodHT=period==="annual"?b.yearHT:b.monthHT;
       const cc=computeCommission(periodHT,rate,floor,cap);
-      return{...s,commissionRate:rate,commissionPeriod:period,commissionBaseHT:periodHT,
+      const st=salesBySeller.find(s=>s.name===b.name)||{};// stats all-time pour le tableau
+      return{...st,name:b.name,commissionRate:rate,commissionPeriod:period,commissionBaseHT:periodHT,
         commissionFloor:floor,commissionCap:cap,commissionRaw:cc.raw,commission:cc.commission,
         commissionCapped:cc.capped,commissionFloored:cc.floored,
-        goal:salesGoals[s.name]||0,goalProgress:salesGoals[s.name]?(s.revenue/salesGoals[s.name]*100):0};});
-  },[salesBySeller,tickets,salesGoals,settings]);
+        goal:salesGoals[b.name]||0,goalProgress:salesGoals[b.name]&&st.revenue?(st.revenue/salesGoals[b.name]*100):0};});
+  },[commissionBase,salesBySeller,tickets,salesGoals,settings]);
 
   // ══ P3: Last price paid by customer ══
   const getLastPriceForCustomer=useCallback((customerId,productId)=>{
@@ -1677,7 +1694,7 @@ function AppProvider({children}){
     bestSellers,salesBySeller,salesByVariant,caEvolution,salesByCollection,
     saleNote,setSaleNote,clockIn,clockOut,clockEntries,verifyChain,exportCatalog,
     updateProductPrice,priceHistory,reorderSuggestions,toggleFavorite,favorites,tvaSummary,stockAging,
-    duplicateProduct,salesGoals,setSellerGoal,commissions,getLastPriceForCustomer,theme,setTheme,
+    duplicateProduct,salesGoals,setSellerGoal,commissions,reloadCommissions,getLastPriceForCustomer,theme,setTheme,
     notifications,notify,
     processReturn,giftCards,createGiftCard,useGiftCard,checkGiftCard,
     updateProduct,deleteProduct,addVariantToProduct,deleteVariant,reorderVariants,
