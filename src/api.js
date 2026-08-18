@@ -194,6 +194,7 @@ export const settings = {
   taxRates: () => api('/api/settings/tax-rates'),
   openRegister: (amount) => api('/api/settings/register/open', { method: 'POST', body: JSON.stringify({ openingAmount: amount }) }),
   closeRegister: (id, data) => api(`/api/settings/register/${id}/close`, { method: 'PUT', body: JSON.stringify(data) }),
+  registerSessions: (params) => api('/api/settings/register/sessions?' + new URLSearchParams(params || {})),
 };
 
 // ══ Stores (multi-magasin) ══
