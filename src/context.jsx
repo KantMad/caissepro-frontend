@@ -86,7 +86,7 @@ function AppProvider({children}){
   const[saleNote,setSaleNote]=useState("");
   const[clockEntries,setClockEntries]=useState(()=>{try{const s=localStorage.getItem("caissepro_clock");return s?JSON.parse(s):[];}catch(e){return[];}});
   useEffect(()=>{try{localStorage.setItem("caissepro_clock",JSON.stringify(clockEntries.slice(0,500)));}catch(e){}},[clockEntries]);
-  const[priceHistory,setPriceHistory]=useState(()=>{try{const s=localStorage.getItem("caissepro_pricehistory");return s?JSON.parse(s):[];}catch(e){return[];}});
+  const[priceHistory,setPriceHistory]=useState(()=>{try{const s=localStorage.getItem("caissepro_pricehistory");return s?norm.priceHistories(JSON.parse(s)):[];}catch(e){return[];}});
   useEffect(()=>{try{localStorage.setItem("caissepro_pricehistory",JSON.stringify(priceHistory.slice(0,500)));}catch(e){}},[priceHistory]);
   const[favorites,setFavoritesRaw]=useState(()=>{try{const s=localStorage.getItem("caissepro_favorites");return s?JSON.parse(s):[];}catch(e){return[];}});
   const setFavorites=useCallback((v)=>{setFavoritesRaw(prev=>{const next=typeof v==="function"?v(prev):v;try{localStorage.setItem("caissepro_favorites",JSON.stringify(next));}catch(e){}
@@ -259,7 +259,7 @@ function AppProvider({children}){
       try{const jetData=await API.audit.jet();if(jetData?.length)setJet(jetData);}catch(e){/* keep localStorage jet */}
       try{const movesData=await API.stock.movements({limit:500});if(movesData?.length)setStockMoves(movesData);}catch(e){/* keep localStorage stockMoves */}
       try{const clockData=await API.audit.clock();if(clockData?.length)setClockEntries(clockData);}catch(e){/* keep localStorage clock */}
-      try{const phData=await API.pricehistory.list({limit:500});if(phData?.length)setPriceHistory(phData);}catch(e){/* keep localStorage */}
+      try{const phData=await API.pricehistory.list({limit:500});if(phData?.length)setPriceHistory(norm.priceHistories(phData));}catch(e){/* keep localStorage */}
       try{const retData=await API.retouches.list();if(retData?.length)setRetoucheBons(retData.map(r=>({id:r.id,num:r.retouche_number,shortCode:r.short_code||(r.retouche_number||"").slice(-4)||"",client:r.client||"",phone:r.phone||"",seller:r.seller||"",items:(r.items||[]).map(i=>({desc:i.description||i.desc||"",price:i.price})),dateRetrait:r.date_retrait,total:parseFloat(r.total_ttc)||0,barcode:r.barcode,date:r.created_at,status:r.status})));}catch(e){/* keep localStorage retouches */}
       try{await reloadTenues();}catch(e){/* keep localStorage tenues */}
       try{await reloadCashMovements();}catch(e){/* keep localStorage cash movements */}

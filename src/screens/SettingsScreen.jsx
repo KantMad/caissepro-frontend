@@ -1485,11 +1485,11 @@ function SettingsScreen(){
       <h3 style={{fontSize:14,fontWeight:700,marginBottom:10}}>Historique des changements de prix</h3>
       {priceHistory.length===0&&<div style={{textAlign:"center",padding:20,color:C.textLight}}>Aucun changement</div>}
       {priceHistory.slice(0,30).map(e=>(<div key={e.id} style={{display:"flex",alignItems:"center",gap:8,padding:6,borderBottom:`1px solid ${C.border}`,fontSize:11}}>
-        <span style={{flex:1,fontWeight:600}}>{e.productName}</span>
-        <span style={{color:C.danger,textDecoration:"line-through"}}>{e.oldPrice.toFixed(2)}€</span>
+        <span style={{flex:1,fontWeight:600}}>{e.productName||e.product_name||"—"}</span>
+        <span style={{color:C.danger,textDecoration:"line-through"}}>{(Number(e.oldPrice??e.old_price)||0).toFixed(2)}€</span>
         <span>→</span>
-        <span style={{color:"#059669",fontWeight:700}}>{e.newPrice.toFixed(2)}€</span>
-        <span style={{color:C.textMuted,fontSize:9}}>{e.user} — {new Date(e.date).toLocaleDateString("fr-FR")}</span></div>))}</div>}
+        <span style={{color:"#059669",fontWeight:700}}>{(Number(e.newPrice??e.new_price)||0).toFixed(2)}€</span>
+        <span style={{color:C.textMuted,fontSize:9}}>{e.user||e.user_name||"—"} — {e.date||e.created_at?new Date(e.date||e.created_at).toLocaleDateString("fr-FR"):"—"}</span></div>))}</div>}
 
     {tab==="tpe"&&<div style={{maxWidth:600}}>
       {/* Payment terminal selection */}

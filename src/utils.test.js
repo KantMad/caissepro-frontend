@@ -151,6 +151,29 @@ describe("norm.sale", () => {
   });
 });
 
+describe("norm.priceHistory", () => {
+  it("forme API (snake, NUMERIC string) → camelCase numérique (corrige le crash toFixed)", () => {
+    const e = norm.priceHistory({ id: 1, old_price: "29.90", new_price: "34.50", product_name: "T-shirt", user_name: "Sova", created_at: "2026-07-16T10:00:00Z" });
+    expect(e.oldPrice).toBe(29.9);
+    expect(e.newPrice).toBe(34.5);
+    expect(typeof e.oldPrice).toBe("number");
+    expect(e.productName).toBe("T-shirt");
+    expect(e.user).toBe("Sova");
+    expect(e.date).toBe("2026-07-16T10:00:00Z");
+  });
+  it("forme locale (camelCase) préservée — idempotent", () => {
+    const e = norm.priceHistory({ oldPrice: 10, newPrice: 12, productName: "X", user: "Y", date: "d" });
+    expect(e.oldPrice).toBe(10);
+    expect(e.productName).toBe("X");
+  });
+  it("valeurs manquantes → 0/— (pas de crash)", () => {
+    const e = norm.priceHistory({});
+    expect(e.oldPrice).toBe(0);
+    expect(() => e.oldPrice.toFixed(2)).not.toThrow();
+    expect(e.productName).toBe("—");
+  });
+});
+
 describe("norm.product", () => {
   it("parse price/cost/tax et conserve les variantes", () => {
     const p = norm.product({ sku: "SKU1", name: "T-shirt", price: "19.9", cost_price: "8", tax_rate: "0.055",

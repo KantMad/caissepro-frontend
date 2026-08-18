@@ -181,6 +181,17 @@ export const norm={
       lineTVA:parseFloat(i.lineTVA??i.line_tva??0)||0})),
     payments:s.payments||[]}},
   sales(list){return(list||[]).map(norm.sale)},
+  // Changement de prix : forme API (old_price string, product_name, user_name, created_at)
+  // OU locale (oldPrice, productName, user, date). Spread + camelCase garanti. Idempotent.
+  priceHistory(e){return{...e,
+    id:e.id,
+    productName:e.productName||e.product_name||e.name||"—",
+    oldPrice:parseFloat(e.oldPrice??e.old_price??0)||0,
+    newPrice:parseFloat(e.newPrice??e.new_price??0)||0,
+    reason:e.reason||"",
+    user:e.user||e.userName||e.user_name||"—",
+    date:e.date||e.created_at||null}},
+  priceHistories(list){return(list||[]).map(norm.priceHistory)},
 };
 
 /* ══════════ EAN-13 SVG BARCODE COMPONENT ══════════ */
