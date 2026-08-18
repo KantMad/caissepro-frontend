@@ -736,6 +736,15 @@ class SunmiPrinterAdapter {
     bold(true); size(32);
     text(`${isIn ? 'MONTANT +' : 'MONTANT -'}  ${amt} EUR\n`);
     size(24); bold(false);
+    // Détail des coupures (transfert de fond)
+    const _dz = mv.denominations && typeof mv.denominations === 'object'
+      ? Object.entries(mv.denominations).filter(([, n]) => (parseInt(n) || 0) > 0).sort((a, b) => parseFloat(b[0]) - parseFloat(a[0])) : [];
+    if (_dz.length) {
+      cmds.push({ cmd: 'line', char: '-', len: 32 });
+      size(22); text('Detail monnaie:\n');
+      for (const [v, n] of _dz) { const lbl = parseFloat(v) >= 5 ? `${v} EUR` : `${(parseFloat(v) * 100).toFixed(0)} cts`; text(`  ${n} x ${lbl}\n`); }
+      size(24);
+    }
     cmds.push({ cmd: 'line', char: '=', len: 32 });
 
     if (mv.barcode && mv.barcode.length === 13) {
@@ -1315,6 +1324,12 @@ class BrowserPrintAdapter {
     h += `<div class="row"><span>Operateur</span><span>${mv.userName || mv.user_name || '?'}</span></div>`;
     h += `<div>Motif: ${mv.reason || '-'}</div><div class="sep"></div>`;
     h += `<div class="row bold big"><span>${isIn ? 'MONTANT +' : 'MONTANT -'}</span><span>${(Number(mv.amount) || 0).toFixed(2)} EUR</span></div>`;
+    const dzb = mv.denominations && typeof mv.denominations === 'object'
+      ? Object.entries(mv.denominations).filter(([, n]) => (parseInt(n) || 0) > 0).sort((a, b) => parseFloat(b[0]) - parseFloat(a[0])) : [];
+    if (dzb.length) {
+      h += `<div class="sep"></div><div class="bold">Detail monnaie</div>`;
+      for (const [v, n] of dzb) { const lbl = parseFloat(v) >= 5 ? `${v}€` : `${(parseFloat(v) * 100).toFixed(0)}c`; h += `<div class="row"><span>${n} x ${lbl}</span><span>${(parseFloat(v) * parseInt(n)).toFixed(2)}€</span></div>`; }
+    }
     if (mv.barcode) h += `<div class="center small">Code: ${mv.barcode}</div>`;
     h += `<div class="center small">Mouvement hors CA - Conforme NF525</div>`;
     return this._printViaIframe(h);
@@ -1550,6 +1565,12 @@ async function _textBasedPrint(adapter, type, data, settings, companyInfo, width
     lines.push(`Motif: ${data.reason || '-'}`);
     lines.push(dsep);
     lines.push(pad(data.direction === 'in' ? 'MONTANT +' : 'MONTANT -', `${(Number(data.amount) || 0).toFixed(2)}E`));
+    const dzt = data.denominations && typeof data.denominations === 'object'
+      ? Object.entries(data.denominations).filter(([, n]) => (parseInt(n) || 0) > 0).sort((a, b) => parseFloat(b[0]) - parseFloat(a[0])) : [];
+    if (dzt.length) {
+      lines.push('Detail monnaie:');
+      for (const [v, n] of dzt) { const lbl = parseFloat(v) >= 5 ? `${v}E` : `${(parseFloat(v) * 100).toFixed(0)}c`; lines.push(pad(`  ${n} x ${lbl}`, `${(parseFloat(v) * parseInt(n)).toFixed(2)}E`)); }
+    }
     if (data.barcode) lines.push(`Code: ${data.barcode}`);
     lines.push('Mouvement hors CA - NF525');
   } else if (type === 'registerOpen') {

@@ -156,13 +156,14 @@ function AppProvider({children}){
     }catch(e){console.warn("Chargement tenues échoué:",e.message);return[];}
   },[]);
   // ══ Tiroir-caisse : apports (in) / prélèvements (out) — NF525, motif obligatoire ══
-  const addCashMovement=useCallback(async(direction,amount,reason)=>{
+  const addCashMovement=useCallback(async(direction,amount,reason,opts={})=>{
     const amt=parseFloat(amount)||0;
     if(direction!=="in"&&direction!=="out")throw new Error("Direction invalide");
     if(!(amt>0))throw new Error("Montant invalide");
     if(!reason||!String(reason).trim())throw new Error("Motif requis (NF525)");
     // Le backend journalise déjà ce mouvement (audit_log CASH_IN/CASH_OUT) → pas de double log local
-    const saved=await API.cashMovements.create({direction,amount:amt,reason:String(reason).trim()});
+    const saved=await API.cashMovements.create({direction,amount:amt,reason:String(reason).trim(),
+      denominations:opts.denominations||null,kind:opts.kind||"standard"});
     setCashMovements(prev=>{const next=[saved,...prev].slice(0,500);try{localStorage.setItem("caissepro_cashmoves",JSON.stringify(next));}catch(e){}return next;});
     return saved;
   },[]);

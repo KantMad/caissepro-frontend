@@ -4,6 +4,7 @@ import { C, CO } from "../constants.jsx";
 import { EAN13Svg } from "../utils.jsx";
 import { Modal, Btn, Input, Badge, SC } from "../ui.jsx";
 import { useApp } from "../context.jsx";
+import { formatDenominations } from "../lib/formatters.js";
 
 export default function TiroirCaisseScreen() {
   const { cashMovements, addCashMovement, reloadCashMovements, thermalPrint, settings, currentUser, currentStore, cashReg, notify } = useApp();
@@ -12,6 +13,11 @@ export default function TiroirCaisseScreen() {
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
   const [lastTicket, setLastTicket] = useState(null);
+  const [transferOpen, setTransferOpen] = useState(false);
+  const BILLS = [500, 200, 100, 50, 20, 10, 5];
+  const COINS = [2, 1, 0.5, 0.2, 0.1, 0.05, 0.02, 0.01];
+  const [denom, setDenom] = useState({});
+  const denomTotal = Math.round(Object.entries(denom).reduce((s, [v, n]) => s + parseFloat(v) * (parseInt(n) || 0), 0) * 100) / 100;
 
   const today = new Date().toISOString().split("T")[0];
   const todays = useMemo(() => (cashMovements || []).filter(m => (m.created_at || m.date || "").startsWith(today)), [cashMovements, today]);
@@ -38,6 +44,22 @@ export default function TiroirCaisseScreen() {
     } catch (e) {
       notify(e.message || "Erreur", "danger");
     } finally { setBusy(false); }
+  };
+
+  const submitTransfer = async () => {
+    if (!(denomTotal > 0)) { notify("Détail monnaie vide", "danger"); return; }
+    setBusy(true);
+    try {
+      const clean = {};
+      Object.entries(denom).forEach(([v, n]) => { const c = parseInt(n) || 0; if (c > 0) clean[v] = c; });
+      const saved = await addCashMovement("out", denomTotal, "Transfert de fond", { denominations: clean, kind: "transfer" });
+      const ticket = { ...saved, direction: "out", amount: denomTotal, reason: "Transfert de fond", kind: "transfer", denominations: clean,
+        userName: currentUser?.name, storeName: currentStore?.name || settings?.name, date: saved?.created_at || new Date().toISOString() };
+      setLastTicket(ticket);
+      try { await thermalPrint("cash-movement", ticket); } catch (e) { console.warn("Impression transfert:", e.message); }
+      notify(`Transfert de fond de ${denomTotal.toFixed(2)}€ enregistré`, "success");
+      setTransferOpen(false); setDenom({});
+    } catch (e) { notify(e.message || "Erreur", "danger"); } finally { setBusy(false); }
   };
 
   const reprint = async (m) => {
@@ -72,6 +94,10 @@ export default function TiroirCaisseScreen() {
           <span style={{ fontSize: 11, fontWeight: 600, color: C.textMuted }}>Prélèvement (banque, dépense…)</span>
         </button>
       </div>
+      <button onClick={() => { setDenom({}); setTransferOpen(true); }} style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10, width: "100%", padding: "14px 12px", borderRadius: 14, border: `2px solid ${C.fiscal}33`, background: `${C.fiscal}0D`, cursor: "pointer", color: C.fiscal, fontWeight: 800, fontSize: 15, marginBottom: 22 }}>
+        <Wallet size={22} /> Transfert de fond (coffre / banque)
+        <span style={{ fontSize: 11, fontWeight: 600, color: C.textMuted }}>— sortie avec détail des coupures, date du jour</span>
+      </button>
 
       {/* Historique */}
       <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 8 }}>Mouvements du jour</div>
@@ -115,6 +141,10 @@ export default function TiroirCaisseScreen() {
               <span>{lastTicket.direction === "in" ? "MONTANT +" : "MONTANT -"}</span>
               <span>{(lastTicket.amount || 0).toFixed(2)}€</span>
             </div>
+            {formatDenominations(lastTicket.denominations).length > 0 && <div style={{ marginTop: 6, borderTop: "1px dashed #999", paddingTop: 6 }}>
+              <div style={{ fontWeight: 700, marginBottom: 2 }}>Détail monnaie</div>
+              {formatDenominations(lastTicket.denominations).map(d => <div key={d.value} style={{ display: "flex", justifyContent: "space-between" }}><span>{d.count} × {d.label}</span><span>{d.total.toFixed(2)}€</span></div>)}
+            </div>}
             {lastTicket.barcode && <div style={{ textAlign: "center", marginTop: 8 }}><EAN13Svg code={lastTicket.barcode} width={180} height={50} /></div>}
             <div style={{ textAlign: "center", fontSize: 9, color: "#888", marginTop: 6 }}>Mouvement hors CA — Conforme NF525</div>
           </div>
@@ -137,6 +167,32 @@ export default function TiroirCaisseScreen() {
           </Btn>
           <div style={{ fontSize: 10, color: C.textMuted, textAlign: "center" }}>Mouvement inaltérable. Une erreur se corrige par un mouvement inverse.</div>
         </div>
+      </Modal>
+
+      {/* Modal Transfert de fond — détail des coupures */}
+      <Modal open={transferOpen} onClose={() => setTransferOpen(false)} title="Transfert de fond" sub={`Sortie de caisse vers coffre/banque — ${new Date().toLocaleDateString("fr-FR")} (date du jour)`} wide>
+        {(() => {
+          const row = (v) => (
+            <div key={v} style={{ display: "flex", alignItems: "center", gap: 4, padding: "5px 8px", borderRadius: 10, border: `1.5px solid ${(denom[v] || 0) > 0 ? C.fiscal : C.border}`, background: (denom[v] || 0) > 0 ? `${C.fiscal}12` : "transparent" }}>
+              <span style={{ fontSize: 10, fontWeight: 700, color: C.fiscal, minWidth: 40 }}>{v >= 5 ? `${v}€` : `${(v * 100).toFixed(0)}c`}</span>
+              <span style={{ fontSize: 9, color: C.textMuted }}>×</span>
+              <input type="number" min="0" inputMode="numeric" value={denom[v] || ""} onChange={e => { const n = parseInt(e.target.value) || 0; setDenom(d => ({ ...d, [v]: n })); }}
+                style={{ width: 46, padding: "4px", borderRadius: 6, border: `1px solid ${C.border}`, fontSize: 13, fontWeight: 700, textAlign: "center", fontFamily: "inherit" }} />
+            </div>
+          );
+          return (<div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            <div><div style={{ fontSize: 11, fontWeight: 700, color: C.textMuted, marginBottom: 6 }}>BILLETS</div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 6 }}>{BILLS.map(row)}</div></div>
+            <div><div style={{ fontSize: 11, fontWeight: 700, color: C.textMuted, marginBottom: 6 }}>PIÈCES</div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 6 }}>{COINS.map(row)}</div></div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 16px", borderRadius: 12, background: `${C.fiscal}10`, border: `1.5px solid ${C.fiscal}33` }}>
+              <span style={{ fontSize: 14, fontWeight: 700, color: C.fiscal }}>Total à sortir</span>
+              <span style={{ fontSize: 22, fontWeight: 900, color: C.fiscal }}>{denomTotal.toFixed(2)}€</span></div>
+            <Btn variant="primary" onClick={submitTransfer} disabled={busy || denomTotal <= 0} style={{ height: 48, fontSize: 15, background: C.fiscal }}>
+              {busy ? "Enregistrement…" : `Valider le transfert — ${denomTotal.toFixed(2)}€`}</Btn>
+            <div style={{ fontSize: 10, color: C.textMuted, textAlign: "center" }}>Mouvement inaltérable (NF525), justificatif imprimé avec le détail. Date = aujourd'hui.</div>
+          </div>);
+        })()}
       </Modal>
     </div>
   );

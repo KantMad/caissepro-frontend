@@ -22,3 +22,4 @@ export { HelpDashboardScreen } from "./HelpDashboardScreen.jsx";
 export { ExportsScreen } from "./ExportsScreen.jsx";
 export { GestlogDeliveriesScreen } from "./GestlogDeliveriesScreen.jsx";
 export { default as TiroirCaisseScreen } from "./TiroirCaisseScreen.jsx";
+export { default as CashMovementsScreen } from "./CashMovementsScreen.jsx";

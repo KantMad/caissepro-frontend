@@ -1296,6 +1296,14 @@ class ThermalPrinter {
     await this.bold(true); await this.doubleSize();
     await this.line(isIn ? 'MONTANT +' : 'MONTANT -', `${amt.toFixed(2)}€`);
     await this.normalSize(); await this.bold(false);
+    // Détail des coupures (transfert de fond)
+    const dz = mv.denominations && typeof mv.denominations === 'object'
+      ? Object.entries(mv.denominations).filter(([, n]) => (parseInt(n) || 0) > 0).sort((a, b) => parseFloat(b[0]) - parseFloat(a[0])) : [];
+    if (dz.length) {
+      await this.separator('-');
+      await this.alignLeft(); await this.text('Detail monnaie:'); await this.newline();
+      for (const [v, n] of dz) { const lbl = parseFloat(v) >= 5 ? `${v}€` : `${(parseFloat(v) * 100).toFixed(0)}cts`; await this.line(`  ${n} x ${lbl}`, `${(parseFloat(v) * parseInt(n)).toFixed(2)}€`); }
+    }
     await this.separator('=');
     // Barcode EAN-13
     if (mv.barcode) { await this.newline(); await this.alignCenter(); await this.barcode(mv.barcode); }

@@ -79,6 +79,19 @@ export const normClosure = (c) => {
   };
 };
 
+// ── Détail monnaie (coupures) → liste ordonnée pour l'affichage/impression ──
+// denom = { "50": 2, "20": 3, ... } → [{ label:"50€", count:2, value:50, total:100 }, ...]
+export const formatDenominations = (denom) => {
+  if (!denom || typeof denom !== "object") return [];
+  return Object.entries(denom)
+    .filter(([, n]) => (parseInt(n) || 0) > 0)
+    .sort((a, b) => parseFloat(b[0]) - parseFloat(a[0]))
+    .map(([v, n]) => {
+      const value = parseFloat(v), count = parseInt(n) || 0;
+      return { value, count, total: Math.round(value * count * 100) / 100, label: value >= 5 ? `${v}€` : `${(value * 100).toFixed(0)}c` };
+    });
+};
+
 // ── Commission vendeur (sur le HT) bornée par plancher/plafond ──
 // raw = baseHT × taux ; commission = clamp(raw, plancher, plafond).
 // cap=0 → pas de plafond. floor=0 → pas de plancher.

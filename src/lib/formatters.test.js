@@ -1,8 +1,21 @@
 import { describe, it, expect } from "vitest";
 import {
   formatAmount, getPaymentLabel, getAvoirRemaining, isAvoirPartiallyUsed,
-  filterByToday, getTodayDate, aggregatePaymentsByMethod, normClosure, computeCommission,
+  filterByToday, getTodayDate, aggregatePaymentsByMethod, normClosure, computeCommission, formatDenominations,
 } from "./formatters.js";
+
+describe("formatDenominations", () => {
+  it("trie décroissant, calcule total et label €/cts", () => {
+    const r = formatDenominations({ "50": 2, "0.5": 3, "20": 1 });
+    expect(r.map(d => d.value)).toEqual([50, 20, 0.5]);
+    expect(r[0]).toMatchObject({ label: "50€", count: 2, total: 100 });
+    expect(r[2]).toMatchObject({ label: "50c", count: 3, total: 1.5 });
+  });
+  it("ignore les comptes nuls, [] si null", () => {
+    expect(formatDenominations({ "10": 0 })).toEqual([]);
+    expect(formatDenominations(null)).toEqual([]);
+  });
+});
 
 describe("computeCommission (sur le HT, plancher/plafond)", () => {
   it("commission = baseHT × taux quand dans les bornes", () => {
