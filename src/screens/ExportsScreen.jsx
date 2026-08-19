@@ -3,6 +3,7 @@ import { Search, Receipt, RotateCcw, Users, DollarSign, Download, FileText, Data
 import { CO, C } from "../constants.jsx";
 import { Modal, Btn, Input } from "../ui.jsx";
 import { useApp } from "../context.jsx";
+import * as API from "../api.js";
 
 function ExportsScreen(){
   const{tickets,avoirs,customers,settings,exportCSVReport,notify,addAudit,addJET,perm}=useApp();
@@ -441,9 +442,10 @@ Facture générée par ${CO.sw} v${CO.ver}</div></body></html>`;
     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:20}}>
       <div>
         <h2 style={{fontSize:22,fontWeight:800,margin:0,letterSpacing:"-0.4px"}}>Exports & Factures</h2>
-        <p style={{fontSize:12,color:C.textMuted,margin:"4px 0 0"}}>Exportez vos données en CSV et générez des factures clients</p></div>
-      <div style={{display:"flex",gap:8}}>
+        <p style={{fontSize:12,color:C.textMuted,margin:"4px 0 0"}}>Exportez vos données en CSV/Excel et générez des factures clients</p></div>
+      <div style={{display:"flex",gap:8,flexWrap:"wrap",justifyContent:"flex-end"}}>
         <Btn variant="outline" onClick={()=>setInvoiceModal(true)} style={{gap:6}}><FileText size={14}/> Générer une facture</Btn>
+        <Btn variant="outline" onClick={()=>{const url=API.exports.invoiceEanUrl({from:dateFrom+"T00:00:00",to:dateTo+"T23:59:59"});window.open(url,"_blank");addAudit&&addAudit("EXPORT",`Facturation EAN ${dateFrom} → ${dateTo}`);}} style={{gap:6,color:C.fiscal,borderColor:C.fiscal+"44"}} title="Excel : ventes + avoirs par EAN (2 onglets)"><Grid size={14}/> Facturation EAN (Excel)</Btn>
         <Btn onClick={doExport} disabled={selectedCount===0||currentCount===0} style={{background:C.primary,gap:6}}><Download size={14}/> Exporter CSV ({currentCount})</Btn></div></div>
 
     {/* Tabs */}

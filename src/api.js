@@ -273,6 +273,14 @@ export const cashMovements = {
   },
 };
 
+// ══ Exports Excel (générés par le backend, download direct WebView-compatible) ══
+export const exports = {
+  invoiceEanUrl: (params = {}) => {
+    const q = new URLSearchParams({ token: getToken() || '', store_id: getStoreId() || '', ...params });
+    return `${API_URL}/api/exports/invoice-ean?${q.toString()}`;
+  },
+};
+
 // ══ Barcodes ══
 export const barcodes = {
   lookup: (code) => api(`/api/barcodes/${encodeURIComponent(code)}`),
