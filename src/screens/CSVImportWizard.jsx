@@ -104,10 +104,23 @@ function CSVImportWizard({open,onClose,existingProducts,onImportComplete}){
         name:get("name")||ref,sku:get("sku")||ref,
         price:parseFloat(get("price"))||0,costPrice:parseFloat(get("costPrice"))||0,
         taxRate:csvParseTax(get("taxRate")),category:get("category")||"Divers",collection:get("collection")||"",
-        variants:group.rows.map((r,i)=>{const gv=(f)=>r[mapping[f]]||"";return{
-          id:`iv-${Date.now()}-${i}-${Math.random().toString(36).slice(2,6)}`,
-          color:gv("color")||"Défaut",colorCode:gv("colorCode")||"",size:gv("size")||"TU",ean:gv("ean")||"",
-          stock:Math.max(0,parseInt(gv("stock"))||0),defective:0,stockAlert:Math.max(0,parseInt(gv("stockAlert"))||5),sortOrder:i};}),
+        variants:(()=>{
+          // Fusionne les lignes de même (couleur, taille) : un fichier livraison répète
+          // le même article (même code-barres) sur plusieurs colis/commandes. Sans fusion,
+          // deux variantes identiques -> viole UNIQUE(product_id,color,size) -> 23505 à la
+          // création (tout le produit est annulé). La quantité est la SOMME des lignes.
+          const vm=new Map();let order=0;
+          group.rows.forEach((r)=>{const gv=(f)=>r[mapping[f]]||"";
+            const color=gv("color")||"Défaut",size=gv("size")||"TU";
+            const key=`${color.toLowerCase().trim()}|${size.toLowerCase().trim()}`;
+            const stock=Math.max(0,parseInt(gv("stock"))||0);
+            const ex=vm.get(key);
+            if(ex){ex.stock+=stock;if(!ex.ean&&gv("ean"))ex.ean=gv("ean");}
+            else vm.set(key,{id:`iv-${Date.now()}-${order}-${Math.random().toString(36).slice(2,6)}`,
+              color,colorCode:gv("colorCode")||"",size,ean:gv("ean")||"",
+              stock,defective:0,stockAlert:Math.max(0,parseInt(gv("stockAlert"))||5),sortOrder:order++});});
+          return[...vm.values()];
+        })(),
         sourceRows:group.indices.map(i=>i+2),
       };
       // Check duplicates
@@ -120,6 +133,14 @@ function CSVImportWizard({open,onClose,existingProducts,onImportComplete}){
         existingMatch=existingProducts.find(ep=>ep.sku===product.sku);isDuplicate=!!existingMatch;
       }else if(uniqueKeyField==="name"){
         existingMatch=existingProducts.find(ep=>ep.name.toLowerCase()===product.name.toLowerCase());isDuplicate=!!existingMatch;
+      }
+      // Repli identité produit : si la clé choisie n'a rien trouvé, matcher par SKU.
+      // Une (re)livraison apporte souvent de NOUVEAUX EAN pour un produit déjà présent :
+      // sans ce repli le wizard tenterait une création -> collision UNIQUE(sku,store_id)
+      // ("SKU déjà utilisé"). Le SKU est l'identité fiable du produit.
+      if(!isDuplicate&&product.sku){
+        const bySku=existingProducts.find(ep=>ep.sku&&ep.sku===product.sku);
+        if(bySku){existingMatch=bySku;isDuplicate=true;}
       }
       if(isDuplicate){
         if(duplicateAction==="update"){
