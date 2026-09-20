@@ -3,6 +3,8 @@
 // Unified interface for all POS terminals
 // ═══════════════════════════════════════════════════════
 
+import { lineDiscountEuro } from './lib/formatters.js';
+
 const HARDWARE_PROFILES = {
   sunmi: {
     id: 'sunmi',
@@ -272,6 +274,8 @@ class SunmiPrinterAdapter {
         text(`  x${qty}\n`);
       } else {
         bold(true); text(`  x${qty}  ${fmt(lineTTC)} EUR\n`); bold(false);
+        const _d = lineDiscountEuro(item);
+        if (_d > 0) { size(22); text(`  Remise: -${fmt(_d)} EUR\n`); size(24); }
       }
     }
     cmds.push({ cmd: 'line', char: '-', len: 32 });
@@ -1484,6 +1488,8 @@ async function _textBasedPrint(adapter, type, data, settings, companyInfo, width
         if (colorCode) detail += ` ${colorCode}`;
         lines.push(detail);
       }
+      const _d = lineDiscountEuro(item);
+      if (_d > 0) lines.push(pad('  Remise', `-${_d.toFixed(2)}E`));
     }
     lines.push(dsep);
     if (Number(data.globalDiscount || data.global_discount || 0) > 0) lines.push(pad('Remise', `-${Number(data.globalDiscount || data.global_discount).toFixed(2)}E`));
@@ -1694,6 +1700,8 @@ function _generateReceiptHTML(ticket, settings, companyInfo) {
     const name = item.product?.name || item.product_name || '?';
     const ttc = Number(item.lineTTC || item.line_ttc || ((item.unit_price || 0) * (item.quantity || 1))) || 0;
     h += `<div class="row"><span>${name} x${item.quantity || 1}</span><span>${ttc.toFixed(2)}EUR</span></div>`;
+    const _d = lineDiscountEuro(item);
+    if (_d > 0) h += `<div class="row small"><span>&nbsp;&nbsp;Remise</span><span>-${_d.toFixed(2)}EUR</span></div>`;
   }
   h += '<div class="sep"></div>';
   if (Number(ticket.globalDiscount || ticket.global_discount || 0) > 0) h += `<div class="row"><span>Remise</span><span>-${Number(ticket.globalDiscount || ticket.global_discount).toFixed(2)}EUR</span></div>`;

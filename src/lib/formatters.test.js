@@ -2,7 +2,29 @@ import { describe, it, expect } from "vitest";
 import {
   formatAmount, getPaymentLabel, getAvoirRemaining, isAvoirPartiallyUsed,
   filterByToday, getTodayDate, aggregatePaymentsByMethod, normClosure, computeCommission, formatDenominations,
+  lineDiscountEuro,
 } from "./formatters.js";
+
+describe("lineDiscountEuro (remise ligne affichée sur le ticket)", () => {
+  // unit_price = HT brut ; line_ttc = net payé. TVA 20%.
+  it("remise en € : 100 HT (120 TTC) payé 90 TTC → remise 30€", () => {
+    expect(lineDiscountEuro({ unit_price: 100, tax_rate: 0.20, quantity: 1, line_ttc: 90 })).toBe(30);
+  });
+  it("remise en % : 2×50 HT (120 TTC) −20% payé 96 → remise 24€", () => {
+    expect(lineDiscountEuro({ unit_price: 50, tax_rate: 0.20, quantity: 2, line_ttc: 96 })).toBe(24);
+  });
+  it("sans remise → 0 (net = brut)", () => {
+    expect(lineDiscountEuro({ unit_price: 100, tax_rate: 0.20, quantity: 1, line_ttc: 120 })).toBe(0);
+  });
+  it("données partielles → 0 (pas de fausse remise)", () => {
+    expect(lineDiscountEuro({ line_ttc: 50 })).toBe(0);
+    expect(lineDiscountEuro({ unit_price: 100, line_ttc: 0 })).toBe(0);
+    expect(lineDiscountEuro(null)).toBe(0);
+  });
+  it("accepte camelCase (lineTTC/taxRate/unitPrice)", () => {
+    expect(lineDiscountEuro({ unitPrice: 100, taxRate: 0.20, quantity: 1, lineTTC: 90 })).toBe(30);
+  });
+});
 
 describe("formatDenominations", () => {
   it("trie décroissant, calcule total et label €/cts", () => {

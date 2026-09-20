@@ -6,7 +6,7 @@ import { CO, C } from "../constants.jsx";
 import { EAN13Svg, ean13SvgHtml } from "../utils.jsx";
 import { Modal, Btn, Input, Badge } from "../ui.jsx";
 import { useApp } from "../context.jsx";
-import { getPaymentLabel, getAvoirRemaining, isAvoirPartiallyUsed } from "../lib/formatters.js";
+import { getPaymentLabel, getAvoirRemaining, isAvoirPartiallyUsed, lineDiscountEuro } from "../lib/formatters.js";
 
 function HistoryScreen(){
   const{tickets,setTickets,avoirs,settings,processReturn,perm:p,printerConnected,thermalPrint,setSelectedAvoir,setMode,notify,customers,setCustomers,retoucheBons,updateRetoucheStatus,scanBarcode,setScanBarcode,trainingMode}=useApp();
@@ -238,9 +238,9 @@ function HistoryScreen(){
           const size=i.variant?.size||i.variant_size||i.size||"";
           const isCustom=i.isCustom||i.is_custom;
           const lineAmt=Number(i.lineTTC||i.line_ttc)||(Number(i.unit_price||i.unitTTC||0)*Number(i.quantity||1));
-          const disc=Number(i.discount)||0;
+          const disc=lineDiscountEuro(i);
           return(<div key={k}>
-          <div style={{display:"flex",justifyContent:"space-between",gap:8}}><span style={{flex:1,wordBreak:"break-word",lineHeight:1.3,fontWeight:600}}>{name}{!isCustom&&(color||size)?` (${color}/${size})`:""} x{i.quantity||1}{disc>0?` -${disc}${i.discountType==="amount"||i.discount_type==="amount"?"€":"%"}`:""}</span>
+          <div style={{display:"flex",justifyContent:"space-between",gap:8}}><span style={{flex:1,wordBreak:"break-word",lineHeight:1.3,fontWeight:600}}>{name}{!isCustom&&(color||size)?` (${color}/${size})`:""} x{i.quantity||1}{disc>0?` (-${disc.toFixed(2)}€)`:""}</span>
           <span style={{whiteSpace:"nowrap",fontWeight:800}}>{lineAmt.toFixed(2)}€</span></div>
           {!isCustom&&(sku||ean||colorCode)&&<div style={{fontSize:9,color:"#888",fontWeight:600}}>{sku?`Réf: ${sku}`:""}{sku&&colorCode?" — ":""}{colorCode||""}{(sku||colorCode)&&ean?" — ":""}{ean?`EAN: ${ean}`:""}</div>}
         </div>);})}

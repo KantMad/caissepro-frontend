@@ -188,6 +188,8 @@ class SunmiPrinterAdapter {
         text(`  x${qty}\n`);
       } else {
         bold(true); text(`  x${qty}  ${fmt(lineTTC)} EUR\n`); bold(false);
+        const _d = lineDiscountEuro(item);
+        if (_d > 0) { size(22); text(`  Remise: -${fmt(_d)} EUR\n`); size(24); }
       }
     }
     cmds.push({ cmd: 'line', char: '-', len: 32 });
@@ -652,6 +654,15 @@ class SunmiPrinterAdapter {
     bold(true); size(32);
     text(`${isIn ? 'MONTANT +' : 'MONTANT -'}  ${amt} EUR\n`);
     size(24); bold(false);
+    // Détail des coupures (transfert de fond)
+    const _dz = mv.denominations && typeof mv.denominations === 'object'
+      ? Object.entries(mv.denominations).filter(([, n]) => (parseInt(n) || 0) > 0).sort((a, b) => parseFloat(b[0]) - parseFloat(a[0])) : [];
+    if (_dz.length) {
+      cmds.push({ cmd: 'line', char: '-', len: 32 });
+      size(22); text('Detail monnaie:\n');
+      for (const [v, n] of _dz) { const lbl = parseFloat(v) >= 5 ? `${v} EUR` : `${(parseFloat(v) * 100).toFixed(0)} cts`; text(`  ${n} x ${lbl}\n`); }
+      size(24);
+    }
     cmds.push({ cmd: 'line', char: '=', len: 32 });
 
     if (mv.barcode && mv.barcode.length === 13) {

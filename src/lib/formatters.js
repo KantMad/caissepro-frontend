@@ -105,6 +105,22 @@ export const computeCommission = (baseHT, rate, floor = 0, cap = 0) => {
   return { raw: r2(raw), commission: r2(commission), capped: c > 0 && raw > c, floored: raw < f };
 };
 
+// ── Remise ligne en euros, pour l'affichage ticket ──
+// Dérivée du brut (prix unitaire HT × (1+TVA) × qté) moins le net (lineTTC réellement payé).
+// Marche pour remise en % ou en €, sur ticket live ET réimprimé (les données backend
+// n'exposent pas le champ `discount`, seulement unit_price HT + line_ttc net).
+export const lineDiscountEuro = (item) => {
+  if (!item) return 0;
+  const qty = Number(item.quantity) || 1;
+  const tax = Number(item.tax_rate ?? item.taxRate ?? (item.product && item.product.taxRate) ?? 0.20);
+  const unitHT = Number(item.unit_price ?? item.unitPrice ?? 0);
+  const net = Number(item.lineTTC ?? item.line_ttc ?? 0);
+  if (!unitHT || net <= 0) return 0; // données partielles → pas de fausse remise
+  const gross = unitHT * (1 + tax) * qty;
+  const d = Math.round((gross - net) * 100) / 100;
+  return d > 0.005 ? d : 0;
+};
+
 // ── Agrégation des paiements par méthode (clôtures, stats) ──
 export const PAYMENT_METHODS = ["cash", "card", "cheque", "giftcard", "amex", "avoir"];
 export const aggregatePaymentsByMethod = (tickets) => {

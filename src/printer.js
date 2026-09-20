@@ -4,6 +4,8 @@
 // ═══════════════════════════════════════
 
 // ESC/POS Command Constants
+import { lineDiscountEuro } from './lib/formatters.js';
+
 const ESC = 0x1B;
 const GS = 0x1D;
 const LF = 0x0A;
@@ -506,7 +508,8 @@ class ThermalPrinter {
           // ne pas ré-appliquer la remise ici, sinon total faux et != TOTAL TTC.
           const unitPrice = lineTTC / qty;
           let qtyLine = `  ${qty} x ${unitPrice.toFixed(2)}€`;
-          if (discount > 0) qtyLine += discountType === "amount" ? ` (-${Number(discount).toFixed(2)}€)` : ` (-${discount}%)`;
+          const _d = lineDiscountEuro(item);
+          if (_d > 0) qtyLine += ` (-${_d.toFixed(2)}€)`;
           const total = lineTTC.toFixed(2);
           await this.bold(true);
           await this.line(qtyLine, `${total}€`);
