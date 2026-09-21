@@ -4,6 +4,7 @@ import * as API from "../api.js";
 import { CO, initUsers, C } from "../constants.jsx";
 import { Btn, Input } from "../ui.jsx";
 import { useApp } from "../context.jsx";
+import logo from "../assets/logo.png";
 
 function LoginScreen(){
   const{login,setMode:setIM,users,setUsers}=useApp();const[su,setSu]=useState("");const[pw,setPw]=useState("");const[err,setErr]=useState("");const[m,setM]=useState("cashier");const[loading,setLoading]=useState(false);
@@ -21,8 +22,7 @@ function LoginScreen(){
       boxShadow:"0 20px 60px rgba(15,23,42,0.08), 0 0 0 1px rgba(15,23,42,0.04)",animation:"fadeIn 0.4s ease"}}>
       <div style={{marginBottom:32}}>
         <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:20}}>
-          <div style={{width:44,height:44,borderRadius:12,background:C.primary,display:"flex",alignItems:"center",justifyContent:"center"}}>
-            <Store size={22} color="#fff"/></div>
+          <img src={logo} alt="Tech in Cash" style={{width:48,height:48,objectFit:"contain"}}/>
           <div><h1 style={{fontSize:22,fontWeight:700,margin:0,letterSpacing:"-0.5px",color:C.text}}>Tech in Cash</h1>
             <p style={{color:C.textMuted,fontSize:11,margin:0}}>v{CO.ver} — NF525</p>
             <p style={{color:C.textLight,fontSize:9,margin:0,fontFamily:"monospace"}}>{typeof __BUILD_TIME__!=='undefined'?__BUILD_TIME__:''}</p></div></div>

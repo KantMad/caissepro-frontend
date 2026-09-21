@@ -11,6 +11,7 @@ import { hashPin, verifyPin } from "./utils.jsx";
 import { Modal, Btn, Input, Badge, SC, ErrorBoundary, ToastContainer, ConfirmDialog } from "./ui.jsx";
 import { useApp } from "./context.jsx";
 import { useViewport } from "./useViewport.js";
+import logo from "./assets/logo.png";
 import {
   LoginScreen, CashRegControl, SalesScreen, StatsScreen, StockScreen,
   HistoryScreen, ReturnScreen, ClosureScreen, CustomersScreen, FiscalScreen,
@@ -221,7 +222,7 @@ function DashboardNav({active,onNav,vp,mobileOpen,onCloseMobile}){
   const inner=(<>
     <div style={{padding:"20px 20px 16px",borderBottom:"1px solid rgba(255,255,255,0.06)"}}>
       <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:16}}>
-        <div style={{width:34,height:34,borderRadius:9,background:C.primary,display:"flex",alignItems:"center",justifyContent:"center"}}><Store size={17} color="#fff"/></div>
+        <img src={logo} alt="Tech in Cash" style={{width:34,height:34,objectFit:"contain"}}/>
         <div><div style={{color:"#fff",fontSize:14,fontWeight:700,letterSpacing:"-0.3px"}}>Tech in Cash</div>
           <div style={{color:"rgba(255,255,255,0.4)",fontSize:10}}>v{CO.ver}</div></div></div>
       <div style={{padding:"10px 12px",borderRadius:10,background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.06)",display:"flex",alignItems:"center",gap:10}}>
@@ -525,6 +526,7 @@ function DashboardInterface(){
     return(<div style={{display:"flex",flexDirection:"column",height:"100vh",fontFamily:"'DM Sans',system-ui,sans-serif"}}>
       <div style={{display:"flex",alignItems:"center",gap:12,padding:"10px 14px",background:"#0F172A",flexShrink:0,boxShadow:"0 2px 12px rgba(0,0,0,0.2)"}}>
         <button onClick={()=>setDrawerOpen(true)} style={{width:44,height:44,borderRadius:11,border:"none",cursor:"pointer",background:"rgba(255,255,255,0.08)",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"inherit"}}><Grid size={20}/></button>
+        <img src={logo} alt="" style={{width:28,height:28,objectFit:"contain"}}/>
         <div style={{color:"#fff",fontSize:16,fontWeight:700,letterSpacing:"-0.3px"}}>{titles[sc]||"Tech in Cash"}</div>
       </div>
       <DashboardNav active={sc} onNav={setSc} vp={vp} mobileOpen={drawerOpen} onCloseMobile={()=>setDrawerOpen(false)}/>
