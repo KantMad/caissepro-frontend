@@ -16,7 +16,7 @@ import {
   HistoryScreen, ReturnScreen, ClosureScreen, CustomersScreen, FiscalScreen,
   AuditScreen, CSVImportWizard, ProductsScreen, ReturnsHistoryScreen,
   SettingsScreen, GiftCardScreen, PromosScreen, FootfallScreen,
-  HelpCashierScreen, HelpDashboardScreen, ExportsScreen, GestlogDeliveriesScreen, TiroirCaisseScreen, CashMovementsScreen, RegisterSessionsScreen
+  HelpCashierScreen, HelpDashboardScreen, ExportsScreen, GestlogDeliveriesScreen, TiroirCaisseScreen, CashMovementsScreen, RegisterSessionsScreen, MobileStatsScreen
 } from "./screens.jsx";
 
 function CashierNav({active,onNav}){
@@ -214,7 +214,7 @@ function UsersScreen(){
 function DashboardNav({active,onNav,vp,mobileOpen,onCloseMobile}){
   const{logout,currentUser,stores,viewingStoreId,switchViewingStore,currentStore}=useApp();
   const sections=[
-    {title:"",items:[{id:"overview",l:"Dashboard",i:LayoutDashboard}]},
+    {title:"",items:[{id:"resume",l:"Résumé",i:TrendingUp},{id:"overview",l:"Dashboard",i:LayoutDashboard}]},
     {title:"Commerce",items:[{id:"products",l:"Produits",i:Package},{id:"stock",l:"Stock",i:Grid},{id:"gestlog",l:"Livraisons gestlog",i:Truck},{id:"stats",l:"Statistiques",i:BarChart3},{id:"returns",l:"Retours & Avoirs",i:RotateCcw},{id:"cashmovements",l:"Tiroir-caisse",i:Wallet},{id:"registersessions",l:"Ouv./Ferm. caisse",i:Lock},{id:"exports",l:"Exports & Factures",i:Download}]},
     {title:"Relations",items:[{id:"customers",l:"Clients",i:Users},{id:"users",l:"Utilisateurs",i:UserIcon},{id:"giftcards",l:"Cartes cadeaux",i:Gift},{id:"promos",l:"Promotions",i:Zap},{id:"footfall",l:"Entrees",i:Activity}]},
     {title:"Systeme",items:[{id:"storesMgmt",l:"Magasins",i:Store},{id:"tva",l:"Taux de TVA",i:Percent},{id:"settings",l:"Parametres",i:Settings},{id:"fiscal",l:"Fiscal NF525",i:Shield},{id:"audit",l:"Journal d'audit",i:Activity},{id:"help",l:"Aide",i:HelpCircle}]}];
@@ -515,12 +515,12 @@ function StoresManagementScreen(){
 function DashboardInterface(){
   const vp=useViewport();
   const[drawerOpen,setDrawerOpen]=useState(false);
-  const[sc,setScRaw]=useState(()=>{try{return sessionStorage.getItem("caissepro_dash_screen")||"overview";}catch(e){return"overview";}});
+  const[sc,setScRaw]=useState(()=>{try{const saved=sessionStorage.getItem("caissepro_dash_screen");if(saved)return saved;}catch(e){}return(typeof window!=="undefined"&&window.innerWidth<=640)?"resume":"overview";});
   const setSc=useCallback((v)=>{setScRaw(v);try{sessionStorage.setItem("caissepro_dash_screen",v);}catch(e){}setDrawerOpen(false);},[]);
-  const S={overview:DashOverview,products:ProductsScreen,stock:StockScreen,gestlog:GestlogDeliveriesScreen,stats:StatsScreen,returns:ReturnsHistoryScreen,customers:CustomersScreen,
+  const S={resume:MobileStatsScreen,overview:DashOverview,products:ProductsScreen,stock:StockScreen,gestlog:GestlogDeliveriesScreen,stats:StatsScreen,returns:ReturnsHistoryScreen,customers:CustomersScreen,
     users:UsersScreen,storesMgmt:StoresManagementScreen,tva:TVAScreen,giftcards:GiftCardScreen,promos:PromosScreen,footfall:FootfallScreen,settings:SettingsScreen,fiscal:FiscalScreen,audit:AuditScreen,help:HelpDashboardScreen,exports:ExportsScreen,cashmovements:CashMovementsScreen,registersessions:RegisterSessionsScreen};
   const Sc=S[sc]||DashOverview;
-  const titles={overview:"Dashboard",products:"Produits",stock:"Stock",gestlog:"Livraisons gestlog",stats:"Statistiques",returns:"Retours & Avoirs",customers:"Clients",users:"Utilisateurs",storesMgmt:"Magasins",tva:"Taux de TVA",giftcards:"Cartes cadeaux",promos:"Promotions",footfall:"Entrées",settings:"Paramètres",fiscal:"Fiscal NF525",audit:"Journal d'audit",help:"Aide",exports:"Exports & Factures",cashmovements:"Tiroir-caisse",registersessions:"Ouvertures & fermetures de caisse"};
+  const titles={resume:"Résumé",overview:"Dashboard",products:"Produits",stock:"Stock",gestlog:"Livraisons gestlog",stats:"Statistiques",returns:"Retours & Avoirs",customers:"Clients",users:"Utilisateurs",storesMgmt:"Magasins",tva:"Taux de TVA",giftcards:"Cartes cadeaux",promos:"Promotions",footfall:"Entrées",settings:"Paramètres",fiscal:"Fiscal NF525",audit:"Journal d'audit",help:"Aide",exports:"Exports & Factures",cashmovements:"Tiroir-caisse",registersessions:"Ouvertures & fermetures de caisse"};
   if(vp.isMobile){
     return(<div style={{display:"flex",flexDirection:"column",height:"100vh",fontFamily:"'DM Sans',system-ui,sans-serif"}}>
       <div style={{display:"flex",alignItems:"center",gap:12,padding:"10px 14px",background:"#0F172A",flexShrink:0,boxShadow:"0 2px 12px rgba(0,0,0,0.2)"}}>
