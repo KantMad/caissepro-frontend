@@ -260,7 +260,7 @@ class SunmiPrinterAdapter {
     if (t.customerName || t.customer_name) {
       size(20); text(`Fidelite: +${Math.round(Number(t.totalTTC || t.total_ttc) || 0)}pts\n`);
     }
-    size(18); text(`${co.sw || 'CaissePro'} v${co.ver || '6.1.0'} - Conforme NF525\n`);
+    size(18); text(`${co.sw || 'Tech in Cash'} v${co.ver || '6.1.0'} - Conforme NF525\n`);
 
     // Feed and cut
     cmds.push({ cmd: 'feed', lines: 4 });
@@ -338,7 +338,7 @@ class SunmiPrinterAdapter {
     align(1);
     if (s.footerMsg || co.footerMsg) { size(24); bold(true); text(`${s.footerMsg || co.footerMsg}\n`); bold(false); }
     if (s.ticketFreeText) { size(22); bold(true); const ftLines = s.ticketFreeText.split('\n'); for (const ln of ftLines) { text(ln + '\n'); } bold(false); }
-    size(18); text(`${co.sw || 'CaissePro'} v${co.ver || '6.1.0'} - Conforme NF525\n`);
+    size(18); text(`${co.sw || 'Tech in Cash'} v${co.ver || '6.1.0'} - Conforme NF525\n`);
 
     cmds.push({ cmd: 'feed', lines: 4 });
     cmds.push({ cmd: 'cut' });
@@ -494,7 +494,7 @@ class SunmiPrinterAdapter {
     if (bon.notes) { size(22); bold(true); text(`Notes: ${bon.notes}\n`); bold(false); size(24); cmds.push({ cmd: 'line', char: '-', len: 32 }); }
 
     align(1); size(20); bold(true);
-    text(`${co.sw || 'CaissePro'} v${co.ver || '6.1.0'}\n`);
+    text(`${co.sw || 'Tech in Cash'} v${co.ver || '6.1.0'}\n`);
     bold(false);
     if (s.retoucheMsg) { bold(true); text(s.retoucheMsg + '\n'); bold(false); }
     else { bold(true); text(`Retrait prevu sous ${s.retoucheDelay || 5} jours ouvres\n`); bold(false); }
@@ -588,7 +588,7 @@ class SunmiPrinterAdapter {
 
     align(1); size(20); bold(true);
     text('Justificatif de sortie de stock\n'); bold(false);
-    text(`${co.sw || 'CaissePro'} v${co.ver || '6.1.0'}\n`);
+    text(`${co.sw || 'Tech in Cash'} v${co.ver || '6.1.0'}\n`);
     if (s.footerMsg || co.footerMsg) { bold(true); text(`${s.footerMsg || co.footerMsg}\n`); bold(false); }
 
     if (tenue.barcode && tenue.barcode.length === 13) {
@@ -671,7 +671,7 @@ class SunmiPrinterAdapter {
     }
     align(1); size(20);
     text('Mouvement hors CA - Conforme NF525\n');
-    text(`${co.sw || 'CaissePro'} v${co.ver || '6.1.0'}\n`);
+    text(`${co.sw || 'Tech in Cash'} v${co.ver || '6.1.0'}\n`);
     cmds.push({ cmd: 'feed', lines: 4 });
     cmds.push({ cmd: 'cut' });
     return cmds;
@@ -932,7 +932,7 @@ class SunmiPrinterAdapter {
       bold(false);
       cmds.push({ cmd: 'line', char: '=', len: 32 });
       align(1); size(20); bold(true);
-      text(`${co.sw || 'CaissePro'}\n`); bold(false);
+      text(`${co.sw || 'Tech in Cash'}\n`); bold(false);
       cmds.push({ cmd: 'feed', lines: 4 });
       cmds.push({ cmd: 'cut' });
 
@@ -966,7 +966,7 @@ class SunmiPrinterAdapter {
         { cmd: 'bold', enabled: false },
         { cmd: 'line', char: '=', len: 32 },
         { cmd: 'align', value: 0 },
-        { cmd: 'text', text: 'CaissePro - Imprimante Sunmi\n' },
+        { cmd: 'text', text: 'Tech in Cash - Imprimante Sunmi\n' },
         { cmd: 'text', text: `Date: ${new Date().toLocaleString('fr-FR')}\n` },
         { cmd: 'text', text: 'Caracteres: EUR a e c u o\n' },
         { cmd: 'line', char: '=', len: 32 },

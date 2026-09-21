@@ -744,7 +744,7 @@ function SalesScreen(){
           const printed=await thermalPrint("retouche",bon);
           if(!printed){
             const w=window.open("","_blank","width=400,height=600");if(w){w.document.write(`<html><head><title>Bon de retouche ${bonNum}</title><style>body{font-family:'Courier New',monospace;font-size:12px;padding:10px;max-width:300px;margin:0 auto;}h2{text-align:center;font-size:14px;margin:4px 0;}hr{border:none;border-top:1px dashed #333;margin:6px 0;}.row{display:flex;justify-content:space-between;}.center{text-align:center;}.short-code{text-align:center;font-size:32px;font-weight:900;letter-spacing:6px;margin:8px 0;padding:8px;border:3px solid #000;}</style></head><body>`+
-              `<h2>${settings.name||"CaissePro"}</h2><div class="center">${settings.address||""} ${settings.postalCode||""} ${settings.city||""}</div><hr>`+
+              `<h2>${settings.name||"Tech in Cash"}</h2><div class="center">${settings.address||""} ${settings.postalCode||""} ${settings.city||""}</div><hr>`+
               `<h2>BON DE RETOUCHE</h2><div class="short-code">${sc}</div><div class="center" style="font-size:10px;margin-bottom:6px;">Ref: ${bonNum}</div><hr>`+
               `<div class="row"><span>Client:</span><strong>${bon.client||"—"}</strong></div>`+
               `<div class="row"><span>Tel:</span><span>${bon.phone||"—"}</span></div>`+
@@ -752,7 +752,7 @@ function SalesScreen(){
               bon.items.filter(i=>i.desc).map(i=>`<div class="row"><span>${i.desc}</span><strong>${parseFloat(i.price||0).toFixed(2)}EUR</strong></div>`).join("")+
               `<hr><div class="row"><strong>TOTAL</strong><strong>${retTotal.toFixed(2)}EUR TTC</strong></div><hr>`+
               (bon.notes?`<div><strong>Notes:</strong> ${bon.notes}</div><hr>`:"")+
-              `<div class="center" style="font-size:10px;">Vendeur: ${bon.seller}<br>${new Date().toLocaleString("fr-FR")}<br>${settings.name||"CaissePro"} — ${settings.siret||""}</div>`+
+              `<div class="center" style="font-size:10px;">Vendeur: ${bon.seller}<br>${new Date().toLocaleString("fr-FR")}<br>${settings.name||"Tech in Cash"} — ${settings.siret||""}</div>`+
               `</body></html>`);w.document.close();setTimeout(()=>{w.print();},300);}}
           setRetoucheModal(false);setRetForm({client:"",phone:"",date:new Date().toISOString().split("T")[0],notes:"",items:[{desc:"",price:""}]});
           notify(`Bon de retouche #${sc} (${bonNum}) cree et ajoute au panier`);

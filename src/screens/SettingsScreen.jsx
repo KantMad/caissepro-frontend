@@ -810,7 +810,7 @@ function DebugPanel(){
 
   return(<div style={{maxWidth:750}}>
     <div style={{background:"linear-gradient(135deg,#DC2626,#991B1B)",borderRadius:16,padding:20,marginBottom:16}}>
-      <h3 style={{fontSize:18,fontWeight:800,margin:"0 0 4px",color:"#fff"}}>Centre de Debug CaissePro</h3>
+      <h3 style={{fontSize:18,fontWeight:800,margin:"0 0 4px",color:"#fff"}}>Centre de Debug Tech in Cash</h3>
       <p style={{fontSize:11,color:"#FCA5A5",margin:0}}>Diagnostic complet — imprimante, TPE, tickets. Faites des screenshots des resultats.</p></div>
 
     {/* Debug sub-tabs */}
@@ -1592,11 +1592,11 @@ function SettingsScreen(){
       <div style={{background:C.surfaceAlt,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`}}>
         <h4 style={{fontSize:13,fontWeight:700,marginBottom:8}}>Fonctionnement</h4>
         <div style={{fontSize:11,color:C.textMuted,lineHeight:1.6}}>
-          {paymentId==="manual"&&<>Mode manuel: le caissier encaisse sur le TPE separement puis confirme le paiement dans CaissePro. Aucune connexion au TPE necessaire.</>}
-          {paymentId==="concert"&&<>Le protocole Concert envoie automatiquement le montant au pinpad. Le client presente sa carte, et la reponse (accepte/refuse) revient dans CaissePro. Standard francais compatible Ingenico, Verifone, Worldline.</>}
-          {paymentId==="sumup"&&<>CaissePro ouvre l'app SumUp avec le montant pre-rempli. Le paiement se fait sur le lecteur SumUp, puis le resultat revient dans CaissePro.</>}
-          {paymentId==="stripe"&&<>Stripe Terminal se connecte au lecteur (BBPOS Chipper, Verifone P400) via Internet. Le paiement est traite par Stripe avec retour automatique dans CaissePro.</>}
-          {paymentId==="zettle"&&<>CaissePro ouvre l'app Zettle avec le montant. Le paiement se fait sur le lecteur Zettle, compatible CB, Amex, Apple Pay.</>}
+          {paymentId==="manual"&&<>Mode manuel: le caissier encaisse sur le TPE separement puis confirme le paiement dans Tech in Cash. Aucune connexion au TPE necessaire.</>}
+          {paymentId==="concert"&&<>Le protocole Concert envoie automatiquement le montant au pinpad. Le client presente sa carte, et la reponse (accepte/refuse) revient dans Tech in Cash. Standard francais compatible Ingenico, Verifone, Worldline.</>}
+          {paymentId==="sumup"&&<>Tech in Cash ouvre l'app SumUp avec le montant pre-rempli. Le paiement se fait sur le lecteur SumUp, puis le resultat revient dans Tech in Cash.</>}
+          {paymentId==="stripe"&&<>Stripe Terminal se connecte au lecteur (BBPOS Chipper, Verifone P400) via Internet. Le paiement est traite par Stripe avec retour automatique dans Tech in Cash.</>}
+          {paymentId==="zettle"&&<>Tech in Cash ouvre l'app Zettle avec le montant. Le paiement se fait sur le lecteur Zettle, compatible CB, Amex, Apple Pay.</>}
           {paymentId==="worldline"&&<>Connexion directe au TPE Worldline (VALINA, YOMANI, LANE) via le protocole NEXO ou l'API REST locale.</>}
           {paymentId==="pax_pay"&&<>Paiement integre sur le terminal PAX. Le montant est envoye directement au module de paiement interne.</>}
           {paymentId==="sunmi_pay"&&<>Paiement integre sur Sunmi P-series. Le module NFC/puce de la Sunmi traite le paiement directement.</>}
@@ -1668,7 +1668,7 @@ function SettingsScreen(){
 
       <div style={{background:C.surface,borderRadius:16,padding:20,border:`1.5px solid ${C.border}`,marginTop:20}}>
         <h3 style={{fontSize:14,fontWeight:800,margin:"0 0 4px"}}>Configuration Sunmi T2 / D2</h3>
-        <p style={{fontSize:11,color:C.textMuted,marginBottom:12}}>Pour afficher l'ecran client sur le second ecran Sunmi, installez l'APK "CaissePro Display" et renseignez ces informations :</p>
+        <p style={{fontSize:11,color:C.textMuted,marginBottom:12}}>Pour afficher l'ecran client sur le second ecran Sunmi, installez l'APK "Tech in Cash Display" et renseignez ces informations :</p>
         <div style={{background:C.bg,borderRadius:10,padding:12,marginBottom:8}}>
           <div style={{fontSize:10,fontWeight:600,color:C.textMuted,marginBottom:2}}>URL FRONTEND</div>
           <div style={{fontSize:12,fontWeight:700,fontFamily:"monospace",wordBreak:"break-all",cursor:"pointer",color:C.primary}}

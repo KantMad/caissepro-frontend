@@ -358,7 +358,7 @@ function AppProvider({children}){
   const perm=useCallback(()=>currentUser?PERMS[currentUser.role]||PERMS.cashier:PERMS.cashier,[currentUser]);
   // NF525: JET — événement de démarrage système + vérification séquence
   useEffect(()=>{
-    addJET("SYS_START",`Démarrage CaissePro v${CO.ver}`);
+    addJET("SYS_START",`Démarrage Tech in Cash v${CO.ver}`);
     // NF525: Vérification intégrité séquence tickets au démarrage (code 95)
     if(tickets.length>1){
       const sorted=[...tickets].sort((a,b)=>(a.seq||0)-(b.seq||0)).filter(t=>t.seq);
@@ -1199,7 +1199,7 @@ function AppProvider({children}){
         ${d.storeName?`<div style="display:flex;justify-content:space-between;"><span>Magasin</span><span>${d.storeName}</span></div>`:""}
         ${isOpen?`<div class="sep"></div><div class="center"><div style="font-weight:700;">FOND DE CAISSE</div><div style="font-size:18px;font-weight:900;">${parseFloat(d.openingAmount||0).toFixed(2)} EUR</div></div>${denomHtml}`:closeHtml}
         <div class="sep" style="border-top-style:double;"></div>
-        <div class="center" style="font-size:9px;">CaissePro — Document obligatoire</div>
+        <div class="center" style="font-size:9px;">Tech in Cash — Document obligatoire</div>
         <div class="no-print center" style="margin-top:12px;"><button onclick="window.print()" style="padding:8px 20px;background:#047857;color:#fff;border:none;border-radius:8px;font-size:13px;cursor:pointer;">Imprimer</button></div>
         </body></html>`;
       const w=window.open("","_blank","width=350,height=500");
@@ -1602,7 +1602,7 @@ function AppProvider({children}){
     // Browser fallback: window.open
     if(customerDisplayRef.current&&!customerDisplayRef.current.closed){customerDisplayRef.current.focus();return;}
     const displayUrl=window.location.origin+"/customer-display.html";
-    const w=window.open(displayUrl,"CaisseProClient","width=800,height=600,menubar=no,toolbar=no,location=no,status=no");
+    const w=window.open(displayUrl,"TechInCashClient","width=800,height=600,menubar=no,toolbar=no,location=no,status=no");
     if(w){
       customerDisplayRef.current=w;
       notify("Ecran client ouvert — glissez-le sur le 2e moniteur","success");

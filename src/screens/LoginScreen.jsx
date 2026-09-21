@@ -23,7 +23,7 @@ function LoginScreen(){
         <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:20}}>
           <div style={{width:44,height:44,borderRadius:12,background:C.primary,display:"flex",alignItems:"center",justifyContent:"center"}}>
             <Store size={22} color="#fff"/></div>
-          <div><h1 style={{fontSize:22,fontWeight:700,margin:0,letterSpacing:"-0.5px",color:C.text}}>CaissePro</h1>
+          <div><h1 style={{fontSize:22,fontWeight:700,margin:0,letterSpacing:"-0.5px",color:C.text}}>Tech in Cash</h1>
             <p style={{color:C.textMuted,fontSize:11,margin:0}}>v{CO.ver} — NF525</p>
             <p style={{color:C.textLight,fontSize:9,margin:0,fontFamily:"monospace"}}>{typeof __BUILD_TIME__!=='undefined'?__BUILD_TIME__:''}</p></div></div>
         <p style={{color:C.textMuted,fontSize:13,lineHeight:1.5}}>Selectionnez votre profil pour commencer</p></div>

@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════════════
-// CaissePro — Application Entry Point (Orchestrator)
+// Tech in Cash — Application Entry Point (Orchestrator)
 // ═══════════════════════════════════════════════════════════════
 import React,{useState,useEffect,useCallback} from "react";
 import AppProvider from "./context.jsx";

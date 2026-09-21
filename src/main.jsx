@@ -8,25 +8,25 @@ import { startAutoCheck, onUpdateAvailable, downloadAndInstall, markAsUpdated } 
 const CURRENT_BUILD = __BUILD_TIME__;
 const LAST_BUILD = localStorage.getItem('caissepro_last_build');
 if (LAST_BUILD !== CURRENT_BUILD) {
-  console.log('[CaissePro] New build detected, clearing all caches...');
+  console.log('[Tech in Cash] New build detected, clearing all caches...');
   // Unregister old service workers
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.getRegistrations().then(regs => {
       regs.forEach(r => r.unregister());
-      console.log('[CaissePro] Unregistered', regs.length, 'old service workers');
+      console.log('[Tech in Cash] Unregistered', regs.length, 'old service workers');
     });
   }
   // Clear all caches
   if ('caches' in window) {
     caches.keys().then(names => {
       names.forEach(name => caches.delete(name));
-      console.log('[CaissePro] Deleted', names.length, 'caches');
+      console.log('[Tech in Cash] Deleted', names.length, 'caches');
     });
   }
   localStorage.setItem('caissepro_last_build', CURRENT_BUILD);
 }
 
-console.log(`[CaissePro] v${__APP_VERSION__} | Build: ${__BUILD_TIME__}`);
+console.log(`[Tech in Cash] v${__APP_VERSION__} | Build: ${__BUILD_TIME__}`);
 
 // ── Global error catcher — stores errors for the debug panel ──
 window.__CAISSEPRO_ERRORS = [];
@@ -53,11 +53,11 @@ if (!isCapacitor) {
       showUpdateBanner('Nouvelle version disponible', () => updateSW(true));
     },
     onOfflineReady() {
-      console.log('[CaissePro] App disponible hors-ligne');
+      console.log('[Tech in Cash] App disponible hors-ligne');
     },
   });
 } else {
-  console.log('[CaissePro] Capacitor detected — Service Worker disabled');
+  console.log('[Tech in Cash] Capacitor detected — Service Worker disabled');
   // Force unregister any existing SW on Capacitor
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.getRegistrations().then(regs => regs.forEach(r => r.unregister()));

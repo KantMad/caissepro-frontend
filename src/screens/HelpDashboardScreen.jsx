@@ -28,7 +28,7 @@ function HelpDashboardScreen(){
     {icon:"📄",title:"Import CSV de produits",desc:"Importer des produits en masse depuis un fichier Excel/CSV.",steps:[
       "Cliquez sur « Produits » dans la barre latérale gauche, puis sur le bouton « Importer CSV » en haut de l'écran.",
       "Cliquez sur « Choisir un fichier » et sélectionnez votre fichier .csv (séparateur virgule ou point-virgule).",
-      "L'aperçu des colonnes détectées s'affiche. Pour chaque colonne de votre fichier, sélectionnez le champ CaissePro correspondant dans le menu déroulant :",
+      "L'aperçu des colonnes détectées s'affiche. Pour chaque colonne de votre fichier, sélectionnez le champ Tech in Cash correspondant dans le menu déroulant :",
       "  • Colonnes disponibles : Nom, SKU, Prix de vente, Prix d'achat, Catégorie, TVA, Taille, Couleur, EAN, Stock.",
       "Si vos colonnes portent des noms standard (name, price, sku, etc.), le mapping est automatique.",
       "Vérifiez l'aperçu des premières lignes en bas de l'écran. Les données doivent correspondre aux bons champs.",

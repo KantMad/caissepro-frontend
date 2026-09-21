@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════
-// CaissePro — Auto-Updater
+// Tech in Cash — Auto-Updater
 // Checks GitHub Releases for new APK versions
 // ═══════════════════════════════════════════════════════
 
@@ -80,7 +80,7 @@ export async function downloadAndInstall(downloadUrl) {
         console.log('[Updater] Using native AppInstaller plugin...');
         const result = await installer.downloadAndInstall({
           url: downloadUrl,
-          filename: 'CaissePro.apk',
+          filename: 'TechInCash.apk',
         });
         console.log('[Updater] Download result:', result);
         return true;

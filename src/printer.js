@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════
-// CaissePro — ESC/POS Thermal Printer
+// Tech in Cash — ESC/POS Thermal Printer
 // Web Serial API + WebUSB support
 // ═══════════════════════════════════════
 
@@ -649,7 +649,7 @@ class ThermalPrinter {
       }
 
       await this.bold(true);
-      await this.text(`${co.sw || 'CaissePro'} v${co.ver || '6.1.0'}`);
+      await this.text(`${co.sw || 'Tech in Cash'} v${co.ver || '6.1.0'}`);
       await this.newline();
       await this.bold(false);
 
@@ -781,7 +781,7 @@ class ThermalPrinter {
       }
       await this.fontNormal();
       await this.bold(true);
-      await this.text(`${co.sw || 'CaissePro'} v${co.ver || '6.1.0'}`);
+      await this.text(`${co.sw || 'Tech in Cash'} v${co.ver || '6.1.0'}`);
       await this.newline();
       await this.bold(false);
 
@@ -874,7 +874,7 @@ class ThermalPrinter {
       await this.bold(false);
 
       await this.bold(true);
-      await this.text(`${co.sw || 'CaissePro'} v${co.ver || '6.1.0'}`);
+      await this.text(`${co.sw || 'Tech in Cash'} v${co.ver || '6.1.0'}`);
       await this.newline();
       await this.bold(false);
 
@@ -975,7 +975,7 @@ class ThermalPrinter {
       // Footer
       await this.alignCenter();
       await this.fontSmall();
-      await this.text(`${co.sw || 'CaissePro'} v${co.ver || '6.1.0'}`);
+      await this.text(`${co.sw || 'Tech in Cash'} v${co.ver || '6.1.0'}`);
       await this.newline();
       await this.text('Document obligatoire — A conserver');
       await this.newline();
@@ -1192,7 +1192,7 @@ class ThermalPrinter {
       // Footer
       await this.alignCenter();
       await this.fontSmall();
-      await this.text(`${co.sw || 'CaissePro'} v${co.ver || '6.1.0'}`);
+      await this.text(`${co.sw || 'Tech in Cash'} v${co.ver || '6.1.0'}`);
       await this.newline();
       await this.text('Document obligatoire — A conserver');
       await this.newline();
@@ -1429,7 +1429,7 @@ class ThermalPrinter {
       await this.alignCenter();
       await this.fontNormal();
       await this.bold(true);
-      await this.text(`${co.sw || 'CaissePro'} v${co.ver || '6.1.0'}`);
+      await this.text(`${co.sw || 'Tech in Cash'} v${co.ver || '6.1.0'}`);
       await this.newline();
       if (s.retoucheMsg) {
         await this.text(s.retoucheMsg);
@@ -1578,7 +1578,7 @@ class ThermalPrinter {
     await this.bold(false);
     await this.separator('=');
     await this.alignLeft();
-    await this.text('CaissePro - Imprimante thermique');
+    await this.text('Tech in Cash - Imprimante thermique');
     await this.newline();
     await this.text(`Connexion: ${this.connectionType === 'serial' ? 'Serie (Web Serial)' : 'USB (WebUSB)'}`);
     await this.newline();

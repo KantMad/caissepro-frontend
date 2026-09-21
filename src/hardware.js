@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════
-// CaissePro — Hardware Abstraction Layer (HAL)
+// Tech in Cash — Hardware Abstraction Layer (HAL)
 // Unified interface for all POS terminals
 // ═══════════════════════════════════════════════════════
 
@@ -346,7 +346,7 @@ class SunmiPrinterAdapter {
     if (t.customerName || t.customer_name) {
       size(20); text(`Fidelite: +${Math.round(Number(t.totalTTC || t.total_ttc) || 0)}pts\n`);
     }
-    size(18); text(`${co.sw || 'CaissePro'} v${co.ver || '6.1.0'} - Conforme NF525\n`);
+    size(18); text(`${co.sw || 'Tech in Cash'} v${co.ver || '6.1.0'} - Conforme NF525\n`);
 
     // Feed and cut
     cmds.push({ cmd: 'feed', lines: 4 });
@@ -424,7 +424,7 @@ class SunmiPrinterAdapter {
     align(1);
     if (s.footerMsg || co.footerMsg) { size(24); bold(true); text(`${s.footerMsg || co.footerMsg}\n`); bold(false); }
     if (s.ticketFreeText) { size(22); bold(true); const ftLines = s.ticketFreeText.split('\n'); for (const ln of ftLines) { text(ln + '\n'); } bold(false); }
-    size(18); text(`${co.sw || 'CaissePro'} v${co.ver || '6.1.0'} - Conforme NF525\n`);
+    size(18); text(`${co.sw || 'Tech in Cash'} v${co.ver || '6.1.0'} - Conforme NF525\n`);
 
     cmds.push({ cmd: 'feed', lines: 4 });
     cmds.push({ cmd: 'cut' });
@@ -580,7 +580,7 @@ class SunmiPrinterAdapter {
     if (bon.notes) { size(22); bold(true); text(`Notes: ${bon.notes}\n`); bold(false); size(24); cmds.push({ cmd: 'line', char: '-', len: 32 }); }
 
     align(1); size(20); bold(true);
-    text(`${co.sw || 'CaissePro'} v${co.ver || '6.1.0'}\n`);
+    text(`${co.sw || 'Tech in Cash'} v${co.ver || '6.1.0'}\n`);
     bold(false);
     if (s.retoucheMsg) { bold(true); text(s.retoucheMsg + '\n'); bold(false); }
     else { bold(true); text(`Retrait prevu sous ${s.retoucheDelay || 5} jours ouvres\n`); bold(false); }
@@ -674,7 +674,7 @@ class SunmiPrinterAdapter {
 
     align(1); size(20); bold(true);
     text('Justificatif de sortie de stock\n'); bold(false);
-    text(`${co.sw || 'CaissePro'} v${co.ver || '6.1.0'}\n`);
+    text(`${co.sw || 'Tech in Cash'} v${co.ver || '6.1.0'}\n`);
     if (s.footerMsg || co.footerMsg) { bold(true); text(`${s.footerMsg || co.footerMsg}\n`); bold(false); }
 
     if (tenue.barcode && tenue.barcode.length === 13) {
@@ -757,7 +757,7 @@ class SunmiPrinterAdapter {
     }
     align(1); size(20);
     text('Mouvement hors CA - Conforme NF525\n');
-    text(`${co.sw || 'CaissePro'} v${co.ver || '6.1.0'}\n`);
+    text(`${co.sw || 'Tech in Cash'} v${co.ver || '6.1.0'}\n`);
     cmds.push({ cmd: 'feed', lines: 4 });
     cmds.push({ cmd: 'cut' });
     return cmds;
@@ -1018,7 +1018,7 @@ class SunmiPrinterAdapter {
       bold(false);
       cmds.push({ cmd: 'line', char: '=', len: 32 });
       align(1); size(20); bold(true);
-      text(`${co.sw || 'CaissePro'}\n`); bold(false);
+      text(`${co.sw || 'Tech in Cash'}\n`); bold(false);
       cmds.push({ cmd: 'feed', lines: 4 });
       cmds.push({ cmd: 'cut' });
 
@@ -1052,7 +1052,7 @@ class SunmiPrinterAdapter {
         { cmd: 'bold', enabled: false },
         { cmd: 'line', char: '=', len: 32 },
         { cmd: 'align', value: 0 },
-        { cmd: 'text', text: 'CaissePro - Imprimante Sunmi\n' },
+        { cmd: 'text', text: 'Tech in Cash - Imprimante Sunmi\n' },
         { cmd: 'text', text: `Date: ${new Date().toLocaleString('fr-FR')}\n` },
         { cmd: 'text', text: 'Caracteres: EUR a e c u o\n' },
         { cmd: 'line', char: '=', len: 32 },
@@ -1180,7 +1180,7 @@ class PAXPrinterAdapter {
     return await _textBasedPrint(this, 'giftcard', gc, settings, companyInfo, 32);
   }
   async testPrint() {
-    await this.printText('=== TEST CaissePro ===\n');
+    await this.printText('=== TEST Tech in Cash ===\n');
     await this.printText(`PAX Printer OK\n${new Date().toLocaleString('fr-FR')}\n\n\n`);
     return true;
   }
@@ -1220,7 +1220,7 @@ class iMinPrinterAdapter {
   async printRegisterClose(data, s, co) { return await _textBasedPrint(this, 'registerClose', data, s, co, 48); }
   async printGiftCard(gc, s, co) { return await _textBasedPrint(this, 'giftcard', gc, s, co, 48); }
   async testPrint() {
-    await this.printText('=== TEST CaissePro ===\n');
+    await this.printText('=== TEST Tech in Cash ===\n');
     await this.printText(`iMin Printer OK\n${new Date().toLocaleString('fr-FR')}\n\n\n`);
     return true;
   }
@@ -1441,7 +1441,7 @@ class BrowserPrintAdapter {
   }
 
   async testPrint() {
-    return this._printViaIframe('<div class="center bold big">TEST IMPRESSION</div><div class="sep"></div><div class="center">CaissePro OK</div>');
+    return this._printViaIframe('<div class="center bold big">TEST IMPRESSION</div><div class="sep"></div><div class="center">Tech in Cash OK</div>');
   }
 
   async openDrawer() { console.warn('[Browser] Cash drawer not supported'); }
@@ -1746,7 +1746,7 @@ class DualScreenAdapter {
       this._ref.document.body.innerHTML = htmlContent;
       return true;
     }
-    this._ref = window.open('', 'CaisseProClient', 'width=800,height=600,menubar=no,toolbar=no');
+    this._ref = window.open('', 'TechInCashClient', 'width=800,height=600,menubar=no,toolbar=no');
     if (!this._ref) return false;
     this._ref.document.write(`<!DOCTYPE html><html><head><title>Ecran Client</title></head><body>${htmlContent}</body></html>`);
     this._ref.document.close();
@@ -2033,7 +2033,7 @@ class StripePaymentAdapter {
       const apiBase = import.meta.env.VITE_API_URL || 'https://api.techincash.app';
       const resp = await fetch(`${apiBase}/api/stripe/terminal/create-payment-intent`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ amount: Math.round(amount * 100), currency: options.currency || 'eur', description: options.reference || 'CaissePro' }),
+        body: JSON.stringify({ amount: Math.round(amount * 100), currency: options.currency || 'eur', description: options.reference || 'Tech in Cash' }),
       });
       const { clientSecret } = await resp.json();
       const result = await this._terminal.collectPaymentMethod(clientSecret);

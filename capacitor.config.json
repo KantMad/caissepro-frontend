@@ -1,6 +1,6 @@
 {
   "appId": "com.caissepro.app",
-  "appName": "CaissePro",
+  "appName": "Tech in Cash",
   "webDir": "dist",
   "server": {
     "androidScheme": "https",

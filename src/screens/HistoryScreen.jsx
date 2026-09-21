@@ -186,7 +186,7 @@ function HistoryScreen(){
             </div>
             <Btn variant="outline" onClick={async()=>{const printed=await thermalPrint("retouche",b);if(!printed){
               const w=window.open("","_blank","width=400,height=600");if(w){w.document.write(`<html><head><title>Bon ${b.num}</title><style>body{font-family:'Courier New',monospace;font-size:12px;padding:10px;max-width:300px;margin:0 auto;}h2{text-align:center;font-size:14px;margin:4px 0;}hr{border:none;border-top:1px dashed #333;margin:6px 0;}.row{display:flex;justify-content:space-between;}.center{text-align:center;}.short-code{text-align:center;font-size:32px;font-weight:900;letter-spacing:6px;margin:8px 0;padding:8px;border:3px solid #000;}</style></head><body>`+
-                `<h2>${settings.name||"CaissePro"}</h2><hr><h2>BON DE RETOUCHE</h2><div class="short-code">${sc}</div><div class="center" style="font-size:10px;margin-bottom:6px;">Ref: ${b.num}</div><hr>`+
+                `<h2>${settings.name||"Tech in Cash"}</h2><hr><h2>BON DE RETOUCHE</h2><div class="short-code">${sc}</div><div class="center" style="font-size:10px;margin-bottom:6px;">Ref: ${b.num}</div><hr>`+
                 `<div class="row"><span>Client:</span><strong>${b.client||""}</strong></div>`+
                 `<div class="row"><span>Tel:</span><span>${b.phone||""}</span></div>`+
                 (b.dateRetrait?`<div class="row"><span>Retrait:</span><span>${new Date(b.dateRetrait).toLocaleDateString("fr-FR")}</span></div>`:"")+`<hr>`+
