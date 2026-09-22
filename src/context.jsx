@@ -626,9 +626,13 @@ function AppProvider({children}){
       // Consume avoir (non-bloquant — échec ne doit pas invalider la vente)
       try{if(selectedAvoir&&selectedAvoir.applied>0){await consumeAvoir(selectedAvoir.avoirNumber,selectedAvoir.applied);}}
       catch(avoirErr){console.warn("Avoir consume failed (sale OK):",avoirErr.message);}
-      // Rafraîchir les produits (stock) — non-bloquant
-      try{const prods=await API.products.list();setProducts(norm.products(prods));}
-      catch(prodErr){console.warn("Products refresh failed (sale OK):",prodErr.message);}
+      // Perf : décrément LOCAL du stock (le backend a déjà décrémenté). Évite de
+      // recharger tout le catalogue (plusieurs Mo) à chaque vente → gros gain de vitesse.
+      setProducts(prev=>prev.map(p=>{
+        const lines=cart.filter(c=>c.product.id===p.id&&!c.isCustom);
+        if(!lines.length)return p;
+        return{...p,variants:(p.variants||[]).map(v=>{const cv=lines.find(c=>c.variant?.id===v.id);return cv?{...v,stock:(v.stock||0)-cv.quantity}:v;})};
+      }));
       // FE-12: use Math.round for consistency between add (checkout) and deduct (return)
       if(selCust){setCustomers(prev=>prev.map(c=>c.id===selCust.id?{...c,points:(c.points||0)+Math.round(parseFloat(ticket.totalTTC)),totalSpent:(c.totalSpent||0)+parseFloat(ticket.totalTTC)}:c));}
       setCart([]);setGDisc(0);setSelCust(null);setPromoCode("");setSelectedAvoir(null);setSaleNote("");
@@ -1065,7 +1069,7 @@ function AppProvider({children}){
   const setScanOverride=useCallback((fn)=>{scanOverrideRef.current=fn;},[]);
   const clearScanOverride=useCallback(()=>{scanOverrideRef.current=null;},[]);
   useEffect(()=>{const s=hardwareManager.scanner;if(!s)return;s.start();
-    const off=s.onScan(code=>{
+    const off=s.onScan(async code=>{
       // 0. If a screen has registered a scan override, delegate to it
       if(scanOverrideRef.current){scanOverrideRef.current(code);return;}
       // 1. Try product EAN
@@ -1088,6 +1092,16 @@ function AppProvider({children}){
         return;}
       const tn=tenuesRef.current.find(t=>t.barcode===code);
       if(tn){setScanBarcode(code);notifyRef.current(`Bon tenue ${tn.num} — ${tn.employee}`,"info");return;}
+      // Repli : produit absent de la mémoire (gros catalogue / pas encore chargé)
+      // → recherche backend indexée (rapide). Rend le scan fiable au démarrage.
+      try{
+        const row=await API.products.findByEAN(code);
+        if(row&&row.variant_id){
+          const p={id:row.id,name:row.name,sku:row.sku,price:Number(row.price),costPrice:Number(row.cost_price||0),taxRate:Number(row.tax_rate||0.20),category:row.category,collection:row.collection};
+          const v={id:row.variant_id,color:row.color,colorCode:row.color_code,size:row.size,ean:row.ean,stock:Number(row.stock||0)};
+          addToCartRef.current(p,v);notifyRef.current(p.name+" ajouté ("+code+")");return;
+        }
+      }catch(e){/* 404 / hors-ligne → code réellement inconnu */}
       notifyRef.current("Code-barres inconnu: "+code,"error");
     });
     return()=>{s.stop();off();};},[]); // eslint-disable-line react-hooks/exhaustive-deps

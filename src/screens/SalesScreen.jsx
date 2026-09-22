@@ -58,6 +58,10 @@ function SalesScreen(){
     const matchCat=cat==="Tous"||cat==="Favoris"?true:p.category===cat;
     const matchFav=cat==="Favoris"?favorites.includes(p.id):true;
     return matchSearch&&matchCat&&matchFav;}),[products,search,cat,favorites]);
+  // Perf : ne rend qu'un nombre limité de cartes (gros catalogue). Le scan et la
+  // recherche restent complets ; seul l'affichage de la grille est plafonné.
+  const PROD_CAP=60;
+  const visible=useMemo(()=>filtered.slice(0,PROD_CAP),[filtered]);
 
   // FE-05: use single source of truth from context (cartTotals) — no local recalculation
   // FE-03: when avoirPayment > 0, proportionally reduce displayed HT and TVA so HT+TVA === TTC
@@ -180,8 +184,9 @@ function SalesScreen(){
             <Package size={26} style={{opacity:0.4}}/></div>
           <div style={{fontSize:14,fontWeight:700,marginBottom:4,color:C.text}}>Aucun produit trouvé</div>
           <div style={{fontSize:12}}>Essayez un autre terme de recherche</div></div>}
+        {filtered.length>PROD_CAP&&<div style={{fontSize:11,color:C.textMuted,padding:"2px 2px 8px"}}>{visible.length} sur {filtered.length} produits affichés — affinez la recherche ou scannez le code-barres.</div>}
         <div style={{display:"grid",gridTemplateColumns:"repeat(var(--prod-cols,4),1fr)",gap:"var(--gap,10px)"}}>
-        {filtered.map(p=>{const ts=p.variants.reduce((s,v)=>s+v.stock,0);const ha=p.variants.some(v=>v.stock<=(v.stockAlert||5));
+        {visible.map(p=>{const ts=p.variants.reduce((s,v)=>s+v.stock,0);const ha=p.variants.some(v=>v.stock<=(v.stockAlert||5));
           const cc=CAT_COLORS[p.category]||C.primary;
           return(<div key={p.id} onClick={()=>p.variants.length===1?addToCart(p,p.variants[0]):setVm(p)}
           style={{background:C.surface,borderRadius:16,padding:0,cursor:"pointer",border:`1px solid ${C.border}`,transition:"all 0.2s ease",
