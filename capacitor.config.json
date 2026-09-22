@@ -5,7 +5,9 @@
   "server": {
     "androidScheme": "https",
     "url": "https://caisse.techincash.app",
-    "allowNavigation": ["*"]
+    "allowNavigation": [
+      "*"
+    ]
   },
   "android": {
     "allowMixedContent": true,
@@ -17,6 +19,9 @@
       "launchShowDuration": 1500,
       "backgroundColor": "#0F172A",
       "showSpinner": false
+    },
+    "SystemBars": {
+      "style": "DARK"
     }
   }
 }
