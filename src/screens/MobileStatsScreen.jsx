@@ -2,7 +2,7 @@ import React, { useState, useMemo } from "react";
 import { TrendingUp, ShoppingBag, Package, CreditCard, Users as UsersIcon } from "lucide-react";
 import { useApp } from "../context.jsx";
 import { C } from "../constants.jsx";
-import { formatAmount, getPaymentLabel, getDateField, aggregatePaymentsByMethod } from "../lib/formatters.js";
+import { formatAmount, getPaymentLabel, getDateField, aggregatePaymentsByMethod, salesIndex, ticketPieces } from "../lib/formatters.js";
 
 // ════════════════════════════════════════════════════════════
 //  Résumé — vue stats simplifiée, pensée téléphone (gros chiffres).
@@ -35,7 +35,7 @@ export default function MobileStatsScreen() {
   const ca = useMemo(() => fT.reduce((s, t) => s + ttcOf(t), 0), [fT]);
   const nb = fT.length;
   const panier = nb ? ca / nb : 0;
-  const articles = useMemo(() => fT.reduce((s, t) => s + (t.items || []).reduce((a, i) => a + (parseInt(i.quantity) || 0), 0), 0), [fT]);
+  const articles = useMemo(() => fT.reduce((s, t) => s + ticketPieces(t), 0), [fT]);
 
   const pays = useMemo(() => {
     const agg = aggregatePaymentsByMethod(fT);
@@ -97,8 +97,8 @@ export default function MobileStatsScreen() {
 
         {/* KPIs */}
         <div style={{ display: "flex", gap: 10, marginTop: 12 }}>
-          {kpi(<ShoppingBag size={13} />, "Ventes", nb, `${articles} article${articles > 1 ? "s" : ""}`)}
-          {kpi(<Package size={13} />, "Panier moyen", `${formatAmount(panier)}€`)}
+          {kpi(<ShoppingBag size={13} />, "Ventes", nb, `${articles} pièce${articles > 1 ? "s" : ""}`)}
+          {kpi(<Package size={13} />, "Indice de vente", salesIndex(fT).toFixed(2), "pièces par ticket")}
         </div>
 
         {/* Règlements */}

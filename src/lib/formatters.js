@@ -105,6 +105,17 @@ export const computeCommission = (baseHT, rate, floor = 0, cap = 0) => {
   return { raw: r2(raw), commission: r2(commission), capped: c > 0 && raw > c, floored: raw < f };
 };
 
+// ── Indice de vente (UPT) : pièces vendues par ticket ──
+// Pièces = quantités des articles catalogue ; les lignes « divers » (retouches,
+// articles libres) ne sont pas des pièces et sont exclues.
+export const ticketPieces = (t) =>
+  ((t && t.items) || []).reduce((s, i) => (i.isCustom || i.is_custom) ? s : s + (parseInt(i.quantity) || 0), 0);
+export const salesIndex = (tickets) => {
+  const list = tickets || [];
+  if (!list.length) return 0;
+  return Math.round((list.reduce((s, t) => s + ticketPieces(t), 0) / list.length) * 100) / 100;
+};
+
 // ── Remise ligne en euros, pour l'affichage ticket ──
 // Dérivée du brut (prix unitaire HT × (1+TVA) × qté) moins le net (lineTTC réellement payé).
 // Marche pour remise en % ou en €, sur ticket live ET réimprimé (les données backend

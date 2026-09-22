@@ -2,8 +2,25 @@ import { describe, it, expect } from "vitest";
 import {
   formatAmount, getPaymentLabel, getAvoirRemaining, isAvoirPartiallyUsed,
   filterByToday, getTodayDate, aggregatePaymentsByMethod, normClosure, computeCommission, formatDenominations,
-  lineDiscountEuro,
+  lineDiscountEuro, ticketPieces, salesIndex,
 } from "./formatters.js";
+
+describe("indice de vente (pièces par ticket)", () => {
+  const t1 = { items: [{ quantity: 2 }, { quantity: 1 }] };                       // 3 pièces
+  const t2 = { items: [{ quantity: 1 }, { quantity: 1, isCustom: true }] };       // 1 pièce (retouche exclue)
+  const t3 = { items: [{ quantity: "2", is_custom: false }] };                    // 2 pièces (backend snake_case)
+  it("compte les pièces d'un ticket, hors articles divers", () => {
+    expect(ticketPieces(t1)).toBe(3);
+    expect(ticketPieces(t2)).toBe(1);
+    expect(ticketPieces(t3)).toBe(2);
+    expect(ticketPieces({})).toBe(0);
+  });
+  it("moyenne de pièces par ticket", () => {
+    expect(salesIndex([t1, t2, t3])).toBe(2);   // (3+1+2)/3
+    expect(salesIndex([t1, t2])).toBe(2);       // (3+1)/2
+    expect(salesIndex([])).toBe(0);
+  });
+});
 
 describe("lineDiscountEuro (remise ligne affichée sur le ticket)", () => {
   // unit_price = HT brut ; line_ttc = net payé. TVA 20%.

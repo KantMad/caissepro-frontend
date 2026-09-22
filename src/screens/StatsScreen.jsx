@@ -5,7 +5,7 @@ import * as API from "../api.js";
 import { C } from "../constants.jsx";
 import { Btn, Input, Badge, SC } from "../ui.jsx";
 import { useApp } from "../context.jsx";
-import { getPaymentLabel } from "../lib/formatters.js";
+import { getPaymentLabel, ticketPieces, salesIndex } from "../lib/formatters.js";
 
 function StatsScreen(){
   const{tickets,products,avoirs,bestSellers:allBestSellers,salesBySeller,salesByVariant,caEvolution,salesByCollection,exportCSVReport,perm,commissions,salesGoals,setSellerGoal,settings,mode}=useApp();
@@ -33,8 +33,8 @@ function StatsScreen(){
     const fmt=d=>d.toISOString().split("T")[0];
     return tickets.filter(t=>{const d=(t.date||t.createdAt||t.created_at||"").split("T")[0];return d>=fmt(pFrom)&&d<=fmt(pTo);});},[tickets,dateFrom,dateTo]);
   const stats=useMemo(()=>{const t=fTickets.reduce((s,t)=>s+(t.totalTTC||parseFloat(t.total_ttc)||0),0);const h=fTickets.reduce((s,t)=>s+(t.totalHT||parseFloat(t.total_ht)||0),0);
-    const m=fTickets.reduce((s,t)=>s+(parseFloat(t.margin)||0),0);return{tTTC:t,tHT:h,margin:m,avg:fTickets.length?t/fTickets.length:0,count:fTickets.length};},[fTickets]);
-  const prevStats=useMemo(()=>{const t=prevTickets.reduce((s,t)=>s+(t.totalTTC||parseFloat(t.total_ttc)||0),0);return{tTTC:t,count:prevTickets.length};},[prevTickets]);
+    const m=fTickets.reduce((s,t)=>s+(parseFloat(t.margin)||0),0);return{tTTC:t,tHT:h,margin:m,avg:fTickets.length?t/fTickets.length:0,count:fTickets.length,pieces:fTickets.reduce((s,t)=>s+ticketPieces(t),0),upt:salesIndex(fTickets)};},[fTickets]);
+  const prevStats=useMemo(()=>{const t=prevTickets.reduce((s,t)=>s+(t.totalTTC||parseFloat(t.total_ttc)||0),0);return{tTTC:t,count:prevTickets.length,upt:salesIndex(prevTickets)};},[prevTickets]);
   const pctChange=(cur,prev)=>{if(!prev)return null;const pct=((cur-prev)/prev*100);return pct;};
   const PctBadge=({cur,prev})=>{const p=pctChange(cur,prev);if(p===null||!dateFrom)return null;
     return<Badge color={p>=0?"#059669":C.danger}>{p>=0?"+":""}{p.toFixed(1)}%</Badge>;};
@@ -57,7 +57,7 @@ function StatsScreen(){
     const n=t.sellerName||t.seller_name||t.userName||t.user_name||"?";
     if(!m[n])m[n]={name:n,count:0,revenue:0,margin:0,totalItems:0,customers:new Set()};
     m[n].count++;m[n].revenue+=(t.totalTTC||parseFloat(t.total_ttc)||0);m[n].margin+=(parseFloat(t.margin)||0);
-    m[n].totalItems+=(t.items||[]).reduce((s,i)=>s+(parseInt(i.quantity)||0),0);
+    m[n].totalItems+=ticketPieces(t);
     if(t.customerId||t.customer_id)m[n].customers.add(t.customerId||t.customer_id);});
     return Object.values(m).sort((a,b)=>b.revenue-a.revenue).map(s=>{
       // Commission = celle calculée par le context (sur le HT, période + plancher/plafond)
@@ -116,10 +116,11 @@ function StatsScreen(){
       <Input type="date" value={dateTo} onChange={e=>setDateTo(e.target.value)} style={{width:120,height:28,fontSize:10,padding:"2px 6px"}}/>
       <select value={catFilter} onChange={e=>setCatFilter(e.target.value)} style={{padding:"4px 8px",borderRadius:6,border:`1px solid ${C.border}`,fontSize:10,fontFamily:"inherit"}}>
         <option value="">Toutes catégories</option>{allCats.map(c=>(<option key={c} value={c}>{c}</option>))}</select></div>
-    <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:10,marginBottom:16}}>
+    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:10,marginBottom:16}}>
       <div><SC icon={Euro} label="CA TTC" value={`${stats.tTTC.toFixed(0)}€`} color={C.primary} sub={<PctBadge cur={stats.tTTC} prev={prevStats.tTTC}/>}/></div>
       <div><SC icon={Receipt} label="Tickets" value={stats.count} color={C.info} sub={<PctBadge cur={stats.count} prev={prevStats.count}/>}/></div>
       <SC icon={TrendingUp} label="Panier moy." value={`${stats.avg.toFixed(1)}€`} color={C.accent}/>
+      <div><SC icon={Receipt} label="Indice de vente" value={stats.upt.toFixed(2)} color={C.info} sub={<span style={{fontSize:10,color:C.textMuted}}>pièces/ticket · {stats.pieces} pièces <PctBadge cur={stats.upt} prev={prevStats.upt}/></span>}/></div>
       {mode!=="cashier"&&<SC icon={BarChart2} label="Marge" value={`${stats.margin.toFixed(0)}€`} color="#059669"/>}
       {mode!=="cashier"&&<SC icon={BarChart2} label="Marge %" value={stats.tHT>0?`${(stats.margin/stats.tHT*100).toFixed(1)}%`:"—"} color="#059669"/>}</div>
 
@@ -163,14 +164,14 @@ function StatsScreen(){
     {tab==="seller"&&<div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`}}>
       <table className="rtable" style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
         <thead><tr style={{borderBottom:`2px solid ${C.border}`}}>
-          {["Vendeur","Nb ventes","Nb pièces","Panier moyen","Art./vente",mode!=="cashier"?"Marge":"","CA TTC",mode!=="cashier"?"Commission":"","Objectif","Progression"].filter(Boolean).map(h=>(
+          {["Vendeur","Nb ventes","Nb pièces","Panier moyen","Indice de vente",mode!=="cashier"?"Marge":"","CA TTC",mode!=="cashier"?"Commission":"","Objectif","Progression"].filter(Boolean).map(h=>(
             <th key={h} style={{padding:8,textAlign:"left",fontSize:10,fontWeight:700,color:C.textMuted}}>{h}</th>))}</tr></thead>
         <tbody>{fCommissions.map(s=>(<tr key={s.name} style={{borderBottom:`1px solid ${C.border}`}}>
           <td data-label="Vendeur" style={{padding:8,fontWeight:600}}>{s.name}</td>
           <td data-label="Nb ventes" style={{padding:8}}>{s.count}</td>
           <td data-label="Nb pièces" style={{padding:8,fontWeight:600}}>{s.totalItems||0}</td>
           <td data-label="Panier moyen" style={{padding:8,fontWeight:700,color:C.info}}>{(s.avgBasket||0).toFixed(2)}€</td>
-          <td data-label="Art./vente" style={{padding:8}}>{(s.avgItems||0).toFixed(1)}</td>
+          <td data-label="Indice de vente" style={{padding:8}}>{(s.avgItems||0).toFixed(2)}</td>
           {mode!=="cashier"&&<td data-label="Marge" style={{padding:8,color:"#059669"}}>{s.margin.toFixed(2)}€</td>}
           <td data-label="CA TTC" style={{padding:8,fontWeight:700,color:C.primary}}>{s.revenue.toFixed(2)}€</td>
           {mode!=="cashier"&&<td data-label="Commission" style={{padding:8,color:C.accent,fontWeight:600}} title={`HT ${(s.commissionBaseHT||0).toFixed(2)}€ × ${((s.commissionRate||0)*100).toFixed(1)}% — ${s.commissionPeriod==="annual"?"annuel":"mensuel"}`}>{s.commission.toFixed(2)}€{s.commissionCapped&&<span style={{fontSize:8,color:C.warn||"#B45309",marginLeft:3}}>plaf.</span>}{s.commissionFloored&&<span style={{fontSize:8,color:C.info||"#0284C7",marginLeft:3}}>planch.</span>}</td>}
@@ -233,7 +234,7 @@ function StatsScreen(){
         :<div>
           <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12,marginBottom:16}}>
             {[{l:"CA TTC",cur:stats.tTTC,prev:prevStats.tTTC,fmt:v=>`${v.toFixed(0)}€`},{l:"Nb tickets",cur:stats.count,prev:prevStats.count,fmt:v=>v},
-              {l:"Panier moyen",cur:stats.avg,prev:prevAvg,fmt:v=>`${v.toFixed(1)}€`}].map(x=>{const p=pctChange(x.cur,x.prev);return(
+              {l:"Panier moyen",cur:stats.avg,prev:prevAvg,fmt:v=>`${v.toFixed(1)}€`},{l:"Indice de vente",cur:stats.upt,prev:prevStats.upt,fmt:v=>v.toFixed(2)}].map(x=>{const p=pctChange(x.cur,x.prev);return(
               <div key={x.l} style={{padding:14,borderRadius:12,background:C.surfaceAlt,textAlign:"center"}}>
                 <div style={{fontSize:10,color:C.textMuted,fontWeight:600,marginBottom:4}}>{x.l}</div>
                 <div style={{fontSize:20,fontWeight:800,color:C.primary,marginBottom:2}}>{x.fmt(x.cur)}</div>
