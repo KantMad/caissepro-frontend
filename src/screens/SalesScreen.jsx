@@ -3,7 +3,7 @@ import { ShoppingCart, Search, Trash2, Percent, CreditCard, Banknote, Gift, Plus
 import printer from "../printer.js";
 import * as API from "../api.js";
 import { CO, C, CAT_COLORS } from "../constants.jsx";
-import { catIcon, EAN13Svg, ean13SvgHtml } from "../utils.jsx";
+import { catIcon, EAN13Svg, ean13SvgHtml, norm } from "../utils.jsx";
 import { Modal, Btn, Input, Badge, Numpad } from "../ui.jsx";
 import { useApp } from "../context.jsx";
 import { getPaymentLabel, getAvoirRemaining } from "../lib/formatters.js";
@@ -53,15 +53,32 @@ function SalesScreen(){
   // Barcode scanning is handled centrally by hardwareManager.scanner in context.jsx
   // (removed duplicate keydown listener that caused double-scan issue)
 
-  const filtered=useMemo(()=>products.filter(p=>{const q=search.toLowerCase();
-    const matchSearch=!q||p.name.toLowerCase().includes(q)||p.sku.toLowerCase().includes(q)||p.variants.some(v=>v.ean.includes(q)||v.color.toLowerCase().includes(q));
-    const matchCat=cat==="Tous"||cat==="Favoris"?true:p.category===cat;
-    const matchFav=cat==="Favoris"?favorites.includes(p.id):true;
-    return matchSearch&&matchCat&&matchFav;}),[products,search,cat,favorites]);
-  // Perf : ne rend qu'un nombre limité de cartes (gros catalogue). Le scan et la
-  // recherche restent complets ; seul l'affichage de la grille est plafonné.
-  const PROD_CAP=60;
-  const visible=useMemo(()=>filtered.slice(0,PROD_CAP),[filtered]);
+  // Grille pilotée par le SERVEUR (recherche + pagination) : on n'itère plus les
+  // 33k variantes en mémoire. Le catalogue complet du contexte ne sert plus qu'au
+  // repli hors-ligne et aux Favoris (petite liste).
+  const SRV_LIMIT=80;
+  const[srv,setSrv]=useState([]);
+  useEffect(()=>{
+    if(cat==="Favoris")return; // Favoris géré via le contexte
+    let cancel=false;
+    const t=setTimeout(async()=>{
+      try{
+        const params={limit:SRV_LIMIT};
+        if(search.trim())params.search=search.trim();
+        if(cat!=="Tous")params.category=cat;
+        const rows=await API.products.list(params);
+        if(!cancel)setSrv(norm.products(rows||[]));
+      }catch(e){if(!cancel)setSrv([]);}
+    },220);
+    return()=>{cancel=true;clearTimeout(t);};
+  },[search,cat]);
+  const gridSource=useMemo(()=>{
+    if(cat==="Favoris")return products.filter(p=>favorites.includes(p.id));
+    if(navigator.onLine!==false)return srv; // en ligne : résultats serveur
+    // hors-ligne : repli sur le cache local du contexte
+    const q=search.toLowerCase();
+    return products.filter(p=>!q||p.name.toLowerCase().includes(q)||p.sku.toLowerCase().includes(q)).slice(0,SRV_LIMIT);
+  },[srv,products,favorites,cat,search]);
 
   // FE-05: use single source of truth from context (cartTotals) — no local recalculation
   // FE-03: when avoirPayment > 0, proportionally reduce displayed HT and TVA so HT+TVA === TTC
@@ -179,14 +196,14 @@ function SalesScreen(){
           boxShadow:cat==="Favoris"?`0 2px 8px ${C.accent}30`:"none"}}>
           <Star size={10} style={{verticalAlign:"middle"}}/> Favoris</button></div>
       <div style={{flex:1,overflowY:"auto",paddingRight:4,paddingBottom:vp.isMobile&&cart.length>0?84:4}}>
-        {filtered.length===0&&<div style={{textAlign:"center",padding:"50px 20px",color:C.textLight}}>
+        {gridSource.length===0&&<div style={{textAlign:"center",padding:"50px 20px",color:C.textLight}}>
           <div style={{width:56,height:56,borderRadius:16,background:C.surfaceAlt,display:"inline-flex",alignItems:"center",justifyContent:"center",marginBottom:12}}>
             <Package size={26} style={{opacity:0.4}}/></div>
           <div style={{fontSize:14,fontWeight:700,marginBottom:4,color:C.text}}>Aucun produit trouvé</div>
           <div style={{fontSize:12}}>Essayez un autre terme de recherche</div></div>}
-        {filtered.length>PROD_CAP&&<div style={{fontSize:11,color:C.textMuted,padding:"2px 2px 8px"}}>{visible.length} sur {filtered.length} produits affichés — affinez la recherche ou scannez le code-barres.</div>}
+        {gridSource.length>=SRV_LIMIT&&<div style={{fontSize:11,color:C.textMuted,padding:"2px 2px 8px"}}>Premiers {SRV_LIMIT} résultats — affinez la recherche ou scannez le code-barres.</div>}
         <div style={{display:"grid",gridTemplateColumns:"repeat(var(--prod-cols,4),1fr)",gap:"var(--gap,10px)"}}>
-        {visible.map(p=>{const ts=p.variants.reduce((s,v)=>s+v.stock,0);const ha=p.variants.some(v=>v.stock<=(v.stockAlert||5));
+        {gridSource.map(p=>{const ts=(p.variants||[]).reduce((s,v)=>s+v.stock,0);const ha=(p.variants||[]).some(v=>v.stock<=(v.stockAlert||5));
           const cc=CAT_COLORS[p.category]||C.primary;
           return(<div key={p.id} onClick={()=>p.variants.length===1?addToCart(p,p.variants[0]):setVm(p)}
           style={{background:C.surface,borderRadius:16,padding:0,cursor:"pointer",border:`1px solid ${C.border}`,transition:"all 0.2s ease",
