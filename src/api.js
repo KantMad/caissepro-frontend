@@ -145,6 +145,9 @@ export const stock = {
   receiveDefective: (data) => api('/api/stock/receive-defective', { method: 'POST', body: JSON.stringify(data) }),
   adjustDefective: (data) => api('/api/stock/adjust-defective', { method: 'POST', body: JSON.stringify(data) }),
   transfer: (data) => api('/api/stock/transfer', { method: 'POST', body: JSON.stringify(data) }),
+  // Bons de transfert (sortie vers destination libre) : { destination, note, items:[{productId,variantId,quantity}] }
+  transferOut: (data) => api('/api/stock/transfer-out', { method: 'POST', body: JSON.stringify(data) }),
+  transfers: (params) => api('/api/stock/transfers?' + new URLSearchParams(params || {})),
 };
 
 // ══ Fiscal ══

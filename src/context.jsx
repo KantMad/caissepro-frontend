@@ -1147,7 +1147,7 @@ function AppProvider({children}){
     }
     // Try HAL native printer first (Sunmi/PAX/iMin) — only for methods the HAL supports
     if(halPrinter&&halPrinter.connected){
-      const halMethod=type==="receipt"?"printReceipt":type==="avoir"?"printAvoir":type==="giftcard"?"printGiftCard":type==="retouche"?"printRetouche":type==="tenue"?"printTenue":type==="cash-movement"?"printCashMovement":type==="register-open"?"printRegisterOpen":type==="register-close"?"printRegisterClose":type==="closure"?"printClosure":type==="test"?"testPrint":type==="drawer"?"openDrawer":null;
+      const halMethod=type==="receipt"?"printReceipt":type==="avoir"?"printAvoir":type==="giftcard"?"printGiftCard":type==="retouche"?"printRetouche":type==="tenue"?"printTenue":type==="cash-movement"?"printCashMovement":type==="transfer"?"printTransfer":type==="register-open"?"printRegisterOpen":type==="register-close"?"printRegisterClose":type==="closure"?"printClosure":type==="test"?"testPrint":type==="drawer"?"openDrawer":null;
       if(halMethod&&typeof halPrinter[halMethod]==="function"){
         try{
           await halPrinter[halMethod](data,settings,CO);
@@ -1164,6 +1164,7 @@ function AppProvider({children}){
         else if(type==="retouche")await printer.printRetouche(data,settings,CO);
         else if(type==="tenue")await printer.printTenue(data,settings,CO);
         else if(type==="cash-movement")await printer.printCashMovement(data,settings,CO);
+        else if(type==="transfer")await printer.printTransfer(data,settings,CO);
         else if(type==="register-open")await printer.printRegisterOpen(data,settings,CO);
         else if(type==="register-close")await printer.printRegisterClose(data,settings,CO);
         else if(type==="closure")await printer.printClosure(data,settings,CO);
@@ -1715,7 +1716,7 @@ function AppProvider({children}){
     updateProduct,deleteProduct,addVariantToProduct,deleteVariant,reorderVariants,
     updateCustomer,deleteCustomer,adjustStock,
     defectiveStock,loadDefectiveStock,receiveDefectiveStock,adjustDefectiveStock,
-    printerConnected,printerType,thermalPrint,connectPrinter,disconnectPrinter,isSunmi,isAndroid,
+    printerConnected,printerType,thermalPrint,printReceiptOnly,connectPrinter,disconnectPrinter,isSunmi,isAndroid,
     hwId,hwProfile,switchHardware,hardwareProfiles:hardwareManager.profiles,
     paymentId,paymentConfig,switchPayment,updatePaymentConfig,chargePayment,refundPayment,
     paymentProfiles:hardwareManager.paymentProfiles,

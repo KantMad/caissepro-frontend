@@ -694,6 +694,77 @@ class SunmiPrinterAdapter {
     } catch (e) { throw e; }
   }
 
+  // ── Bon de transfert (sortie de stock) ──
+  _buildTransferBatch(t, settings, companyInfo) {
+    const s = settings || {};
+    const co = companyInfo || {};
+    const cmds = [];
+    const text = (txt) => cmds.push({ cmd: 'text', text: txt });
+    const bold = (on) => cmds.push({ cmd: 'bold', enabled: on });
+    const size = (v) => cmds.push({ cmd: 'size', value: v });
+    const align = (v) => cmds.push({ cmd: 'align', value: v });
+
+    align(1); size(32); bold(true);
+    text((s.name || co.name || 'Ma Boutique') + '\n');
+    size(24); bold(false);
+    if (s.siret) text(`SIRET: ${s.siret}\n`);
+    cmds.push({ cmd: 'line', char: '=', len: 32 });
+    align(1); size(32); bold(true);
+    text('BON DE TRANSFERT\n');
+    size(24); bold(false);
+    cmds.push({ cmd: 'line', char: '=', len: 32 });
+
+    align(0); bold(true);
+    let dateStr = '';
+    try { dateStr = new Date(t.date || Date.now()).toLocaleString('fr-FR'); } catch (e) {}
+    text(`N: ${t.number || '-'}\n`);
+    text(`Date: ${dateStr}\n`);
+    text(`Operateur: ${t.userName || '?'}\n`);
+    text(`Origine: ${t.storeName || s.name || '-'}\n`);
+    text(`Destination: ${t.destination || '-'}\n`);
+    bold(false);
+    text(`Ref/Motif: ${t.note || '-'}\n`);
+    cmds.push({ cmd: 'line', char: '-', len: 32 });
+
+    for (const it of (t.items || [])) {
+      bold(true); text(`${it.productName || '?'}\n`); bold(false);
+      let d = `  ${it.color || ''}/${it.size || ''}`;
+      if (it.sku) d += ` | Ref: ${it.sku}`;
+      text(d + '\n');
+      if (it.ean) { size(20); text(`  EAN: ${it.ean}\n`); size(24); }
+      bold(true); text(`  Quantite: x${it.quantity}\n`); bold(false);
+    }
+    cmds.push({ cmd: 'line', char: '-', len: 32 });
+    bold(true); size(32);
+    text(`TOTAL PIECES  ${t.totalQty || 0}\n`);
+    size(24); bold(false);
+    cmds.push({ cmd: 'line', char: '=', len: 32 });
+    text('\nSignature origine:\n\n________________________\n');
+    text('\nSignature destination:\n\n________________________\n');
+    align(1); size(20);
+    text('\nMouvement de stock - hors CA\n');
+    text(`${co.sw || 'Tech in Cash'} v${co.ver || '6.1.0'}\n`);
+    cmds.push({ cmd: 'feed', lines: 4 });
+    cmds.push({ cmd: 'cut' });
+    return cmds;
+  }
+
+  async printTransfer(t, settings, companyInfo) {
+    if (this._isCapacitor && this._bridge) {
+      const commands = this._buildTransferBatch(t, settings, companyInfo);
+      if (this._bridge.printRaw) { await this._bridge.printRaw({ commands }); }
+      else if (this._bridge.printBatch) { await this._bridge.printBatch({ commands }); }
+      return true;
+    }
+    await this._cap('printerInit', {});
+    await this.printText(`BON DE TRANSFERT ${t?.number || ''}\nDestination: ${t?.destination || '-'}\nRef/Motif: ${t?.note || '-'}\n`);
+    for (const it of (t?.items || [])) await this.printText(`${it.productName} ${it.color}/${it.size} x${it.quantity}\n`);
+    await this.printText(`Total pieces: ${t?.totalQty || 0}\n`);
+    await this._cap('lineWrap', { lines: 4 });
+    try { await this._cap('cutPaper', {}); } catch (e) {}
+    return true;
+  }
+
   // ── Register Open ──
   _buildRegisterOpenBatch(data, settings, companyInfo) {
     const s = settings || {};

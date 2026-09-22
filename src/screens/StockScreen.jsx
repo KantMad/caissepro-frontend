@@ -9,7 +9,7 @@ import { useApp } from "../context.jsx";
 import { sortSizes } from "./_shared.js";
 
 function StockScreen(){
-  const{products,setProducts,stockAlerts,stockMoves,receiveStock,receiveBatchStock,stockAging,reorderSuggestions,adjustStock,notify,findByEAN,users,addStockMove,addAudit,settings,perm,defectiveStock,loadDefectiveStock,receiveDefectiveStock,adjustDefectiveStock,setScanOverride,clearScanOverride,mode}=useApp();
+  const{products,setProducts,stockAlerts,stockMoves,receiveStock,receiveBatchStock,stockAging,reorderSuggestions,adjustStock,notify,findByEAN,users,addStockMove,addAudit,settings,perm,defectiveStock,loadDefectiveStock,receiveDefectiveStock,adjustDefectiveStock,setScanOverride,clearScanOverride,mode,thermalPrint,printReceiptOnly,currentStore,currentUser}=useApp();
   // Valorisation du stock au PRIX D'ACHAT (cost_price de l'import) — DASHBOARD uniquement
   const stockValuation=useMemo(()=>{let value=0,units=0,valued=0,unvalued=0;
     (products||[]).forEach(p=>{const cost=parseFloat(p.costPrice)||0;(p.variants||[]).forEach(v=>{const st=parseInt(v.stock)||0;if(st<=0)return;units+=st;if(cost>0){value+=st*cost;valued+=st;}else unvalued+=st;});});
@@ -60,6 +60,43 @@ function StockScreen(){
     notify(`${p.name} ${v.color}/${v.size} ajouté`,"info");
   },[findByEAN,notify]);
   const[trProd,setTrProd]=useState("");const[trVar,setTrVar]=useState("");const[trQty,setTrQty]=useState("1");const[trDest,setTrDest]=useState("");const[trRef,setTrRef]=useState("");
+  // ── Bon de transfert multi-articles (sortie de stock vers une destination) ──
+  const[trLines,setTrLines]=useState([]);const[trHist,setTrHist]=useState([]);const[trPreview,setTrPreview]=useState(null);const[trBusy,setTrBusy]=useState(false);
+  const trAddLine=useCallback((product,variant,qty)=>{
+    const q=Math.max(1,parseInt(qty)||1);
+    setTrLines(prev=>{const i=prev.findIndex(l=>l.variantId===variant.id);
+      if(i>=0){const n=[...prev];n[i]={...n[i],quantity:n[i].quantity+q};return n;}
+      return[...prev,{productId:product.id,variantId:variant.id,productName:product.name,sku:product.sku,color:variant.color,size:variant.size,ean:variant.ean,stock:Number(variant.stock)||0,quantity:q}];});
+  },[]);
+  const trScan=useCallback(async(code)=>{
+    let r=resolveEAN(code);
+    if(!r){try{const row=await API.products.findByEAN(code);
+      if(row&&row.variant_id)r={product:{id:row.id,name:row.name,sku:row.sku},variant:{id:row.variant_id,color:row.color,size:row.size,ean:row.ean,stock:Number(row.stock||0)}};}catch(e){/* inconnu */}}
+    if(!r){notify("EAN inconnu: "+code,"warn");return;}
+    trAddLine(r.product,r.variant,1);notify(`${r.product.name} ${r.variant.color}/${r.variant.size} ajouté au bon`,"info");
+  },[resolveEAN,trAddLine,notify]);
+  const loadTrHist=useCallback(async()=>{try{setTrHist((await API.stock.transfers({limit:30}))||[]);}catch(e){setTrHist([]);}},[]);
+  useEffect(()=>{if(tab==="transfers")loadTrHist();},[tab,loadTrHist]);
+  const trTotal=trLines.reduce((s,l)=>s+(parseInt(l.quantity)||0),0);
+  const trSubmit=async()=>{
+    if(!trLines.length){notify("Ajoutez au moins un article","error");return;}
+    if(!trDest.trim()){notify("Indiquez la destination","error");return;}
+    if(!trRef.trim()){notify("Indiquez la référence / le motif","error");return;}
+    const over=trLines.find(l=>l.quantity>l.stock);
+    if(over){notify(`Stock insuffisant : ${over.productName} ${over.color}/${over.size} (${over.stock} dispo)`,"error");return;}
+    setTrBusy(true);
+    try{
+      const t=await API.stock.transferOut({destination:trDest.trim(),note:trRef.trim(),
+        items:trLines.map(l=>({productId:l.productId,variantId:l.variantId,quantity:parseInt(l.quantity)}))});
+      // Décrément local (pas de rechargement complet du catalogue)
+      setProducts(prev=>prev.map(p=>{const ls=trLines.filter(l=>l.productId===p.id);if(!ls.length)return p;
+        return{...p,variants:(p.variants||[]).map(v=>{const l=ls.find(x=>x.variantId===v.id);return l?{...v,stock:Math.max(0,(v.stock||0)-l.quantity)}:v;})};}));
+      setTrPreview(t);setTrLines([]);setTrDest("");setTrRef("");loadTrHist();
+      notify(`Bon ${t.number} — ${t.totalQty} pièce(s) → ${t.destination}`,"success");
+      try{await thermalPrint("transfer",t);}catch(e){console.warn("Impression bon de transfert:",e.message);}
+    }catch(e){notify("Transfert refusé : "+e.message,"error");}
+    finally{setTrBusy(false);}
+  };
   const p=products.find(x=>x.id===sel);
   const sizes=[...new Set(p?.variants.map(v=>v.size)||[])].sort(sortSizes);const colors=[...new Set(p?.variants.map(v=>v.color)||[])].sort();
   return(<div style={{height:"100%",overflowY:"auto",padding:"var(--pad,16px)",background:C.bg}}>
@@ -517,12 +554,12 @@ function StockScreen(){
       setScanOverride={setScanOverride} clearScanOverride={clearScanOverride} findByEAN={findByEAN}/>}
 
     {tab==="transfers"&&<div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`}}>
-      <h3 style={{fontSize:14,fontWeight:700,marginBottom:10}}>Transfert de stock</h3>
+      <h3 style={{fontSize:14,fontWeight:700,marginBottom:10}}>Bon de transfert</h3>
       <div style={{padding:10,background:C.primaryLight,borderRadius:8,marginBottom:12,fontSize:11,color:C.primaryDark,border:`1px solid ${C.primary}22`}}>
-        Transférez du stock vers un autre magasin ou une entité externe. Un justificatif est généré automatiquement.</div>
-      <Input placeholder="Scanner EAN ou saisir code-barres..." style={{marginBottom:10,height:36,fontSize:12,borderColor:C.info,borderWidth:2}}
-        onKeyDown={e=>{if(e.key==="Enter"){const r=resolveEAN(e.target.value.trim());if(r){setTrProd(r.productId);setTrVar(r.variantId);e.target.value="";notify(`${r.product.name} ${r.variant.color}/${r.variant.size} (stock: ${r.variant.stock})`,"info");}else{notify("EAN inconnu: "+e.target.value,"warn");e.target.value="";}}}}/>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
+        Sortie de stock vers un autre magasin ou une entité externe (site web, dépôt…). Scannez ou ajoutez les articles, puis validez : le stock est décrémenté et un ticket récapitulatif est imprimé.</div>
+      <Input placeholder="Scanner EAN ou saisir code-barres puis Entrée..." style={{marginBottom:10,height:36,fontSize:12,borderColor:C.info,borderWidth:2}}
+        onKeyDown={e=>{if(e.key==="Enter"){const c=e.target.value.trim();e.target.value="";if(c)trScan(c);}}}/>
+      <div style={{display:"grid",gridTemplateColumns:"2fr 1.4fr 70px auto",gap:8,alignItems:"end",marginBottom:12}}>
         <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>PRODUIT</label>
           <select value={trProd} onChange={e=>{setTrProd(e.target.value);setTrVar("");}} style={{width:"100%",padding:8,borderRadius:8,border:`1.5px solid ${C.border}`,fontSize:11,fontFamily:"inherit"}}>
             <option value="">Sélectionner…</option>
@@ -531,36 +568,33 @@ function StockScreen(){
           <select value={trVar} onChange={e=>setTrVar(e.target.value)} style={{width:"100%",padding:8,borderRadius:8,border:`1.5px solid ${C.border}`,fontSize:11,fontFamily:"inherit"}}>
             <option value="">Sélectionner…</option>
             {(products.find(p=>p.id===trProd)?.variants||[]).map(v=>(<option key={v.id} value={v.id}>{v.color} / {v.size} (stock: {v.stock})</option>))}</select></div>
-        <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>DESTINATION</label>
-          <Input value={trDest} onChange={e=>setTrDest(e.target.value)} placeholder="Boutique Paris, Site web, Dépôt…" style={{height:36}}/></div>
-        <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>QUANTITÉ</label>
+        <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>QTÉ</label>
           <Input type="number" value={trQty} onChange={e=>setTrQty(e.target.value)} min="1" style={{height:36}}/></div>
-        <div style={{gridColumn:"span 2"}}><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>RÉFÉRENCE / MOTIF</label>
-          <Input value={trRef} onChange={e=>setTrRef(e.target.value)} placeholder="N° bon de transfert, motif…" style={{height:36}}/></div></div>
-      <Btn onClick={async()=>{if(!trProd||!trVar||!trDest){notify("Remplissez produit, variante et destination","error");return;}
-        const q=parseInt(trQty)||1;const prod=products.find(p=>p.id===trProd);const vari=prod?.variants.find(v=>v.id===trVar);
-        if(!prod||!vari){notify("Produit introuvable","error");return;}
-        if(vari.stock<q){notify(`Stock insuffisant (${vari.stock} dispo)`,"error");return;}
-        const transferNum=`TR-${Date.now().toString(36).toUpperCase()}`;
-        try{await API.stock.adjust({productId:trProd,variantId:trVar,quantity:-q,reason:`Transfert ${transferNum} → ${trDest}`});
-          const prods=await API.products.list();setProducts(norm.products(prods));}
-        catch(e){setProducts(prev=>prev.map(p=>p.id===trProd?{...p,variants:p.variants.map(v=>v.id===trVar?{...v,stock:Math.max(0,v.stock-q)}:v)}:p));}
-        addStockMove("TRANSFERT",prod,vari,-q,`${transferNum} → ${trDest}`);
-        addAudit("TRANSFERT",`${prod.name} ${vari.color}/${vari.size} x${q} → ${trDest} (${trRef||"sans réf"})`,transferNum);
-        const slip=`JUSTIFICATIF DE TRANSFERT\n${"═".repeat(40)}\nN°: ${transferNum}\nDate: ${new Date().toLocaleString("fr-FR")}\nOrigine: ${settings.name||"Magasin"}\nDestination: ${trDest}\n${"─".repeat(40)}\nProduit: ${prod.name}\nVariante: ${vari.color} / ${vari.size}\nSKU: ${prod.sku}\nQuantité: ${q}\nRéférence: ${trRef||"—"}\n${"─".repeat(40)}\nOpérateur: ${currentUser?.name||"—"}\n\nSignature origine: ________________\nSignature destination: ________________`;
-        const blob=new Blob([slip],{type:"text/plain"});const url=URL.createObjectURL(blob);
-        const a=document.createElement("a");a.href=url;a.download=`transfert-${transferNum}.txt`;a.click();URL.revokeObjectURL(url);
-        notify(`Transfert ${transferNum} — ${prod.name} x${q} → ${trDest} — Justificatif téléchargé`,"success");
-        setTrProd("");setTrVar("");setTrQty("1");setTrDest("");setTrRef("");}}
-        style={{width:"100%",height:44,background:C.info}}>Transférer et générer justificatif</Btn>
-      <div style={{marginTop:16,fontSize:12,fontWeight:700,marginBottom:8}}>Historique transferts</div>
-      {stockMoves.filter(m=>m.type==="TRANSFERT").length===0&&<div style={{color:C.textLight,fontSize:11}}>Aucun transfert</div>}
-      {stockMoves.filter(m=>m.type==="TRANSFERT").slice(0,20).map((m,i)=>(<div key={i} style={{display:"flex",alignItems:"center",gap:8,padding:6,borderBottom:`1px solid ${C.border}`,fontSize:11}}>
-        <span style={{color:C.textMuted,fontSize:9}}>{new Date(m.date).toLocaleDateString("fr-FR")}</span>
-        <span style={{fontWeight:600}}>{m.productName}</span>
-        <span style={{color:C.textMuted}}>{m.variantColor}/{m.variantSize}</span>
-        <span style={{fontWeight:700,color:C.info}}>x{Math.abs(m.qty)}</span>
-        <span style={{color:C.primary,fontWeight:600}}>{m.ref}</span></div>))}</div>}
+        <Btn variant="outline" style={{height:36}} onClick={()=>{const prod=products.find(p=>p.id===trProd);const vari=prod?.variants.find(v=>v.id===trVar);
+          if(!prod||!vari){notify("Choisissez un produit et une variante","error");return;}trAddLine(prod,vari,trQty);setTrVar("");setTrQty("1");}}>+ Ajouter</Btn></div>
+      {trLines.length===0?<div style={{padding:14,textAlign:"center",color:C.textLight,fontSize:11,border:`1px dashed ${C.border}`,borderRadius:8,marginBottom:12}}>Aucun article dans le bon</div>:
+      <div style={{border:`1px solid ${C.border}`,borderRadius:8,marginBottom:12,overflow:"hidden"}}>
+        {trLines.map((l,i)=>(<div key={l.variantId} style={{display:"flex",alignItems:"center",gap:8,padding:"8px 10px",borderTop:i?`1px solid ${C.border}`:"none",fontSize:12}}>
+          <div style={{flex:1,minWidth:0}}><div style={{fontWeight:600,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{l.productName}</div>
+            <div style={{fontSize:10,color:C.textMuted}}>{l.color} / {l.size} · {l.sku} · stock {l.stock}</div></div>
+          <input type="number" min="1" value={l.quantity} onChange={e=>{const q=Math.max(1,parseInt(e.target.value)||1);setTrLines(prev=>prev.map(x=>x.variantId===l.variantId?{...x,quantity:q}:x));}}
+            style={{width:56,padding:5,borderRadius:6,border:`1.5px solid ${l.quantity>l.stock?C.danger:C.border}`,fontSize:12,textAlign:"center",fontFamily:"inherit"}}/>
+          <button onClick={()=>setTrLines(prev=>prev.filter(x=>x.variantId!==l.variantId))} style={{border:"none",background:"none",cursor:"pointer",color:C.danger,padding:4}}><Trash2 size={14}/></button></div>))}
+        <div style={{display:"flex",justifyContent:"space-between",padding:"8px 10px",background:C.surfaceAlt,fontWeight:700,fontSize:12}}><span>Total</span><span>{trTotal} pièce{trTotal>1?"s":""}</span></div></div>}
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
+        <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>DESTINATION *</label>
+          <Input value={trDest} onChange={e=>setTrDest(e.target.value)} placeholder="Boutique Paris, Site web, Dépôt…" style={{height:36}}/></div>
+        <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>RÉFÉRENCE / MOTIF *</label>
+          <Input value={trRef} onChange={e=>setTrRef(e.target.value)} placeholder="N° bon, motif du transfert…" style={{height:36}}/></div></div>
+      <Btn onClick={trSubmit} disabled={trBusy} style={{width:"100%",height:44,background:C.info}}><Printer size={15}/> {trBusy?"Transfert en cours…":`Valider le transfert et imprimer (${trTotal} pièce${trTotal>1?"s":""})`}</Btn>
+      <div style={{marginTop:18,fontSize:12,fontWeight:700,marginBottom:8}}>Historique des bons de transfert</div>
+      {trHist.length===0&&<div style={{color:C.textLight,fontSize:11}}>Aucun bon de transfert</div>}
+      {trHist.map(t=>(<div key={t.number} style={{display:"flex",alignItems:"center",gap:8,padding:"7px 4px",borderBottom:`1px solid ${C.border}`,fontSize:11}}>
+        <span style={{color:C.primary,fontWeight:700,whiteSpace:"nowrap"}}>{t.number}</span>
+        <span style={{color:C.textMuted,fontSize:10,whiteSpace:"nowrap"}}>{new Date(t.date).toLocaleDateString("fr-FR")}</span>
+        <span style={{flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>→ <b>{t.destination}</b> · {t.note}</span>
+        <span style={{fontWeight:700,color:C.info,whiteSpace:"nowrap"}}>{t.totalQty} pce</span>
+        <Btn variant="outline" style={{height:26,fontSize:10,padding:"0 8px"}} onClick={()=>setTrPreview(t)}><Printer size={11}/> Voir</Btn></div>))}</div>}
 
   </div>);
 }
@@ -739,6 +773,34 @@ function TenuesTab({products,setProducts,users,tenUser,setTenUser,tenItems,setTe
     </div>
 
     {/* ══ Justificatif imprimable ══ */}
+    <Modal open={!!trPreview} onClose={()=>setTrPreview(null)} title={`Bon de transfert ${trPreview?.number||""}`}>
+      {trPreview&&<>
+        <div data-print-receipt style={{fontFamily:"'Courier New',monospace",fontSize:12,fontWeight:500,background:"#FAFAF8",borderRadius:10,padding:16,border:`1px solid ${C.border}`,maxWidth:340,margin:"0 auto"}}>
+          <div style={{textAlign:"center",fontWeight:800,fontSize:14}}>{settings?.name||CO.name||"Ma Boutique"}</div>
+          <div style={{borderTop:"1px dashed #999",margin:"6px 0"}}/>
+          <div style={{textAlign:"center",fontWeight:800,fontSize:14}}>BON DE TRANSFERT</div>
+          <div style={{borderTop:"1px dashed #999",margin:"6px 0"}}/>
+          {[["N°",trPreview.number],["Date",new Date(trPreview.date).toLocaleString("fr-FR")],["Opérateur",trPreview.userName||"—"],["Origine",trPreview.storeName||currentStore?.name||settings?.name||"—"]].map(([k,v])=>(
+            <div key={k} style={{display:"flex",justifyContent:"space-between",gap:8}}><span>{k}</span><span style={{textAlign:"right"}}>{v}</span></div>))}
+          <div style={{display:"flex",justifyContent:"space-between",gap:8,fontWeight:800}}><span>Destination</span><span style={{textAlign:"right"}}>{trPreview.destination}</span></div>
+          <div>Réf/Motif : {trPreview.note||"—"}</div>
+          <div style={{borderTop:"1px dashed #999",margin:"6px 0"}}/>
+          {(trPreview.items||[]).map((it,i)=>(<div key={i} style={{marginBottom:4}}>
+            <div style={{fontWeight:700}}>{it.productName}</div>
+            <div style={{display:"flex",justifyContent:"space-between"}}><span>{it.color}/{it.size}{it.sku?` | Réf: ${it.sku}`:""}</span><span style={{fontWeight:800}}>x{it.quantity}</span></div>
+            {it.ean&&<div style={{fontSize:10,color:"#666"}}>EAN: {it.ean}</div>}</div>))}
+          <div style={{borderTop:"1px dashed #999",margin:"6px 0"}}/>
+          <div style={{display:"flex",justifyContent:"space-between",fontWeight:800,fontSize:14}}><span>TOTAL PIÈCES</span><span>{trPreview.totalQty}</span></div>
+          <div style={{borderTop:"1px dashed #999",margin:"6px 0"}}/>
+          <div style={{marginTop:10}}>Signature origine :</div><div style={{borderBottom:"1px solid #000",margin:"20px 0 6px"}}/>
+          <div style={{marginTop:10}}>Signature destination :</div><div style={{borderBottom:"1px solid #000",margin:"20px 0 6px"}}/>
+          <div style={{textAlign:"center",fontSize:10,color:"#666",marginTop:6}}>Mouvement de stock — hors CA</div>
+        </div>
+        <div style={{display:"flex",gap:8,marginTop:12}}>
+          <Btn onClick={async()=>{try{await thermalPrint("transfer",trPreview);}catch(e){notify("Impression : "+e.message,"error");}}} style={{flex:1,gap:6}}><Printer size={14}/> Imprimante caisse</Btn>
+          <Btn variant="outline" onClick={()=>printReceiptOnly()} style={{flex:1,gap:6}}><Printer size={14}/> Navigateur</Btn>
+        </div></>}
+    </Modal>
     <Modal open={!!ticketModal} onClose={()=>setTicketModal(null)} title={`Bon de tenue ${ticketModal?.num||""}`}>
       {ticketModal&&<>
         <div data-print-receipt style={{fontFamily:"'Courier New',monospace",fontSize:12,fontWeight:500,background:"#FAFAF8",borderRadius:10,padding:16,border:`1px solid ${C.border}`}}>

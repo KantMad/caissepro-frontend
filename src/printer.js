@@ -1315,6 +1315,47 @@ class ThermalPrinter {
     return true;
   }
 
+  // ── Bon de transfert (sortie de stock) ──
+  async printTransfer(t, settings, companyInfo) {
+    if (!this.connected) throw new Error("Imprimante non connectee");
+    const s = settings || {};
+    const co = companyInfo || {};
+    await this.send(CMD.INIT);
+    await this.send(CHARSET_FRENCH);
+    await this.send(CODEPAGE_PC858);
+    await this.alignCenter(); await this.doubleSize(); await this.bold(true);
+    await this.text(s.name || co.name || 'Ma Boutique'); await this.newline();
+    await this.normalSize(); await this.bold(false);
+    if (s.siret) { await this.text(`SIRET: ${s.siret}`); await this.newline(); }
+    await this.separator('=');
+    await this.alignCenter(); await this.doubleSize(); await this.bold(true);
+    await this.text('BON DE TRANSFERT'); await this.newline();
+    await this.normalSize(); await this.bold(false);
+    await this.separator('=');
+    await this.alignLeft();
+    await this.line(`N: ${t.number || '-'}`, new Date(t.date || '').toLocaleString('fr-FR'));
+    await this.line(`Operateur: ${t.userName || '?'}`);
+    await this.line(`Origine: ${t.storeName || s.name || '-'}`);
+    await this.bold(true); await this.text(`Destination: ${t.destination || '-'}`); await this.newline(); await this.bold(false);
+    await this.text(`Ref/Motif: ${t.note || '-'}`); await this.newline();
+    await this.separator('-');
+    for (const it of (t.items || [])) {
+      await this.bold(true); await this.text(it.productName || '?'); await this.newline(); await this.bold(false);
+      await this.line(`  ${it.color || ''}/${it.size || ''}${it.sku ? ' | Ref: ' + it.sku : ''}`, `x${it.quantity}`);
+      if (it.ean) { await this.fontSmall(); await this.text(`  EAN: ${it.ean}`); await this.newline(); await this.fontNormal(); }
+    }
+    await this.separator('-');
+    await this.bold(true); await this.doubleSize();
+    await this.line('TOTAL PIECES', String(t.totalQty || 0));
+    await this.normalSize(); await this.bold(false);
+    await this.separator('=');
+    await this.newline(); await this.text('Signature origine:'); await this.newline(); await this.newline(); await this.text('________________________'); await this.newline();
+    await this.newline(); await this.text('Signature destination:'); await this.newline(); await this.newline(); await this.text('________________________'); await this.newline();
+    await this.alignCenter(); await this.fontSmall(); await this.text('Mouvement de stock - hors CA'); await this.newline(); await this.fontNormal();
+    await this.feed(4); await this.cut();
+    return true;
+  }
+
   async printRetouche(bon, settings, companyInfo) {
     if (!this.connected) throw new Error("Imprimante non connectee");
 

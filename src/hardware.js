@@ -780,6 +780,77 @@ class SunmiPrinterAdapter {
     } catch (e) { throw e; }
   }
 
+  // ── Bon de transfert (sortie de stock) ──
+  _buildTransferBatch(t, settings, companyInfo) {
+    const s = settings || {};
+    const co = companyInfo || {};
+    const cmds = [];
+    const text = (txt) => cmds.push({ cmd: 'text', text: txt });
+    const bold = (on) => cmds.push({ cmd: 'bold', enabled: on });
+    const size = (v) => cmds.push({ cmd: 'size', value: v });
+    const align = (v) => cmds.push({ cmd: 'align', value: v });
+
+    align(1); size(32); bold(true);
+    text((s.name || co.name || 'Ma Boutique') + '\n');
+    size(24); bold(false);
+    if (s.siret) text(`SIRET: ${s.siret}\n`);
+    cmds.push({ cmd: 'line', char: '=', len: 32 });
+    align(1); size(32); bold(true);
+    text('BON DE TRANSFERT\n');
+    size(24); bold(false);
+    cmds.push({ cmd: 'line', char: '=', len: 32 });
+
+    align(0); bold(true);
+    let dateStr = '';
+    try { dateStr = new Date(t.date || Date.now()).toLocaleString('fr-FR'); } catch (e) {}
+    text(`N: ${t.number || '-'}\n`);
+    text(`Date: ${dateStr}\n`);
+    text(`Operateur: ${t.userName || '?'}\n`);
+    text(`Origine: ${t.storeName || s.name || '-'}\n`);
+    text(`Destination: ${t.destination || '-'}\n`);
+    bold(false);
+    text(`Ref/Motif: ${t.note || '-'}\n`);
+    cmds.push({ cmd: 'line', char: '-', len: 32 });
+
+    for (const it of (t.items || [])) {
+      bold(true); text(`${it.productName || '?'}\n`); bold(false);
+      let d = `  ${it.color || ''}/${it.size || ''}`;
+      if (it.sku) d += ` | Ref: ${it.sku}`;
+      text(d + '\n');
+      if (it.ean) { size(20); text(`  EAN: ${it.ean}\n`); size(24); }
+      bold(true); text(`  Quantite: x${it.quantity}\n`); bold(false);
+    }
+    cmds.push({ cmd: 'line', char: '-', len: 32 });
+    bold(true); size(32);
+    text(`TOTAL PIECES  ${t.totalQty || 0}\n`);
+    size(24); bold(false);
+    cmds.push({ cmd: 'line', char: '=', len: 32 });
+    text('\nSignature origine:\n\n________________________\n');
+    text('\nSignature destination:\n\n________________________\n');
+    align(1); size(20);
+    text('\nMouvement de stock - hors CA\n');
+    text(`${co.sw || 'Tech in Cash'} v${co.ver || '6.1.0'}\n`);
+    cmds.push({ cmd: 'feed', lines: 4 });
+    cmds.push({ cmd: 'cut' });
+    return cmds;
+  }
+
+  async printTransfer(t, settings, companyInfo) {
+    if (this._isCapacitor && this._bridge) {
+      const commands = this._buildTransferBatch(t, settings, companyInfo);
+      if (this._bridge.printRaw) { await this._bridge.printRaw({ commands }); }
+      else if (this._bridge.printBatch) { await this._bridge.printBatch({ commands }); }
+      return true;
+    }
+    await this._cap('printerInit', {});
+    await this.printText(`BON DE TRANSFERT ${t?.number || ''}\nDestination: ${t?.destination || '-'}\nRef/Motif: ${t?.note || '-'}\n`);
+    for (const it of (t?.items || [])) await this.printText(`${it.productName} ${it.color}/${it.size} x${it.quantity}\n`);
+    await this.printText(`Total pieces: ${t?.totalQty || 0}\n`);
+    await this._cap('lineWrap', { lines: 4 });
+    try { await this._cap('cutPaper', {}); } catch (e) {}
+    return true;
+  }
+
   // ── Register Open ──
   _buildRegisterOpenBatch(data, settings, companyInfo) {
     const s = settings || {};
@@ -1170,6 +1241,9 @@ class PAXPrinterAdapter {
   async printCashMovement(mv, settings, companyInfo) {
     return await _textBasedPrint(this, 'cashmove', mv, settings, companyInfo, 32);
   }
+  async printTransfer(t, settings, companyInfo) {
+    return await _textBasedPrint(this, 'transfer', t, settings, companyInfo, 32);
+  }
   async printRegisterOpen(data, settings, companyInfo) {
     return await _textBasedPrint(this, 'registerOpen', data, settings, companyInfo, 32);
   }
@@ -1216,6 +1290,7 @@ class iMinPrinterAdapter {
   async printRetouche(bon, s, co) { return await _textBasedPrint(this, 'retouche', bon, s, co, 48); }
   async printTenue(t, s, co) { return await _textBasedPrint(this, 'tenue', t, s, co, 48); }
   async printCashMovement(mv, s, co) { return await _textBasedPrint(this, 'cashmove', mv, s, co, 48); }
+  async printTransfer(t, s, co) { return await _textBasedPrint(this, 'transfer', t, s, co, 48); }
   async printRegisterOpen(data, s, co) { return await _textBasedPrint(this, 'registerOpen', data, s, co, 48); }
   async printRegisterClose(data, s, co) { return await _textBasedPrint(this, 'registerClose', data, s, co, 48); }
   async printGiftCard(gc, s, co) { return await _textBasedPrint(this, 'giftcard', gc, s, co, 48); }
@@ -1336,6 +1411,29 @@ class BrowserPrintAdapter {
     }
     if (mv.barcode) h += `<div class="center small">Code: ${mv.barcode}</div>`;
     h += `<div class="center small">Mouvement hors CA - Conforme NF525</div>`;
+    return this._printViaIframe(h);
+  }
+
+  async printTransfer(t, settings, companyInfo) {
+    const s = settings || {}; const co = companyInfo || {};
+    const e = (v) => String(v == null ? '' : v).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+    let h = `<div class="center bold big">${e(s.name || co.name || 'Ma Boutique')}</div><div class="sep"></div>`;
+    h += `<div class="center bold big">BON DE TRANSFERT</div><div class="sep"></div>`;
+    h += `<div class="row"><span>N</span><span>${e(t.number || '-')}</span></div>`;
+    h += `<div class="row"><span>Date</span><span>${new Date(t.date || '').toLocaleString('fr-FR')}</span></div>`;
+    h += `<div class="row"><span>Operateur</span><span>${e(t.userName || '?')}</span></div>`;
+    h += `<div class="row"><span>Origine</span><span>${e(t.storeName || s.name || '-')}</span></div>`;
+    h += `<div class="row bold"><span>Destination</span><span>${e(t.destination || '-')}</span></div>`;
+    h += `<div>Ref/Motif: ${e(t.note || '-')}</div><div class="sep"></div>`;
+    for (const it of (t.items || [])) {
+      h += `<div class="bold">${e(it.productName)}</div>`;
+      h += `<div class="row"><span>${e(it.color)}/${e(it.size)}${it.sku ? ' | Ref: ' + e(it.sku) : ''}</span><span class="bold">x${it.quantity}</span></div>`;
+      if (it.ean) h += `<div class="small">EAN: ${e(it.ean)}</div>`;
+    }
+    h += `<div class="sep"></div><div class="row bold big"><span>TOTAL PIECES</span><span>${t.totalQty || 0}</span></div><div class="sep"></div>`;
+    h += `<div style="margin-top:10px">Signature origine :</div><div style="margin:18px 0 6px;border-bottom:1px solid #000"></div>`;
+    h += `<div style="margin-top:10px">Signature destination :</div><div style="margin:18px 0 6px;border-bottom:1px solid #000"></div>`;
+    h += `<div class="center small">Mouvement de stock - hors CA</div>`;
     return this._printViaIframe(h);
   }
 
@@ -1579,6 +1677,27 @@ async function _textBasedPrint(adapter, type, data, settings, companyInfo, width
     }
     if (data.barcode) lines.push(`Code: ${data.barcode}`);
     lines.push('Mouvement hors CA - NF525');
+  } else if (type === 'transfer') {
+    header();
+    lines.push('BON DE TRANSFERT');
+    lines.push(`N: ${data.number || '-'}`);
+    lines.push(`Date: ${new Date(data.date || '').toLocaleString('fr-FR')}`);
+    lines.push(`Operateur: ${data.userName || '?'}`);
+    lines.push(`Origine: ${data.storeName || s.name || '-'}`);
+    lines.push(`Destination: ${data.destination || '-'}`);
+    lines.push(`Ref/Motif: ${data.note || '-'}`);
+    lines.push(dsep);
+    for (const it of (data.items || [])) {
+      lines.push(`${it.productName || '?'}`);
+      lines.push(pad(`  ${it.color || ''}/${it.size || ''}${it.sku ? ' ' + it.sku : ''}`, `x${it.quantity}`));
+      if (it.ean) lines.push(`  EAN: ${it.ean}`);
+    }
+    lines.push(dsep);
+    lines.push(pad('TOTAL PIECES', String(data.totalQty || 0)));
+    lines.push(sep);
+    lines.push('Signature origine:'); lines.push(''); lines.push('______________________');
+    lines.push('Signature destination:'); lines.push(''); lines.push('______________________');
+    lines.push('Mouvement de stock - hors CA');
   } else if (type === 'registerOpen') {
     header();
     lines.push('OUVERTURE DE CAISSE');
