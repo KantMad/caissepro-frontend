@@ -53,7 +53,7 @@ jobs:
         run: |
           if [ -n "$KS" ]; then
             mkdir -p ~/.android
-            echo "$KS" | base64 -d > ~/.android/debug.keystore
+            printf '%s' "$KS" | tr -d '\r\n\t ' | base64 -d > ~/.android/debug.keystore
             echo "Keystore debug restaurée (signature stable)."
           else
             echo "Pas de secret ANDROID_DEBUG_KEYSTORE_B64 — Gradle génère une clé (signature non stable entre builds)."
