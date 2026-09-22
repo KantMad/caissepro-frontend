@@ -39,6 +39,9 @@ jobs:
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          # Le paquet historique 'tools' n'existe plus dans les sdkmanager récents
+          packages: 'platform-tools'
 
       - name: Make gradlew executable
         run: chmod +x android/gradlew
