@@ -3,12 +3,12 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>CaissePro - Ecran Client</title>
+<title>Tech in Cash - Ecran Client</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:'DM Sans',system-ui,-apple-system,sans-serif;background:#F8FAF7;overflow:hidden;height:100vh}
 #root{height:100vh;display:flex;flex-direction:column}
-.header{background:linear-gradient(135deg,#047857,#059669);color:#fff;padding:20px 30px;text-align:center}
+.header{background:#0F172A;color:#fff;padding:16px 30px;text-align:center}.header .hlogo{height:44px;display:block;margin:0 auto 6px}
 .header h1{font-size:24px;font-weight:800}.header .sub{font-size:13px;opacity:0.8;margin-top:4px}
 .customer-bar{background:#065F46;color:#fff;padding:10px 30px;display:flex;align-items:center;gap:12px}
 .customer-bar .avatar{width:32px;height:32px;border-radius:50%;background:rgba(255,255,255,0.2);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px}
@@ -23,7 +23,7 @@ body{font-family:'DM Sans',system-ui,-apple-system,sans-serif;background:#F8FAF7
 .total-bar{background:#fff;border-top:3px solid #047857;padding:24px 30px;display:flex;justify-content:space-between;align-items:center}
 .total-bar .label{font-size:20px;font-weight:700;color:#333}.total-bar .amount{font-size:36px;font-weight:900;color:#047857}
 .screensaver{height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;background:linear-gradient(135deg,#F8FAF7,#E8F0E3)}
-.screensaver .logo{width:120px;height:120px;border-radius:30px;background:linear-gradient(135deg,#047857,#059669);display:flex;align-items:center;justify-content:center;color:#fff;font-size:48px;font-weight:900;margin-bottom:20px;box-shadow:0 12px 40px rgba(43,110,68,0.3)}
+.screensaver .logo{width:180px;height:180px;object-fit:contain;margin-bottom:16px}
 .screensaver h2{font-size:28px;font-weight:800;color:#333;margin-bottom:8px}
 .screensaver p{font-size:16px;color:#666}
 .screensaver .time{font-size:48px;font-weight:800;color:#047857;margin-top:20px}
@@ -42,7 +42,7 @@ body{font-family:'DM Sans',system-ui,-apple-system,sans-serif;background:#F8FAF7
 <body>
 <div id="root">
   <div class="screensaver">
-    <div class="logo">CP</div>
+    <img class="logo" src="logo-tic.png" alt="Tech in Cash">
     <h2></h2>
     <p>Bienvenue</p>
     <div class="time"></div>
@@ -52,14 +52,14 @@ body{font-family:'DM Sans',system-ui,-apple-system,sans-serif;background:#F8FAF7
 
 <!-- Setup panel: shown on first use or triple-tap -->
 <div id="setup" class="setup">
-  <label>URL de l'API CaissePro</label>
+  <label>URL de l'API Tech in Cash</label>
   <input id="apiUrl" type="url" placeholder="https://votre-api.com" />
   <label>ID du magasin</label>
   <input id="storeId" type="text" placeholder="Ex: abc123..." />
   <label>Token ecran</label>
   <input id="displayToken" type="text" placeholder="Token genere dans Parametres > Ecran 2" />
   <button id="btnSave">Enregistrer et connecter</button>
-  <div class="hint">Triple-tap sur l'ecran pour rouvrir ce panneau de configuration. Le token est disponible dans les parametres de CaissePro.</div>
+  <div class="hint">Triple-tap sur l'ecran pour rouvrir ce panneau de configuration. Le token est disponible dans les parametres de Tech in Cash.</div>
 </div>
 
 <script>
@@ -81,11 +81,11 @@ function setStatus(cls,text){
 function updateCart(data){
   var root=document.getElementById('root');
   if(!data||!data.items||data.items.length===0){
-    root.innerHTML='<div class="screensaver"><div class="logo">CP</div><h2></h2><p>'+(data&&data.customer?esc(data.customer.name)+', bienvenue !':'Bienvenue')+'</p><div class="time"></div></div>';
+    root.innerHTML='<div class="screensaver"><img class="logo" src="logo-tic.png" alt="Tech in Cash"><h2></h2><p>'+(data&&data.customer?esc(data.customer.name)+', bienvenue !':'Bienvenue')+'</p><div class="time"></div></div>';
     var h2=root.querySelector('h2');if(h2)h2.textContent=data&&data.storeName||'';
     updateTime();return;
   }
-  var html='<div class="header"><h1>'+esc(data.storeName)+'</h1><div class="sub">Votre panier</div></div>';
+  var html='<div class="header"><img class="hlogo" src="logo-tic.png" alt=""><h1>'+esc(data.storeName)+'</h1><div class="sub">Votre panier</div></div>';
   if(data.customer){
     html+='<div class="customer-bar"><div class="avatar">'+esc(data.customer.name.charAt(0))+'</div><div class="info"><div class="name">'+esc(data.customer.name)+'</div>';
     if(data.customer.loyalty)html+='<div class="loyalty">'+esc(data.customer.loyalty)+'</div>';
