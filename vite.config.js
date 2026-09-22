@@ -20,7 +20,7 @@ export default defineConfig({
         display: 'standalone',
         orientation: 'any',
         background_color: '#F8F7F4',
-        theme_color: '#2D5A3D',
+        theme_color: '#0F172A',
         categories: ['business', 'finance'],
         icons: [
           { src: '/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
