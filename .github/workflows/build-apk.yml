@@ -61,7 +61,7 @@ jobs:
         run: ./gradlew assembleDebug
 
       - name: Rename APK
-        run: mv android/app/build/outputs/apk/debug/app-debug.apk android/app/build/outputs/apk/debug/CaissePro.apk
+        run: mv android/app/build/outputs/apk/debug/app-debug.apk android/app/build/outputs/apk/debug/TechInCash.apk
 
       # Publie l'APK sur le VPS → https://caisse.techincash.app/download/caissepro.apk
       - name: Publier sur le VPS
@@ -76,7 +76,7 @@ jobs:
           echo "$SSH_KEY" > ~/.ssh/id_deploy
           chmod 600 ~/.ssh/id_deploy
           scp -i ~/.ssh/id_deploy -o StrictHostKeyChecking=no \
-            android/app/build/outputs/apk/debug/CaissePro.apk \
+            android/app/build/outputs/apk/debug/TechInCash.apk \
             ubuntu@51.77.149.138:/var/www/caissepro-apk/caissepro.apk
           echo "Publié sur https://caisse.techincash.app/download/caissepro.apk"
 
@@ -89,12 +89,12 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: latest
-          name: CaissePro - Derniere version
-          files: android/app/build/outputs/apk/debug/CaissePro.apk
+          name: Tech in Cash - Derniere version
+          files: android/app/build/outputs/apk/debug/TechInCash.apk
           body: |
-            Derniere version de CaissePro APK.
+            Derniere version de Tech in Cash APK.
 
-            **Telecharger** : cliquez sur `CaissePro.apk` ci-dessous.
+            **Telecharger** : cliquez sur `TechInCash.apk` ci-dessous.
 
             Build: ${{ github.sha }}
             Date: ${{ github.event.head_commit.timestamp }}
