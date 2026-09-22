@@ -46,22 +46,29 @@ jobs:
       - name: Make gradlew executable
         run: chmod +x android/gradlew
 
-      # Réutilise la même clé que l'APK déjà distribué → les MAJ s'installent par-dessus (pas de désinstallation).
-      - name: Restaurer la keystore debug (signature stable)
+      # Clé de signature STABLE (secret) : indispensable pour que les MAJ s'installent
+      # par-dessus. Sans elle, on échoue plutôt que de publier une APK à signature aléatoire.
+      - name: Restaurer la clé de signature (stable)
         env:
           KS: ${{ secrets.ANDROID_DEBUG_KEYSTORE_B64 }}
         run: |
-          if [ -n "$KS" ]; then
-            mkdir -p ~/.android
-            printf '%s' "$KS" | tr -d '\r\n\t ' | base64 -d > ~/.android/debug.keystore
-            echo "Keystore debug restaurée (signature stable)."
-          else
-            echo "Pas de secret ANDROID_DEBUG_KEYSTORE_B64 — Gradle génère une clé (signature non stable entre builds)."
-          fi
+          if [ -z "$KS" ]; then echo "::error::Secret ANDROID_DEBUG_KEYSTORE_B64 absent"; exit 1; fi
+          printf '%s' "$KS" | tr -d '\r\n\t ' | base64 -d > "$RUNNER_TEMP/tic.keystore"
+          echo "TIC_KEYSTORE=$RUNNER_TEMP/tic.keystore" >> "$GITHUB_ENV"
+          echo "Clé de signature restaurée."
 
       - name: Build APK (debug)
         working-directory: android
         run: ./gradlew assembleDebug
+
+      - name: Vérifier la signature (garde-fou)
+        env:
+          EXPECTED: aad3a25b61b9df83a1ca00b61626b179a6b0fcccce600bbae2dbc2db93e237c7
+        run: |
+          APKSIGNER=$(ls -d $ANDROID_HOME/build-tools/*/ | sort -V | tail -1)apksigner
+          GOT=$($APKSIGNER verify --print-certs android/app/build/outputs/apk/debug/app-debug.apk | grep -m1 'SHA-256 digest' | awk '{print $NF}')
+          echo "Empreinte APK : $GOT"
+          if [ "$GOT" != "$EXPECTED" ]; then echo "::error::Signature inattendue ($GOT) — publication annulée"; exit 1; fi
 
       - name: Rename APK
         run: mv android/app/build/outputs/apk/debug/app-debug.apk android/app/build/outputs/apk/debug/TechInCash.apk

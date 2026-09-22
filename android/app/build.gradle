@@ -19,7 +19,24 @@ android {
     buildFeatures {
         // aidl true — no longer needed, using Sunmi SDK instead
     }
+    signingConfigs {
+        debug {
+            // Signature STABLE : si TIC_KEYSTORE est fourni (CI), on signe avec ce fichier précis.
+            // Sans clé stable, chaque build a une signature différente et Android refuse
+            // d'installer les mises à jour par-dessus (désinstallation forcée).
+            def ks = System.getenv("TIC_KEYSTORE")
+            if (ks) {
+                storeFile file(ks)
+                storePassword "android"
+                keyAlias "androiddebugkey"
+                keyPassword "android"
+            }
+        }
+    }
     buildTypes {
+        debug {
+            signingConfig signingConfigs.debug
+        }
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
