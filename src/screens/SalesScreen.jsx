@@ -4,6 +4,7 @@ import printer from "../printer.js";
 import * as API from "../api.js";
 import { CO, C, CAT_COLORS } from "../constants.jsx";
 import { catIcon, EAN13Svg, ean13SvgHtml, norm } from "../utils.jsx";
+import { ProductIcon, colorHex } from "../ProductIcon.jsx";
 import { Modal, Btn, Input, Badge, Numpad } from "../ui.jsx";
 import { useApp } from "../context.jsx";
 import { getPaymentLabel, getAvoirRemaining } from "../lib/formatters.js";
@@ -214,7 +215,7 @@ function SalesScreen(){
             {(()=>{const firstV=p.variants[0];const photos=firstV?getVariantPhotos(p,firstV):[];
               return photos.length>0
                 ?<img src={photos[0].url} alt="" style={{width:"100%",height:"100%",objectFit:"cover",position:"absolute",inset:0}} loading="lazy"/>
-                :<span style={{fontSize:32,opacity:0.7,filter:"grayscale(0.2)"}}>{catIcon(p.category,settings.categoryIcons)}</span>;
+                :<ProductIcon name={p.name} category={p.category} color={firstV?.color} fallbackColor={cc} size={76} style={{filter:"drop-shadow(0 3px 6px rgba(15,23,42,0.12))"}}/>;
             })()}
             {ts<=0&&<div style={{position:"absolute",top:6,left:6,zIndex:2}}>
               <Badge color={C.danger}>{ts<0?`Stock ${ts}`:"Rupture"}</Badge></div>}
@@ -311,7 +312,7 @@ function SalesScreen(){
                   ?<div style={{width:36,height:36,borderRadius:8,overflow:"hidden",flexShrink:0,border:`1px solid ${C.border}`}}>
                     <img src={photos[0].url} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}} loading="lazy"/></div>
                   :<div style={{width:30,height:30,borderRadius:8,background:`${cc}10`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-                    <span style={{fontSize:14}}>{i.isCustom?"📝":catIcon(i.product.category,settings.categoryIcons)}</span></div>;
+                    {i.isCustom?<span style={{fontSize:14}}>📝</span>:<ProductIcon name={i.product.name} category={i.product.category} color={i.variant?.color} fallbackColor={cc} size={24}/>}</div>;
               })()}
               <div style={{flex:1,minWidth:0}}>
                 <div style={{fontSize:11,fontWeight:700,lineHeight:1.2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{i.product.name}{i.isCustom?" (divers)":""}</div>
@@ -381,7 +382,7 @@ function SalesScreen(){
     <Modal open={!!vm} onClose={()=>setVm(null)} title="Choisir une variante" sub={vm?`${vm.name} — ${vm.price.toFixed(2)}€`:""}>
       {vm&&<>
         <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:14,padding:"10px 12px",background:C.surfaceAlt,borderRadius:12}}>
-          <span style={{fontSize:28}}>{catIcon(vm.category,settings.categoryIcons)}</span>
+          <ProductIcon name={vm.name} category={vm.category} color={vm.variants?.[0]?.color} fallbackColor={CAT_COLORS[vm.category]||C.primary} size={40}/>
           <div><div style={{fontSize:13,fontWeight:700}}>{vm.name}</div>
             <div style={{fontSize:11,color:C.textMuted}}>{vm.category} — {vm.collection||"Sans collection"} — TVA {(vm.taxRate*100).toFixed(0)}%</div>
             {vm.sku&&<div style={{fontSize:10,fontFamily:"monospace",color:C.textMuted,marginTop:1}}>Réf: {vm.sku}</div>}</div>
@@ -393,7 +394,7 @@ function SalesScreen(){
                 cursor:"pointer",textAlign:"left",transition:"all 0.15s"}}
               onMouseEnter={e=>e.currentTarget.style.borderColor=cc} onMouseLeave={e=>e.currentTarget.style.borderColor=v.stock<=0?C.danger+"30":C.border}>
               <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:6}}>
-                <div style={{width:14,height:14,borderRadius:7,background:cc+"30",border:`2px solid ${cc}`}}/>
+                <div style={{width:14,height:14,borderRadius:7,background:colorHex(v.color,cc+"30"),border:`1.5px solid ${C.border}`,flexShrink:0}}/>
                 <span style={{fontSize:12,fontWeight:700}}>{v.color}</span>
                 {v.colorCode&&<span style={{fontSize:9,fontFamily:"monospace",color:C.accent,background:C.accentLight,padding:"1px 5px",borderRadius:4}}>{v.colorCode}</span>}</div>
               <div style={{fontSize:16,fontWeight:800,color:v.stock>0?C.text:C.danger,marginBottom:4}}>{v.size}</div>
