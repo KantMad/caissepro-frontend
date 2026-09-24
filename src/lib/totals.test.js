@@ -21,7 +21,7 @@ describe("round2", () => {
 
 describe("computeTotals — invariant NF525 : HT + TVA = TTC (au centime)", () => {
   it("panier vide → zéros", () => {
-    expect(computeTotals([])).toEqual({ sHT: 0, gd: 0, tHT: 0, tTVA: 0, tTTC: 0 });
+    expect(computeTotals([])).toEqual({ sHT: 0, gd: 0, gdTTC: 0, tHT: 0, tTVA: 0, tTTC: 0 });
   });
 
   it("2×209 TTC = 418.00 (le bug d'origine, plus de 417.99)", () => {
@@ -105,5 +105,61 @@ describe("computeTotals — invariant NF525 : HT + TVA = TTC (au centime)", () =
       const t = computeTotals([L(209), L(9.99), L(49.5)], { gDisc: d, gDiscType: "percentage" });
       expect(round2(t.tHT + t.tTVA)).toBe(t.tTTC);
     }
+  });
+});
+
+// ── Remises cumulables (% puis €) — 24/09/2026 ──
+describe("remises cumulables", () => {
+  const item = (over = {}) => ({ price: 100, quantity: 1, taxRate: 0.20, ...over });
+
+  it("ligne : le % s'applique d'abord, puis les euros sur le reste", () => {
+    // 100 TTC -20% = 80, puis -5 € = 75
+    const t = computeTotals([item({ discountPercent: 20, discountAmount: 5 })]);
+    expect(t.tTTC).toBe(75);
+    expect(round2(t.tHT + t.tTVA)).toBe(75);
+  });
+
+  it("ligne : la remise en euros porte sur la LIGNE, pas sur chaque article", () => {
+    // 3 x 20 = 60 TTC, -5 € => 55 (et non 45)
+    const t = computeTotals([item({ price: 20, quantity: 3, discountAmount: 5 })]);
+    expect(t.tTTC).toBe(55);
+  });
+
+  it("ligne : une remise superieure au montant ne rend jamais la ligne negative", () => {
+    expect(computeTotals([item({ price: 10, discountAmount: 50 })]).tTTC).toBe(0);
+  });
+
+  it("panier : % puis euros, la remise en euros est bien du TTC", () => {
+    // 200 TTC -10% = 180, puis -20 € = 160 payes par le client
+    const t = computeTotals([item({ price: 200 })], { gDiscPct: 10, gDiscAmt: 20 });
+    expect(t.tTTC).toBe(160);
+    expect(t.gdTTC).toBe(40);
+    expect(round2(t.tHT + t.tTVA)).toBe(160);
+    // la valeur enregistree en base reste du HT
+    expect(t.gd).toBe(round2(t.sHT * (40 / 200)));
+  });
+
+  it("panier : remises de ligne ET remise globale se cumulent", () => {
+    // 100 -20% = 80 ; panier -10% = 72 ; -2 € = 70
+    const t = computeTotals([item({ discountPercent: 20 })], { gDiscPct: 10, gDiscAmt: 2 });
+    expect(t.tTTC).toBe(70);
+  });
+
+  it("ancienne forme (discountType amount = euros par article) toujours comprise", () => {
+    const t = computeTotals([{ price: 20, quantity: 3, taxRate: 0.20, discount: 5, discountType: "amount" }]);
+    expect(t.tTTC).toBe(45);   // 60 - (5 x 3)
+  });
+
+  it("ancienne forme de remise globale (gDisc + gDiscType) toujours comprise", () => {
+    const pct = computeTotals([item({ price: 200 })], { gDisc: 10, gDiscType: "percentage" });
+    expect(pct.tTTC).toBe(180);
+    const eur = computeTotals([item({ price: 200 })], { gDisc: 20, gDiscType: "amount" });
+    expect(eur.tTTC).toBe(180);  // desormais 20 EUR TTC (et non 20 EUR HT = 24 TTC)
+  });
+
+  it("le total ne devient jamais negatif avec une remise globale enorme", () => {
+    const t = computeTotals([item({ price: 50 })], { gDiscPct: 50, gDiscAmt: 999 });
+    expect(t.tTTC).toBe(0);
+    expect(t.gdTTC).toBe(50);
   });
 });

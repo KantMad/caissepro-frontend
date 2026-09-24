@@ -4,7 +4,7 @@
 // ═══════════════════════════════════════
 
 // ESC/POS Command Constants
-import { lineDiscountEuro } from './lib/formatters.js';
+import { lineDiscountEuro, globalDiscountTTC } from './lib/formatters.js';
 
 const ESC = 0x1B;
 const GS = 0x1D;
@@ -537,8 +537,9 @@ class ThermalPrinter {
         await this.line('TVA', `${(ticket.totalTVA || 0).toFixed(2)}€`);
         await this.bold(false);
 
-        if (ticket.globalDiscount > 0) {
-          await this.bold(true); await this.line('Remise', `-${ticket.globalDiscount.toFixed(2)}€`); await this.bold(false);
+        const gdTTC = globalDiscountTTC(ticket);
+        if (gdTTC > 0) {
+          await this.bold(true); await this.line('Remise', `-${gdTTC.toFixed(2)}€`); await this.bold(false);
         }
 
         await this.bold(true);

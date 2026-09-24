@@ -204,8 +204,9 @@ class SunmiPrinterAdapter {
       }
 
       // Discount
-      if (Number(t.globalDiscount || t.global_discount || 0) > 0) {
-        bold(true); text(`Remise       -${fmt(t.globalDiscount || t.global_discount)} EUR\n`); bold(false);
+      const _gd = globalDiscountTTC(t);
+      if (_gd > 0) {
+        bold(true); text(`Remise       -${fmt(_gd)} EUR\n`); bold(false);
       }
 
       // Totals

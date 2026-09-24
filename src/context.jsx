@@ -5,7 +5,7 @@ import printer from "./printer.js";
 import hardwareManager from "./hardware.js";
 import { CO, DEFAULT_TVA_RATES, PERMS, initProducts, initUsers, initCustomers, LOYALTY_TIERS, initPromos, C, categories as defaultCategories } from "./constants.jsx";
 import { hashPin, verifyPin, sha256, norm, loadVariantOrderFromSettings, autoImportSizesFromProducts, generateEAN13, DEFAULT_CAT_ICONS } from "./utils.jsx";
-import { computeTotals } from "./lib/totals.js";
+import { computeTotals, lineNetTTC } from "./lib/totals.js";
 import { getLoyaltyTier as loyaltyTierOf } from "./lib/loyalty.js";
 import { calcPromoDiscount as calcPromos } from "./lib/promos.js";
 import { aggregatePaymentsByMethod, normClosure, computeCommission } from "./lib/formatters.js";
@@ -39,7 +39,8 @@ function AppProvider({children}){
   const productPhotosMapRef=useRef(new Map()); // Map<"skuBase-colorKey", [{url, sortOrder}]>
   const[customers,setCustomers]=useState([]);
   const[cart,setCart]=useState([]);
-  const[gDisc,setGDisc]=useState(0);const[gDiscType,setGDiscType]=useState("percentage");
+  // Remise panier cumulable : % d'abord, puis euros TTC sur le reste
+  const[gDiscPct,setGDiscPct]=useState(0);const[gDiscAmt,setGDiscAmt]=useState(0);
   const[promoCode,setPromoCode]=useState("");
   const[cashReg,setCashReg]=useState(()=>{try{const s=localStorage.getItem("caissepro_cashreg");return s?JSON.parse(s):null;}catch(e){return null;}});
   useEffect(()=>{try{if(cashReg)localStorage.setItem("caissepro_cashreg",JSON.stringify(cashReg));else localStorage.removeItem("caissepro_cashreg");}catch(e){}},[cashReg]);
@@ -404,7 +405,7 @@ function AppProvider({children}){
         setUsers(prev=>{const localOnly=prev.filter(lu=>!apiUsers.find(au=>au.name===lu.name));return[...merged,...localOnly];});}
       // Charger gift cards, paniers suspendus, favoris et footfall depuis le backend
       try{const gcs=await API.giftcards.list();if(gcs&&Array.isArray(gcs))setGiftCards(gcs.map(g=>({id:g.id,code:g.code,initialAmount:parseFloat(g.initial_amount||0),balance:parseFloat(g.remaining||0),createdDate:g.created_at,customerName:g.customer_name||"",barcode:g.barcode||null,transactions:g.transactions||[]})));}catch(e){console.warn("Chargement cartes cadeaux échoué:",e.message);}
-      try{const pks=await API.parked.list();if(pks&&Array.isArray(pks))setParked(pks.map(p=>({id:p.id,date:p.created_at,items:p.items||[],customer:null,gDisc:0,gDiscType:"percentage",name:p.name})));}catch(e){console.warn("Chargement paniers suspendus échoué:",e.message);}
+      try{const pks=await API.parked.list();if(pks&&Array.isArray(pks))setParked(pks.map(p=>({id:p.id,date:p.created_at,items:p.items||[],customer:null,gDiscPct:0,gDiscAmt:0,name:p.name})));}catch(e){console.warn("Chargement paniers suspendus échoué:",e.message);}
       // LOW-4: Load favorites and footfall from API
       try{const favs=await API.favorites.list();if(Array.isArray(favs))setFavorites(favs);}catch(e){console.warn("Chargement favoris échoué:",e.message);}
       try{const ff=await API.footfall.list();if(Array.isArray(ff))setFootfall(ff);}catch(e){console.warn("Chargement footfall échoué:",e.message);}
@@ -479,7 +480,7 @@ function AppProvider({children}){
         setOfflineMode(true);setFiscalWarning(true);addJET("LOGIN_OFFLINE",n);
         notify("Mode hors-ligne — chaîne fiscale non sécurisée, synchronisez dès que possible","warn");return{ok:true,stores:[]};}
       return{ok:false};}};
-  const logout=()=>{API.clearToken();addJET("LOGOUT",currentUser?.name);setCurrentUser(null);setCurrentStore(null);setStores([]);setViewingStoreId(null);setCart([]);setGDisc(0);setSelCust(null);setOfflineMode(false);};
+  const logout=()=>{API.clearToken();addJET("LOGOUT",currentUser?.name);setCurrentUser(null);setCurrentStore(null);setStores([]);setViewingStoreId(null);setCart([]);setGDiscPct(0);setGDiscAmt(0);setSelCust(null);setOfflineMode(false);};
 
   // H1/H2 fix: Auto-logout on token expiration
   useEffect(()=>{setOnAuthExpired(()=>{notify("Session expirée — veuillez vous reconnecter","error");logout();});return()=>setOnAuthExpired(null);},[]);
@@ -489,22 +490,28 @@ function AppProvider({children}){
     if(i>=0){const n=[...prev];n[i]={...n[i],quantity:n[i].quantity+1};return n;}return[...prev,{product:p,variant:v,quantity:1,discount:0,isCustom:false}];});
   const addCustomItem=(name,price,taxRate)=>setCart(p=>[...p,{product:{id:`custom-${Date.now()}`,name,sku:"DIVERS",price,costPrice:0,taxRate,category:"Divers"},variant:{id:`cv-${Date.now()}`,color:"—",size:"—",ean:""},quantity:1,discount:0,isCustom:true}]);
   const removeFromCart=(pid,vid,reason)=>{addAudit("VOID_LINE",`Suppression: ${pid}${reason?` — Motif: ${reason}`:""}`,pid);addJET("VOID_LINE",`Suppression ligne produit ${pid}${reason?` — ${reason}`:""}`);setCart(p=>p.filter(c=>!(c.product.id===pid&&(c.variant?.id===vid||!vid))));};
-  const voidSale=(reason)=>{if(cart.length){addAudit("VOID_SALE",`Annulation panier: ${cart.length} articles — Motif: ${reason||"Non spécifié"}`);addJET("VOID_SALE",`Annulation panier ${cart.length} art. — ${reason||"Non spécifié"}`);setCart([]);setGDisc(0);setSelCust(null);setSelectedAvoir(null);setPromoCode("");setSaleNote("");}};
+  const voidSale=(reason)=>{if(cart.length){addAudit("VOID_SALE",`Annulation panier: ${cart.length} articles — Motif: ${reason||"Non spécifié"}`);addJET("VOID_SALE",`Annulation panier ${cart.length} art. — ${reason||"Non spécifié"}`);setCart([]);setGDiscPct(0);setGDiscAmt(0);setSelCust(null);setSelectedAvoir(null);setPromoCode("");setSaleNote("");}};
   const updateQty=(pid,vid,q)=>{if(q<1)return removeFromCart(pid,vid);setCart(p=>p.map(c=>c.product.id===pid&&c.variant?.id===vid?{...c,quantity:q}:c));};
-  const updateItemDisc=(pid,vid,d,dt)=>setCart(p=>p.map(c=>c.product.id===pid&&c.variant?.id===vid?{...c,discount:d,discountType:dt||"percent"}:c));
-  const clearCart=()=>{setCart([]);setGDisc(0);setSelCust(null);setPromoCode("");setSelectedAvoir(null);setSaleNote("");};
-  const setCartGD=(v,t)=>{setGDisc(v);setGDiscType(t);};
+  // Remise de ligne cumulable : pct (%) puis amt (euros TTC sur la ligne entiere)
+  const updateItemDisc=(pid,vid,pct,amt)=>setCart(p=>p.map(c=>c.product.id===pid&&c.variant?.id===vid
+    ?{...c,discountPercent:Number(pct)||0,discountAmount:Number(amt)||0,
+      // champs historiques maintenus pour les paniers suspendus et les anciens tickets
+      discount:Number(pct)||0,discountType:"percent"}
+    :c));
+  const clearCart=()=>{setCart([]);setGDiscPct(0);setGDiscAmt(0);setSelCust(null);setPromoCode("");setSelectedAvoir(null);setSaleNote("");};
+  const setCartGD=(pct,amt)=>{setGDiscPct(Number(pct)||0);setGDiscAmt(Number(amt)||0);};
 
   // Park — backend-first avec cache localStorage
   const parkCart=useCallback(async()=>{if(!cart.length)return;
-    const parkedData={name:`Panier ${new Date().toLocaleString("fr-FR")}`,items:cart.map(i=>({productId:i.product?.id,variantId:i.variant?.id,productName:i.product?.name,variantColor:i.variant?.color,variantSize:i.variant?.size,quantity:i.quantity,price:i.product?.price,discount:i.discount,discountType:i.discountType})),customerId:selCust?.id||null};
+    const parkedData={name:`Panier ${new Date().toLocaleString("fr-FR")}`,items:cart.map(i=>({productId:i.product?.id,variantId:i.variant?.id,productName:i.product?.name,variantColor:i.variant?.color,variantSize:i.variant?.size,quantity:i.quantity,price:i.product?.price,discount:i.discountPercent||i.discount||0,discountType:"percent",discountPercent:i.discountPercent||0,discountAmount:i.discountAmount||0})),customerId:selCust?.id||null};
     let newParked;
-    try{const saved=await API.parked.save(parkedData);newParked={id:saved.id,date:saved.created_at||new Date().toISOString(),items:[...cart],customer:selCust,gDisc,gDiscType};}
-    catch(e){newParked={id:Date.now(),date:new Date().toISOString(),items:[...cart],customer:selCust,gDisc,gDiscType};addPendingSync({type:"parkCart",data:parkedData});}
-    setParked(p=>[...p,newParked]);setCart([]);setGDisc(0);setSelCust(null);addAudit("PARK","Panier mis en attente");
-  },[cart,selCust,gDisc,gDiscType,addAudit,addPendingSync]);
+    try{const saved=await API.parked.save(parkedData);newParked={id:saved.id,date:saved.created_at||new Date().toISOString(),items:[...cart],customer:selCust,gDiscPct,gDiscAmt};}
+    catch(e){newParked={id:Date.now(),date:new Date().toISOString(),items:[...cart],customer:selCust,gDiscPct,gDiscAmt};addPendingSync({type:"parkCart",data:parkedData});}
+    setParked(p=>[...p,newParked]);setCart([]);setGDiscPct(0);setGDiscAmt(0);setSelCust(null);addAudit("PARK","Panier mis en attente");
+  },[cart,selCust,gDiscPct,gDiscAmt,addAudit,addPendingSync]);
   const restoreCart=useCallback(async(id)=>{const pk=parked.find(p=>p.id===id);if(!pk)return;if(cart.length)await parkCart();
-    setCart(pk.items);setGDisc(pk.gDisc||0);setGDiscType(pk.gDiscType||"percentage");setSelCust(pk.customer);
+    setCart(pk.items);setGDiscPct(pk.gDiscPct??(pk.gDiscType==="percentage"?pk.gDisc:0)??0);
+    setGDiscAmt(pk.gDiscAmt??(pk.gDiscType==="amount"?pk.gDisc:0)??0);setSelCust(pk.customer);
     setParked(p=>p.filter(x=>x.id!==id));
     try{await API.parked.remove(id);}catch(e){/* Le panier etait peut-etre local seulement */}
     addAudit("RESTORE","Panier restaure");},[parked,cart,parkCart,addAudit]);
@@ -540,12 +547,12 @@ function AppProvider({children}){
 
   // ══ FE-05: Single source of truth for cart totals (used by both context and screens) ══
   const cartTotals=useMemo(()=>{
-    if(!cart.length)return{sHT:0,gd:0,promoDisc:0,applied:[],tHT:0,tTVA:0,tTTC:0};
+    if(!cart.length)return{sHT:0,gd:0,gdTTC:0,promoDisc:0,applied:[],tHT:0,tTVA:0,tTTC:0};
     const{promoDisc,applied}=calcPromoDiscount(cart);
-    const lines=cart.map(i=>({price:i.product.price,quantity:i.quantity,taxRate:i.product.taxRate,discount:i.discount,discountType:i.discountType}));
-    const t=computeTotals(lines,{pricingMode:settings.pricingMode,gDisc,gDiscType,promoDisc,avoirPayment});
+    const lines=cart.map(i=>({price:i.product.price,quantity:i.quantity,taxRate:i.product.taxRate,discount:i.discountPercent||i.discount||0,discountType:"percent",discountPercent:i.discountPercent||0,discountAmount:i.discountAmount||0}));
+    const t=computeTotals(lines,{pricingMode:settings.pricingMode,gDiscPct,gDiscAmt,promoDisc,avoirPayment});
     return{...t,promoDisc,applied};
-  },[cart,gDisc,gDiscType,calcPromoDiscount,avoirPayment,settings.pricingMode]);
+  },[cart,gDiscPct,gDiscAmt,calcPromoDiscount,avoirPayment,settings.pricingMode]);
 
   // ══ CHECKOUT — API ou fallback local ══
   // H3 fix: mutex to prevent race conditions in offline checkout
@@ -561,24 +568,27 @@ function AppProvider({children}){
     if(!cart.length)return null;
     const pm=settings.pricingMode||"TTC";
     const items=cart.map(i=>{
-      const rawPrice=i.discountType==="amount"?i.product.price*i.quantity-((i.discount||0)*i.quantity):i.product.price*i.quantity*(1-i.discount/100);
-      const lineHT=pm==="TTC"?rawPrice/(1+(i.product.taxRate||0.20)):rawPrice;
-      const lineTVA=lineHT*(i.product.taxRate||0.20);
-      const lineTTC=lineHT+lineTVA;
+      // Ligne nette (remises cumulees) — meme fonction que l'apercu panier
+      const rate=i.product.taxRate||0.20;
+      const lineTTC=lineNetTTC({price:i.product.price,quantity:i.quantity,taxRate:rate,
+        discountPercent:i.discountPercent??i.discount,discountAmount:i.discountAmount,discount:i.discount,discountType:i.discountType},pm);
+      const lineHT=lineTTC/(1+rate);
+      const lineTVA=lineTTC-lineHT;
       return{
       product_id:i.isCustom?null:i.product.id,variant_id:i.isCustom?null:i.variant?.id,
       product_name:i.product.name,variant_color:i.variant?.color||"—",variant_size:i.variant?.size||"—",
       quantity:i.quantity,unit_price:pm==="TTC"?i.product.price/(1+(i.product.taxRate||0.20)):i.product.price,cost_price:pm==="TTC"?(i.product.costPrice||0)/(1+(i.product.taxRate||0.20)):i.product.costPrice||0,
-      tax_rate:i.product.taxRate||0.20,discount_percent:i.discountType==="amount"?0:i.discount||0,discount_amount:i.discountType==="amount"?(i.discount||0)*i.quantity:0,is_custom:i.isCustom||false,
+      tax_rate:i.product.taxRate||0.20,discount_percent:i.discountPercent??(i.discountType==="amount"?0:i.discount)??0,
+      discount_amount:i.discountAmount??(i.discountType==="amount"?(i.discount||0)*i.quantity:0),is_custom:i.isCustom||false,
       lineHT,lineTVA,lineTTC,
       product:{id:i.product.id,name:i.product.name,sku:i.product.sku,price:i.product.price,costPrice:i.product.costPrice,taxRate:i.product.taxRate,collection:i.product.collection,category:i.product.category},
       variant:i.variant?{id:i.variant.id,color:i.variant.color,size:i.variant.size}:null,
-      discount:i.discount||0
+      discount:i.discountPercent??i.discount??0,discountPercent:i.discountPercent??i.discount??0,discountAmount:i.discountAmount||0
     };});
     // Totaux via la source unique (identique à cartTotals) — TTC ancré, HT/TVA dérivés
     const{promoDisc,applied}=calcPromoDiscount(cart);
-    const _lines=cart.map(i=>({price:i.product.price,quantity:i.quantity,taxRate:i.product.taxRate,discount:i.discount,discountType:i.discountType}));
-    const{sHT,gd,tHT,tTVA,tTTC}=computeTotals(_lines,{pricingMode:pm,gDisc,gDiscType,promoDisc,avoirPayment});
+    const _lines=cart.map(i=>({price:i.product.price,quantity:i.quantity,taxRate:i.product.taxRate,discount:i.discountPercent||i.discount||0,discountType:"percent",discountPercent:i.discountPercent||0,discountAmount:i.discountAmount||0}));
+    const{sHT,gd,gdTTC,tHT,tTVA,tTTC}=computeTotals(_lines,{pricingMode:pm,gDiscPct,gDiscAmt,promoDisc,avoirPayment});
 
     // ── TPE: charge card payments via hardware terminal BEFORE finalizing ──
     const cardMethods=['card','amex','contactless'];
@@ -635,7 +645,7 @@ function AppProvider({children}){
       }));
       // FE-12: use Math.round for consistency between add (checkout) and deduct (return)
       if(selCust){setCustomers(prev=>prev.map(c=>c.id===selCust.id?{...c,points:(c.points||0)+Math.round(parseFloat(ticket.totalTTC)),totalSpent:(c.totalSpent||0)+parseFloat(ticket.totalTTC)}:c));}
-      setCart([]);setGDisc(0);setSelCust(null);setPromoCode("");setSelectedAvoir(null);setSaleNote("");
+      setCart([]);setGDiscPct(0);setGDiscAmt(0);setSelCust(null);setPromoCode("");setSelectedAvoir(null);setSaleNote("");
       setTSeq(ticket.seq);setLastHash(ticket.hash);setGt(parseFloat(ticket.grandTotal));
       const fullTicket={...ticket,items:ticket.items||items,payments:ticket.payments||payments,
         date:ticket.createdAt||ticket.date,userName:currentUser?.name,
@@ -652,7 +662,9 @@ function AppProvider({children}){
       const seq=tSeq+1;const date=new Date().toISOString();
       const ticketNumber=`TK-${new Date().getFullYear()}-${String(seq).padStart(6,"0")}`;
       const paymentMethod=payments.length===1?payments[0].method:"MIXTE";
-      const margin=cart.reduce((s,i)=>{const netRevenue=i.discountType==="amount"?i.product.price*i.quantity-((i.discount||0)*i.quantity):i.product.price*i.quantity*(1-i.discount/100);return s+(netRevenue-i.product.costPrice*i.quantity);},0)*(tHT/sHT||0);
+      const margin=cart.reduce((s,i)=>{const netRevenue=lineNetTTC({price:i.product.price,quantity:i.quantity,taxRate:i.product.taxRate,
+        discountPercent:i.discountPercent??i.discount,discountAmount:i.discountAmount,discount:i.discount,discountType:i.discountType},pm);
+        return s+(netRevenue-i.product.costPrice*i.quantity);},0)*(tHT/sHT||0);
       // Décrémenter stock local (autorise négatif)
       setProducts(prev=>prev.map(p=>{const ci=cart.find(c=>c.product.id===p.id);if(!ci)return p;
         return{...p,variants:p.variants.map(v=>{const cv=cart.find(c=>c.product.id===p.id&&c.variant?.id===v.id);
@@ -679,7 +691,7 @@ function AppProvider({children}){
       // NF525: ne PAS incrémenter le GT en mode formation
       if(!trainingMode)setGt(g=>g+tTTC);
       setTickets(prev=>[ticket,...prev]);
-      setCart([]);setGDisc(0);setSelCust(null);setPromoCode("");setSelectedAvoir(null);setSaleNote("");
+      setCart([]);setGDiscPct(0);setGDiscAmt(0);setSelCust(null);setPromoCode("");setSelectedAvoir(null);setSaleNote("");
       // FE-10: per-article stock movements instead of 1 global entry
       cart.forEach(i=>{if(!i.isCustom)addStockMove("VENTE",{name:i.product.name,sku:i.product.sku||"—"},{color:i.variant?.color||"—",size:i.variant?.size||"—"},-i.quantity,ticket.ticketNumber);});
       // Queue offline sale for sync when back online
@@ -692,7 +704,7 @@ function AppProvider({children}){
       if(selectedAvoir&&selectedAvoir.applied>0){await consumeAvoir(selectedAvoir.avoirNumber,selectedAvoir.applied);}
       notify("Vente enregistrée (hors-ligne) — synchro en attente","warn");return ticket;
     }
-  },[cart,gDisc,gDiscType,currentUser,selCust,calcPromoDiscount,promoCode,saleNote,cashReg,tSeq,gt,lastHash,avoirPayment,selectedAvoir,consumeAvoir,addStockMove,notify,settings.pricingMode,addPendingSync,trainingMode,currentStore,hardwareManager]);
+  },[cart,gDiscPct,gDiscAmt,currentUser,selCust,calcPromoDiscount,promoCode,saleNote,cashReg,tSeq,gt,lastHash,avoirPayment,selectedAvoir,consumeAvoir,addStockMove,notify,settings.pricingMode,addPendingSync,trainingMode,currentStore,hardwareManager]);
   _doCheckoutRef.current=_doCheckout;
 
   // Stock receipt - via API
@@ -1632,7 +1644,7 @@ function AppProvider({children}){
   return<AppCtx.Provider value={{currentUser,login,logout,mode,setMode,offlineMode,
     stores,setStores,currentStore,setCurrentStore,selectStore,viewingStoreId,switchViewingStore,effectiveStoreId,
     products,setProducts,addProduct,customers,setCustomers,addCustomer,openCustomerDisplay,footfall,addFootfall,
-    cart,addToCart,addCustomItem,removeFromCart,voidSale,updateQty,updateItemDisc,clearCart,gDisc,gDiscType,setCartGD,
+    cart,addToCart,addCustomItem,removeFromCart,voidSale,updateQty,updateItemDisc,clearCart,gDiscPct,gDiscAmt,setCartGD,
     promoCode,setPromoCode,calcPromoDiscount,
     cashReg,openReg,closeReg,isOnline,tickets,setTickets,tSeq,lastHash,gt,audit,jet,closures,avoirs,consumeAvoir,isAvoirExpired,
     checkout,createClosure,exportArchive,exportFEC,exportCSVReport,exportCustomerRGPD,addAudit,addJET,

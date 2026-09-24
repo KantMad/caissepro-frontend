@@ -8,6 +8,7 @@ import { ProductIcon, colorHex } from "../ProductIcon.jsx";
 import { Modal, Btn, Input, Badge, Numpad } from "../ui.jsx";
 import { useApp } from "../context.jsx";
 import { getPaymentLabel, getAvoirRemaining } from "../lib/formatters.js";
+import { lineNetTTC, round2 } from "../lib/totals.js";
 import { useViewport } from "../useViewport.js";
 import hardwareManager from "../hardware.js";
 
@@ -15,13 +16,15 @@ function SalesScreen(){
   const vp=useViewport();
   const[mobileCartOpen,setMobileCartOpen]=useState(false);
   const{products,cart,addToCart,addCustomItem,removeFromCart,voidSale,updateQty,updateItemDisc,clearCart,checkout,
-    gDisc,gDiscType,setCartGD,promoCode,setPromoCode,calcPromoDiscount,isOnline,findByEAN,offlineMode,
+    gDiscPct,gDiscAmt,setCartGD,promoCode,setPromoCode,calcPromoDiscount,isOnline,findByEAN,offlineMode,
     parked,parkCart,restoreCart,removeParked,customers,addCustomer,selCust,setSelCust,perm,notify,
     stockAlerts,activePromos,avoirPayment,selectedAvoir,setSelectedAvoir,getLoyaltyTier,tickets,saleNote,setSaleNote,favorites,toggleFavorite,getLastPriceForCustomer,settings,
     printerConnected,thermalPrint,pendingSync,clearPendingSync,users,currentUser,currentStore,avoirs,consumeAvoir,isAvoirExpired,addAudit,addJET,trainingMode,cartTotals,retoucheBons,addRetoucheBon,cashReg,closures,allCategories,getVariantPhotos}=useApp();
   const categories=allCategories;
   const[search,setSearch]=useState("");const[cat,setCat]=useState("Tous");const[vm,setVm]=useState(null);const[selSeller,setSelSeller]=useState(null);
-  const[dm,setDm]=useState(null);const[dv,setDv]=useState("");const[gm,setGm]=useState(false);const[gv,setGv]=useState("");const[gtp,setGtp]=useState("percentage");
+  // Remises cumulables : pourcentage d'abord, puis euros TTC sur le reste
+  const[dm,setDm]=useState(null);const[dPct,setDPct]=useState("");const[dEur,setDEur]=useState("");
+  const[gm,setGm]=useState(false);const[gPct,setGPct]=useState("");const[gEur,setGEur]=useState("");
   const[lastTk,setLastTk]=useState(null);const[tkModal,setTkModal]=useState(false);const[busy,setBusy]=useState(false);
   const[payModal,setPayModal]=useState(false);const[cashGiven,setCashGiven]=useState("");
   const[cashNumpadModal,setCashNumpadModal]=useState(false);const[numpadValue,setNumpadValue]=useState("");
@@ -298,7 +301,7 @@ function SalesScreen(){
             <ScanLine size={20} style={{opacity:.4}}/></div>
           <div style={{fontSize:12,fontWeight:600,marginBottom:2}}>Panier vide</div>
           <div style={{fontSize:10}}>Scannez ou sélectionnez un produit</div></div>
-        :cart.map(i=>{const t=i.product.price*i.quantity;const d=i.discountType==="amount"?(i.discount||0)*i.quantity:t*(i.discount/100);
+        :cart.map(i=>{const t=i.product.price*i.quantity;const d=Math.max(0,t-lineNetTTC({price:i.product.price,quantity:i.quantity,taxRate:i.product.taxRate,discountPercent:i.discountPercent??i.discount,discountAmount:i.discountAmount,discount:i.discount,discountType:i.discountType},settings.pricingMode));
           const cc=CAT_COLORS[i.product.category]||C.primary;
           const lastP=selCust&&!i.isCustom?getLastPriceForCustomer(selCust.id,i.product.id):null;
           return(
@@ -333,8 +336,12 @@ function SalesScreen(){
                 <button onClick={()=>updateQty(i.product.id,i.variant?.id,i.quantity-1)} style={{width:24,height:24,borderRadius:12,border:"none",background:C.surface,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:`0 1px 2px ${C.shadow}`,transition:"all 0.1s"}}><Minus size={10}/></button>
                 <span style={{width:24,textAlign:"center",fontSize:12,fontWeight:700}}>{i.quantity}</span>
                 <button onClick={()=>updateQty(i.product.id,i.variant?.id,i.quantity+1)} style={{width:24,height:24,borderRadius:12,border:"none",background:C.surface,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:`0 1px 2px ${C.shadow}`,transition:"all 0.1s"}}><Plus size={10}/></button></div>
-              <button onClick={()=>{setDm({pid:i.product.id,vid:i.variant?.id,discType:i.discountType||"percent"});setDv(String(i.discount));}} style={{padding:"2px 6px",borderRadius:6,border:`1px solid ${i.discount>0?cc:C.border}`,background:i.discount>0?`${cc}08`:"transparent",cursor:"pointer",fontSize:8,fontWeight:600,color:i.discount>0?cc:C.textMuted,transition:"all 0.15s"}}>
-                {i.discount>0?`-${i.discount}${i.discountType==="amount"?"€":"%"}`:"Remise"}</button>
+              <button onClick={()=>{setDm({pid:i.product.id,vid:i.variant?.id,item:i});
+                setDPct(String(i.discountPercent??(i.discountType==="amount"?0:i.discount)??""));
+                setDEur(String(i.discountAmount??(i.discountType==="amount"?(i.discount||0)*i.quantity:0)??""));}} style={{padding:"2px 6px",borderRadius:6,border:`1px solid ${d>0?cc:C.border}`,background:d>0?`${cc}08`:"transparent",cursor:"pointer",fontSize:8,fontWeight:600,color:d>0?cc:C.textMuted,transition:"all 0.15s"}}>
+                {d>0?[(i.discountPercent??(i.discountType==="amount"?0:i.discount))>0?`-${i.discountPercent??i.discount}%`:null,
+                      (i.discountAmount??(i.discountType==="amount"?(i.discount||0)*i.quantity:0))>0?`-${Number(i.discountAmount??((i.discount||0)*i.quantity)).toFixed(2)}€`:null]
+                      .filter(Boolean).join(" ")||"Remise":"Remise"}</button>
               <div style={{textAlign:"right"}}>{i.discount>0&&<div style={{fontSize:7,color:C.textLight,textDecoration:"line-through"}}>{t.toFixed(2)}€</div>}
                 <div style={{fontSize:13,fontWeight:800,color:cc,letterSpacing:"-0.3px"}}>{(t-d).toFixed(2)}€</div></div></div></div>);})}</div>
 
@@ -342,7 +349,7 @@ function SalesScreen(){
       <div style={{padding:"0 var(--pad-sm,12px) var(--pad-sm,12px)",borderTop:`1px solid ${C.border}`}}>
         <div style={{background:C.surfaceAlt,borderRadius:"var(--radius-sm,10px)",padding:"var(--total-pad,14px)",margin:"var(--gap-sm,6px) 0",fontSize:10}}>
           <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}><span style={{color:C.textMuted}}>Sous-total HT</span><span style={{fontWeight:600}}>{totals.sHT.toFixed(2)}€</span></div>
-          {totals.gd>0&&<div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}><span style={{color:"#059669",display:"flex",alignItems:"center",gap:3}}><Percent size={9}/> Remises & promos</span><span style={{fontWeight:700,color:"#059669"}}>-{totals.gd.toFixed(2)}€</span></div>}
+          {totals.gdTTC>0&&<div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}><span style={{color:"#059669",display:"flex",alignItems:"center",gap:3}}><Percent size={9}/> Remises & promos</span><span style={{fontWeight:700,color:"#059669"}}>-{totals.gdTTC.toFixed(2)}€</span></div>}
           {totals.applied?.length>0&&<div style={{background:`${C.warn}10`,borderRadius:6,padding:"3px 6px",marginBottom:3,border:`1px solid ${C.warn}15`}}>{totals.applied.map((a,i)=><div key={i} style={{fontSize:8,color:"#92720E",fontWeight:600}}>✓ {a}</div>)}</div>}
           <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}><span style={{color:C.textMuted}}>TVA</span><span style={{fontWeight:600}}>{totals.tTVA.toFixed(2)}€</span></div>
           {selectedAvoir&&avoirPayment>0&&<div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:3}}><span style={{color:C.fiscal,display:"flex",alignItems:"center",gap:3}}>
@@ -362,7 +369,9 @@ function SalesScreen(){
           <span style={{fontSize:18,fontWeight:900,color:C.primary,letterSpacing:"-0.5px"}}>{change.toFixed(2)}€</span></div>}
 
         <div style={{display:"flex",gap:4,marginBottom:5}}>
-          <Btn variant="outline" onClick={()=>{setGm(true);setGv(String(gDisc));setGtp(gDiscType);}} style={{flex:1,height:28,fontSize:9,padding:"0 6px",borderRadius:8}}><Percent size={10}/> Remise globale</Btn>
+          <Btn variant="outline" onClick={()=>{setGm(true);setGPct(gDiscPct?String(gDiscPct):"");setGEur(gDiscAmt?String(gDiscAmt):"");}}
+            style={{flex:1,height:28,fontSize:9,padding:"0 6px",borderRadius:8,borderColor:(gDiscPct||gDiscAmt)?C.accent:undefined,color:(gDiscPct||gDiscAmt)?C.accent:undefined}}><Percent size={10}/>
+            {gDiscPct||gDiscAmt?`Remise ${[gDiscPct?`-${gDiscPct}%`:null,gDiscAmt?`-${Number(gDiscAmt).toFixed(2)}€`:null].filter(Boolean).join(" ")}`:"Remise globale"}</Btn>
           </div>
 
         {selectedAvoir&&totals.tTTC<=0?
@@ -407,24 +416,66 @@ function SalesScreen(){
         </div>
       </>}</Modal>
 
-    <Modal open={!!dm} onClose={()=>setDm(null)} title="Remise article">
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginBottom:10}}>
-        <Btn variant={dm?.discType!=="amount"?"primary":"outline"} onClick={()=>setDm(p=>({...p,discType:"percent"}))}>%</Btn>
-        <Btn variant={dm?.discType==="amount"?"primary":"outline"} onClick={()=>setDm(p=>({...p,discType:"amount"}))}>€</Btn></div>
-      <Input type="number" value={dv} onChange={e=>setDv(e.target.value)} placeholder={dm?.discType==="amount"?"Montant en €":"Pourcentage"} style={{marginBottom:8,height:40}}/>
-      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:6,marginBottom:12}}>{dm?.discType==="amount"?[2,5,10,20].map(v=>(<Btn key={v} variant="outline" onClick={()=>setDv(String(v))} style={{fontSize:12}}>{v}€</Btn>)):[5,10,15,20].map(v=>(<Btn key={v} variant="outline" onClick={()=>setDv(String(v))} style={{fontSize:12}}>{v}%</Btn>))}</div>
-      {dm?.discType!=="amount"&&parseInt(dv)>maxDisc&&<div style={{padding:8,background:C.dangerLight,borderRadius:8,marginBottom:8,fontSize:11,color:C.danger}}>Remise max autorisée: {maxDisc}%</div>}
-      <Btn onClick={()=>{const d=parseFloat(dv);if(d>=0&&dm){updateItemDisc(dm.pid,dm.vid,d,dm.discType||"percent");setDm(null);}}}
-        disabled={dm?.discType!=="amount"&&parseInt(dv)>maxDisc} style={{width:"100%",height:40,background:C.primary}}>Appliquer</Btn></Modal>
+    <Modal open={!!dm} onClose={()=>setDm(null)} title="Remise article" sub="Le % s'applique d'abord, puis les euros sur le reste">
+      {(()=>{const it=dm?.item;if(!it)return null;
+        const brut=round2(it.product.price*it.quantity);
+        const pct=Math.max(0,Math.min(100,parseFloat(dPct)||0));
+        const eur=Math.max(0,parseFloat(dEur)||0);
+        const net=lineNetTTC({price:it.product.price,quantity:it.quantity,taxRate:it.product.taxRate,discountPercent:pct,discountAmount:eur},settings.pricingMode);
+        // Le plafond du role porte sur la remise TOTALE (% + euros), sinon il suffirait
+        // de tout passer en euros pour le contourner.
+        const pctEffectif=brut>0?round2((brut-net)/brut*100):0;
+        const tropDeRemise=pctEffectif>maxDisc+0.01;
+        return(<>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
+            <div><label style={{fontSize:10,fontWeight:700,color:C.textMuted,display:"block",marginBottom:4}}>REMISE %</label>
+              <Input type="number" value={dPct} onChange={e=>setDPct(e.target.value)} placeholder="0" style={{height:40}}/>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:4,marginTop:6}}>
+                {[5,10,15,20].map(v=>(<Btn key={v} variant="outline" onClick={()=>setDPct(String(v))} style={{fontSize:11,padding:"4px 0"}}>{v}%</Btn>))}</div></div>
+            <div><label style={{fontSize:10,fontWeight:700,color:C.textMuted,display:"block",marginBottom:4}}>PUIS REMISE € (sur la ligne)</label>
+              <Input type="number" value={dEur} onChange={e=>setDEur(e.target.value)} placeholder="0.00" style={{height:40}}/>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:4,marginTop:6}}>
+                {[2,5,10,20].map(v=>(<Btn key={v} variant="outline" onClick={()=>setDEur(String(v))} style={{fontSize:11,padding:"4px 0"}}>{v}€</Btn>))}</div></div>
+          </div>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 12px",borderRadius:10,background:C.surfaceAlt,marginBottom:10}}>
+            <span style={{fontSize:11,color:C.textMuted}}>Ligne : <s>{brut.toFixed(2)}€</s></span>
+            <span style={{fontSize:16,fontWeight:800,color:C.primary}}>{net.toFixed(2)}€
+              <span style={{fontSize:11,fontWeight:600,color:C.textMuted,marginLeft:6}}>(-{round2(brut-net).toFixed(2)}€)</span></span></div>
+          {tropDeRemise&&<div style={{padding:8,background:C.dangerLight,borderRadius:8,marginBottom:8,fontSize:11,color:C.danger}}>
+            Remise max autorisée : {maxDisc}% — ici {pctEffectif.toFixed(1)}% de la ligne</div>}
+          <div style={{display:"grid",gridTemplateColumns:"1fr 2fr",gap:8}}>
+            <Btn variant="outline" onClick={()=>{updateItemDisc(dm.pid,dm.vid,0,0);setDm(null);}} style={{height:40}}>Supprimer</Btn>
+            <Btn onClick={()=>{updateItemDisc(dm.pid,dm.vid,pct,eur);setDm(null);}} disabled={tropDeRemise}
+              style={{height:40,background:C.primary}}>Appliquer</Btn></div>
+        </>);})()}
+    </Modal>
 
-    <Modal open={gm} onClose={()=>setGm(false)} title="Remise globale">
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginBottom:10}}>
-        <Btn variant={gtp==="percentage"?"primary":"outline"} onClick={()=>setGtp("percentage")}>%</Btn>
-        <Btn variant={gtp==="amount"?"primary":"outline"} onClick={()=>setGtp("amount")}>€</Btn></div>
-      <Input type="number" value={gv} onChange={e=>setGv(e.target.value)} style={{marginBottom:12,height:40}}/>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
-        <Btn variant="outline" onClick={()=>{setCartGD(0,"percentage");setGm(false);}}>Supprimer</Btn>
-        <Btn variant="success" onClick={()=>{const d=parseFloat(gv);if(d>=0){setCartGD(d,gtp);setGm(false);}}}>Appliquer</Btn></div></Modal>
+    <Modal open={gm} onClose={()=>setGm(false)} title="Remise globale" sub="Le % s'applique d'abord, puis les euros sur le reste">
+      {(()=>{const brutTTC=round2(cart.reduce((s2,i)=>s2+lineNetTTC({price:i.product.price,quantity:i.quantity,taxRate:i.product.taxRate,
+          discountPercent:i.discountPercent??i.discount,discountAmount:i.discountAmount,discount:i.discount,discountType:i.discountType},settings.pricingMode),0));
+        const pct=Math.max(0,Math.min(100,parseFloat(gPct)||0));
+        const eur=Math.max(0,parseFloat(gEur)||0);
+        const net=Math.max(0,round2(round2(brutTTC*(1-pct/100))-eur));
+        return(<>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
+            <div><label style={{fontSize:10,fontWeight:700,color:C.textMuted,display:"block",marginBottom:4}}>REMISE %</label>
+              <Input type="number" value={gPct} onChange={e=>setGPct(e.target.value)} placeholder="0" style={{height:40}}/>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:4,marginTop:6}}>
+                {[5,10,15,20].map(v=>(<Btn key={v} variant="outline" onClick={()=>setGPct(String(v))} style={{fontSize:11,padding:"4px 0"}}>{v}%</Btn>))}</div></div>
+            <div><label style={{fontSize:10,fontWeight:700,color:C.textMuted,display:"block",marginBottom:4}}>PUIS REMISE € (à payer en moins)</label>
+              <Input type="number" value={gEur} onChange={e=>setGEur(e.target.value)} placeholder="0.00" style={{height:40}}/>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:4,marginTop:6}}>
+                {[5,10,20,50].map(v=>(<Btn key={v} variant="outline" onClick={()=>setGEur(String(v))} style={{fontSize:11,padding:"4px 0"}}>{v}€</Btn>))}</div></div>
+          </div>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 12px",borderRadius:10,background:C.surfaceAlt,marginBottom:12}}>
+            <span style={{fontSize:11,color:C.textMuted}}>Panier : <s>{brutTTC.toFixed(2)}€</s></span>
+            <span style={{fontSize:18,fontWeight:800,color:C.primary}}>{net.toFixed(2)}€
+              <span style={{fontSize:11,fontWeight:600,color:C.textMuted,marginLeft:6}}>(-{round2(brutTTC-net).toFixed(2)}€)</span></span></div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
+            <Btn variant="outline" onClick={()=>{setCartGD(0,0);setGm(false);}}>Supprimer</Btn>
+            <Btn variant="success" onClick={()=>{setCartGD(pct,eur);setGm(false);}}>Appliquer</Btn></div>
+        </>);})()}
+    </Modal>
 
     <Modal open={confirmClear} onClose={()=>setConfirmClear(false)} title="Vider le panier">
       <div style={{textAlign:"center",padding:"10px 0"}}>

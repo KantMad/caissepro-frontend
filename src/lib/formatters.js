@@ -129,7 +129,23 @@ export const lineDiscountEuro = (item) => {
   if (!unitHT || net <= 0) return 0; // données partielles → pas de fausse remise
   const gross = unitHT * (1 + tax) * qty;
   const d = Math.round((gross - net) * 100) / 100;
-  return d > 0.005 ? d : 0;
+  // seuil : 1 centime par piece = arrondi du HT stocke, pas une remise
+  return d > 0.011 * qty ? d : 0;
+};
+
+// Remise globale du ticket, exprimee en TTC (ce que le client a economise).
+// En base, `global_discount` est un montant HT (create_sale la retire du HT) :
+// l'afficher tel quel sur un ticket sous-evalue la remise. On la recalcule donc
+// depuis les lignes brutes : somme des lignes - (HT + TVA) du ticket.
+export const globalDiscountTTC = (ticket) => {
+  if (!ticket) return 0;
+  const items = ticket.items || [];
+  const sum = items.reduce((s, i) => s + (Number(i.lineTTC ?? i.line_ttc) || 0), 0);
+  const net = (Number(ticket.totalHT ?? ticket.total_ht) || 0) + (Number(ticket.totalTVA ?? ticket.total_tva) || 0);
+  const d = Math.round((sum - net) * 100) / 100;
+  if (sum > 0 && d > 0.011) return d;
+  // Repli : pas de lignes disponibles -> valeur HT enregistree
+  return Math.round((Number(ticket.globalDiscount ?? ticket.global_discount) || 0) * 100) / 100;
 };
 
 // ── Agrégation des paiements par méthode (clôtures, stats) ──

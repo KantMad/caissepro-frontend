@@ -6,7 +6,7 @@ import { CO, C } from "../constants.jsx";
 import { EAN13Svg, ean13SvgHtml } from "../utils.jsx";
 import { Modal, Btn, Input, Badge } from "../ui.jsx";
 import { useApp } from "../context.jsx";
-import { getPaymentLabel, getAvoirRemaining, isAvoirPartiallyUsed, lineDiscountEuro } from "../lib/formatters.js";
+import { getPaymentLabel, getAvoirRemaining, isAvoirPartiallyUsed, lineDiscountEuro, globalDiscountTTC } from "../lib/formatters.js";
 
 function HistoryScreen(){
   const{tickets,setTickets,avoirs,settings,processReturn,perm:p,printerConnected,thermalPrint,setSelectedAvoir,setMode,notify,customers,setCustomers,retoucheBons,updateRetoucheStatus,scanBarcode,setScanBarcode,trainingMode}=useApp();
@@ -215,7 +215,7 @@ function HistoryScreen(){
         const tkTTC=Number(tk.totalTTC||tk.total_ttc)||0;
         const tkHT=Number(tk.totalHT||tk.total_ht)||0;
         const tkTVA=Number(tk.totalTVA||tk.total_tva)||0;
-        const tkDisc=Number(tk.globalDiscount||tk.global_discount)||0;
+        const tkDisc=globalDiscountTTC(tk);   // remise panier exprimee en TTC
         const tkItems=tk.items||[];
         const tkPayments=tk.payments||[];
         const tkFp=tk.fingerprint||tk.fiscal_fingerprint||"";

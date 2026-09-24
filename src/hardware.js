@@ -3,7 +3,7 @@
 // Unified interface for all POS terminals
 // ═══════════════════════════════════════════════════════
 
-import { lineDiscountEuro } from './lib/formatters.js';
+import { lineDiscountEuro, globalDiscountTTC } from './lib/formatters.js';
 
 const HARDWARE_PROFILES = {
   sunmi: {
@@ -290,8 +290,9 @@ class SunmiPrinterAdapter {
       }
 
       // Discount
-      if (Number(t.globalDiscount || t.global_discount || 0) > 0) {
-        bold(true); text(`Remise       -${fmt(t.globalDiscount || t.global_discount)} EUR\n`); bold(false);
+      const _gd = globalDiscountTTC(t);
+      if (_gd > 0) {
+        bold(true); text(`Remise       -${fmt(_gd)} EUR\n`); bold(false);
       }
 
       // Totals
@@ -1590,7 +1591,8 @@ async function _textBasedPrint(adapter, type, data, settings, companyInfo, width
       if (_d > 0) lines.push(pad('  Remise', `-${_d.toFixed(2)}E`));
     }
     lines.push(dsep);
-    if (Number(data.globalDiscount || data.global_discount || 0) > 0) lines.push(pad('Remise', `-${Number(data.globalDiscount || data.global_discount).toFixed(2)}E`));
+    const _gdT = globalDiscountTTC(data);
+    if (_gdT > 0) lines.push(pad('Remise', `-${_gdT.toFixed(2)}E`));
     lines.push(pad('Total HT', `${(data.totalHT || 0).toFixed(2)}E`));
     lines.push(pad('TVA', `${(data.totalTVA || 0).toFixed(2)}E`));
     lines.push(pad('TOTAL TTC', `${(data.totalTTC || 0).toFixed(2)}E`));
@@ -1823,7 +1825,8 @@ function _generateReceiptHTML(ticket, settings, companyInfo) {
     if (_d > 0) h += `<div class="row small"><span>&nbsp;&nbsp;Remise</span><span>-${_d.toFixed(2)}EUR</span></div>`;
   }
   h += '<div class="sep"></div>';
-  if (Number(ticket.globalDiscount || ticket.global_discount || 0) > 0) h += `<div class="row"><span>Remise</span><span>-${Number(ticket.globalDiscount || ticket.global_discount).toFixed(2)}EUR</span></div>`;
+  const _gdH = globalDiscountTTC(ticket);
+  if (_gdH > 0) h += `<div class="row"><span>Remise</span><span>-${_gdH.toFixed(2)}EUR</span></div>`;
   h += `<div class="row bold big"><span>TOTAL TTC</span><span>${(ticket.totalTTC || 0).toFixed(2)}EUR</span></div>`;
   if (ticket.saleNote || ticket.sale_note) h += `<div>Note: ${ticket.saleNote || ticket.sale_note}</div>`;
   h += '<div class="sep"></div>';
