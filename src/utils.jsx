@@ -143,6 +143,9 @@ export const norm={
     originalTicket:a.originalTicket||a.original_ticket||"",
     reason:a.reason||"",
     refundMethod:a.refundMethod||a.refund_method||"avoir",
+    // Echange = avoir consomme immediatement par une nouvelle vente (calcul serveur)
+    isExchange:a.isExchange??a.is_exchange??(a.refundMethod||a.refund_method)==="exchange",
+    usedInTicket:a.usedInTicket||a.used_in_ticket||"",
     userName:a.userName||a.user_name||"",
     customerName:a.customerName||a.customer_name||"",
     barcode:a.barcode||"",

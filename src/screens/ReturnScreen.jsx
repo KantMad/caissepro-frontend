@@ -109,7 +109,7 @@ function ReturnScreen(){
       unitPrice:r.unitPrice||0,
       taxRate:products.find(p=>p.id===r.productId)?.taxRate||0.20}));
     try{
-    const avoir=await processReturn(syntheticTicket,enrichedItems,reason,refundMethod==="exchange"?"avoir":refundMethod,restock,defective);
+    const avoir=await processReturn(syntheticTicket,enrichedItems,reason,refundMethod,restock,defective);
     if(avoir){
       if(refundMethod==="exchange"){
         setSelectedAvoir({avoirNumber:avoir.avoirNumber,totalTTC:avoir.totalTTC||0,remaining:avoir.remaining||avoir.totalTTC||0,applied:avoir.totalTTC||0});

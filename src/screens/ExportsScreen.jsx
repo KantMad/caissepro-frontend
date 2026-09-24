@@ -6,7 +6,7 @@ import { useApp } from "../context.jsx";
 import * as API from "../api.js";
 
 function ExportsScreen(){
-  const{tickets,avoirs,customers,settings,exportCSVReport,notify,addAudit,addJET,perm}=useApp();
+  const{tickets,avoirs,customers,settings,notify,addAudit,addJET,perm}=useApp();
   if(!perm().canExport)return<div style={{padding:40,textAlign:"center",color:"#94a3b8",fontSize:16,fontWeight:600}}>Accès réservé aux administrateurs</div>;
   const[tab,setTab]=useState("sales");
   const[dateFrom,setDateFrom]=useState(()=>{const d=new Date();d.setMonth(d.getMonth()-1);return d.toISOString().split("T")[0];});
@@ -22,8 +22,9 @@ function ExportsScreen(){
   const SERVER_COLUMNS={
     sales:"N° ticket, date, heure, vendeur, client, nb articles, détail articles, remise lignes €, remise ticket €, total HT, TVA, total TTC, marge, paiement, note, empreinte NF525.",
     salesDetail:"N° ticket, date, heure, vendeur, client, produit, réf/SKU, EAN, catégorie, collection, couleur, code couleur, taille, quantité, PU TTC, remise ligne €, remise ticket €, ligne HT, TVA, ligne TTC, paiement.",
-    returns:"N° avoir, date, heure, ticket d'origine, responsable, client, motif, articles, total HT, TVA, total TTC, mode de remboursement, solde avoir, empreinte NF525.",
-    refunds:"N° avoir, date, heure, ticket d'origine, responsable, client, motif, articles, total HT, TVA, total TTC, mode de remboursement, solde avoir, empreinte NF525.",
+    returns:"N° avoir, date, heure, ticket d'origine, responsable, client, motif, articles, total HT, TVA, total TTC, type, mode de remboursement, ticket d'utilisation, solde avoir, empreinte NF525.",
+    refunds:"N° avoir, date, heure, ticket d'origine, responsable, client, motif, articles, total HT, TVA, total TTC, type, mode de remboursement, ticket d'utilisation, solde avoir, empreinte NF525.",
+    exchanges:"N° avoir, date, heure, ticket d'origine, responsable, client, motif, articles, total HT, TVA, total TTC, type, mode de remboursement, ticket d'utilisation, solde avoir, empreinte NF525.",
     clients:"Nom complet, prénom, nom, email, téléphone, ville, points fidélité, niveau, total dépensé, nb achats, panier moyen, premier achat, dernier achat, notes.",
   };
 
@@ -159,8 +160,11 @@ function ExportsScreen(){
     return data;
   },[tickets,dateFrom,dateTo,minAmount,maxAmount,searchQ,payMethodFilter,customerFilter]);
 
-  const allReturns=useMemo(()=>avoirs.filter(a=>a.refundMethod!=="exchange"),[avoirs]);
-  const allExchanges=useMemo(()=>avoirs.filter(a=>a.refundMethod==="exchange"),[avoirs]);
+  // Un echange est un avoir consomme immediatement par une nouvelle vente (isExchange,
+  // calcule par le serveur) : avant, rien n'etait jamais marque "exchange" en base et
+  // l'onglet Echanges restait vide en permanence.
+  const allReturns=useMemo(()=>avoirs.filter(a=>!a.isExchange&&!["cash","card"].includes(a.refundMethod)),[avoirs]);
+  const allExchanges=useMemo(()=>avoirs.filter(a=>a.isExchange),[avoirs]);
   const allRefunds=useMemo(()=>avoirs.filter(a=>a.refundMethod==="cash"||a.refundMethod==="card"),[avoirs]);
 
   const filteredReturns=useMemo(()=>{
@@ -173,8 +177,9 @@ function ExportsScreen(){
   const filteredExchanges=useMemo(()=>{
     let data=[...allExchanges];data=filterByDate(data);
     data=filterBySearch(data,["avoirNumber","originalTicket","userName","customerName","reason"]);
+    data=filterByAmount(data,"totalTTC");
     return data;
-  },[allExchanges,dateFrom,dateTo,searchQ]);
+  },[allExchanges,dateFrom,dateTo,searchQ,amountMin,amountMax]);
 
   const filteredRefunds=useMemo(()=>{
     let data=[...allRefunds];data=filterByDate(data);data=filterByAmount(data);
@@ -290,6 +295,7 @@ function ExportsScreen(){
     salesDetail:{kind:"sales-detail",label:"ventes détaillées"},
     returns:{kind:"returns",label:"retours",params:{mode:"avoir"}},
     refunds:{kind:"returns",label:"remboursements",params:{mode:"refund"}},
+    exchanges:{kind:"returns",label:"échanges",params:{mode:"exchange"}},
     clients:{kind:"customers",label:"clients"},
   };
   const downloadServerExport=(format)=>{
@@ -301,17 +307,8 @@ function ExportsScreen(){
   };
   const downloadSalesDetail=downloadServerExport;
 
-  const doExport=()=>{
-    if(SERVER_EXPORT[tab]){downloadServerExport("xlsx");return;}
-    let rows,filename;
-    const d=dateFrom&&dateTo?`${dateFrom}_${dateTo}`:"all";
-    if(tab==="exchanges"){rows=buildReturnsRows(filteredExchanges,fields.exchanges);filename=`echanges_${d}.csv`;}
-    if(!rows||!rows.length){notify("Aucune donnée à exporter","warn");return;}
-    exportCSVReport(rows,filename);
-    addAudit("EXPORT",`Export ${tab} — ${rows.length} lignes`);
-    addJET("EXPORT",`Export CSV ${tab}`);
-    notify(`${rows.length} lignes exportées`,"success");
-  };
+  // Tous les onglets sont servis par le backend (cf. SERVER_EXPORT).
+  const doExport=()=>downloadServerExport("xlsx");
 
   // --- Invoice generation ---
   const generateInvoice=(ticket,client)=>{

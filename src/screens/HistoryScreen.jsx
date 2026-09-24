@@ -332,7 +332,9 @@ function HistoryScreen(){
           <span style={{fontSize:13,fontWeight:700,color:C.danger}}>Total remboursement</span>
           <span style={{fontSize:16,fontWeight:800,color:C.danger}}>{(returnTotal||0).toFixed(2)}€</span></div>
         <Btn variant="danger" disabled={returnTotal===0||!returnReason} onClick={async()=>{
-          const avoir=await processReturn(returnModal,returnItems.filter(i=>i.qty>0),returnReason,returnMethod==="exchange"?"avoir":returnMethod);
+          // L'echange est enregistre comme tel (refund_method='exchange') : sinon il etait
+          // indistinguable d'un avoir classique et l'onglet Echanges restait vide.
+          const avoir=await processReturn(returnModal,returnItems.filter(i=>i.qty>0),returnReason,returnMethod);
           if(avoir&&returnMethod==="exchange"){setSelectedAvoir({avoirNumber:avoir.avoirNumber,totalTTC:avoir.totalTTC||0,remaining:avoir.remaining||avoir.totalTTC||0,applied:avoir.totalTTC||0});setMode("cashier");notify(`Avoir ${avoir.avoirNumber} de ${(avoir.totalTTC||0).toFixed(2)}€ appliqué — Scannez les nouveaux articles`,"success");}
           setReturnModal(null);}}
           style={{width:"100%",height:44}}><RotateCcw size={16}/> Valider le retour</Btn>
