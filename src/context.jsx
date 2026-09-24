@@ -943,102 +943,22 @@ function AppProvider({children}){
     addJET("EXPORT",`Export FEC ${per}`);addAudit("FEC",`Export fichier FEC ${per}`);
   }catch(e){notify("Erreur: "+e.message,"error");}},[notify,addJET,addAudit]);
 
-  const exportArchive=useCallback(async()=>{
-    // Tenter l'export via API d'abord
-    try{await API.fiscal.archive();addJET("ARCHIVE","Export archive fiscale NF525 (serveur)");addAudit("EXPORT","Export archive fiscale NF525");return;}catch(e){console.warn("Archive API échoué, export local NF525:",e.message);}
-    // Fallback: archive locale NF525 conforme — 10 fichiers CSV dans un ZIP
-    const socId=(settings.siret||CO.siret||"").replace(/\s/g,"");
-    const caisseId=currentStore?.id||cashReg?.id||"01";
-    const today=new Date().toISOString().split("T")[0].replace(/-/g,"");
-    const period="J";// Journalier
-    const prefix=`Archive_NF525_${socId}_${caisseId}_${period}_${today}`;
-    // 1. Entete (ticket headers)
-    const entete=tickets.map(t=>({
-      NUM_TICKET:t.ticketNumber||t.ticket_number,SEQ:t.seq,DATE:t.date||t.createdAt,
-      TYPE:"VENTE",ID_CAISSE:caisseId,ID_SOC:socId,
-      TOTAL_HT:(t.totalHT).toFixed(2),
-      TOTAL_TVA:(t.totalTVA).toFixed(2),
-      TOTAL_TTC:(t.totalTTC).toFixed(2),
-      REMISE_GLOBALE:(t.globalDiscount||0).toFixed(2),
-      MODE_PAIEMENT:t.paymentMethod||"",VENDEUR:t.sellerName||t.seller_name||t.userName||"",
-      CLIENT:t.customerName||"",CLIENT_ID:t.customerId||"",
-      NOTE:t.saleNote||"",HASH:t.hash||"",EMPREINTE:t.fingerprint||"",GT:(t.grandTotal||0).toFixed(2)}));
-    // 2. Lignes (line items)
-    const lignes=[];tickets.forEach(t=>(t.items||[]).forEach((i,idx)=>{
-      lignes.push({NUM_TICKET:t.ticketNumber||t.ticket_number,LIGNE:idx+1,
-        PRODUIT:i.product?.name||i.product_name||"",SKU:i.product?.sku||i.product_sku||"",
-        VARIANTE_COULEUR:i.variant?.color||i.variant_color||"",VARIANTE_TAILLE:i.variant?.size||i.variant_size||"",
-        EAN:i.variant?.ean||"",QUANTITE:i.quantity,
-        PU_HT:((i.lineHT)/i.quantity).toFixed(4),TAUX_TVA:((i.tax_rate||i.product?.taxRate||0.20)*100).toFixed(2),
-        REMISE_LIGNE:(i.discount_amount||0).toFixed(2),REMISE_PCT:(i.discount_percent||0).toFixed(2),
-        TOTAL_HT:(i.lineHT).toFixed(2),TOTAL_TVA:(i.lineTVA||i.line_tva||0).toFixed(2),
-        TOTAL_TTC:(i.lineTTC).toFixed(2)});}));
-    // 3. TVA (breakdown par taux)
-    const tvaRows=[];tickets.forEach(t=>{const byRate={};(t.items||[]).forEach(i=>{
-      const r=((i.tax_rate||i.product?.taxRate||0.20)*100).toFixed(1);
-      if(!byRate[r])byRate[r]={ht:0,tva:0};byRate[r].ht+=(i.lineHT);byRate[r].tva+=(i.lineTVA||i.line_tva||0);});
-      Object.entries(byRate).forEach(([rate,v])=>{tvaRows.push({NUM_TICKET:t.ticketNumber||t.ticket_number,TAUX:rate,BASE_HT:v.ht.toFixed(2),MONTANT_TVA:v.tva.toFixed(2)});});});
-    // 4. Pied (ticket footers/totals)
-    const pieds=tickets.map(t=>({
-      NUM_TICKET:t.ticketNumber||t.ticket_number,TOTAL_HT:(t.totalHT||0).toFixed(2),TOTAL_TVA:(t.totalTVA||0).toFixed(2),
-      TOTAL_TTC:(t.totalTTC||0).toFixed(2),REMISE:(t.globalDiscount||0).toFixed(2),
-      NB_ARTICLES:(t.items||[]).reduce((s,i)=>s+i.quantity,0),GT:(t.grandTotal||0).toFixed(2),
-      HASH:t.hash||"",EMPREINTE:t.fingerprint||""}));
-    // 5. Clients
-    const clientRows=customers.map(c=>({ID:c.id,NOM:`${c.firstName||""} ${c.lastName||""}`.trim(),
-      EMAIL:c.email||"",TELEPHONE:c.phone||"",VILLE:c.city||"",POINTS:c.points||0,TOTAL_DEPENSE:(c.totalSpent||0).toFixed(2)}));
-    // 6. Règlements (payments)
-    const reglements=[];tickets.forEach(t=>(t.payments||[]).forEach((p,idx)=>{
-      reglements.push({NUM_TICKET:t.ticketNumber||t.ticket_number,LIGNE:idx+1,MODE:p.method,MONTANT:p.amount.toFixed(2),
-        CODE_AUTH:p.authCode||"",REF_TRANSACTION:p.transactionId||"",TYPE_CARTE:p.cardType||"",PAN_MASQUE:p.maskedPan||""});}));
-    // 7. Duplicata (reprints)
-    const duplicata=audit.filter(a=>a.action==="DUPLICATA").map(a=>({DATE:a.date,DETAIL:a.detail,UTILISATEUR:a.user}));
-    // 8. JET
-    const jetRows=jet.map(j=>({ID:j.id,SEQ:j.seq||"",DATE:j.date,CODE_JET:j.codeJet||"",TYPE:j.type,
-      DESCRIPTIF:j.detail,UTILISATEUR:j.userName||j.user||"",ID_SOC:j.socId||socId,ID_CAISSE:j.caisseId||caisseId,
-      HASH:j.hash||"",EMPREINTE:j.fingerprint||""}));
-    // 9. GTT (grand ticket totals — cumul par ticket)
-    const gttRows=tickets.map(t=>({NUM_TICKET:t.ticketNumber||t.ticket_number,SEQ:t.seq,DATE:t.date||t.createdAt,
-      TOTAL_TTC:(t.totalTTC||0).toFixed(2),GT_CUMULE:(t.grandTotal||0).toFixed(2)}));
-    // 10. GTJ (grand total journalier)
-    const byDay={};tickets.forEach(t=>{const d=(t.date||t.createdAt||"").slice(0,10);if(!byDay[d])byDay[d]={ttc:0,count:0};
-      byDay[d].ttc+=(t.totalTTC);byDay[d].count++;});
-    const gtjRows=Object.entries(byDay).sort().map(([d,v])=>({DATE:d,NB_TICKETS:v.count,TOTAL_TTC:v.ttc.toFixed(2)}));
-
-    // Générer les CSVs et empaqueter
-    const files=[
-      {name:`Entete_${period}_${today}.csv`,data:entete},
-      {name:`Lignes_${period}_${today}.csv`,data:lignes},
-      {name:`TVA_${period}_${today}.csv`,data:tvaRows},
-      {name:`Pied_${period}_${today}.csv`,data:pieds},
-      {name:`Client_${period}_${today}.csv`,data:clientRows},
-      {name:`Reglements_${period}_${today}.csv`,data:reglements},
-      {name:`Duplicata_${period}_${today}.csv`,data:duplicata},
-      {name:`JET_${period}_${today}.csv`,data:jetRows},
-      {name:`GTT_${period}_${today}.csv`,data:gttRows},
-      {name:`GTJ_${period}_${today}.csv`,data:gtjRows},
-    ];
-    // NF-D3: Archive ZIP avec intégrité SHA-256 + HMAC
-    const JSZip=(await import("jszip")).default;
-    const zip=new JSZip();
-    const csvFolder=zip.folder("data");
-    files.forEach(f=>{csvFolder.file(f.name,Papa.unparse(f.data));});
-    // Métadonnées
-    const meta={format:"NF525_ARCHIVE",version:CO.ver,socId,caisseId,period,date:today,
-      generatedAt:new Date().toISOString(),ticketCount:tickets.length,gt:gt.toFixed(2),
-      files:files.map(f=>f.name)};
-    zip.file("meta.json",JSON.stringify(meta,null,2));
-    // Intégrité: SHA-256 du contenu sérialisé
-    const archiveContent=JSON.stringify({meta,files:Object.fromEntries(files.map(f=>[f.name,Papa.unparse(f.data)]))});
-    const integrityHash=await sha256(archiveContent);
-    zip.file("integrity.json",JSON.stringify({sha256:integrityHash,algorithm:"SHA-256",generatedAt:meta.generatedAt},null,2));
-    const blob=await zip.generateAsync({type:"blob",compression:"DEFLATE",compressionOptions:{level:6}});
-    const url=URL.createObjectURL(blob);const a=document.createElement("a");
-    a.href=url;a.download=`${prefix}.zip`;a.click();
-    addJET("ARCHIVE",`Archive NF525 locale — ${tickets.length} tickets — GT: ${gt.toFixed(2)}€`);
-    addAudit("EXPORT","Export archive NF525 locale");
-    notify(`Archive NF525 exportée (${tickets.length} tickets)`,"success");
-  },[tickets,customers,audit,jet,closures,gt,settings,currentStore,cashReg,notify,addJET,addAudit]);
+  // Archive fiscale NF525 : 10 CSV + manifeste d'integrite, generes par le SERVEUR sur la
+  // periode demandee. L'ancienne version locale ne voyait que les 200 derniers tickets
+  // charges, sans filtre de date, avec SKU/EAN vides et le cumul GT a zero.
+  const exportArchive=useCallback(async(opts={})=>{
+    try{
+      const params={period:opts.period||"J"};
+      if(opts.from)params.from=opts.from+"T00:00:00";
+      if(opts.to)params.to=opts.to+"T23:59:59";
+      const data=await API.fiscal.archiveNF525(params);
+      const n=data?.files?.length||0;
+      const per=opts.from&&opts.to?`${opts.from} → ${opts.to}`:"tout l'historique";
+      addJET("ARCHIVE",`Export archive fiscale NF525 (${per})`);
+      addAudit("EXPORT",`Archive fiscale NF525 ${per} — ${n} fichiers`);
+      notify(`Archive NF525 générée (${n} fichiers)`,"success");
+    }catch(e){notify("Erreur archive: "+e.message,"error");}
+  },[notify,addJET,addAudit]);
 
   // Customer RGPD export — via API
   const exportCustomerRGPD=useCallback(async(custId)=>{

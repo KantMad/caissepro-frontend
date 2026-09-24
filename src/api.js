@@ -155,6 +155,18 @@ export const fiscal = {
   closure: (data) => api('/api/fiscal/closure', { method: 'POST', body: JSON.stringify(data) }),
   closures: () => api('/api/fiscal/closures'),
   fec: (params) => api('/api/fiscal/fec?' + new URLSearchParams(params || {})),
+  // Archive NF525 : les 10 CSV sont produits par le serveur (periode + historique complet),
+  // le navigateur ne fait que les empaqueter en ZIP.
+  archiveNF525: (params) => api('/api/fiscal/archive-nf525?' + new URLSearchParams(params || {})).then(async data => {
+    const JSZip = (await import('jszip')).default;
+    const zip = new JSZip();
+    (data.files || []).forEach(f => zip.file(f.name, f.content));
+    const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = `${data.prefix}.zip`; a.click();
+    URL.revokeObjectURL(url);
+    return data;
+  }),
   archive: () => api('/api/fiscal/archive').then(async data => {
     const JSZip = (await import('jszip')).default;
     const zip = new JSZip();

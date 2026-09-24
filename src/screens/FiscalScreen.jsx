@@ -14,6 +14,7 @@ function FiscalScreen(){
   const yStart=`${new Date().getFullYear()}-01-01`,today=new Date().toISOString().split("T")[0];
   const[fecFrom,setFecFrom]=useState(yStart);const[fecTo,setFecTo]=useState(today);
   const[fecReglements,setFecReglements]=useState(false);
+  const[archivePeriod,setArchivePeriod]=useState("J");
   if(!p().canExport)return<div style={{padding:40,textAlign:"center",color:C.textMuted}}>Accès réservé aux administrateurs</div>;
 
   // NF525 compliance checks
@@ -86,8 +87,8 @@ function FiscalScreen(){
               <div style={{fontSize:10,color:C.textMuted,marginTop:1}}>{c.desc}</div></div></div>))}</div></div>
 
       <div style={{background:C.surface,borderRadius:12,padding:14,border:`1.5px solid ${C.border}`,marginBottom:14}}>
-        <div style={{fontSize:12,fontWeight:700,marginBottom:2}}>Export FEC (article A47 A-1)</div>
-        <div style={{fontSize:10,color:C.textMuted,marginBottom:10}}>Exercice comptable à exporter. Sans bornes, le fichier contient tout l'historique du magasin.</div>
+        <div style={{fontSize:12,fontWeight:700,marginBottom:2}}>Période exportée (FEC et archive NF525)</div>
+        <div style={{fontSize:10,color:C.textMuted,marginBottom:10}}>S'applique aux deux exports ci-dessous. Sans bornes, ils contiennent tout l'historique du magasin.</div>
         <div style={{display:"flex",gap:10,alignItems:"flex-end",flexWrap:"wrap"}}>
           <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>DU</label>
             <Input type="date" value={fecFrom} onChange={e=>setFecFrom(e.target.value)} style={{fontSize:11,padding:"8px 10px"}}/></div>
@@ -96,11 +97,15 @@ function FiscalScreen(){
           <label style={{display:"flex",alignItems:"center",gap:6,fontSize:11,color:C.textMuted,cursor:"pointer",paddingBottom:8}}>
             <input type="checkbox" checked={fecReglements} onChange={e=>setFecReglements(e.target.checked)}/>
             Écritures de règlement (caisse / banque)</label>
+          <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>PÉRIODICITÉ ARCHIVE</label>
+            <select value={archivePeriod} onChange={e=>setArchivePeriod(e.target.value)}
+              style={{height:38,fontSize:11,padding:"0 10px",borderRadius:10,border:`1.5px solid ${C.border}`,fontFamily:"inherit",background:C.surface,color:C.text}}>
+              <option value="J">Journalière</option><option value="M">Mensuelle</option><option value="A">Annuelle</option></select></div>
         </div>
       </div>
 
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>
-        <Btn variant="fiscal" onClick={exportArchive} style={{height:44}}><Archive size={14}/> Archive NF525 (10 CSV)</Btn>
+        <Btn variant="fiscal" onClick={()=>exportArchive({from:fecFrom,to:fecTo,period:archivePeriod})} style={{height:44}}><Archive size={14}/> Archive NF525 (10 CSV)</Btn>
         <Btn variant="info" onClick={()=>exportFEC({from:fecFrom,to:fecTo,reglements:fecReglements})} style={{height:44}}><FileText size={14}/> Export FEC</Btn></div>
     </>}
 
