@@ -274,11 +274,20 @@ function ExportsScreen(){
     });return rows;
   };
 
+  // Détail articles : généré par le backend (EAN, SKU, catégorie, collection viennent
+  // de la base ; le navigateur n'a plus tout le catalogue en mémoire).
+  const downloadSalesDetail=(format)=>{
+    const url=API.exports.salesDetailUrl({from:dateFrom+"T00:00:00",to:dateTo+"T23:59:59",format});
+    window.open(url,"_blank");
+    addAudit&&addAudit("EXPORT",`Ventes détaillées (${format}) ${dateFrom} → ${dateTo}`);
+    notify("Export des ventes détaillées lancé","success");
+  };
+
   const doExport=()=>{
     let rows,filename;
     const d=dateFrom&&dateTo?`${dateFrom}_${dateTo}`:"all";
     if(tab==="sales"){rows=buildSalesRows();filename=`ventes_${d}.csv`;}
-    else if(tab==="salesDetail"){rows=buildSalesDetailRows();filename=`ventes_detail_${d}.csv`;}
+    else if(tab==="salesDetail"){downloadSalesDetail("xlsx");return;}
     else if(tab==="returns"){rows=buildReturnsRows(filteredReturns,fields.returns);filename=`retours_${d}.csv`;}
     else if(tab==="exchanges"){rows=buildReturnsRows(filteredExchanges,fields.exchanges);filename=`echanges_${d}.csv`;}
     else if(tab==="refunds"){rows=buildReturnsRows(filteredRefunds,fields.refunds);filename=`remboursements_${d}.csv`;}
@@ -446,7 +455,8 @@ Facture générée par ${CO.sw} v${CO.ver}</div></body></html>`;
       <div style={{display:"flex",gap:8,flexWrap:"wrap",justifyContent:"flex-end"}}>
         <Btn variant="outline" onClick={()=>setInvoiceModal(true)} style={{gap:6}}><FileText size={14}/> Générer une facture</Btn>
         <Btn variant="outline" onClick={()=>{const url=API.exports.invoiceEanUrl({from:dateFrom+"T00:00:00",to:dateTo+"T23:59:59"});window.open(url,"_blank");addAudit&&addAudit("EXPORT",`Facturation EAN ${dateFrom} → ${dateTo}`);}} style={{gap:6,color:C.fiscal,borderColor:C.fiscal+"44"}} title="Excel : ventes + avoirs par EAN (2 onglets)"><Grid size={14}/> Facturation EAN (Excel)</Btn>
-        <Btn onClick={doExport} disabled={selectedCount===0||currentCount===0} style={{background:C.primary,gap:6}}><Download size={14}/> Exporter CSV ({currentCount})</Btn></div></div>
+        {tab==="salesDetail"&&<Btn variant="outline" onClick={()=>downloadSalesDetail("csv")} style={{gap:6}} title="CSV separe par ; — s'ouvre directement en colonnes dans Excel FR"><Download size={14}/> CSV (Excel FR)</Btn>}
+        <Btn onClick={doExport} disabled={tab!=="salesDetail"&&(selectedCount===0||currentCount===0)} style={{background:C.primary,gap:6}}><Download size={14}/> {tab==="salesDetail"?`Exporter Excel (${currentCount})`:`Exporter CSV (${currentCount})`}</Btn></div></div>
 
     {/* Tabs */}
     <div style={{display:"flex",gap:4,marginBottom:16,background:C.surfaceAlt,borderRadius:12,padding:4}}>
@@ -488,8 +498,16 @@ Facture générée par ${CO.sw} v${CO.ver}</div></body></html>`;
           </div>
         </div>
 
-        {/* Field selection */}
+        {/* Field selection — le détail articles est généré par le backend : colonnes fixes */}
+        {tab==="salesDetail"?
         <div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`}}>
+          <div style={{fontSize:12,fontWeight:700,display:"flex",alignItems:"center",gap:6,marginBottom:8}}><Grid size={13}/> Colonnes du fichier</div>
+          <div style={{fontSize:11,color:C.textMuted,lineHeight:1.7}}>
+            N° ticket, date, heure, vendeur, client, produit, réf/SKU, <b>EAN</b>, catégorie, collection,
+            couleur, code couleur, taille, quantité, PU TTC, remise €, ligne HT, TVA, ligne TTC, paiement.</div>
+          <div style={{fontSize:10,color:C.textLight,marginTop:8}}>Généré par le serveur : une ligne par article vendu, sur la période choisie.</div>
+        </div>
+        :<div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`}}>
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
             <div style={{fontSize:12,fontWeight:700,display:"flex",alignItems:"center",gap:6}}><Grid size={13}/> Champs ({selectedCount}/{activeFields.length})</div>
             <div style={{display:"flex",gap:4}}>
@@ -505,7 +523,7 @@ Facture générée par ${CO.sw} v${CO.ver}</div></body></html>`;
                   {on&&<Check size={10} color="#fff"/>}</div>
                 <span style={{fontSize:11,fontWeight:on?600:400,color:on?C.text:C.textMuted}}>{f.label}</span></button>);})}
           </div>
-        </div>
+        </div>}
       </div>
 
       {/* Right panel — Preview */}
@@ -533,6 +551,7 @@ Facture générée par ${CO.sw} v${CO.ver}</div></body></html>`;
                   tab==="returns"?buildReturnsRows(filteredReturns,fields.returns)[idx]:
                   tab==="exchanges"?buildReturnsRows(filteredExchanges,fields.exchanges)[idx]:
                   tab==="refunds"?buildReturnsRows(filteredRefunds,fields.refunds)[idx]:
+                  tab==="salesDetail"?buildSalesDetailRows()[idx]:
                   buildClientRows()[idx];
                 if(!rowData)return null;
                 const vals=Object.values(rowData);
