@@ -18,6 +18,15 @@ function ExportsScreen(){
   const[refundMethodFilter,setRefundMethodFilter]=useState("all");
   const[customerFilter,setCustomerFilter]=useState("");
 
+  // Colonnes des fichiers produits par le serveur (fixes, pas de sélection de champs)
+  const SERVER_COLUMNS={
+    sales:"N° ticket, date, heure, vendeur, client, nb articles, détail articles, remise lignes €, remise ticket €, total HT, TVA, total TTC, marge, paiement, note, empreinte NF525.",
+    salesDetail:"N° ticket, date, heure, vendeur, client, produit, réf/SKU, EAN, catégorie, collection, couleur, code couleur, taille, quantité, PU TTC, remise ligne €, remise ticket €, ligne HT, TVA, ligne TTC, paiement.",
+    returns:"N° avoir, date, heure, ticket d'origine, responsable, client, motif, articles, total HT, TVA, total TTC, mode de remboursement, solde avoir, empreinte NF525.",
+    refunds:"N° avoir, date, heure, ticket d'origine, responsable, client, motif, articles, total HT, TVA, total TTC, mode de remboursement, solde avoir, empreinte NF525.",
+    clients:"Nom complet, prénom, nom, email, téléphone, ville, points fidélité, niveau, total dépensé, nb achats, panier moyen, premier achat, dernier achat, notes.",
+  };
+
   // Field configuration per export type
   const FIELD_DEFS={
     sales:[
@@ -274,24 +283,29 @@ function ExportsScreen(){
     });return rows;
   };
 
-  // Détail articles : généré par le backend (EAN, SKU, catégorie, collection viennent
-  // de la base ; le navigateur n'a plus tout le catalogue en mémoire).
-  const downloadSalesDetail=(format)=>{
-    const url=API.exports.salesDetailUrl({from:dateFrom+"T00:00:00",to:dateTo+"T23:59:59",format});
-    window.open(url,"_blank");
-    addAudit&&addAudit("EXPORT",`Ventes détaillées (${format}) ${dateFrom} → ${dateTo}`);
-    notify("Export des ventes détaillées lancé","success");
+  // Tous les exports sont générés par le backend : l'écran ne charge que les 200 dernières
+  // ventes, un export construit depuis la mémoire tronquait donc les périodes chargées.
+  const SERVER_EXPORT={
+    sales:{kind:"sales",label:"ventes"},
+    salesDetail:{kind:"sales-detail",label:"ventes détaillées"},
+    returns:{kind:"returns",label:"retours",params:{mode:"avoir"}},
+    refunds:{kind:"returns",label:"remboursements",params:{mode:"refund"}},
+    clients:{kind:"customers",label:"clients"},
   };
+  const downloadServerExport=(format)=>{
+    const conf=SERVER_EXPORT[tab];if(!conf)return;
+    const url=API.exports.url(conf.kind,{from:dateFrom+"T00:00:00",to:dateTo+"T23:59:59",format,...(conf.params||{})});
+    window.open(url,"_blank");
+    addAudit&&addAudit("EXPORT",`Export ${conf.label} (${format}) ${dateFrom} → ${dateTo}`);
+    notify(`Export ${conf.label} lancé`,"success");
+  };
+  const downloadSalesDetail=downloadServerExport;
 
   const doExport=()=>{
+    if(SERVER_EXPORT[tab]){downloadServerExport("xlsx");return;}
     let rows,filename;
     const d=dateFrom&&dateTo?`${dateFrom}_${dateTo}`:"all";
-    if(tab==="sales"){rows=buildSalesRows();filename=`ventes_${d}.csv`;}
-    else if(tab==="salesDetail"){downloadSalesDetail("xlsx");return;}
-    else if(tab==="returns"){rows=buildReturnsRows(filteredReturns,fields.returns);filename=`retours_${d}.csv`;}
-    else if(tab==="exchanges"){rows=buildReturnsRows(filteredExchanges,fields.exchanges);filename=`echanges_${d}.csv`;}
-    else if(tab==="refunds"){rows=buildReturnsRows(filteredRefunds,fields.refunds);filename=`remboursements_${d}.csv`;}
-    else if(tab==="clients"){rows=buildClientRows();filename=`clients_${d}.csv`;}
+    if(tab==="exchanges"){rows=buildReturnsRows(filteredExchanges,fields.exchanges);filename=`echanges_${d}.csv`;}
     if(!rows||!rows.length){notify("Aucune donnée à exporter","warn");return;}
     exportCSVReport(rows,filename);
     addAudit("EXPORT",`Export ${tab} — ${rows.length} lignes`);
@@ -461,8 +475,8 @@ Facture générée par ${CO.sw} v${CO.ver}</div></body></html>`;
       <div style={{display:"flex",gap:8,flexWrap:"wrap",justifyContent:"flex-end"}}>
         <Btn variant="outline" onClick={()=>setInvoiceModal(true)} style={{gap:6}}><FileText size={14}/> Générer une facture</Btn>
         <Btn variant="outline" onClick={()=>{const url=API.exports.invoiceEanUrl({from:dateFrom+"T00:00:00",to:dateTo+"T23:59:59"});window.open(url,"_blank");addAudit&&addAudit("EXPORT",`Facturation EAN ${dateFrom} → ${dateTo}`);}} style={{gap:6,color:C.fiscal,borderColor:C.fiscal+"44"}} title="Excel : ventes + avoirs par EAN (2 onglets)"><Grid size={14}/> Facturation EAN (Excel)</Btn>
-        {tab==="salesDetail"&&<Btn variant="outline" onClick={()=>downloadSalesDetail("csv")} style={{gap:6}} title="CSV separe par ; — s'ouvre directement en colonnes dans Excel FR"><Download size={14}/> CSV (Excel FR)</Btn>}
-        <Btn onClick={doExport} disabled={tab!=="salesDetail"&&(selectedCount===0||currentCount===0)} style={{background:C.primary,gap:6}}><Download size={14}/> {tab==="salesDetail"?`Exporter Excel (${currentCount})`:`Exporter CSV (${currentCount})`}</Btn></div></div>
+        {SERVER_EXPORT[tab]&&<Btn variant="outline" onClick={()=>downloadServerExport("csv")} style={{gap:6}} title="CSV séparé par ; — s'ouvre directement en colonnes dans Excel FR"><Download size={14}/> CSV (Excel FR)</Btn>}
+        <Btn onClick={doExport} disabled={!SERVER_EXPORT[tab]&&(selectedCount===0||currentCount===0)} style={{background:C.primary,gap:6}}><Download size={14}/> {SERVER_EXPORT[tab]?"Exporter Excel":`Exporter CSV (${currentCount})`}</Btn></div></div>
 
     {/* Tabs */}
     <div style={{display:"flex",gap:4,marginBottom:16,background:C.surfaceAlt,borderRadius:12,padding:4}}>
@@ -505,13 +519,11 @@ Facture générée par ${CO.sw} v${CO.ver}</div></body></html>`;
         </div>
 
         {/* Field selection — le détail articles est généré par le backend : colonnes fixes */}
-        {tab==="salesDetail"?
+        {SERVER_EXPORT[tab]?
         <div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`}}>
           <div style={{fontSize:12,fontWeight:700,display:"flex",alignItems:"center",gap:6,marginBottom:8}}><Grid size={13}/> Colonnes du fichier</div>
-          <div style={{fontSize:11,color:C.textMuted,lineHeight:1.7}}>
-            N° ticket, date, heure, vendeur, client, produit, réf/SKU, <b>EAN</b>, catégorie, collection,
-            couleur, code couleur, taille, quantité, PU TTC, remise €, ligne HT, TVA, ligne TTC, paiement.</div>
-          <div style={{fontSize:10,color:C.textLight,marginTop:8}}>Généré par le serveur : une ligne par article vendu, sur la période choisie.</div>
+          <div style={{fontSize:11,color:C.textMuted,lineHeight:1.7}}>{SERVER_COLUMNS[tab]}</div>
+          <div style={{fontSize:10,color:C.textLight,marginTop:8}}>Généré par le serveur sur toute la période choisie — les filtres de l'écran ne s'y appliquent pas.</div>
         </div>
         :<div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`}}>
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
@@ -535,7 +547,8 @@ Facture générée par ${CO.sw} v${CO.ver}</div></body></html>`;
       {/* Right panel — Preview */}
       <div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`,overflow:"hidden"}}>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
-          <div style={{fontSize:12,fontWeight:700,display:"flex",alignItems:"center",gap:6}}><FileText size={13}/> Aperçu ({currentCount} résultats)</div>
+          <div style={{fontSize:12,fontWeight:700,display:"flex",alignItems:"center",gap:6}}><FileText size={13}/> Aperçu ({currentCount} résultats)
+            {SERVER_EXPORT[tab]&&<span style={{fontSize:10,fontWeight:500,color:C.textMuted}}>— écran uniquement : le fichier contient toute la période</span>}</div>
           {tab==="sales"&&<Btn variant="ghost" onClick={()=>setInvoiceModal(true)} style={{fontSize:10,gap:4}}><FileText size={12}/> Facturer</Btn>}
         </div>
         <div style={{overflowX:"auto"}}>
@@ -574,7 +587,7 @@ Facture générée par ${CO.sw} v${CO.ver}</div></body></html>`;
                 </tr>);})}
             </tbody></table>}
           {currentCount>10&&<div style={{textAlign:"center",padding:"10px",fontSize:11,color:C.textMuted,borderTop:`1px solid ${C.surfaceAlt}`,marginTop:4}}>
-            ... et {currentCount-10} autres lignes (incluses dans l'export)</div>}
+            ... et {currentCount-10} autres lignes{SERVER_EXPORT[tab]?"":" (incluses dans l'export)"}</div>}
         </div>
       </div>
     </div>

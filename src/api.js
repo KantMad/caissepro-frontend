@@ -278,11 +278,13 @@ export const cashMovements = {
 
 // ══ Exports Excel (générés par le backend, download direct WebView-compatible) ══
 export const exports = {
-  // Ventes détaillées (1 ligne par article, EAN/SKU/catégorie inclus) — xlsx ou csv FR
-  salesDetailUrl: (params = {}) => {
+  // Exports générés par le backend (pas de troncature : toute la période, pas les 200
+  // dernières ventes chargées en mémoire). format: 'xlsx' (défaut) ou 'csv' (Excel FR).
+  url: (kind, params = {}) => {
     const q = new URLSearchParams({ token: getToken() || '', store_id: getStoreId() || '', ...params });
-    return `${API_URL}/api/exports/sales-detail?${q.toString()}`;
+    return `${API_URL}/api/exports/${kind}?${q.toString()}`;
   },
+  salesDetailUrl: (params = {}) => exports.url('sales-detail', params),
   invoiceEanUrl: (params = {}) => {
     const q = new URLSearchParams({ token: getToken() || '', store_id: getStoreId() || '', ...params });
     return `${API_URL}/api/exports/invoice-ean?${q.toString()}`;
