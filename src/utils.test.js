@@ -240,3 +240,31 @@ describe("hashPin / verifyPin", () => {
     expect(await verifyPin("1234", "****")).toBe(false);
   });
 });
+
+describe("norm.sale — champs necessaires aux exports", () => {
+  const apiSale = {
+    ticket_number: "2026-000145", total_ht: "100.00", total_tva: "20.00", total_ttc: "120.00",
+    grand_total: "9999.99", global_discount: "10.00", created_at: "2026-09-22T13:02:49Z",
+    items: [{ product_id: "p1", variant_id: "v1", product_name: "Pull", sku: "PU01", ean: "2000000000017",
+      category: "Pulls", collection: "Hiver", variant_color: "Noir", variant_size: "L",
+      quantity: 2, unit_price: "50.00", line_ht: "80.00", line_tva: "16.00", line_ttc: "96.00" }],
+  };
+  it("expose grandTotal (cumul fiscal de l'archive NF525)", () => {
+    expect(norm.sale(apiSale).grandTotal).toBe(9999.99);
+  });
+  it("expose SKU, EAN, categorie et collection de la ligne", () => {
+    const i = norm.sale(apiSale).items[0];
+    expect(i.product.sku).toBe("PU01");
+    expect(i.variant.ean).toBe("2000000000017");
+    expect(i.product.category).toBe("Pulls");
+    expect(i.product.collection).toBe("Hiver");
+  });
+  it("calcule la remise de ligne en euros HT (brut - net), remises % ET €", () => {
+    // 2 x 50 HT = 100 brut, ligne nette 80 HT => 20 EUR de remise
+    expect(norm.sale(apiSale).items[0].lineDiscountHT).toBe(20);
+  });
+  it("ne renvoie jamais de remise negative", () => {
+    const s = norm.sale({ items: [{ quantity: 1, unit_price: "10.00", line_ht: "15.00" }] });
+    expect(s.items[0].lineDiscountHT).toBe(0);
+  });
+});

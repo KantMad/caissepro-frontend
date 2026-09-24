@@ -49,7 +49,7 @@ function ExportsScreen(){
       {key:"color",label:"Couleur",default:true},
       {key:"size",label:"Taille",default:true},
       {key:"quantity",label:"Quantité",default:true},
-      {key:"unitPrice",label:"Prix unitaire TTC",default:true},
+      {key:"unitPrice",label:"PU HT",default:true},
       {key:"lineTTC",label:"Ligne TTC",default:true},
       {key:"discount",label:"Remise article",default:true},
       {key:"paymentMethod",label:"Mode de paiement",default:true},
@@ -266,9 +266,9 @@ function ExportsScreen(){
         if(sel.color)row["Couleur"]=i.variant?.color||i.variant_color||i.color||"";
         if(sel.size)row["Taille"]=i.variant?.size||i.variant_size||i.size||"";
         if(sel.quantity)row["Quantité"]=i.quantity||1;
-        if(sel.unitPrice)row["Prix unitaire TTC"]=Number(i.unit_price||i.unitTTC||0).toFixed(2);
+        if(sel.unitPrice)row["PU HT"]=Number(i.unit_price||i.unitTTC||0).toFixed(2);
         if(sel.lineTTC)row["Ligne TTC"]=Number(i.lineTTC||i.line_ttc||(Number(i.unit_price||0)*(i.quantity||1))).toFixed(2);
-        if(sel.discount)row["Remise article"]=i.discount?`${i.discount}${i.discountType==="amount"||i.discount_type==="amount"?"€":"%"}`:"";
+        if(sel.discount)row["Remise article"]=(i.lineDiscountHT||0)>0?`${i.lineDiscountHT.toFixed(2)}€ HT`:"";
         if(sel.paymentMethod)row["Paiement"]=payStr;
         rows.push(row);});
     });return rows;
@@ -333,11 +333,17 @@ function ExportsScreen(){
     const totalHT=items.reduce((s,i)=>s+i.lineHT,0);
     const totalTVA=items.reduce((s,i)=>s+i.lineTVA,0);
     const totalTTC=items.reduce((s,i)=>s+i.lineTTC,0);
+    // La remise globale porte sur le HT : le TTC net suit le meme ratio (cf. lib/totals.js
+    // et create_sale). Soustraire la remise du TTC donnait une facture > au ticket.
     const globalDisc=ticket.globalDiscount||0;
-    const netTTC=totalTTC-globalDisc;
+    const ratio=globalDisc>0&&totalHT>0?Math.min(globalDisc/totalHT,1):0;
+    const netHT=Math.round(totalHT*(1-ratio)*100)/100;
+    const netTVA=Math.round(totalTVA*(1-ratio)*100)/100;
+    const netTTC=Math.round((netHT+netTVA)*100)/100;
 
-    // TVA breakdown
-    const tvaBreakdown={};items.forEach(i=>{const r=`${(i.taxRate*100).toFixed(1)}%`;if(!tvaBreakdown[r])tvaBreakdown[r]={base:0,tva:0};tvaBreakdown[r].base+=i.lineHT;tvaBreakdown[r].tva+=i.lineTVA;});
+    // TVA breakdown — sur les bases NETTES, sinon la mention fiscale de la facture est fausse
+    const tvaBreakdown={};items.forEach(i=>{const r=`${(i.taxRate*100).toFixed(1)}%`;if(!tvaBreakdown[r])tvaBreakdown[r]={base:0,tva:0};
+      tvaBreakdown[r].base+=i.lineHT*(1-ratio);tvaBreakdown[r].tva+=i.lineTVA*(1-ratio);});
 
     const payLabels={cash:"Espèces",card:"Carte bancaire",amex:"American Express",contactless:"Sans-contact",giftcard:"Carte cadeau",cheque:"Chèque",avoir:"Avoir"};
     const paymentInfo=(ticket.payments||[]).map(p=>`${payLabels[p.method]||p.method}: ${p.amount.toFixed(2)} EUR`).join(" / ");
@@ -406,7 +412,7 @@ tbody tr:last-child td{border-bottom:2px solid #e2e8f0;}
 <div class="totals"><div class="totals-table">
   <div class="totals-row"><span>Sous-total HT</span><span>${totalHT.toFixed(2)} EUR</span></div>
   <div class="totals-row"><span>TVA</span><span>${totalTVA.toFixed(2)} EUR</span></div>
-  ${globalDisc>0?`<div class="totals-row discount"><span>Remise</span><span>-${globalDisc.toFixed(2)} EUR</span></div>`:""}
+  ${globalDisc>0?`<div class="totals-row discount"><span>Remise (HT)</span><span>-${globalDisc.toFixed(2)} EUR</span></div>`:""}
   <div class="totals-row bold"><span>TOTAL TTC</span><span>${netTTC.toFixed(2)} EUR</span></div></div></div>
 <div class="payment-box"><div class="label">Règlement</div><div class="value">${paymentInfo||"Non renseigné"}</div></div>
 ${invoiceNotes?`<div class="notes"><div class="label">Remarques</div>${invoiceNotes}</div>`:""}

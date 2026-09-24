@@ -351,8 +351,10 @@ function StatsScreen(){
       </div>);})()}
 
     {/* Discounts analysis */}
-    {tab==="discounts"&&(()=>{const discounted=fTickets.filter(t=>t.globalDiscount>0||(t.items||[]).some(i=>i.discount>0));
-      const totalDisc=fTickets.reduce((s,t)=>{const gd=t.globalDiscount||0;const id=(t.items||[]).reduce((si,i)=>si+(i.product?.price||0)*i.quantity*(i.discount||0)/100,0);return s+gd+id;},0);
+    {/* Remises : lineDiscountHT = brut - net (couvre % et euros) ; globalDiscount est deja en HT */}
+    {tab==="discounts"&&(()=>{const lineDisc=t=>(t.items||[]).reduce((si,i)=>si+(i.lineDiscountHT||0),0);
+      const discounted=fTickets.filter(t=>(t.globalDiscount||0)>0||lineDisc(t)>0);
+      const totalDisc=fTickets.reduce((s,t)=>s+(t.globalDiscount||0)+lineDisc(t),0);
       return(<div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`}}>
         <h3 style={{fontSize:14,fontWeight:700,marginBottom:10}}>Analyse des remises</h3>
         <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:14}}>

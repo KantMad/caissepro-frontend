@@ -733,9 +733,13 @@ function AppProvider({children}){
     }
   },[tickets]);
 
+  // CSV « Excel FR » : separateur ;, decimales a la virgule, BOM UTF-8 (sinon Excel ouvre
+  // tout dans une seule colonne et casse les accents).
   const exportCSVReport=useCallback((data,filename)=>{
-    const csv=Papa.unparse(data);const b=new Blob([csv],{type:"text/csv"});const u=URL.createObjectURL(b);
-    const a=document.createElement("a");a.href=u;a.download=filename;a.click();
+    const csv=Papa.unparse(data,{delimiter:";",newline:"\r\n"})
+      .replace(/(^|;)(-?\d+)\.(\d+)(?=;|$)/gm,(m,p,i,d)=>`${p}${i},${d}`);
+    const b=new Blob(["\uFEFF"+csv],{type:"text/csv;charset=utf-8"});const u=URL.createObjectURL(b);
+    const a=document.createElement("a");a.href=u;a.download=filename;a.click();URL.revokeObjectURL(u);
   },[]);
 
   // ══ P2: Export product catalog — via API ══
