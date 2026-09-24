@@ -179,7 +179,7 @@ function ExportsScreen(){
     data=filterBySearch(data,["avoirNumber","originalTicket","userName","customerName","reason"]);
     data=filterByAmount(data,"totalTTC");
     return data;
-  },[allExchanges,dateFrom,dateTo,searchQ,amountMin,amountMax]);
+  },[allExchanges,dateFrom,dateTo,searchQ,minAmount,maxAmount]);
 
   const filteredRefunds=useMemo(()=>{
     let data=[...allRefunds];data=filterByDate(data);data=filterByAmount(data);
