@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { Lock, Receipt, Shield, FileText, CheckCircle2, AlertTriangle, Archive, Database, Check, X } from "lucide-react";
 import { CO, C } from "../constants.jsx";
-import { Btn, Badge, SC } from "../ui.jsx";
+import { Btn, Badge, SC, Input } from "../ui.jsx";
 import { useApp } from "../context.jsx";
 
 function FiscalScreen(){
@@ -10,6 +10,10 @@ function FiscalScreen(){
   const storeName=viewingStoreId==="all"?"Tous les magasins":viewingStoreId?stores.find(s=>s.id===viewingStoreId)?.name:currentStore?.name||"";
   const[chainResult,setChainResult]=useState(null);
   const[fiscalTab,setFiscalTab]=useState("status");
+  // Exercice exporté : par défaut l'année civile en cours (1er janvier → aujourd'hui)
+  const yStart=`${new Date().getFullYear()}-01-01`,today=new Date().toISOString().split("T")[0];
+  const[fecFrom,setFecFrom]=useState(yStart);const[fecTo,setFecTo]=useState(today);
+  const[fecReglements,setFecReglements]=useState(false);
   if(!p().canExport)return<div style={{padding:40,textAlign:"center",color:C.textMuted}}>Accès réservé aux administrateurs</div>;
 
   // NF525 compliance checks
@@ -81,9 +85,23 @@ function FiscalScreen(){
             <div><div style={{fontSize:12,fontWeight:700,color:c.ok?C.fiscal:C.danger}}>{c.label}</div>
               <div style={{fontSize:10,color:C.textMuted,marginTop:1}}>{c.desc}</div></div></div>))}</div></div>
 
+      <div style={{background:C.surface,borderRadius:12,padding:14,border:`1.5px solid ${C.border}`,marginBottom:14}}>
+        <div style={{fontSize:12,fontWeight:700,marginBottom:2}}>Export FEC (article A47 A-1)</div>
+        <div style={{fontSize:10,color:C.textMuted,marginBottom:10}}>Exercice comptable à exporter. Sans bornes, le fichier contient tout l'historique du magasin.</div>
+        <div style={{display:"flex",gap:10,alignItems:"flex-end",flexWrap:"wrap"}}>
+          <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>DU</label>
+            <Input type="date" value={fecFrom} onChange={e=>setFecFrom(e.target.value)} style={{fontSize:11,padding:"8px 10px"}}/></div>
+          <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>AU</label>
+            <Input type="date" value={fecTo} onChange={e=>setFecTo(e.target.value)} style={{fontSize:11,padding:"8px 10px"}}/></div>
+          <label style={{display:"flex",alignItems:"center",gap:6,fontSize:11,color:C.textMuted,cursor:"pointer",paddingBottom:8}}>
+            <input type="checkbox" checked={fecReglements} onChange={e=>setFecReglements(e.target.checked)}/>
+            Écritures de règlement (caisse / banque)</label>
+        </div>
+      </div>
+
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>
         <Btn variant="fiscal" onClick={exportArchive} style={{height:44}}><Archive size={14}/> Archive NF525 (10 CSV)</Btn>
-        <Btn variant="info" onClick={exportFEC} style={{height:44}}><FileText size={14}/> Export FEC</Btn></div>
+        <Btn variant="info" onClick={()=>exportFEC({from:fecFrom,to:fecTo,reglements:fecReglements})} style={{height:44}}><FileText size={14}/> Export FEC</Btn></div>
     </>}
 
     {fiscalTab==="chain"&&<>

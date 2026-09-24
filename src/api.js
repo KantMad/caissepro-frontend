@@ -154,7 +154,7 @@ export const stock = {
 export const fiscal = {
   closure: (data) => api('/api/fiscal/closure', { method: 'POST', body: JSON.stringify(data) }),
   closures: () => api('/api/fiscal/closures'),
-  fec: () => api('/api/fiscal/fec'),
+  fec: (params) => api('/api/fiscal/fec?' + new URLSearchParams(params || {})),
   archive: () => api('/api/fiscal/archive').then(async data => {
     const JSZip = (await import('jszip')).default;
     const zip = new JSZip();

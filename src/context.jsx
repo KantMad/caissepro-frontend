@@ -933,7 +933,15 @@ function AppProvider({children}){
   },[addAudit,tickets,closures,gt,cashReg,currentUser,notify,addPendingSync,cashMovements]);
 
   // Exports — via API
-  const exportFEC=useCallback(async()=>{try{await API.fiscal.fec();addJET("EXPORT","Export FEC");addAudit("FEC","Export fichier FEC");}catch(e){notify("Erreur: "+e.message,"error");}},[notify,addJET,addAudit]);
+  // FEC : bornes d'exercice obligatoires cote appelant (sinon tout l'historique part au
+  // controle fiscal). opts = {from, to, reglements}
+  const exportFEC=useCallback(async(opts={})=>{try{
+    const params={};if(opts.from)params.from=opts.from+"T00:00:00";if(opts.to)params.to=opts.to+"T23:59:59";
+    if(opts.reglements)params.reglements="1";
+    await API.fiscal.fec(params);
+    const per=opts.from&&opts.to?`${opts.from} → ${opts.to}`:"tout l'historique";
+    addJET("EXPORT",`Export FEC ${per}`);addAudit("FEC",`Export fichier FEC ${per}`);
+  }catch(e){notify("Erreur: "+e.message,"error");}},[notify,addJET,addAudit]);
 
   const exportArchive=useCallback(async()=>{
     // Tenter l'export via API d'abord
