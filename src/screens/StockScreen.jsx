@@ -596,6 +596,36 @@ function StockScreen(){
         <span style={{fontWeight:700,color:C.info,whiteSpace:"nowrap"}}>{t.totalQty} pce</span>
         <Btn variant="outline" style={{height:26,fontSize:10,padding:"0 8px"}} onClick={()=>setTrPreview(t)}><Printer size={11}/> Voir</Btn></div>))}</div>}
 
+    {/* ══ Justificatif imprimable ══ */}
+    <Modal open={!!trPreview} onClose={()=>setTrPreview(null)} title={`Bon de transfert ${trPreview?.number||""}`}>
+      {trPreview&&<>
+        <div data-print-receipt style={{fontFamily:"'Courier New',monospace",fontSize:12,fontWeight:500,background:"#FAFAF8",borderRadius:10,padding:16,border:`1px solid ${C.border}`,maxWidth:340,margin:"0 auto"}}>
+          <div style={{textAlign:"center",fontWeight:800,fontSize:14}}>{settings?.name||CO.name||"Ma Boutique"}</div>
+          <div style={{borderTop:"1px dashed #999",margin:"6px 0"}}/>
+          <div style={{textAlign:"center",fontWeight:800,fontSize:14}}>BON DE TRANSFERT</div>
+          <div style={{borderTop:"1px dashed #999",margin:"6px 0"}}/>
+          {[["N°",trPreview.number],["Date",new Date(trPreview.date).toLocaleString("fr-FR")],["Opérateur",trPreview.userName||"—"],["Origine",trPreview.storeName||currentStore?.name||settings?.name||"—"]].map(([k,v])=>(
+            <div key={k} style={{display:"flex",justifyContent:"space-between",gap:8}}><span>{k}</span><span style={{textAlign:"right"}}>{v}</span></div>))}
+          <div style={{display:"flex",justifyContent:"space-between",gap:8,fontWeight:800}}><span>Destination</span><span style={{textAlign:"right"}}>{trPreview.destination}</span></div>
+          <div>Réf/Motif : {trPreview.note||"—"}</div>
+          <div style={{borderTop:"1px dashed #999",margin:"6px 0"}}/>
+          {(trPreview.items||[]).map((it,i)=>(<div key={i} style={{marginBottom:4}}>
+            <div style={{fontWeight:700}}>{it.productName}</div>
+            <div style={{display:"flex",justifyContent:"space-between"}}><span>{it.color}/{it.size}{it.sku?` | Réf: ${it.sku}`:""}</span><span style={{fontWeight:800}}>x{it.quantity}</span></div>
+            {it.ean&&<div style={{fontSize:10,color:"#666"}}>EAN: {it.ean}</div>}</div>))}
+          <div style={{borderTop:"1px dashed #999",margin:"6px 0"}}/>
+          <div style={{display:"flex",justifyContent:"space-between",fontWeight:800,fontSize:14}}><span>TOTAL PIÈCES</span><span>{trPreview.totalQty}</span></div>
+          <div style={{borderTop:"1px dashed #999",margin:"6px 0"}}/>
+          <div style={{marginTop:10}}>Signature origine :</div><div style={{borderBottom:"1px solid #000",margin:"20px 0 6px"}}/>
+          <div style={{marginTop:10}}>Signature destination :</div><div style={{borderBottom:"1px solid #000",margin:"20px 0 6px"}}/>
+          <div style={{textAlign:"center",fontSize:10,color:"#666",marginTop:6}}>Mouvement de stock — hors CA</div>
+        </div>
+        <div style={{display:"flex",gap:8,marginTop:12}}>
+          <Btn onClick={async()=>{try{await thermalPrint("transfer",trPreview);}catch(e){notify("Impression : "+e.message,"error");}}} style={{flex:1,gap:6}}><Printer size={14}/> Imprimante caisse</Btn>
+          <Btn variant="outline" onClick={()=>printReceiptOnly()} style={{flex:1,gap:6}}><Printer size={14}/> Navigateur</Btn>
+        </div></>}
+    </Modal>
+
   </div>);
 }
 
@@ -772,35 +802,6 @@ function TenuesTab({products,setProducts,users,tenUser,setTenUser,tenItems,setTe
       </div>
     </div>
 
-    {/* ══ Justificatif imprimable ══ */}
-    <Modal open={!!trPreview} onClose={()=>setTrPreview(null)} title={`Bon de transfert ${trPreview?.number||""}`}>
-      {trPreview&&<>
-        <div data-print-receipt style={{fontFamily:"'Courier New',monospace",fontSize:12,fontWeight:500,background:"#FAFAF8",borderRadius:10,padding:16,border:`1px solid ${C.border}`,maxWidth:340,margin:"0 auto"}}>
-          <div style={{textAlign:"center",fontWeight:800,fontSize:14}}>{settings?.name||CO.name||"Ma Boutique"}</div>
-          <div style={{borderTop:"1px dashed #999",margin:"6px 0"}}/>
-          <div style={{textAlign:"center",fontWeight:800,fontSize:14}}>BON DE TRANSFERT</div>
-          <div style={{borderTop:"1px dashed #999",margin:"6px 0"}}/>
-          {[["N°",trPreview.number],["Date",new Date(trPreview.date).toLocaleString("fr-FR")],["Opérateur",trPreview.userName||"—"],["Origine",trPreview.storeName||currentStore?.name||settings?.name||"—"]].map(([k,v])=>(
-            <div key={k} style={{display:"flex",justifyContent:"space-between",gap:8}}><span>{k}</span><span style={{textAlign:"right"}}>{v}</span></div>))}
-          <div style={{display:"flex",justifyContent:"space-between",gap:8,fontWeight:800}}><span>Destination</span><span style={{textAlign:"right"}}>{trPreview.destination}</span></div>
-          <div>Réf/Motif : {trPreview.note||"—"}</div>
-          <div style={{borderTop:"1px dashed #999",margin:"6px 0"}}/>
-          {(trPreview.items||[]).map((it,i)=>(<div key={i} style={{marginBottom:4}}>
-            <div style={{fontWeight:700}}>{it.productName}</div>
-            <div style={{display:"flex",justifyContent:"space-between"}}><span>{it.color}/{it.size}{it.sku?` | Réf: ${it.sku}`:""}</span><span style={{fontWeight:800}}>x{it.quantity}</span></div>
-            {it.ean&&<div style={{fontSize:10,color:"#666"}}>EAN: {it.ean}</div>}</div>))}
-          <div style={{borderTop:"1px dashed #999",margin:"6px 0"}}/>
-          <div style={{display:"flex",justifyContent:"space-between",fontWeight:800,fontSize:14}}><span>TOTAL PIÈCES</span><span>{trPreview.totalQty}</span></div>
-          <div style={{borderTop:"1px dashed #999",margin:"6px 0"}}/>
-          <div style={{marginTop:10}}>Signature origine :</div><div style={{borderBottom:"1px solid #000",margin:"20px 0 6px"}}/>
-          <div style={{marginTop:10}}>Signature destination :</div><div style={{borderBottom:"1px solid #000",margin:"20px 0 6px"}}/>
-          <div style={{textAlign:"center",fontSize:10,color:"#666",marginTop:6}}>Mouvement de stock — hors CA</div>
-        </div>
-        <div style={{display:"flex",gap:8,marginTop:12}}>
-          <Btn onClick={async()=>{try{await thermalPrint("transfer",trPreview);}catch(e){notify("Impression : "+e.message,"error");}}} style={{flex:1,gap:6}}><Printer size={14}/> Imprimante caisse</Btn>
-          <Btn variant="outline" onClick={()=>printReceiptOnly()} style={{flex:1,gap:6}}><Printer size={14}/> Navigateur</Btn>
-        </div></>}
-    </Modal>
     <Modal open={!!ticketModal} onClose={()=>setTicketModal(null)} title={`Bon de tenue ${ticketModal?.num||""}`}>
       {ticketModal&&<>
         <div data-print-receipt style={{fontFamily:"'Courier New',monospace",fontSize:12,fontWeight:500,background:"#FAFAF8",borderRadius:10,padding:16,border:`1px solid ${C.border}`}}>
