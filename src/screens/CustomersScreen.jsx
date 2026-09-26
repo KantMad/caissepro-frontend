@@ -5,6 +5,7 @@ import * as API from "../api.js";
 import { LOYALTY_TIERS, C } from "../constants.jsx";
 import { Modal, Btn, Input, Badge, SC, ConfirmDialog } from "../ui.jsx";
 import { useApp } from "../context.jsx";
+import { formatAmount } from "../lib/formatters.js";
 
 function CustomersScreen(){
   const{customers,setCustomers,tickets,exportCustomerRGPD,getLoyaltyTier,updateCustomer,deleteCustomer,addCustomer,notify}=useApp();
@@ -58,7 +59,7 @@ function CustomersScreen(){
             onMouseEnter={e=>{if(sel?.id!==c.id)e.currentTarget.style.borderColor=C.primary+"66";}} onMouseLeave={e=>{if(sel?.id!==c.id)e.currentTarget.style.borderColor=C.border;}}>
             <div style={{width:sel?30:36,height:sel?30:36,borderRadius:sel?15:18,background:C.primary,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:700,fontSize:sel?10:12}}>{c.firstName?.[0]}{c.lastName?.[0]}</div>
             <div style={{flex:1,minWidth:0}}><div style={{fontSize:sel?11:13,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.firstName} {c.lastName}</div>
-              <div style={{fontSize:sel?9:10,color:C.textMuted}}>{tier.name} — {c.points}pts — {c.totalSpent.toFixed(0)}€</div>
+              <div style={{fontSize:sel?9:10,color:C.textMuted}}>{tier.name} — {c.points}pts — {formatAmount(c.totalSpent)}€</div>
               {!sel&&c.phone&&<div style={{fontSize:9,color:C.textLight,marginTop:1}}>{c.phone}{c.email?` — ${c.email}`:""}</div>}</div>
           </div>);})}</div>
       </div>
@@ -86,7 +87,7 @@ function CustomersScreen(){
             </div></div>
           <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8,marginBottom:10}}>
             <SC icon={Star} label="Points" value={sel.points} color={C.accent}/>
-            <SC icon={Euro} label="Dépensé" value={`${sel.totalSpent.toFixed(0)}€`} color={C.primary}/>
+            <SC icon={Euro} label="Dépensé" value={`${formatAmount(sel.totalSpent)}€`} color={C.primary}/>
             <SC icon={Heart} label="Niveau" value={getLoyaltyTier(sel.points).name} color={C.fiscal}/>
             <SC icon={Receipt} label="Panier moy." value={`${custAvg.toFixed(1)}€`} color={C.info}/></div>
           <div style={{marginBottom:8}}><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>NOTES</label>

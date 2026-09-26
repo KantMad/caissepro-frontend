@@ -5,6 +5,7 @@ import printer from "../printer.js";
 import { CO, C } from "../constants.jsx";
 import { Modal, Btn, Input, SC } from "../ui.jsx";
 import { useApp } from "../context.jsx";
+import { formatAmount } from "../lib/formatters.js";
 
 function ClosureScreen(){
   const{tickets,cashReg,closures,createClosure,gt,closeReg,perm:p,avoirs,settings,printerConnected,thermalPrint,notify,trainingMode,mode}=useApp();
@@ -39,7 +40,7 @@ function ClosureScreen(){
       <SC icon={Receipt} label="Tickets" value={pt.length} color={C.info}/>
       <SC icon={Banknote} label="Espèces" value={`${cash.toFixed(2)}€`} color={C.primary}/>
       <SC icon={CreditCard} label="Carte" value={`${card.toFixed(2)}€`} color={C.info}/>
-      {mode!=="cashier"&&<SC icon={TrendingUp} label="Marge" value={`${totalMargin.toFixed(0)}€`} color="#059669"/>}
+      {mode!=="cashier"&&<SC icon={TrendingUp} label="Marge" value={`${formatAmount(totalMargin)}€`} color="#059669"/>}
       <SC icon={RotateCcw} label="Retours" value={`-${totalReturns.toFixed(2)}€`} color={C.danger}/></div>
 
     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>
@@ -68,7 +69,7 @@ function ClosureScreen(){
               <span style={{fontSize:9,color:C.textMuted}}>×</span>
               <input type="number" min="0" value={denomCounts[d]||""} onChange={e=>setDenom(d,e.target.value)}
                 style={{width:40,padding:"3px 4px",borderRadius:6,border:`1px solid ${C.border}`,fontSize:12,fontWeight:700,textAlign:"center",fontFamily:"inherit"}}/>
-              <span style={{fontSize:9,color:C.textMuted,marginLeft:"auto"}}>{(d*(denomCounts[d]||0)).toFixed(0)}€</span>
+              <span style={{fontSize:9,color:C.textMuted,marginLeft:"auto"}}>{formatAmount(d*(denomCounts[d]||0))}€</span>
             </div>))}</div></div>
         <div style={{marginBottom:10}}>
           <div style={{fontSize:11,fontWeight:700,color:C.textMuted,marginBottom:6}}>PIÈCES</div>

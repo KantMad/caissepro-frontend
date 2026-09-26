@@ -12,6 +12,7 @@ import { Modal, Btn, Input, Badge, SC, ErrorBoundary, ToastContainer, ConfirmDia
 import { useApp } from "./context.jsx";
 import { useViewport } from "./useViewport.js";
 import logo from "./assets/logo.png";
+import { formatAmount } from "./lib/formatters.js";
 import {
   LoginScreen, CashRegControl, SalesScreen, StatsScreen, StockScreen,
   HistoryScreen, ReturnScreen, ClosureScreen, CustomersScreen, FiscalScreen,
@@ -294,14 +295,14 @@ function DashOverview(){
         <div style={{fontSize:26,fontWeight:700,letterSpacing:"-0.5px",color:C.text}}>{todayCount}</div></div>
       <div style={{padding:"18px 20px",borderRight:`1px solid ${C.border}`}}>
         <div style={{fontSize:11,color:C.textMuted,marginBottom:4,fontWeight:500}}>CA du jour</div>
-        <div style={{fontSize:26,fontWeight:700,letterSpacing:"-0.5px",color:C.primary}}>{todayCA.toFixed(0)}€</div></div>
+        <div style={{fontSize:26,fontWeight:700,letterSpacing:"-0.5px",color:C.primary}}>{formatAmount(todayCA)}€</div></div>
       <div style={{padding:"18px 20px"}}>
         <div style={{fontSize:11,color:C.textMuted,marginBottom:4,fontWeight:500}}>Panier moyen</div>
         <div style={{fontSize:26,fontWeight:700,letterSpacing:"-0.5px",color:C.text}}>{todayAvg.toFixed(1)}€</div></div></div>
 
     <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12,marginBottom:20}}>
-      <SC icon={Euro} label="CA total (GT)" value={`${totalCA.toFixed(0)}€`} color={C.primary}/>
-      {p().canViewMargin&&<SC icon={TrendingUp} label="Marge" value={`${margin.toFixed(0)}€`} color="#059669"/>}
+      <SC icon={Euro} label="CA total (GT)" value={`${formatAmount(totalCA)}€`} color={C.primary}/>
+      {p().canViewMargin&&<SC icon={TrendingUp} label="Marge" value={`${formatAmount(margin)}€`} color="#059669"/>}
       <SC icon={Receipt} label="Tickets" value={totalTickets} color={C.info}/>
       <SC icon={AlertTriangle} label="Alertes stock" value={stockAlerts.length} color={stockAlerts.length>0?C.danger:C.textLight}/></div>
     {stockAlerts.length>0&&<div style={{background:C.surface,borderRadius:12,padding:14,marginBottom:16,border:`1px solid ${C.border}`,borderLeft:`3px solid ${C.warn}`}}>
@@ -313,7 +314,7 @@ function DashOverview(){
         <span style={{fontSize:12,fontWeight:700,color:i<3?C.primary:C.textLight,width:22,height:22,borderRadius:6,background:i<3?C.primaryLight:C.surfaceAlt,display:"flex",alignItems:"center",justifyContent:"center"}}>{i+1}</span>
         <span style={{flex:1,fontSize:13,fontWeight:500,color:C.text}}>{b.name||b.product_name}</span>
         <span style={{fontSize:12,color:C.textMuted}}>{b.qty||b.total_qty} vendus</span>
-        <span style={{fontSize:13,fontWeight:600,color:C.primary}}>{(parseFloat(b.revenue)||0).toFixed(0)}€</span></div>))}</div>}
+        <span style={{fontSize:13,fontWeight:600,color:C.primary}}>{formatAmount(parseFloat(b.revenue)||0)}€</span></div>))}</div>}
   </div>);
 }
 

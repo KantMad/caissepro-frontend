@@ -75,10 +75,12 @@ describe("Écrans — rendu sans plantage", () => {
     expect(container.textContent.length).toBeGreaterThan(0);
   });
 
-  it("Stats se monte", () => {
+  it("Stats se monte et affiche les montants au centime", () => {
     const { container } = render(<AppProvider><StatsScreen /></AppProvider>);
-    expect(container.textContent.length).toBeGreaterThan(0);
     expect(errors.join("\n")).not.toMatch(/is not defined|Cannot read/);
+    // Le CA TTC etait arrondi a l'euro (toFixed(0)) : on exige deux decimales.
+    expect(container.textContent).toMatch(/\d+\.\d{2}€/);
+    expect(container.textContent).not.toMatch(/CA TTC\s*\d+€/);
   });
 
   it("Fiscal se monte (FEC + archive)", () => {

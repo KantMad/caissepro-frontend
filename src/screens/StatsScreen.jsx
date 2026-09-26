@@ -5,7 +5,7 @@ import * as API from "../api.js";
 import { C } from "../constants.jsx";
 import { Btn, Input, Badge, SC } from "../ui.jsx";
 import { useApp } from "../context.jsx";
-import { getPaymentLabel, ticketPieces, salesIndex } from "../lib/formatters.js";
+import { getPaymentLabel, ticketPieces, salesIndex, formatAmount } from "../lib/formatters.js";
 
 function StatsScreen(){
   const{tickets,products,avoirs,bestSellers:allBestSellers,salesBySeller,salesByVariant,caEvolution,salesByCollection,exportCSVReport,perm,commissions,salesGoals,setSellerGoal,settings,mode}=useApp();
@@ -117,11 +117,11 @@ function StatsScreen(){
       <select value={catFilter} onChange={e=>setCatFilter(e.target.value)} style={{padding:"4px 8px",borderRadius:6,border:`1px solid ${C.border}`,fontSize:10,fontFamily:"inherit"}}>
         <option value="">Toutes catégories</option>{allCats.map(c=>(<option key={c} value={c}>{c}</option>))}</select></div>
     <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:10,marginBottom:16}}>
-      <div><SC icon={Euro} label="CA TTC" value={`${stats.tTTC.toFixed(0)}€`} color={C.primary} sub={<PctBadge cur={stats.tTTC} prev={prevStats.tTTC}/>}/></div>
+      <div><SC icon={Euro} label="CA TTC" value={`${formatAmount(stats.tTTC)}€`} color={C.primary} sub={<PctBadge cur={stats.tTTC} prev={prevStats.tTTC}/>}/></div>
       <div><SC icon={Receipt} label="Tickets" value={stats.count} color={C.info} sub={<PctBadge cur={stats.count} prev={prevStats.count}/>}/></div>
       <SC icon={TrendingUp} label="Panier moy." value={`${stats.avg.toFixed(1)}€`} color={C.accent}/>
       <div><SC icon={Receipt} label="Indice de vente" value={stats.upt.toFixed(2)} color={C.info} sub={<span style={{fontSize:10,color:C.textMuted}}>pièces/ticket · {stats.pieces} pièces <PctBadge cur={stats.upt} prev={prevStats.upt}/></span>}/></div>
-      {mode!=="cashier"&&<SC icon={BarChart2} label="Marge" value={`${stats.margin.toFixed(0)}€`} color="#059669"/>}
+      {mode!=="cashier"&&<SC icon={BarChart2} label="Marge" value={`${formatAmount(stats.margin)}€`} color="#059669"/>}
       {mode!=="cashier"&&<SC icon={BarChart2} label="Marge %" value={stats.tHT>0?`${(stats.margin/stats.tHT*100).toFixed(1)}%`:"—"} color="#059669"/>}</div>
 
     <div style={{display:"flex",gap:6,marginBottom:14,flexWrap:"wrap"}}>
@@ -233,7 +233,7 @@ function StatsScreen(){
         {!dateFrom?<div style={{padding:20,textAlign:"center",color:C.textMuted,fontSize:12}}>Sélectionnez une période ci-dessus pour activer la comparaison</div>
         :<div>
           <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12,marginBottom:16}}>
-            {[{l:"CA TTC",cur:stats.tTTC,prev:prevStats.tTTC,fmt:v=>`${v.toFixed(0)}€`},{l:"Nb tickets",cur:stats.count,prev:prevStats.count,fmt:v=>v},
+            {[{l:"CA TTC",cur:stats.tTTC,prev:prevStats.tTTC,fmt:v=>`${formatAmount(v)}€`},{l:"Nb tickets",cur:stats.count,prev:prevStats.count,fmt:v=>v},
               {l:"Panier moyen",cur:stats.avg,prev:prevAvg,fmt:v=>`${v.toFixed(1)}€`},{l:"Indice de vente",cur:stats.upt,prev:prevStats.upt,fmt:v=>v.toFixed(2)}].map(x=>{const p=pctChange(x.cur,x.prev);return(
               <div key={x.l} style={{padding:14,borderRadius:12,background:C.surfaceAlt,textAlign:"center"}}>
                 <div style={{fontSize:10,color:C.textMuted,fontWeight:600,marginBottom:4}}>{x.l}</div>
@@ -290,7 +290,7 @@ function StatsScreen(){
                     <span style={{color:C.textMuted}}>— {v.size}</span></div>
                   <div style={{display:"flex",justifyContent:"space-between",marginTop:3}}>
                     <span style={{fontWeight:700,color:C.primary}}>{v.qty} ({pct.toFixed(0)}%)</span>
-                    <span style={{color:C.textMuted}}>{v.revenue.toFixed(0)}€</span></div>
+                    <span style={{color:C.textMuted}}>{formatAmount(v.revenue)}€</span></div>
                   <div style={{height:3,background:C.surfaceAlt,borderRadius:2,marginTop:3}}>
                     <div style={{width:`${pct}%`,height:"100%",background:C.primary,borderRadius:2}}/></div>
                 </div>);})}
@@ -313,11 +313,11 @@ function StatsScreen(){
             <div style={{padding:12,borderRadius:10,background:C.primaryLight,textAlign:"center"}}>
               <div style={{fontSize:20,fontWeight:800,color:C.primary}}>{identified.length}</div>
               <div style={{fontSize:10,color:C.primaryDark,fontWeight:600}}>Ventes identifiées</div>
-              <div style={{fontSize:12,fontWeight:700,color:C.primary}}>{identCA.toFixed(0)}€</div></div>
+              <div style={{fontSize:12,fontWeight:700,color:C.primary}}>{formatAmount(identCA)}€</div></div>
             <div style={{padding:12,borderRadius:10,background:C.surfaceAlt,textAlign:"center"}}>
               <div style={{fontSize:20,fontWeight:800,color:C.textMuted}}>{anonymous.length}</div>
               <div style={{fontSize:10,color:C.textMuted,fontWeight:600}}>Ventes anonymes</div>
-              <div style={{fontSize:12,fontWeight:700,color:C.textMuted}}>{anonCA.toFixed(0)}€</div></div></div>
+              <div style={{fontSize:12,fontWeight:700,color:C.textMuted}}>{formatAmount(anonCA)}€</div></div></div>
           <div style={{fontSize:11,color:C.textMuted}}>Taux d'identification: <strong style={{color:C.primary}}>{fTickets.length?(identified.length/fTickets.length*100).toFixed(1):0}%</strong></div>
           {identified.length>0&&<div style={{fontSize:11,color:C.textMuted,marginTop:4}}>Panier moyen identifié: <strong>{(identCA/identified.length).toFixed(1)}€</strong> vs anonyme: <strong>{anonymous.length?(anonCA/anonymous.length).toFixed(1):0}€</strong></div>}
         </div>
@@ -325,7 +325,7 @@ function StatsScreen(){
           <h3 style={{fontSize:14,fontWeight:700,marginBottom:10}}>Top clients</h3>
           {topCusts.slice(0,8).map((c,i)=>(<div key={i} style={{display:"flex",justifyContent:"space-between",padding:6,borderBottom:`1px solid ${C.border}`,fontSize:11}}>
             <span style={{fontWeight:i<3?700:400}}>{i+1}. {c.name}</span>
-            <span><Badge color={C.primary}>{c.count} achats</Badge> <strong style={{color:C.primary}}>{c.total.toFixed(0)}€</strong></span></div>))}</div>
+            <span><Badge color={C.primary}>{c.count} achats</Badge> <strong style={{color:C.primary}}>{formatAmount(c.total)}€</strong></span></div>))}</div>
       </div>);})()}
 
     {/* Retours stats */}
@@ -341,7 +341,7 @@ function StatsScreen(){
           <h3 style={{fontSize:14,fontWeight:700,marginBottom:10}}>Statistiques retours</h3>
           <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8}}>
             <SC icon={RotateCcw} label="Retours" value={totalReturns} color={C.fiscal}/>
-            <SC icon={Euro} label="Montant" value={`${totalReturnValue.toFixed(0)}€`} color={C.danger}/>
+            <SC icon={Euro} label="Montant" value={`${formatAmount(totalReturnValue)}€`} color={C.danger}/>
             <SC icon={TrendingUp} label="Taux retour" value={`${returnRate.toFixed(1)}%`} color={returnRate>5?C.danger:C.primary}/></div></div>
         <div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`}}>
           <h3 style={{fontSize:14,fontWeight:700,marginBottom:10}}>Motifs de retour</h3>
@@ -359,7 +359,7 @@ function StatsScreen(){
         <h3 style={{fontSize:14,fontWeight:700,marginBottom:10}}>Analyse des remises</h3>
         <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:14}}>
           <SC icon={Percent} label="Ventes avec remise" value={discounted.length} color={C.accent}/>
-          <SC icon={Euro} label="Total remisé" value={`${totalDisc.toFixed(0)}€`} color={C.warn}/>
+          <SC icon={Euro} label="Total remisé" value={`${formatAmount(totalDisc)}€`} color={C.warn}/>
           <SC icon={TrendingUp} label="% ventes remisées" value={`${fTickets.length?(discounted.length/fTickets.length*100).toFixed(1):0}%`} color={C.info}/></div>
       </div>);})()}
   </div>);
