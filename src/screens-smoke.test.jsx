@@ -36,6 +36,7 @@ import ExportsScreen from "./screens/ExportsScreen.jsx";
 import FiscalScreen from "./screens/FiscalScreen.jsx";
 import StockScreen from "./screens/StockScreen.jsx";
 import StatsScreen from "./screens/StatsScreen.jsx";
+import LabelsScreen from "./screens/LabelsScreen.jsx";
 
 // Un admin en session : sans cela les ecrans affichent « Acces reserve aux administrateurs »
 const asAdmin = () => {
@@ -81,6 +82,12 @@ describe("Écrans — rendu sans plantage", () => {
     // Le CA TTC etait arrondi a l'euro (toFixed(0)) : on exige deux decimales.
     expect(container.textContent).toMatch(/\d+\.\d{2}€/);
     expect(container.textContent).not.toMatch(/CA TTC\s*\d+€/);
+  });
+
+  it("Étiquettes se monte", () => {
+    const { container } = render(<AppProvider><LabelsScreen /></AppProvider>);
+    expect(container.textContent).toContain("Étiquettes");
+    expect(errors.join("\n")).not.toMatch(/is not defined|Cannot read/);
   });
 
   it("Fiscal se monte (FEC + archive)", () => {

@@ -221,20 +221,43 @@ export function generateEAN13(prefix, seq) {
   return digits12 + String((10 - (sum % 10)) % 10);
 }
 
-export function EAN13Svg({ code, width = 180, height = 60 }) {
-  if (!code || code.length !== 13) return null;
-  const digits = code.split("").map(Number);
+// Motif binaire EAN-13 : 95 modules (garde 101 + 6 chiffres + garde centrale 01010
+// + 6 chiffres + garde 101). Source unique : tickets, cartes cadeaux ET etiquettes.
+export function ean13Bits(code) {
+  if (!code || !/^\d{13}$/.test(String(code))) return "";
+  const digits = String(code).split("").map(Number);
   const parity = EAN_PARITY[digits[0]];
-  let bits = "101"; // start guard
-  for (let i = 0; i < 6; i++) {
-    const table = parity[i] === "L" ? EAN_L : EAN_G;
-    bits += table[digits[i + 1]];
+  let bits = "101";
+  for (let i = 0; i < 6; i++) bits += (parity[i] === "L" ? EAN_L : EAN_G)[digits[i + 1]];
+  bits += "01010";
+  for (let i = 0; i < 6; i++) bits += EAN_R[digits[i + 7]];
+  return bits + "101";
+}
+
+// Verifie la cle de controle (13e chiffre) — un EAN faux ne doit jamais partir en etiquette.
+export function isValidEAN13(code) {
+  if (!code || !/^\d{13}$/.test(String(code))) return false;
+  const d = String(code).split("").map(Number);
+  let sum = 0;
+  for (let i = 0; i < 12; i++) sum += d[i] * (i % 2 === 0 ? 1 : 3);
+  return (10 - (sum % 10)) % 10 === d[12];
+}
+
+// Barres SVG (chaine HTML) a partir du motif — reutilise par toutes les impressions.
+export function ean13Rects(code, width, height) {
+  const bits = ean13Bits(code);
+  if (!bits) return "";
+  const barW = width / bits.length;
+  let rects = "";
+  for (let i = 0; i < bits.length; i++) {
+    if (bits[i] === "1") rects += `<rect x="${(i * barW).toFixed(3)}" y="0" width="${barW.toFixed(3)}" height="${height}" fill="#000"/>`;
   }
-  bits += "01010"; // center guard
-  for (let i = 0; i < 6; i++) {
-    bits += EAN_R[digits[i + 7]];
-  }
-  bits += "101"; // end guard
+  return rects;
+}
+
+export function EAN13Svg({ code, width = 180, height = 60 }) {
+  const bits = ean13Bits(code);
+  if (!bits) return null;
   const barW = width / bits.length;
   const bars = [];
   for (let i = 0; i < bits.length; i++) {
@@ -250,61 +273,88 @@ export function EAN13Svg({ code, width = 180, height = 60 }) {
 
 // EAN-13 SVG as HTML string (for popup windows)
 export function ean13SvgHtml(code, width = 180, height = 60) {
-  if (!code || code.length !== 13) return "";
-  const digits = code.split("").map(Number);
-  const parity = EAN_PARITY[digits[0]];
-  let bits = "101";
-  for (let i = 0; i < 6; i++) { bits += (parity[i] === "L" ? EAN_L : EAN_G)[digits[i + 1]]; }
-  bits += "01010";
-  for (let i = 0; i < 6; i++) { bits += EAN_R[digits[i + 7]]; }
-  bits += "101";
-  const barW = width / bits.length;
-  let rects = "";
-  for (let i = 0; i < bits.length; i++) {
-    if (bits[i] === "1") rects += `<rect x="${(i * barW).toFixed(2)}" y="0" width="${barW.toFixed(2)}" height="${height}" fill="#000"/>`;
-  }
+  const rects = ean13Rects(code, width, height);
+  if (!rects) return "";
   return `<div style="text-align:center;margin-top:8px"><svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">${rects}</svg><div style="font-family:monospace;font-size:11px;letter-spacing:2px;margin-top:2px">${code}</div></div>`;
 }
 
-/* ══════════ BARCODE LABEL PRINTING ══════════ */
-export function printBarcodeLabels(product,settings){
-  const fmt=settings?.labelFormat||"50x30";const content=settings?.labelContent||"ean+price";
-  const[w,h]=fmt.split("x").map(Number);
-  const pm=settings?.pricingMode||"TTC";
-  const variants=(product.variants||[]).filter(v=>v.ean);
-  if(!variants.length){alert("Aucune variante avec code EAN. Ajoutez des EAN pour imprimer des étiquettes.");return;}
-  // Generate barcode SVG using Code128-like simple rendering
-  const encodeBarcode=(code)=>{
-    const bars=[];let x=0;const narrow=1.5;const wide=3;
-    // Simple EAN/Code display — use SVG text for the number and lines pattern
-    for(let i=0;i<code.length;i++){const c=code.charCodeAt(i);
-      const pattern=((c*7+i*13)%4===0)?[wide,narrow,narrow,wide]:[narrow,wide,wide,narrow];
-      pattern.forEach((bw,j)=>{bars.push({x,w:bw,fill:j%2===0});x+=bw;});}
-    return{bars,totalWidth:x};
-  };
-  const labels=variants.map(v=>{
-    const ean=v.ean||"";const bc=encodeBarcode(ean);
-    const showName=content.includes("name");const showPrice=content.includes("price");
-    return`<div style="width:${w}mm;height:${h}mm;border:0.5px dashed #ccc;display:inline-flex;flex-direction:column;align-items:center;justify-content:center;padding:1mm;box-sizing:border-box;page-break-inside:avoid;overflow:hidden">
-      ${showName?`<div style="font-size:${Math.min(8,h/5)}px;font-weight:700;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;line-height:1.2">${escapeHtml(product.name)}</div>`:""}
-      ${showName&&v.color?`<div style="font-size:${Math.min(6,h/7)}px;color:#666;line-height:1.1">${escapeHtml(v.color)} / ${escapeHtml(v.size)}</div>`:""}
-      <svg viewBox="0 0 ${bc.totalWidth} 30" style="width:${w-4}mm;height:${h*0.4}mm;margin:0.5mm 0">
-        ${bc.bars.filter(b=>b.fill).map(b=>`<rect x="${b.x}" y="0" width="${b.w}" height="30" fill="#000"/>`).join("")}
-      </svg>
-      <div style="font-size:${Math.min(7,h/5)}px;font-family:monospace;letter-spacing:1px;font-weight:600">${escapeHtml(ean)}</div>
-      ${showPrice?`<div style="font-size:${Math.min(9,h/4)}px;font-weight:800;color:#000">${product.price.toFixed(2)}€ ${pm}</div>`:""}
+/* ══════════ ETIQUETTES CODE-BARRES ══════════ */
+// Formats courants d'etiquettes textile (largeur x hauteur en mm)
+export const LABEL_FORMATS = [
+  { id: "30x20", w: 30, h: 20, l: "30 x 20 mm — petite" },
+  { id: "40x30", w: 40, h: 30, l: "40 x 30 mm — standard" },
+  { id: "50x30", w: 50, h: 30, l: "50 x 30 mm — large" },
+  { id: "60x40", w: 60, h: 40, l: "60 x 40 mm — grande" },
+];
+
+/**
+ * Construit le HTML d'une planche d'etiquettes.
+ * @param {Array} lignes - [{ productName, sku, color, colorCode, size, ean, price, qty }]
+ * @param {Object} opts - { format:"40x30", name, colorSize, price, sku, pricingMode }
+ * Le code-barres est un VRAI EAN-13 (meme encodage que les tickets) : scannable.
+ */
+export function buildLabelsHtml(lignes, opts = {}) {
+  const fmt = LABEL_FORMATS.find(f => f.id === (opts.format || "40x30")) || LABEL_FORMATS[1];
+  const { w, h } = fmt;
+  const pm = opts.pricingMode === "HT" ? "HT" : "TTC";
+  const cards = [];
+  let ignorees = 0;
+  for (const l of lignes) {
+    if (!isValidEAN13(l.ean)) { ignorees += Math.max(1, l.qty || 1); continue; }
+    // Code-barres : ~55 % de la hauteur, hauteur minimale de 8 mm pour rester lisible
+    const bcH = Math.max(8, h * 0.45), bcW = w - 6;
+    const rects = ean13Rects(l.ean, 100, 30);
+    const variante = [l.color, l.size].filter(Boolean).join(" / ") + (l.colorCode ? ` (${l.colorCode})` : "");
+    const card = `<div class="lbl" style="width:${w}mm;height:${h}mm">
+      ${opts.name && l.productName ? `<div class="nom">${escapeHtml(l.productName)}</div>` : ""}
+      ${opts.colorSize && variante.trim() ? `<div class="var">${escapeHtml(variante)}</div>` : ""}
+      ${opts.sku && l.sku ? `<div class="sku">${escapeHtml(l.sku)}</div>` : ""}
+      <svg viewBox="0 0 100 30" preserveAspectRatio="none" style="width:${bcW}mm;height:${bcH}mm">${rects}</svg>
+      <div class="ean">${escapeHtml(l.ean)}</div>
+      ${opts.price && l.price != null ? `<div class="prix">${Number(l.price).toFixed(2)}€ ${pm}</div>` : ""}
     </div>`;
-  });
-  const win=window.open("","_blank","width=800,height=600");
-  if(!win){alert("Popup bloqué — autorisez les popups pour imprimer les étiquettes");return;}
-  win.document.write(`<!DOCTYPE html><html><head><title>Étiquettes — ${escapeHtml(product.name)}</title>
-    <style>@page{margin:2mm}body{margin:0;font-family:Arial,sans-serif}
-    .grid{display:flex;flex-wrap:wrap;gap:1mm;padding:2mm}
-    @media print{.no-print{display:none!important}}</style></head><body>
-    <div class="no-print" style="padding:10px;background:#f5f5f5;border-bottom:1px solid #ddd;display:flex;align-items:center;gap:10px">
-      <button onclick="window.print()" style="padding:8px 20px;background:#047857;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer">🖨️ Imprimer</button>
-      <span style="font-size:12px;color:#666">${variants.length} étiquette(s) — ${fmt} mm — ${escapeHtml(product.name)}</span>
-    </div>
-    <div class="grid">${labels.join("")}</div></body></html>`);
+    for (let i = 0; i < Math.max(1, l.qty || 1); i++) cards.push(card);
+  }
+  const style = `@page{size:auto;margin:3mm}
+    body{margin:0;font-family:Arial,Helvetica,sans-serif;-webkit-print-color-adjust:exact}
+    .grid{display:flex;flex-wrap:wrap;gap:1.5mm;padding:2mm;align-content:flex-start}
+    .lbl{border:0.2mm solid #eee;display:flex;flex-direction:column;align-items:center;justify-content:center;
+      padding:0.8mm;box-sizing:border-box;overflow:hidden;page-break-inside:avoid;text-align:center}
+    .nom{font-size:${Math.min(8, h / 3.5).toFixed(1)}pt;font-weight:700;line-height:1.1;max-width:100%;
+      white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .var{font-size:${Math.min(7, h / 4.5).toFixed(1)}pt;color:#333;line-height:1.1}
+    .sku{font-size:${Math.min(6.5, h / 5).toFixed(1)}pt;font-family:monospace;color:#555;line-height:1.1}
+    .ean{font-size:${Math.min(7, h / 4.5).toFixed(1)}pt;font-family:monospace;letter-spacing:0.4pt;line-height:1.2}
+    .prix{font-size:${Math.min(11, h / 2.8).toFixed(1)}pt;font-weight:800;line-height:1.1}
+    @media print{.no-print{display:none!important}.lbl{border:none}}`;
+  return { html: `<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><title>Étiquettes</title><style>${style}</style></head>
+    <body><div class="no-print" style="padding:10px;background:#f5f5f5;border-bottom:1px solid #ddd;display:flex;align-items:center;gap:12px">
+      <button onclick="window.print()" style="padding:8px 20px;background:#047857;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer">Imprimer</button>
+      <span style="font-size:12px;color:#666">${cards.length} étiquette(s) — ${fmt.l}${ignorees ? ` — ${ignorees} ignorée(s) : code-barres manquant ou invalide` : ""}</span>
+    </div><div class="grid">${cards.join("")}</div></body></html>`, count: cards.length, ignorees };
+}
+
+// Ouvre la planche d'etiquettes dans un onglet (impression via le pilote de l'imprimante).
+export function printLabels(lignes, opts = {}) {
+  const { html, count, ignorees } = buildLabelsHtml(lignes, opts);
+  if (!count) return { count: 0, ignorees };
+  const win = window.open("", "_blank", "width=900,height=700");
+  if (!win) return { count: 0, ignorees, popupBloque: true };
+  win.document.write(html);
   win.document.close();
+  return { count, ignorees };
+}
+
+// Fiche produit : une etiquette par declinaison ayant un code-barres.
+export function printBarcodeLabels(product, settings) {
+  const lignes = (product.variants || []).map(v => ({
+    productName: product.name, sku: product.sku, color: v.color, colorCode: v.colorCode || v.color_code,
+    size: v.size, ean: v.ean, price: product.price, qty: 1,
+  }));
+  const content = settings?.labelContent || "ean+price";
+  return printLabels(lignes, {
+    format: settings?.labelFormat || "40x30",
+    name: content.includes("name"), colorSize: true, sku: true,
+    price: content.includes("price"), pricingMode: settings?.pricingMode,
+  });
 }

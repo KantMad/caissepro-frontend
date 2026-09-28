@@ -12,6 +12,7 @@ export { FiscalScreen } from "./FiscalScreen.jsx";
 export { AuditScreen } from "./AuditScreen.jsx";
 export { CSVImportWizard } from "./CSVImportWizard.jsx";
 export { ProductsScreen } from "./ProductsScreen.jsx";
+export { LabelsScreen } from "./LabelsScreen.jsx";
 export { ReturnsHistoryScreen } from "./ReturnsHistoryScreen.jsx";
 export { SettingsScreen } from "./SettingsScreen.jsx";
 export { GiftCardScreen } from "./GiftCardScreen.jsx";

@@ -17,8 +17,7 @@ import {
   escapeHtml, getPriceHT, getPriceTTC, catIcon, variantKey,
   getSizeRank, generateEAN13, norm, hashPin, verifyPin,
   ean13SvgHtml, autoImportSizesFromProducts,
-  sha256, getVariantOrderMap, loadVariantOrderFromSettings,
-} from "./utils.jsx";
+  sha256, getVariantOrderMap, loadVariantOrderFromSettings, ean13Bits, ean13Rects, isValidEAN13, buildLabelsHtml } from "./utils.jsx";
 
 describe("escapeHtml", () => {
   it("échappe les caractères dangereux", () => {
@@ -266,5 +265,111 @@ describe("norm.sale — champs necessaires aux exports", () => {
   it("ne renvoie jamais de remise negative", () => {
     const s = norm.sale({ items: [{ quantity: 1, unit_price: "10.00", line_ht: "15.00" }] });
     expect(s.items[0].lineDiscountHT).toBe(0);
+  });
+});
+
+describe("EAN-13 — encodage des etiquettes", () => {
+  // 2996000000028 = EAN genere par la caisse (seed demo)
+  const EAN = "2996000000028";
+
+  it("valide la cle de controle", () => {
+    expect(isValidEAN13(EAN)).toBe(true);
+    expect(isValidEAN13("2996000000029")).toBe(false);  // cle fausse
+    expect(isValidEAN13("123")).toBe(false);
+    expect(isValidEAN13(null)).toBe(false);
+  });
+
+  it("produit 95 modules avec les gardes aux bons endroits", () => {
+    const bits = ean13Bits(EAN);
+    expect(bits.length).toBe(95);
+    expect(bits.slice(0, 3)).toBe("101");          // garde depart
+    expect(bits.slice(45, 50)).toBe("01010");      // garde centrale
+    expect(bits.slice(-3)).toBe("101");            // garde fin
+  });
+
+  it("le motif differe d'un code a l'autre (pas de barres factices)", () => {
+    expect(ean13Bits("2996000000028")).not.toBe(ean13Bits("2996000000011"));
+  });
+
+  it("refuse un code invalide plutot que de dessiner n'importe quoi", () => {
+    expect(ean13Bits("abc")).toBe("");
+    expect(ean13Rects("abc", 100, 30)).toBe("");
+  });
+});
+
+describe("Planche d'etiquettes", () => {
+  const ligne = (over = {}) => ({ productName: "Pull col rond", sku: "PU01", color: "Noir",
+    size: "L", ean: "2996000000028", price: 59.9, qty: 1, ...over });
+
+  it("repete l'etiquette autant de fois que la quantite demandee", () => {
+    const r = buildLabelsHtml([ligne({ qty: 3 })], { format: "40x30" });
+    expect(r.count).toBe(3);
+    expect(r.ignorees).toBe(0);
+  });
+
+  it("ignore les declinaisons sans code-barres valide et le signale", () => {
+    const r = buildLabelsHtml([ligne(), ligne({ ean: "", qty: 2 }), ligne({ ean: "1234567890123" })], {});
+    expect(r.count).toBe(1);
+    expect(r.ignorees).toBe(3);
+    expect(r.html).toContain("ignorée(s)");
+  });
+
+  it("n'affiche que ce qui est demande", () => {
+    const avecPrix = buildLabelsHtml([ligne()], { price: true, colorSize: true, sku: true }).html;
+    expect(avecPrix).toContain("59.90€");
+    expect(avecPrix).toContain("Noir / L");
+    expect(avecPrix).toContain("PU01");
+    const sansPrix = buildLabelsHtml([ligne()], { colorSize: true }).html;
+    expect(sansPrix).not.toContain("59.90€");
+    expect(sansPrix).not.toContain("PU01");
+  });
+
+  it("respecte le format choisi", () => {
+    expect(buildLabelsHtml([ligne()], { format: "60x40" }).html).toContain("width:60mm;height:40mm");
+    expect(buildLabelsHtml([ligne()], { format: "30x20" }).html).toContain("width:30mm;height:20mm");
+  });
+});
+
+// Preuve de scannabilite : on DECODE le motif produit et on doit retrouver le code.
+// (Un motif "joli mais faux", comme l'ancien generateur d'etiquettes, echoue ici.)
+describe("EAN-13 — relecture du motif", () => {
+  const L = ["0001101","0011001","0010011","0111101","0100011","0110001","0101111","0111011","0110111","0001011"];
+  const G = ["0100111","0110011","0011011","0100001","0011101","0111001","0000101","0010001","0001001","0010111"];
+  const R = ["1110010","1100110","1101100","1000010","1011100","1001110","1010000","1000100","1001000","1110100"];
+  const PARITY = ["LLLLLL","LLGLGG","LLGGLG","LLGGGL","LGLLGG","LGGLLG","LGGGLL","LGLGLG","LGLGGL","LGGLGL"];
+
+  const decode = (bits) => {
+    if (bits.length !== 95 || bits.slice(0,3) !== "101" || bits.slice(45,50) !== "01010" || bits.slice(-3) !== "101") return null;
+    let parity = "", left = [];
+    for (let i = 0; i < 6; i++) {
+      const chunk = bits.substr(3 + i*7, 7);
+      const li = L.indexOf(chunk), gi = G.indexOf(chunk);
+      if (li >= 0) { parity += "L"; left.push(li); }
+      else if (gi >= 0) { parity += "G"; left.push(gi); }
+      else return null;
+    }
+    const first = PARITY.indexOf(parity);
+    if (first < 0) return null;
+    const right = [];
+    for (let i = 0; i < 6; i++) {
+      const ri = R.indexOf(bits.substr(50 + i*7, 7));
+      if (ri < 0) return null;
+      right.push(ri);
+    }
+    return String(first) + left.join("") + right.join("");
+  };
+
+  it("un lecteur retrouve exactement le code encode", () => {
+    for (const code of ["2996000000028", "2996000000011", "3665249278022", "0123456789012"]) {
+      expect(decode(ean13Bits(code)), code).toBe(code);
+    }
+  });
+
+  it("le motif de l'etiquette est celui du ticket (meme source)", () => {
+    const code = "3665249468805";
+    const rects = ean13Rects(code, 100, 30);
+    // autant de rectangles que de groupes de barres noires dans le motif
+    const noires = (ean13Bits(code).match(/1+/g) || []).reduce((n, g) => n + g.length, 0);
+    expect((rects.match(/<rect/g) || []).length).toBe(noires);
   });
 });
