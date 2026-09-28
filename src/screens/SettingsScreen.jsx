@@ -3,7 +3,7 @@ import { Trash2, CreditCard, Plus, XCircle, RotateCcw, Euro, AlertTriangle, Save
 import * as API from "../api.js";
 import printer from "../printer.js";
 import { C, setHighContrast, isHighContrast } from "../constants.jsx";
-import { DEFAULT_CAT_ICONS, getVariantOrderMap, saveVariantOrderMap, DEFAULT_SIZE_RANKING, getSizeRanking, saveSizeRanking, norm } from "../utils.jsx";
+import { DEFAULT_CAT_ICONS, getVariantOrderMap, saveVariantOrderMap, DEFAULT_SIZE_RANKING, getSizeRanking, saveSizeRanking, norm, LABEL_FORMATS } from "../utils.jsx";
 import { Btn, Input, Badge } from "../ui.jsx";
 import { useApp } from "../context.jsx";
 import hardwareManager from "../hardware.js";
@@ -1355,15 +1355,24 @@ function SettingsScreen(){
             <p style={{fontSize:10,color:C.textMuted,margin:0}}>Imprimez des étiquettes code-barres EAN pour vos produits</p></div></div>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:10}}>
           <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>FORMAT ÉTIQUETTE</label>
-            <select value={settings.labelFormat||"50x30"} onChange={e=>setSettings(s=>({...s,labelFormat:e.target.value}))}
+            <select value={settings.labelFormat||"40x30"} onChange={e=>setSettings(s=>({...s,labelFormat:e.target.value}))}
               style={{width:"100%",padding:10,borderRadius:10,border:`2px solid ${C.border}`,fontSize:12,fontFamily:"inherit"}}>
-              <option value="50x30">50×30 mm</option><option value="40x25">40×25 mm</option><option value="60x40">60×40 mm</option><option value="30x20">30×20 mm</option></select></div>
-          <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>CONTENU ÉTIQUETTE</label>
-            <select value={settings.labelContent||"ean+price"} onChange={e=>setSettings(s=>({...s,labelContent:e.target.value}))}
+              {LABEL_FORMATS.map(f=>(<option key={f.id} value={f.id}>{f.l}</option>))}
+              <option value="custom">Personnalisé…</option></select></div>
+          <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>TYPE D'IMPRIMANTE</label>
+            <select value={settings.labelMode||"roll"} onChange={e=>setSettings(s=>({...s,labelMode:e.target.value}))}
               style={{width:"100%",padding:10,borderRadius:10,border:`2px solid ${C.border}`,fontSize:12,fontFamily:"inherit"}}>
-              <option value="ean+price">Code-barres + Prix</option><option value="ean+name">Code-barres + Nom</option><option value="ean+name+price">Code-barres + Nom + Prix</option><option value="ean">Code-barres seul</option></select></div></div>
+              <option value="roll">Rouleau — 1 étiquette par page</option>
+              <option value="sheet">Planche A4 — plusieurs par page</option></select></div></div>
+        {settings.labelFormat==="custom"&&<div style={{display:"flex",gap:8,alignItems:"center",marginBottom:10}}>
+          <Input type="number" min="10" max="210" value={settings.labelWidth||40} onChange={e=>setSettings(s=>({...s,labelWidth:e.target.value}))} placeholder="largeur"/>
+          <span style={{fontSize:12,color:C.textMuted}}>×</span>
+          <Input type="number" min="10" max="297" value={settings.labelHeight||30} onChange={e=>setSettings(s=>({...s,labelHeight:e.target.value}))} placeholder="hauteur"/>
+          <span style={{fontSize:12,color:C.textMuted}}>mm</span></div>}
         <p style={{fontSize:10,color:C.textMuted,marginBottom:10,lineHeight:1.5}}>
-          Pour imprimer des étiquettes, allez dans <strong>Produits</strong>, cliquez sur un produit puis sur <strong>🏷️ Imprimer étiquettes</strong>. Vous pouvez imprimer par variante (taille/couleur) avec le nombre d'exemplaires souhaité.</p>
+          Ces réglages valent pour <strong>ce magasin</strong>. Pour imprimer, allez dans <strong>Étiquettes</strong> :
+          scannez ou cherchez des articles, choisissez les quantités, puis imprimez. Dans la fenêtre d'impression,
+          sélectionnez l'étiqueteuse, marges « aucune » et échelle 100 %.</p>
         <Btn onClick={()=>{saveSettingsToAPI(settings);notify("Paramètres étiquettes sauvegardés","success");}}
           style={{width:"100%",height:40,background:C.accent}}><Save size={14}/> Enregistrer les paramètres étiquettes</Btn>
       </div>

@@ -279,33 +279,52 @@ export function ean13SvgHtml(code, width = 180, height = 60) {
 }
 
 /* ══════════ ETIQUETTES CODE-BARRES ══════════ */
-// Formats courants d'etiquettes textile (largeur x hauteur en mm)
+// Formats courants (largeur x hauteur en mm). « Personnalise » = dimensions libres.
 export const LABEL_FORMATS = [
-  { id: "30x20", w: 30, h: 20, l: "30 x 20 mm — petite" },
-  { id: "40x30", w: 40, h: 30, l: "40 x 30 mm — standard" },
-  { id: "50x30", w: 50, h: 30, l: "50 x 30 mm — large" },
-  { id: "60x40", w: 60, h: 40, l: "60 x 40 mm — grande" },
+  { id: "30x20", w: 30, h: 20, l: "30 x 20 mm" },
+  { id: "32x25", w: 32, h: 25, l: "32 x 25 mm" },
+  { id: "40x25", w: 40, h: 25, l: "40 x 25 mm" },
+  { id: "40x30", w: 40, h: 30, l: "40 x 30 mm" },
+  { id: "50x30", w: 50, h: 30, l: "50 x 30 mm" },
+  { id: "57x32", w: 57, h: 32, l: "57 x 32 mm" },
+  { id: "60x40", w: 60, h: 40, l: "60 x 40 mm" },
+  { id: "100x50", w: 100, h: 50, l: "100 x 50 mm" },
 ];
+
+// Dimensions retenues : format predefini, ou dimensions personnalisees (mm).
+export function labelSize(opts = {}) {
+  if (opts.format === "custom") {
+    // une saisie vide retombe sur 40x30 ; une saisie hors limites est ramenee au mini/maxi
+    const num = (v, d) => (v === "" || v === null || v === undefined || isNaN(Number(v)) ? d : Number(v));
+    const w = Math.max(10, Math.min(210, num(opts.width, 40)));
+    const h = Math.max(10, Math.min(297, num(opts.height, 30)));
+    return { w, h, l: `${w} x ${h} mm` };
+  }
+  return LABEL_FORMATS.find(f => f.id === opts.format) || LABEL_FORMATS[3];
+}
 
 /**
  * Construit le HTML d'une planche d'etiquettes.
  * @param {Array} lignes - [{ productName, sku, color, colorCode, size, ean, price, qty }]
- * @param {Object} opts - { format:"40x30", name, colorSize, price, sku, pricingMode }
+ * @param {Object} opts
+ *   format: id de LABEL_FORMATS ou "custom" (+ width/height en mm)
+ *   mode: "roll" (une etiquette par page — imprimantes a rouleau, le cas courant)
+ *         | "sheet" (planche A4, plusieurs etiquettes par page)
+ *   name / colorSize / sku / price : contenu ; pricingMode : "TTC" | "HT"
  * Le code-barres est un VRAI EAN-13 (meme encodage que les tickets) : scannable.
  */
 export function buildLabelsHtml(lignes, opts = {}) {
-  const fmt = LABEL_FORMATS.find(f => f.id === (opts.format || "40x30")) || LABEL_FORMATS[1];
-  const { w, h } = fmt;
+  const { w, h, l: fmtLabel } = labelSize(opts);
+  const rouleau = (opts.mode || "roll") === "roll";
   const pm = opts.pricingMode === "HT" ? "HT" : "TTC";
   const cards = [];
   let ignorees = 0;
   for (const l of lignes) {
     if (!isValidEAN13(l.ean)) { ignorees += Math.max(1, l.qty || 1); continue; }
-    // Code-barres : ~55 % de la hauteur, hauteur minimale de 8 mm pour rester lisible
     const bcH = Math.max(8, h * 0.45), bcW = w - 6;
     const rects = ean13Rects(l.ean, 100, 30);
     const variante = [l.color, l.size].filter(Boolean).join(" / ") + (l.colorCode ? ` (${l.colorCode})` : "");
-    const card = `<div class="lbl" style="width:${w}mm;height:${h}mm">
+    const card = `<div class="lbl">
       ${opts.name && l.productName ? `<div class="nom">${escapeHtml(l.productName)}</div>` : ""}
       ${opts.colorSize && variante.trim() ? `<div class="var">${escapeHtml(variante)}</div>` : ""}
       ${opts.sku && l.sku ? `<div class="sku">${escapeHtml(l.sku)}</div>` : ""}
@@ -315,10 +334,20 @@ export function buildLabelsHtml(lignes, opts = {}) {
     </div>`;
     for (let i = 0; i < Math.max(1, l.qty || 1); i++) cards.push(card);
   }
-  const style = `@page{size:auto;margin:3mm}
-    body{margin:0;font-family:Arial,Helvetica,sans-serif;-webkit-print-color-adjust:exact}
-    .grid{display:flex;flex-wrap:wrap;gap:1.5mm;padding:2mm;align-content:flex-start}
-    .lbl{border:0.2mm solid #eee;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  // Rouleau : la PAGE fait la taille de l'etiquette et chaque etiquette est une page.
+  // Sinon l'imprimante sort une etiquette vide sur deux, ou coupe au mauvais endroit.
+  const page = rouleau
+    ? `@page{size:${w}mm ${h}mm;margin:0}
+       body{margin:0}
+       .grid{display:block}
+       .lbl{width:${w}mm;height:${h}mm;border:none;page-break-after:always;break-after:page}
+       .lbl:last-child{page-break-after:auto;break-after:auto}`
+    : `@page{size:A4;margin:5mm}
+       .grid{display:flex;flex-wrap:wrap;gap:${Number(opts.gap) || 1.5}mm;align-content:flex-start}
+       .lbl{width:${w}mm;height:${h}mm;border:0.2mm solid #eee}`;
+  const style = `${page}
+    body{font-family:Arial,Helvetica,sans-serif;-webkit-print-color-adjust:exact}
+    .lbl{display:flex;flex-direction:column;align-items:center;justify-content:center;
       padding:0.8mm;box-sizing:border-box;overflow:hidden;page-break-inside:avoid;text-align:center}
     .nom{font-size:${Math.min(8, h / 3.5).toFixed(1)}pt;font-weight:700;line-height:1.1;max-width:100%;
       white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -326,23 +355,26 @@ export function buildLabelsHtml(lignes, opts = {}) {
     .sku{font-size:${Math.min(6.5, h / 5).toFixed(1)}pt;font-family:monospace;color:#555;line-height:1.1}
     .ean{font-size:${Math.min(7, h / 4.5).toFixed(1)}pt;font-family:monospace;letter-spacing:0.4pt;line-height:1.2}
     .prix{font-size:${Math.min(11, h / 2.8).toFixed(1)}pt;font-weight:800;line-height:1.1}
-    @media print{.no-print{display:none!important}.lbl{border:none}}`;
+    @media screen{.grid{display:flex;flex-wrap:wrap;gap:2mm;padding:3mm;align-content:flex-start}
+      .lbl{border:0.2mm dashed #bbb}}
+    @media print{.no-print{display:none!important}}`;
+  const modeLabel = rouleau ? "rouleau — 1 étiquette par page" : "planche A4";
   return { html: `<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><title>Étiquettes</title><style>${style}</style></head>
     <body><div class="no-print" style="padding:10px;background:#f5f5f5;border-bottom:1px solid #ddd;display:flex;align-items:center;gap:12px">
       <button onclick="window.print()" style="padding:8px 20px;background:#047857;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer">Imprimer</button>
-      <span style="font-size:12px;color:#666">${cards.length} étiquette(s) — ${fmt.l}${ignorees ? ` — ${ignorees} ignorée(s) : code-barres manquant ou invalide` : ""}</span>
-    </div><div class="grid">${cards.join("")}</div></body></html>`, count: cards.length, ignorees };
+      <span style="font-size:12px;color:#666">${cards.length} étiquette(s) — ${fmtLabel} — ${modeLabel}${ignorees ? ` — ${ignorees} ignorée(s) : code-barres manquant ou invalide` : ""}</span>
+    </div><div class="grid">${cards.join("")}</div></body></html>`, count: cards.length, ignorees, width: w, height: h, mode: rouleau ? "roll" : "sheet" };
 }
 
 // Ouvre la planche d'etiquettes dans un onglet (impression via le pilote de l'imprimante).
 export function printLabels(lignes, opts = {}) {
-  const { html, count, ignorees } = buildLabelsHtml(lignes, opts);
-  if (!count) return { count: 0, ignorees };
+  const r = buildLabelsHtml(lignes, opts);
+  if (!r.count) return { count: 0, ignorees: r.ignorees };
   const win = window.open("", "_blank", "width=900,height=700");
-  if (!win) return { count: 0, ignorees, popupBloque: true };
-  win.document.write(html);
+  if (!win) return { count: 0, ignorees: r.ignorees, popupBloque: true };
+  win.document.write(r.html);
   win.document.close();
-  return { count, ignorees };
+  return { count: r.count, ignorees: r.ignorees };
 }
 
 // Fiche produit : une etiquette par declinaison ayant un code-barres.
@@ -352,9 +384,14 @@ export function printBarcodeLabels(product, settings) {
     size: v.size, ean: v.ean, price: product.price, qty: 1,
   }));
   const content = settings?.labelContent || "ean+price";
+  const f = settings?.labelFields;
   return printLabels(lignes, {
-    format: settings?.labelFormat || "40x30",
-    name: content.includes("name"), colorSize: true, sku: true,
-    price: content.includes("price"), pricingMode: settings?.pricingMode,
+    format: settings?.labelFormat || "40x30", width: settings?.labelWidth, height: settings?.labelHeight,
+    mode: settings?.labelMode || "roll",
+    name: f ? !!f.name : content.includes("name"),
+    colorSize: f ? !!f.colorSize : true,
+    sku: f ? !!f.sku : true,
+    price: f ? !!f.price : content.includes("price"),
+    pricingMode: settings?.pricingMode,
   });
 }

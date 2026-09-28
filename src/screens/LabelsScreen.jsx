@@ -4,7 +4,7 @@ import { C } from "../constants.jsx";
 import { Btn, Input, Badge } from "../ui.jsx";
 import { useApp } from "../context.jsx";
 import * as API from "../api.js";
-import { LABEL_FORMATS, printLabels, isValidEAN13, EAN13Svg } from "../utils.jsx";
+import { LABEL_FORMATS, printLabels, isValidEAN13, EAN13Svg, labelSize } from "../utils.jsx";
 
 // ════════════════════════════════════════════════════════════
 //  Étiquettes code-barres — planche imprimée via le navigateur
@@ -13,14 +13,17 @@ import { LABEL_FORMATS, printLabels, isValidEAN13, EAN13Svg } from "../utils.jsx
 //  La recherche passe par l'API : le catalogue complet n'est plus en mémoire.
 // ════════════════════════════════════════════════════════════
 function LabelsScreen() {
-  const { settings, notify, findByEAN, addAudit, perm } = useApp();
+  const { settings, notify, findByEAN, addAudit, perm, saveSettingsToAPI, setSettings } = useApp();
   const [q, setQ] = useState("");
   const [results, setResults] = useState([]);
   const [busy, setBusy] = useState(false);
   const [sel, setSel] = useState(null);          // produit ouvert
   const [lines, setLines] = useState([]);        // [{key, productName, sku, color, colorCode, size, ean, price, qty}]
+  // Reglages repris du magasin (chaque boutique a son etiqueteuse et ses rouleaux)
   const [format, setFormat] = useState(settings?.labelFormat || "40x30");
-  const [opts, setOpts] = useState({ name: true, colorSize: true, sku: true, price: false });
+  const [dim, setDim] = useState({ w: settings?.labelWidth || 40, h: settings?.labelHeight || 30 });
+  const [mode, setMode] = useState(settings?.labelMode || "roll");
+  const [opts, setOpts] = useState(settings?.labelFields || { name: true, colorSize: true, sku: true, price: false });
   const scanRef = useRef(null);
 
   const canPrint = perm().canCreateProduct || perm().canExport;
@@ -68,11 +71,19 @@ function LabelsScreen() {
 
   const total = lines.reduce((s, l) => s + (l.qty || 0), 0);
 
+  const printOpts = () => ({ format, width: dim.w, height: dim.h, mode, ...opts, pricingMode: settings?.pricingMode });
+
+  const saveDefaults = async () => {
+    const next = { ...settings, labelFormat: format, labelWidth: dim.w, labelHeight: dim.h, labelMode: mode, labelFields: opts };
+    try { setSettings(next); await saveSettingsToAPI(next); notify("Réglages d'étiquettes enregistrés pour ce magasin", "success"); }
+    catch (e) { notify("Enregistrement impossible : " + e.message, "error"); }
+  };
+
   const doPrint = () => {
-    const r = printLabels(lines, { format, ...opts, pricingMode: settings?.pricingMode });
+    const r = printLabels(lines, printOpts());
     if (r.popupBloque) { notify("Fenêtre bloquée — autorisez les popups pour imprimer", "error"); return; }
     if (!r.count) { notify("Aucune étiquette à imprimer", "warn"); return; }
-    addAudit && addAudit("ETIQUETTES", `${r.count} étiquette(s) — format ${format}`);
+    addAudit && addAudit("ETIQUETTES", `${r.count} étiquette(s) — ${labelSize({ format, width: dim.w, height: dim.h }).l} — ${mode === "roll" ? "rouleau" : "planche"}`);
     notify(`${r.count} étiquette(s) prêtes à imprimer`, "success");
   };
 
@@ -171,11 +182,29 @@ function LabelsScreen() {
         </div>
 
         <div style={{ marginTop: 12, borderTop: `1px solid ${C.border}`, paddingTop: 10 }}>
+          <label style={{ fontSize: 10, fontWeight: 700, color: C.textMuted, display: "block", marginBottom: 4 }}>IMPRIMANTE</label>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, marginBottom: 10 }}>
+            {[["roll", "Rouleau", "1 étiquette par page"], ["sheet", "Planche A4", "plusieurs par page"]].map(([id, l, sub]) => (
+              <button key={id} onClick={() => setMode(id)} style={{ padding: "7px 8px", borderRadius: 8, cursor: "pointer", fontFamily: "inherit",
+                border: `1.5px solid ${mode === id ? C.primary : C.border}`, background: mode === id ? `${C.primary}08` : "transparent", textAlign: "left" }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: mode === id ? C.primary : C.text }}>{l}</div>
+                <div style={{ fontSize: 9, color: C.textMuted }}>{sub}</div></button>))}
+          </div>
+
           <label style={{ fontSize: 10, fontWeight: 700, color: C.textMuted, display: "block", marginBottom: 4 }}>FORMAT</label>
           <select value={format} onChange={e => setFormat(e.target.value)}
-            style={{ width: "100%", height: 34, fontSize: 11, padding: "0 8px", borderRadius: 8, border: `1.5px solid ${C.border}`, fontFamily: "inherit", background: C.surface, color: C.text, marginBottom: 10 }}>
+            style={{ width: "100%", height: 34, fontSize: 11, padding: "0 8px", borderRadius: 8, border: `1.5px solid ${C.border}`, fontFamily: "inherit", background: C.surface, color: C.text, marginBottom: format === "custom" ? 6 : 10 }}>
             {LABEL_FORMATS.map(f => <option key={f.id} value={f.id}>{f.l}</option>)}
+            <option value="custom">Personnalisé…</option>
           </select>
+          {format === "custom" && <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 10 }}>
+            <Input type="number" min="10" max="210" value={dim.w} onChange={e => setDim(d => ({ ...d, w: e.target.value }))}
+              style={{ height: 32, fontSize: 11 }} placeholder="largeur" />
+            <span style={{ fontSize: 11, color: C.textMuted }}>×</span>
+            <Input type="number" min="10" max="297" value={dim.h} onChange={e => setDim(d => ({ ...d, h: e.target.value }))}
+              style={{ height: 32, fontSize: 11 }} placeholder="hauteur" />
+            <span style={{ fontSize: 11, color: C.textMuted }}>mm</span>
+          </div>}
 
           <label style={{ fontSize: 10, fontWeight: 700, color: C.textMuted, display: "block", marginBottom: 4 }}>CONTENU</label>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginBottom: 12 }}>
@@ -196,8 +225,12 @@ function LabelsScreen() {
 
           <Btn onClick={doPrint} disabled={!total} style={{ width: "100%", height: 44, background: C.primary, gap: 8 }}>
             <Printer size={16} /> Imprimer {total || ""} étiquette{total > 1 ? "s" : ""}</Btn>
-          <div style={{ fontSize: 10, color: C.textLight, marginTop: 8, textAlign: "center" }}>
-            La planche s'ouvre dans un onglet : choisissez votre étiqueteuse, marges à zéro, échelle 100 %.</div>
+          <Btn variant="outline" onClick={saveDefaults} style={{ width: "100%", height: 34, fontSize: 11, marginTop: 8 }}>
+            Enregistrer ces réglages pour ce magasin</Btn>
+          <div style={{ fontSize: 10, color: C.textLight, marginTop: 8, textAlign: "center", lineHeight: 1.5 }}>
+            {mode === "roll"
+              ? "Mode rouleau : la page fait la taille de l'étiquette. Dans la fenêtre d'impression, choisissez l'étiqueteuse, marges « aucune » et échelle 100 %."
+              : "Mode planche : feuille A4 d'étiquettes à découper ou planches pré-découpées. Marges à zéro, échelle 100 %."}</div>
         </div>
       </div>
     </div>

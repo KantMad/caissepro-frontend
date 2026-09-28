@@ -17,7 +17,7 @@ import {
   escapeHtml, getPriceHT, getPriceTTC, catIcon, variantKey,
   getSizeRank, generateEAN13, norm, hashPin, verifyPin,
   ean13SvgHtml, autoImportSizesFromProducts,
-  sha256, getVariantOrderMap, loadVariantOrderFromSettings, ean13Bits, ean13Rects, isValidEAN13, buildLabelsHtml } from "./utils.jsx";
+  sha256, getVariantOrderMap, loadVariantOrderFromSettings, ean13Bits, ean13Rects, isValidEAN13, buildLabelsHtml, labelSize } from "./utils.jsx";
 
 describe("escapeHtml", () => {
   it("échappe les caractères dangereux", () => {
@@ -371,5 +371,38 @@ describe("EAN-13 — relecture du motif", () => {
     // autant de rectangles que de groupes de barres noires dans le motif
     const noires = (ean13Bits(code).match(/1+/g) || []).reduce((n, g) => n + g.length, 0);
     expect((rects.match(/<rect/g) || []).length).toBe(noires);
+  });
+});
+
+describe("Etiquettes — format et mode d'impression", () => {
+  const ligne = { productName: "Pull", sku: "PU01", color: "Noir", size: "L", ean: "2996000000028", price: 59.9, qty: 2 };
+
+  it("mode rouleau : la page fait la taille de l'etiquette et chaque etiquette est une page", () => {
+    const r = buildLabelsHtml([ligne], { format: "57x32", mode: "roll" });
+    expect(r.html).toContain("@page{size:57mm 32mm;margin:0}");
+    expect(r.html).toContain("page-break-after:always");
+    expect(r.mode).toBe("roll");
+  });
+
+  it("mode planche : page A4, plusieurs etiquettes cote a cote", () => {
+    const r = buildLabelsHtml([ligne], { format: "40x30", mode: "sheet" });
+    expect(r.html).toContain("@page{size:A4");
+    expect(r.html).not.toContain("page-break-after:always");
+    expect(r.html).toContain("flex-wrap:wrap");
+  });
+
+  it("format personnalise en millimetres", () => {
+    const r = buildLabelsHtml([ligne], { format: "custom", width: 45, height: 18, mode: "roll" });
+    expect(r.width).toBe(45); expect(r.height).toBe(18);
+    expect(r.html).toContain("@page{size:45mm 18mm;margin:0}");
+  });
+
+  it("dimensions personnalisees hors limites : ramenees dans le raisonnable", () => {
+    expect(labelSize({ format: "custom", width: 0, height: 9999 })).toEqual({ w: 10, h: 297, l: "10 x 297 mm" });
+    expect(labelSize({ format: "inconnu" }).id).toBe("40x30");   // repli sur le format standard
+  });
+
+  it("le mode rouleau est le defaut (cas le plus courant des etiqueteuses)", () => {
+    expect(buildLabelsHtml([ligne], { format: "40x30" }).mode).toBe("roll");
   });
 });
