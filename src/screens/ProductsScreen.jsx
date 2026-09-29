@@ -113,11 +113,15 @@ function ProductsScreen(){
           <Zap size={13}/> Réordonner les tailles (selon réglages)</Btn>
 
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
-          <Btn variant="success" onClick={()=>{
+          <Btn variant="success" onClick={async()=>{
             const newPrice=parseFloat(ep.price);const oldPrice=editModal.price;
-            updateProduct(editModal.id,{name:ep.name,sku:ep.sku,costPrice:parseFloat(ep.costPrice)||0,
+            await updateProduct(editModal.id,{name:ep.name,sku:ep.sku,costPrice:parseFloat(ep.costPrice)||0,
               taxRate:parseFloat(ep.taxRate),category:ep.category,collection:ep.collection});
-            if(newPrice&&newPrice!==oldPrice)updateProductPrice(editModal.id,newPrice);
+            // Le prix part separement : la route enregistre aussi l'historique et l'audit
+            if(newPrice&&newPrice!==oldPrice){
+              const ok=await updateProductPrice(editModal.id,newPrice);
+              if(ok)notify(`Prix mis a jour : ${oldPrice.toFixed(2)}€ → ${newPrice.toFixed(2)}€`,"success");
+            }
             setEditModal(null);}} style={{height:40}}>
             <Save size={14}/> Enregistrer</Btn>
           <Btn variant="outline" onClick={()=>{printBarcodeLabels(editModal,settings);notify("Impression étiquettes lancée","success");}} style={{height:40,color:C.accent,borderColor:C.accent+"44"}}>

@@ -406,3 +406,13 @@ describe("Etiquettes — format et mode d'impression", () => {
     expect(buildLabelsHtml([ligne], { format: "40x30" }).mode).toBe("roll");
   });
 });
+
+// Garde-fou : le prix d'un produit doit PARTIR au serveur (bug du 29/09/2026 — il ne
+// changeait qu'a l'ecran et revenait a l'ancienne valeur au rechargement).
+describe("Mise a jour du prix produit", () => {
+  it("le contexte appelle bien PUT /api/products/:id avec le prix", async () => {
+    const source = await import("fs").then(fs => fs.readFileSync("src/context.jsx", "utf8"));
+    const bloc = source.slice(source.indexOf("const updateProductPrice"), source.indexOf("// ══ P2: Reorder suggestions"));
+    expect(bloc).toContain("API.products.update(productId,{price:newPrice})");
+  });
+});

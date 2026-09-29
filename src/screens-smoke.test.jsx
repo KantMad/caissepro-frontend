@@ -37,6 +37,7 @@ import FiscalScreen from "./screens/FiscalScreen.jsx";
 import StockScreen from "./screens/StockScreen.jsx";
 import StatsScreen from "./screens/StatsScreen.jsx";
 import LabelsScreen from "./screens/LabelsScreen.jsx";
+import ProductsScreen from "./screens/ProductsScreen.jsx";
 
 // Un admin en session : sans cela les ecrans affichent « Acces reserve aux administrateurs »
 const asAdmin = () => {
@@ -87,6 +88,12 @@ describe("Écrans — rendu sans plantage", () => {
   it("Étiquettes se monte", () => {
     const { container } = render(<AppProvider><LabelsScreen /></AppProvider>);
     expect(container.textContent).toContain("Étiquettes");
+    expect(errors.join("\n")).not.toMatch(/is not defined|Cannot read/);
+  });
+
+  it("Produits se monte", () => {
+    const { container } = render(<AppProvider><ProductsScreen /></AppProvider>);
+    expect(container.textContent.length).toBeGreaterThan(0);
     expect(errors.join("\n")).not.toMatch(/is not defined|Cannot read/);
   });
 

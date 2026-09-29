@@ -764,16 +764,24 @@ function AppProvider({children}){
   },[products,exportCSVReport]);
 
   // ══ P2: Update product price with history ══
+  // Le PRIX doit passer par PUT /api/products/:id — c'est cette route qui ecrit le prix,
+  // l'historique (price_history) et l'audit. Avant, on n'envoyait QUE l'historique : le prix
+  // changeait a l'ecran puis revenait a l'ancienne valeur au rechargement.
   const updateProductPrice=useCallback(async(productId,newPrice)=>{
-    const p=products.find(x=>x.id===productId);if(!p)return;
+    const p=products.find(x=>x.id===productId);if(!p)return false;
     const entry={productId,productName:p.name,oldPrice:p.price,newPrice,user:currentUser?.name};
-    // Persister en backend d'abord
-    try{await API.pricehistory.create({productId,oldPrice:p.price,newPrice,reason:`Changement manuel par ${currentUser?.name||"?"}`});}
-    catch(e){addPendingSync({type:"priceChange",data:{productId,oldPrice:p.price,newPrice,reason:`Changement manuel par ${currentUser?.name||"?"}`}});}
+    let ok=true;
+    try{await API.products.update(productId,{price:newPrice});}
+    catch(e){
+      ok=false;
+      addPendingSync({type:"priceChange",data:{productId,oldPrice:p.price,newPrice,reason:`Changement manuel par ${currentUser?.name||"?"}`}});
+      notify("Prix non enregistre (hors ligne) — il sera renvoye a la reconnexion","warn");
+    }
     setPriceHistory(prev=>[{id:Date.now(),date:new Date().toISOString(),...entry},...prev]);
     setProducts(prev=>prev.map(x=>x.id===productId?{...x,price:newPrice}:x));
     addAudit("PRICE_CHANGE",`${p.name}: ${p.price.toFixed(2)}EUR -> ${newPrice.toFixed(2)}EUR`);
-  },[products,currentUser,addAudit,addPendingSync]);
+    return ok;
+  },[products,currentUser,addAudit,addPendingSync,notify]);
 
   // ══ P2: Reorder suggestions ══
   const reorderSuggestions=useMemo(()=>{const suggestions=[];
