@@ -214,10 +214,12 @@ function UsersScreen(){
 }
 
 function DashboardNav({active,onNav,vp,mobileOpen,onCloseMobile}){
-  const{logout,currentUser,stores,viewingStoreId,switchViewingStore,currentStore}=useApp();
+  const{logout,currentUser,stores,viewingStoreId,switchViewingStore,currentStore,settings}=useApp();
   const sections=[
     {title:"",items:[{id:"resume",l:"Résumé",i:TrendingUp},{id:"overview",l:"Dashboard",i:LayoutDashboard}]},
-    {title:"Commerce",items:[{id:"products",l:"Produits",i:Package},{id:"labels",l:"Étiquettes",i:Tag},{id:"stock",l:"Stock",i:Grid},{id:"gestlog",l:"Livraisons gestlog",i:Truck},{id:"stats",l:"Statistiques",i:BarChart3},{id:"returns",l:"Retours & Avoirs",i:RotateCcw},{id:"cashmovements",l:"Tiroir-caisse",i:Wallet},{id:"registersessions",l:"Ouv./Ferm. caisse",i:Lock},{id:"exports",l:"Exports & Factures",i:Download}]},
+    // ⛔ « Livraisons gestlog » : SPECIFIQUE MCS. settings.gestlogEnabled vient de l'API
+    // (false des qu'aucun secret gestlog n'est configure) -> invisible chez un client.
+    {title:"Commerce",items:[{id:"products",l:"Produits",i:Package},{id:"labels",l:"Étiquettes",i:Tag},{id:"stock",l:"Stock",i:Grid},...(settings?.gestlogEnabled?[{id:"gestlog",l:"Livraisons gestlog",i:Truck}]:[]),{id:"stats",l:"Statistiques",i:BarChart3},{id:"returns",l:"Retours & Avoirs",i:RotateCcw},{id:"cashmovements",l:"Tiroir-caisse",i:Wallet},{id:"registersessions",l:"Ouv./Ferm. caisse",i:Lock},{id:"exports",l:"Exports & Factures",i:Download}]},
     {title:"Relations",items:[{id:"customers",l:"Clients",i:Users},{id:"users",l:"Utilisateurs",i:UserIcon},{id:"giftcards",l:"Cartes cadeaux",i:Gift},{id:"promos",l:"Promotions",i:Zap},{id:"footfall",l:"Entrees",i:Activity}]},
     {title:"Systeme",items:[{id:"storesMgmt",l:"Magasins",i:Store},{id:"tva",l:"Taux de TVA",i:Percent},{id:"settings",l:"Parametres",i:Settings},{id:"fiscal",l:"Fiscal NF525",i:Shield},{id:"audit",l:"Journal d'audit",i:Activity},{id:"help",l:"Aide",i:HelpCircle}]}];
   const inner=(<>
