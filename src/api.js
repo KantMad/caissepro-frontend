@@ -347,6 +347,8 @@ export const productPhotos = {
 // ══ Intégrations (gestlog) ══
 export const integrations = {
   gestlogDeliveries: () => api('/api/integrations/gestlog/deliveries'),
+  // ⛔ SPECIFIQUE MCS : historique des imports catalogue (fiches produits)
+  gestlogCatalogImports: () => api('/api/integrations/gestlog/catalog-imports'),
 };
 
 // ══ Health ══
