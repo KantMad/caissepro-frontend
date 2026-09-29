@@ -688,6 +688,12 @@ function TenuesTab({products,setProducts,users,tenUser,setTenUser,tenItems,setTe
         return{...p,variants:p.variants.map(v=>{const mi=its.find(i=>i.variantId===v.id);return mi?{...v,stock:Math.max(0,v.stock-mi.qty)}:v;})};}));
       addAudit("TENUE",`Bon ${saved.num} — ${tenUser} — ${tenItems.reduce((s,i)=>s+i.qty,0)} pièce(s)`);
       notify(`Bon tenue ${saved.num} créé pour ${tenUser}`,"success");
+      // Articles pris alors que la caisse les croyait à 0 : le bon est créé quand même
+      // (le vêtement est bien sorti), mais le stock est à recompter.
+      const manquants=saved.stockInsuffisant||[];
+      if(manquants.length)notify(`Stock insuffisant sur ${manquants.length} article(s) — à recompter : `
+        +manquants.slice(0,3).map(m=>`${m.productName} ${m.variantColor}/${m.variantSize}`).join(", ")
+        +(manquants.length>3?"…":""),"warn");
       setTicketModal(saved);     // ouvrir le justificatif imprimable
       setTenItems([]);
       try{const prods=await API.products.list();setProducts(norm.products(prods));}catch(e){}

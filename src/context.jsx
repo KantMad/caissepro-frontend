@@ -148,7 +148,8 @@ function AppProvider({children}){
     const saved=await API.tenues.create({employee,items,notes:notes||""});
     const mapped=_mapTenue(saved);
     setTenues(prev=>{const next=[mapped,...prev].slice(0,500);try{localStorage.setItem("caissepro_tenues",JSON.stringify(next));}catch(e){}return next;});
-    return mapped;
+    // stockInsuffisant : articles sortis alors que la caisse les croyait a 0 (a recompter)
+    return {...mapped,stockInsuffisant:saved.stockInsuffisant||[]};
   },[]);
   const reloadTenues=useCallback(async(q)=>{
     try{const data=await API.tenues.list(q?{q}:{});const mapped=(data||[]).map(_mapTenue);
