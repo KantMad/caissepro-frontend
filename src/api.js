@@ -123,6 +123,8 @@ export const returns = {
 
 // ══ Customers ══
 export const customers = {
+  // Import en lot (CSV) — avant, l'import ne creait les clients que dans l'ecran
+  importMany: (list) => api('/api/customers/import', { method: 'POST', body: JSON.stringify({ customers: list }) }),
   list: (search) => api('/api/customers?' + new URLSearchParams(search ? { search } : {})),
   create: (data) => api('/api/customers', { method: 'POST', body: JSON.stringify(data) }),
   update: (id, data) => api(`/api/customers/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
@@ -206,6 +208,7 @@ export const settings = {
   activePromos: () => api('/api/settings/promos/active'),
   createPromo: (data) => api('/api/settings/promos', { method: 'POST', body: JSON.stringify(data) }),
   togglePromo: (id) => api(`/api/settings/promos/${id}/toggle`, { method: 'PUT' }),
+  deletePromo: (id) => api(`/api/settings/promos/${id}`, { method: 'DELETE' }),
   taxRates: () => api('/api/settings/tax-rates'),
   openRegister: (amount) => api('/api/settings/register/open', { method: 'POST', body: JSON.stringify({ openingAmount: amount }) }),
   closeRegister: (id, data) => api(`/api/settings/register/${id}/close`, { method: 'PUT', body: JSON.stringify(data) }),
@@ -320,7 +323,7 @@ export const backup = {
   status: () => api('/api/backup/status'),
   trigger: (opts) => api('/api/backup', { method: 'POST', body: JSON.stringify(opts || {}) }),
   remove: (filename) => api(`/api/backup/${encodeURIComponent(filename)}`, { method: 'DELETE' }),
-  downloadUrl: (filename) => `${API_URL}/api/backup/download/${encodeURIComponent(filename)}`,
+  downloadUrl: (filename) => `${API_URL}/api/backup/download/${encodeURIComponent(filename)}?token=${encodeURIComponent(getToken() || '')}`,
 };
 
 // ══ Product Photos ══

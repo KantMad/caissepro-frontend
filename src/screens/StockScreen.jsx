@@ -362,10 +362,17 @@ function StockScreen(){
                 <td style={{padding:6,fontWeight:700,color:diff===null||diff===0?C.textMuted:diff>0?"#059669":C.danger}}>
                   {diff!==null?(diff>0?`+${diff}`:diff):"—"}</td></tr>);})
           )}</tbody></table></div>
-      <Btn onClick={()=>{let count=0;Object.entries(invCounts).forEach(([key,val])=>{if(val===""||val===undefined)return;
-        const[pid,vid]=key.split("_");const pr=products.find(x=>x.id===pid);const vr=pr?.variants.find(x=>x.id===vid);
-        if(pr&&vr&&parseInt(val)!==vr.stock){adjustStock(pid,vid,parseInt(val),"INVENTAIRE");count++;}});
-        setInvCounts({});notify(`${count} ajustement(s) validé(s)`,"success");}}
+      <Btn onClick={async()=>{
+        // On ATTEND chaque ajustement et on compte les vrais succes : avant, le message
+        // « N ajustement(s) valide(s) » partait avant la reponse du serveur.
+        const aFaire=[];Object.entries(invCounts).forEach(([key,val])=>{if(val===""||val===undefined)return;
+          const[pid,vid]=key.split("_");const pr=products.find(x=>x.id===pid);const vr=pr?.variants.find(x=>x.id===vid);
+          if(pr&&vr&&parseInt(val)!==vr.stock)aFaire.push([pid,vid,parseInt(val)]);});
+        let ok=0,ko=0;
+        for(const [pid,vid,val] of aFaire){try{const r=await adjustStock(pid,vid,val,"INVENTAIRE",{lot:true});if(r)ok++;else ko++;}catch(e){ko++;}}
+        setInvCounts({});
+        if(ko)notify(`${ok} ajustement(s) enregistré(s), ${ko} refusé(s) — vérifiez les lignes en écart`,"error");
+        else notify(`${ok} ajustement(s) enregistré(s)`,"success");}}
         disabled={!Object.values(invCounts).some(v=>v!==""&&v!==undefined)}
         style={{width:"100%",height:40,background:C.primary}}><Save size={14}/> Valider l'inventaire</Btn>
     </div>}

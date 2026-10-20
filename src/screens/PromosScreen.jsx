@@ -15,8 +15,13 @@ function PromosScreen(){
 
   const togglePromo=async(id)=>{
     try{const res=await API.settings.togglePromo(id);setPromos(p=>p.map(x=>x.id===id?{...x,active:res.active}:x));}
-    catch(e){setPromos(p=>p.map(x=>x.id===id?{...x,active:!x.active}:x));}};
-  const deletePromo=(id)=>{setPromos(p=>p.filter(x=>x.id!==id));addAudit("PROMO","Suppression promo");notify("Promo supprimée","warn");};
+    catch(e){notify("Changement non enregistré : "+e.message,"error");}};
+  // Suppression REELLE cote serveur : avant, la promo disparaissait de l'ecran mais restait
+  // active en base et continuait de s'appliquer en caisse.
+  const deletePromo=async(id)=>{
+    try{await API.settings.deletePromo(id);setPromos(p=>p.filter(x=>x.id!==id));
+      addAudit("PROMO","Suppression promo");notify("Promotion supprimée","success");}
+    catch(e){notify("Suppression impossible : "+e.message,"error");}};
 
   // Extract unique categories, colors, SKUs from products
   const categories=[...new Set(products.map(p=>p.category).filter(Boolean))].sort();

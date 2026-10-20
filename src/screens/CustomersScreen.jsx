@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Search, Trash2, Plus, Receipt, Euro, Download, Save, Upload, Heart, Star, Edit, ChevronDown, Package } from "lucide-react";
 import Papa from "papaparse";
 import * as API from "../api.js";
+import { norm } from "../utils.jsx";
 import { LOYALTY_TIERS, C } from "../constants.jsx";
 import { Modal, Btn, Input, Badge, SC, ConfirmDialog } from "../ui.jsx";
 import { useApp } from "../context.jsx";
@@ -28,9 +29,18 @@ function CustomersScreen(){
       setCsvHeaders(r.meta.fields||[]);setCsvData(r.data);const map=autoMapCustHeaders(r.meta.fields||[]);setCsvMapping(map);setCsvStep(1);}});};
   const buildCustPreview=()=>{const rows=csvData.map(row=>{const c={};custFields.forEach(f=>{const h=Object.entries(csvMapping).find(([k,v])=>v===f);
     c[f]=h?row[h[0]]?.trim()||"":"";});c._dup=c.email&&customers.some(ex=>ex.email?.toLowerCase()===c.email.toLowerCase());return c;});setCsvPreview(rows);setCsvStep(2);};
-  const importCustCSV=()=>{let added=0;csvPreview.forEach(c=>{if(!c.firstName&&!c.lastName)return;if(c._dup)return;
-    setCustomers(p=>[...p,{id:crypto.randomUUID?crypto.randomUUID():"c"+Date.now()+Math.random().toString(36).slice(2,8),firstName:c.firstName,lastName:c.lastName,email:c.email,phone:c.phone,city:c.city,notes:c.notes,points:0,totalSpent:0}]);added++;});
-    notify(`${added} client(s) importé(s)`,"success");setCsvModal(false);setCsvStep(0);setCsvData([]);};
+  // Import CSV ENVOYE AU SERVEUR (avant : clients crees seulement dans l'ecran, perdus au
+  // rechargement). Le serveur ignore les doublons (email, puis telephone) et rend un bilan.
+  const importCustCSV=async()=>{
+    const lignes=csvPreview.filter(c=>(c.firstName||c.lastName)&&!c._dup)
+      .map(c=>({firstName:c.firstName||"",lastName:c.lastName||"",email:c.email||"",phone:c.phone||"",city:c.city||"",notes:c.notes||""}));
+    if(!lignes.length){notify("Aucun nouveau client à importer","warn");return;}
+    try{
+      const r=await API.customers.importMany(lignes);
+      const fresh=await API.customers.list();if(Array.isArray(fresh))setCustomers(norm.customers(fresh));
+      notify(`${r.crees} client(s) importé(s)`+(r.doublons?` — ${r.doublons} doublon(s) ignoré(s)`:"")+(r.rejets?.length?` — ${r.rejets.length} ligne(s) rejetée(s)`:""),r.crees?"success":"warn");
+      setCsvModal(false);setCsvStep(0);setCsvData([]);
+    }catch(e){notify("Import impossible : "+e.message,"error");}};
   useEffect(()=>{if(!sel)return;setLoadingHist(true);setCustHistory([]);setExpandedTk(null);
     API.customers.history(sel.id).then(data=>{setCustHistory(Array.isArray(data)?data:data.sales||[]);}).catch(()=>{
       // Fallback: filter local tickets

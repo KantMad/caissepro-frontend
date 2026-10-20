@@ -97,7 +97,7 @@ function ProductsScreen(){
             <Badge color={C.primary}>{v.color}</Badge>{v.colorCode&&<span style={{fontSize:8,fontFamily:"monospace",color:C.accent,background:C.accentLight,padding:"1px 4px",borderRadius:4}}>{v.colorCode}</span>}<Badge color={C.info}>{v.size}</Badge>
             <span style={{color:C.textMuted,fontFamily:"monospace",fontSize:9}}>{v.ean||"—"}</span>
             <span style={{marginLeft:"auto",fontWeight:700,color:v.stock<=0?C.danger:v.stock<=(v.stockAlert||5)?C.warn:C.primary}}>Stock: {v.stock}</span>
-            <button onClick={()=>{if(deleteVariant(editModal.id,v.id)){
+            <button onClick={async()=>{if(await deleteVariant(editModal.id,v.id)){
               setEditModal(prev=>prev?{...prev,variants:prev.variants.filter(x=>x.id!==v.id)}:null);}}}
               style={{background:"none",border:"none",cursor:"pointer",color:C.danger,fontSize:9}}>
               <Trash2 size={11}/></button>

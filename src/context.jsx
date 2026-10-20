@@ -430,7 +430,10 @@ function AppProvider({children}){
         setUsers(prev=>{const localOnly=prev.filter(lu=>!apiUsers.find(au=>au.name===lu.name));return[...merged,...localOnly];});}
       // Charger gift cards, paniers suspendus, favoris et footfall depuis le backend
       try{const gcs=await API.giftcards.list();if(gcs&&Array.isArray(gcs))setGiftCards(gcs.map(g=>({id:g.id,code:g.code,initialAmount:parseFloat(g.initial_amount||0),balance:parseFloat(g.remaining||0),createdDate:g.created_at,customerName:g.customer_name||"",barcode:g.barcode||null,transactions:g.transactions||[]})));}catch(e){console.warn("Chargement cartes cadeaux échoué:",e.message);}
-      try{const pks=await API.parked.list();if(pks&&Array.isArray(pks))setParked(pks.map(p=>({id:p.id,date:p.created_at,items:p.items||[],customer:null,gDiscPct:0,gDiscAmt:0,name:p.name})));}catch(e){console.warn("Chargement paniers suspendus échoué:",e.message);}
+      try{const pks=await API.parked.list();if(pks&&Array.isArray(pks))setParked(pks.map(p=>({id:p.id,date:p.created_at,items:p.items||[],
+        // le client et la remise panier sont relus du serveur (avant : remis a zero)
+        customer:null,customerId:p.customer_id||null,customerName:p.customer_name||null,
+        gDiscPct:parseFloat(p.global_discount_pct)||0,gDiscAmt:parseFloat(p.global_discount_amount)||0,name:p.name})));}catch(e){console.warn("Chargement paniers suspendus échoué:",e.message);}
       // LOW-4: Load favorites and footfall from API
       try{const favs=await API.favorites.list();if(Array.isArray(favs))setFavorites(favs);}catch(e){console.warn("Chargement favoris échoué:",e.message);}
       try{const ff=await API.footfall.list();if(Array.isArray(ff))setFootfall(ff);}catch(e){console.warn("Chargement footfall échoué:",e.message);}
@@ -528,7 +531,9 @@ function AppProvider({children}){
 
   // Park — backend-first avec cache localStorage
   const parkCart=useCallback(async()=>{if(!cart.length)return;
-    const parkedData={name:`Panier ${new Date().toLocaleString("fr-FR")}`,items:cart.map(i=>({productId:i.product?.id,variantId:i.variant?.id,productName:i.product?.name,variantColor:i.variant?.color,variantSize:i.variant?.size,quantity:i.quantity,price:i.product?.price,discount:i.discountPercent||i.discount||0,discountType:"percent",discountPercent:i.discountPercent||0,discountAmount:i.discountAmount||0})),customerId:selCust?.id||null};
+    const parkedData={name:`Panier ${new Date().toLocaleString("fr-FR")}`,items:cart.map(i=>({productId:i.product?.id,variantId:i.variant?.id,productName:i.product?.name,variantColor:i.variant?.color,variantSize:i.variant?.size,quantity:i.quantity,price:i.product?.price,discount:i.discountPercent||i.discount||0,discountType:"percent",discountPercent:i.discountPercent||0,discountAmount:i.discountAmount||0})),
+      // Le client et la remise panier etaient perdus au rechargement (pas envoyes / mauvais nom de champ)
+      customerId:selCust?.id||null,globalDiscountPct:gDiscPct||0,globalDiscountAmount:gDiscAmt||0};
     let newParked;
     try{const saved=await API.parked.save(parkedData);newParked={id:saved.id,date:saved.created_at||new Date().toISOString(),items:[...cart],customer:selCust,gDiscPct,gDiscAmt};}
     catch(e){newParked={id:Date.now(),date:new Date().toISOString(),items:[...cart],customer:selCust,gDiscPct,gDiscAmt};addPendingSync({type:"parkCart",data:parkedData});}
@@ -536,10 +541,12 @@ function AppProvider({children}){
   },[cart,selCust,gDiscPct,gDiscAmt,addAudit,addPendingSync]);
   const restoreCart=useCallback(async(id)=>{const pk=parked.find(p=>p.id===id);if(!pk)return;if(cart.length)await parkCart();
     setCart(pk.items);setGDiscPct(pk.gDiscPct??(pk.gDiscType==="percentage"?pk.gDisc:0)??0);
-    setGDiscAmt(pk.gDiscAmt??(pk.gDiscType==="amount"?pk.gDisc:0)??0);setSelCust(pk.customer);
+    setGDiscAmt(pk.gDiscAmt??(pk.gDiscType==="amount"?pk.gDisc:0)??0);
+    // Client : la fiche complete (points, niveau...) est retrouvee par son id
+    setSelCust(pk.customer||(pk.customerId?customers.find(c=>c.id===pk.customerId)||null:null));
     setParked(p=>p.filter(x=>x.id!==id));
     try{await API.parked.remove(id);}catch(e){/* Le panier etait peut-etre local seulement */}
-    addAudit("RESTORE","Panier restaure");},[parked,cart,parkCart,addAudit]);
+    addAudit("RESTORE","Panier restaure");},[parked,cart,parkCart,addAudit,customers]);
   const removeParked=useCallback(async(id)=>{setParked(p=>p.filter(x=>x.id!==id));try{await API.parked.remove(id);}catch(e){console.warn("Suppression panier suspendu échouée:",e.message);}addAudit("PARK_DELETE","Panier en attente supprime");},[addAudit]);
 
   // ══ PROMO ENGINE ══
@@ -844,14 +851,20 @@ function AppProvider({children}){
   },[]);
 
   // ══ P3: Sales goals by seller ══
+  // Objectifs de vente : persistes cote serveur (settings.salesGoals), sinon perdus au rechargement
   const[salesGoals,setSalesGoals]=useState({});
+  useEffect(()=>{if(settings&&settings.salesGoals&&typeof settings.salesGoals==="object")setSalesGoals(settings.salesGoals);},[settings.salesGoals]);
   // Base HT des commissions par vendeur (mois + année), agrégée côté serveur
   const[commissionBase,setCommissionBase]=useState([]);
   const reloadCommissions=useCallback(async()=>{
     try{const data=await API.sales.commissions();setCommissionBase(Array.isArray(data)?data:[]);return data;}
     catch(e){console.warn("Chargement commissions échoué:",e.message);return[];}
   },[]);
-  const setSellerGoal=useCallback((userName,goal)=>{setSalesGoals(p=>({...p,[userName]:goal}));},[]);
+  const setSellerGoal=useCallback((userName,goal)=>{
+    setSalesGoals(p=>{const next={...p,[userName]:goal};
+      API.settings.update({salesGoals:next}).catch(e=>notify("Objectif non enregistré : "+e.message,"error"));
+      return next;});
+  },[notify]);
 
   // Best sellers
   const bestSellers=useMemo(()=>{const m={};tickets.forEach(t=>(t.items||[]).forEach(i=>{
@@ -1230,10 +1243,13 @@ function AppProvider({children}){
   const addCustomer=useCallback(async(c)=>{
     try{const nc=await API.customers.create(c);const mapped=norm.customer(nc);setCustomers(p=>[...p,mapped]);notify("Client créé","success");return mapped;}
     catch(e){
-      // Fallback local si API indisponible — pas d'erreur, juste création locale
+      // Plus de faux « Client créé » : le client local etait perdu au rechargement et
+      // jamais renvoye au serveur. On le dit, et on garde la fiche pour la vente en cours.
       const nc={id:`c-${Date.now()}`,firstName:c.firstName||"",lastName:c.lastName||"",email:c.email||"",phone:c.phone||"",
-        city:c.city||"",notes:c.notes||"",points:0,totalSpent:0,createdAt:new Date().toISOString()};
-      setCustomers(p=>[...p,nc]);notify("Client créé","success");return nc;
+        city:c.city||"",notes:c.notes||"",points:0,totalSpent:0,createdAt:new Date().toISOString(),local:true};
+      setCustomers(p=>[...p,nc]);
+      notify(`Client NON enregistré sur le serveur (${e.message}) — à recréer une fois la connexion rétablie`,"error");
+      return nc;
     }},[notify]);
 
   const openReg=async(a,denominations)=>{
@@ -1522,14 +1538,22 @@ function AppProvider({children}){
   },[customers,addAudit,notify]);
 
   // ══ STOCK ADJUSTMENT ══
-  const adjustStock=useCallback(async(productId,variantId,newStock,reason)=>{
+  // Renvoie true/false (avant : rien, donc impossible de savoir si le serveur avait accepte).
+  // opts.lot=true : pas de rechargement du catalogue ni de toast a chaque ligne — un
+  // inventaire de 50 lignes rechargeait 50 fois le catalogue complet.
+  const adjustStock=useCallback(async(productId,variantId,newStock,reason,opts={})=>{
     const p=products.find(x=>x.id===productId);const v=p?.variants.find(x=>x.id===variantId);
-    if(!p||!v)return;
+    if(!p||!v)return false;
     try{await API.stock.adjust({productId,variantId,newStock,reason});
-      const prods=await API.products.list();setProducts(norm.products(prods));
+      if(opts.lot){
+        setProducts(prev=>prev.map(x=>x.id===productId?{...x,variants:x.variants.map(vr=>vr.id===variantId?{...vr,stock:newStock}:vr)}:x));
+      }else{
+        const prods=await API.products.list();setProducts(norm.products(prods));
+        notify(`Stock ajusté: ${p.name} ${v.color}/${v.size}`,"info");
+      }
       addAudit("STOCK",`${p.name} ${v.color}/${v.size}: ${v.stock} → ${newStock} (${reason||"Ajustement"})`);
-      notify(`Stock ajusté: ${p.name} ${v.color}/${v.size}`,"info");
-    }catch(e){notify("Erreur: "+e.message,"error");}
+      return true;
+    }catch(e){if(!opts.lot)notify("Erreur: "+e.message,"error");return false;}
   },[products,addAudit,notify]);
 
   // ══ DEFECTIVE STOCK ══
