@@ -151,7 +151,9 @@ export const globalDiscountTTC = (ticket) => {
 };
 
 // ── Agrégation des paiements par méthode (clôtures, stats) ──
-export const PAYMENT_METHODS = ["cash", "card", "cheque", "giftcard", "amex", "avoir"];
+// contactless manquait : les paiements sans contact disparaissaient du bloc « Reglements »
+// du Resume mobile et du Z hors ligne (somme des reglements < CA affiche).
+export const PAYMENT_METHODS = ["cash", "card", "contactless", "amex", "cheque", "giftcard", "avoir"];
 export const aggregatePaymentsByMethod = (tickets) => {
   const out = {};
   for (const m of PAYMENT_METHODS) {

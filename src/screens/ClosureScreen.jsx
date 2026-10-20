@@ -166,13 +166,19 @@ function ClosureScreen(){
           {(reportModal.byPayment.avoir||0)>0&&<div style={{display:"flex",justifyContent:"space-between"}}><span>Avoirs utilisés</span><span>{reportModal.byPayment.avoir.toFixed(2)}€</span></div>}
         </>}
         <div style={{borderTop:"1px dashed #999",margin:"6px 0"}}/>
-        <div style={{fontWeight:700,marginBottom:4}}>CA PAR VENDEUR</div>
+        <div style={{fontWeight:700,marginBottom:4}}>CA PAR VENDEUR (HT)</div>
         {reportModal.bySeller&&Object.entries(reportModal.bySeller).map(([name,amount])=>(
           <div key={name} style={{display:"flex",justifyContent:"space-between"}}><span>{name}</span><span>{amount.toFixed(2)}€</span></div>))}
         <div style={{borderTop:"1px dashed #999",margin:"6px 0"}}/>
         <div style={{fontWeight:700,marginBottom:4}}>CONTRÔLE CAISSE</div>
-        {reportModal.expectedCash!=null&&<div style={{display:"flex",justifyContent:"space-between"}}><span>Fond de caisse ouverture</span><span>{(reportModal.expectedCash-(reportModal.byPayment?.cash||0)).toFixed(2)}€</span></div>}
+        {/* Détail = formule du Z. Avant, « Fond de caisse ouverture » affichait en réalité
+            apports − prélèvements (0,00 € les jours sans mouvement). */}
+        {reportModal.expectedCash!=null&&(reportModal.openingFloat!=null
+          ?<div style={{display:"flex",justifyContent:"space-between"}}><span>Fond de caisse ouverture</span><span>{Number(reportModal.openingFloat).toFixed(2)}€</span></div>
+          :<div style={{display:"flex",justifyContent:"space-between"}}><span>Fond + mouvements de tiroir</span><span>{(reportModal.expectedCash-(reportModal.byPayment?.cash||0)).toFixed(2)}€</span></div>)}
         {reportModal.expectedCash!=null&&<div style={{display:"flex",justifyContent:"space-between"}}><span>+ Encaissements espèces</span><span>{(reportModal.byPayment?.cash||0).toFixed(2)}€</span></div>}
+        {reportModal.openingFloat!=null&&Number(reportModal.cashIn)>0&&<div style={{display:"flex",justifyContent:"space-between"}}><span>+ Apports</span><span>{Number(reportModal.cashIn).toFixed(2)}€</span></div>}
+        {reportModal.openingFloat!=null&&Number(reportModal.cashOut)>0&&<div style={{display:"flex",justifyContent:"space-between"}}><span>− Prélèvements</span><span>{Number(reportModal.cashOut).toFixed(2)}€</span></div>}
         {reportModal.expectedCash!=null&&<div style={{display:"flex",justifyContent:"space-between",fontWeight:700}}><span>= Espèces attendues</span><span>{reportModal.expectedCash.toFixed(2)}€</span></div>}
         {reportModal.actualCash!=null&&<div style={{display:"flex",justifyContent:"space-between"}}><span>Espèces comptées</span><span>{reportModal.actualCash.toFixed(2)}€</span></div>}
         {reportModal.actualCash!=null&&reportModal.expectedCash!=null&&<div style={{display:"flex",justifyContent:"space-between",color:Math.abs(reportModal.actualCash-reportModal.expectedCash)<0.01?"#059669":C.danger,fontWeight:700}}>
@@ -181,12 +187,16 @@ function ClosureScreen(){
           <div style={{display:"flex",justifyContent:"space-between"}}><span>CB comptées</span><span>{parseFloat(reportModal.actualCard).toFixed(2)}€</span></div>
           <div style={{display:"flex",justifyContent:"space-between",color:Math.abs(parseFloat(reportModal.actualCard)-(reportModal.byPayment?.card||0))<0.01?"#059669":C.danger,fontWeight:700}}>
             <span>Écart CB</span><span>{(parseFloat(reportModal.actualCard)-(reportModal.byPayment?.card||0))>=0?"+":""}{(parseFloat(reportModal.actualCard)-(reportModal.byPayment?.card||0)).toFixed(2)}€</span></div></>}
-        {(totalReturns>0||todayAvoirs.length>0)&&<><div style={{borderTop:"1px dashed #999",margin:"6px 0"}}/>
-          <div style={{fontWeight:700,marginBottom:4}}>RETOURS / AVOIRS</div>
-          <div style={{display:"flex",justifyContent:"space-between"}}><span>Nombre d'avoirs</span><span>{todayAvoirs.length}</span></div>
-          <div style={{display:"flex",justifyContent:"space-between",color:C.danger}}><span>Total retours</span><span>-{totalReturns.toFixed(2)}€</span></div></>}
-        <div style={{borderTop:"2px solid #333",margin:"6px 0"}}/>
-        <div style={{display:"flex",justifyContent:"space-between",fontWeight:700,fontSize:11}}><span>CA NET (TTC - Retours)</span><span>{((reportModal.totalTTC||0)-(totalReturns||0)).toFixed(2)}€</span></div>
+        {/* Retours de la PÉRIODE du Z (calculés par le serveur). Avant, un Z rouvert depuis
+            l'historique affichait les retours du jour courant. */}
+        {(()=>{const r=reportModal.returns;const nb=r?Number(r.count)||0:todayAvoirs.length;
+          const tot=r?Number(r.totalTTC)||0:totalReturns;
+          return(<>{(tot>0||nb>0)&&<><div style={{borderTop:"1px dashed #999",margin:"6px 0"}}/>
+            <div style={{fontWeight:700,marginBottom:4}}>RETOURS / AVOIRS</div>
+            <div style={{display:"flex",justifyContent:"space-between"}}><span>Nombre d'avoirs</span><span>{nb}</span></div>
+            <div style={{display:"flex",justifyContent:"space-between",color:C.danger}}><span>Total retours</span><span>-{tot.toFixed(2)}€</span></div></>}
+          <div style={{borderTop:"2px solid #333",margin:"6px 0"}}/>
+          <div style={{display:"flex",justifyContent:"space-between",fontWeight:700,fontSize:11}}><span>CA NET (TTC - Retours)</span><span>{((reportModal.totalTTC||0)-tot).toFixed(2)}€</span></div></>);})()}
         <div style={{display:"flex",justifyContent:"space-between",fontWeight:700,fontSize:12,marginTop:4}}><span>GRAND TOTAL PERPÉTUEL</span><span>{(reportModal.grandTotal||0).toFixed(2)}€</span></div>
         <div style={{textAlign:"center",background:C.fiscalLight,padding:8,borderRadius:6,margin:"8px 0"}}>
           <div style={{fontSize:8,color:C.fiscal,fontWeight:700}}>EMPREINTE NF525</div>

@@ -1057,7 +1057,7 @@ function SettingsScreen(){
   return(<div style={{height:"100%",overflowY:"auto",padding:"var(--pad,16px)",background:C.bg}}>
     <h2 style={{fontSize:20,fontWeight:800,marginBottom:10}}>Paramètres</h2>
     <div style={{display:"flex",gap:6,marginBottom:14,flexWrap:"wrap"}}>
-      {[{id:"general",l:"Général"},{id:"retouche",l:"✂️ Retouches"},{id:"pricing",l:"💰 Prix HT/TTC"},{id:"commission",l:"Commission"},{id:"stores",l:"Magasins"},{id:"printer",l:"Imprimante"},{id:"tpe",l:"Terminal paiement"},{id:"receipt",l:"Ticket"},{id:"screen2",l:"📺 Écran 2"},{id:"caticons",l:"🏷️ Catégories"},{id:"return",l:"Retours"},{id:"sizes",l:"📏 Ordre tailles"},{id:"theme",l:"Thème"},{id:"clock",l:"Pointages"},{id:"prices",l:"Historique prix"},{id:"backup",l:"Backup"},{id:"debug",l:"DEBUG"}].map(t=>(
+      {[{id:"general",l:"Général"},{id:"retouche",l:"✂️ Retouches"},{id:"pricing",l:"💰 Prix HT/TTC"},{id:"commission",l:"Commission"},{id:"printer",l:"Imprimante"},{id:"tpe",l:"Terminal paiement"},{id:"receipt",l:"Ticket"},{id:"screen2",l:"📺 Écran 2"},{id:"caticons",l:"🏷️ Catégories"},{id:"return",l:"Retours"},{id:"sizes",l:"📏 Ordre tailles"},{id:"clock",l:"Pointages"},{id:"prices",l:"Historique prix"},{id:"backup",l:"Backup"},{id:"debug",l:"DEBUG"}].map(t=>(
         <button key={t.id} onClick={()=>setTab(t.id)} style={{padding:"5px 12px",borderRadius:8,border:`1.5px solid ${tab===t.id?C.primary:C.border}`,
           background:tab===t.id?C.primary:"transparent",color:tab===t.id?"#fff":C.text,fontSize:11,fontWeight:600,cursor:"pointer"}}>{t.l}</button>))}</div>
 
@@ -1193,30 +1193,7 @@ function SettingsScreen(){
       <Btn onClick={()=>{saveSettingsNotify(settings,"Commissions");addAudit("CONFIG","Commissions mises à jour");}} style={{width:"100%",height:40,background:C.primary}}><Save size={14}/> Enregistrer</Btn>
     </div>;})()}
 
-    {tab==="stores"&&<div style={{maxWidth:600}}>
-      <div style={{background:C.primaryLight,borderRadius:16,padding:20,border:`1.5px solid ${C.primary}22`,marginBottom:16}}>
-        <h3 style={{fontSize:16,fontWeight:800,margin:"0 0 4px"}}>Configuration multi-magasins</h3>
-        <p style={{fontSize:11,color:C.textMuted,margin:0}}>Définissez les magasins de votre réseau. Utilisé pour les transferts de stock et les rapports consolidés.</p></div>
-      <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:14}}>
-        {(settings.stores||[]).map((store,i)=>(<div key={i} style={{display:"flex",alignItems:"center",gap:8,padding:12,borderRadius:12,background:C.surfaceAlt,border:`1px solid ${C.border}`}}>
-          <div style={{flex:1}}>
-            <Input value={store.name} onChange={e=>{const stores=[...(settings.stores||[])];stores[i]={...stores[i],name:e.target.value};setSettings(s=>({...s,stores}));}}
-              placeholder="Nom du magasin" style={{marginBottom:4,fontWeight:600}}/>
-            <Input value={store.address||""} onChange={e=>{const stores=[...(settings.stores||[])];stores[i]={...stores[i],address:e.target.value};setSettings(s=>({...s,stores}));}}
-              placeholder="Adresse" style={{fontSize:11}}/>
-          </div>
-          <Btn variant="outline" onClick={()=>{const stores=(settings.stores||[]).filter((_,j)=>j!==i);setSettings(s=>({...s,stores}));}}
-            style={{height:36,width:36,padding:0,borderRadius:8,color:C.danger,borderColor:C.danger+"44"}}><Trash2 size={14}/></Btn>
-        </div>))}
-        {(settings.stores||[]).length===0&&<div style={{textAlign:"center",padding:20,color:C.textLight,fontSize:12}}>Aucun magasin configuré</div>}
-      </div>
-      <Btn variant="outline" onClick={()=>{const stores=[...(settings.stores||[]),{name:"",address:"",id:`store-${Date.now()}`}];setSettings(s=>({...s,stores}));}}
-        style={{width:"100%",height:36,marginBottom:12,borderRadius:10,fontSize:11}}><Plus size={12}/> Ajouter un magasin</Btn>
-      <Btn onClick={()=>{saveSettingsNotify(settings,"Magasins");addAudit("CONFIG","Configuration magasins mise à jour");}}
-        style={{width:"100%",height:40,background:C.primary}}><Save size={14}/> Enregistrer</Btn>
-    </div>}
-
-    {tab==="printer"&&<div style={{maxWidth:600}}>
+        {tab==="printer"&&<div style={{maxWidth:600}}>
       {/* Hardware selection */}
       <div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.primary}22`,marginBottom:14}}>
         <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}>
@@ -1463,26 +1440,7 @@ function SettingsScreen(){
 
     {tab==="sizes"&&<SizeSettingsTab notify={notify}/>}
 
-    {tab==="theme"&&<div style={{maxWidth:500}}>
-      <div style={{marginBottom:10}}><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>COULEUR PRINCIPALE</label>
-        <div style={{display:"flex",gap:8,alignItems:"center"}}><input type="color" value={theme.primaryColor} onChange={e=>setTheme(t=>({...t,primaryColor:e.target.value}))}
-          style={{width:40,height:36,border:"none",cursor:"pointer",borderRadius:8}}/><span style={{fontSize:12}}>{theme.primaryColor}</span></div></div>
-      <div style={{marginBottom:10}}><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>COULEUR ACCENT</label>
-        <div style={{display:"flex",gap:8,alignItems:"center"}}><input type="color" value={theme.accentColor} onChange={e=>setTheme(t=>({...t,accentColor:e.target.value}))}
-          style={{width:40,height:36,border:"none",cursor:"pointer",borderRadius:8}}/><span style={{fontSize:12}}>{theme.accentColor}</span></div></div>
-      <div style={{marginBottom:10}}><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>URL DU LOGO</label>
-        <Input value={settings.logo||""} onChange={e=>setSettings(s=>({...s,logo:e.target.value}))} placeholder="https://…"/></div>
-      <div style={{marginTop:16,marginBottom:10}}><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:6}}>ACCESSIBILITÉ</label>
-        <div style={{display:"flex",alignItems:"center",gap:10}}>
-          <button onClick={()=>{setHighContrast(!isHighContrast());window.location.reload();}}
-            style={{padding:"8px 16px",borderRadius:8,border:`1.5px solid ${C.border}`,background:isHighContrast()?C.primary:C.surface,
-              color:isHighContrast()?"#fff":C.text,fontSize:12,fontWeight:600,cursor:"pointer"}}>
-            {isHighContrast()?"Contraste élevé activé":"Activer contraste élevé"}</button>
-          <span style={{fontSize:11,color:C.textMuted}}>Augmente le contraste des textes et bordures pour une meilleure lisibilité</span>
-        </div></div>
-      <p style={{fontSize:10,color:C.textMuted}}>Les changements de thème seront appliqués au prochain rechargement.</p></div>}
-
-    {tab==="clock"&&<div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`}}>
+        {tab==="clock"&&<div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`}}>
       <h3 style={{fontSize:14,fontWeight:700,marginBottom:10}}>Pointages récents</h3>
       {clockEntries.length===0&&<div style={{textAlign:"center",padding:20,color:C.textLight}}>Aucun pointage</div>}
       {clockEntries.slice(0,30).map(e=>(<div key={e.id} style={{display:"flex",alignItems:"center",gap:8,padding:6,borderBottom:`1px solid ${C.border}`,fontSize:11}}>
@@ -1533,7 +1491,7 @@ function SettingsScreen(){
                 placeholder={f.placeholder||""} type={f.type||"text"}/>}
           </div>))}
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-          <Btn onClick={()=>{notify("Configuration TPE sauvegardee","success");}} style={{height:40,background:C.primary}}>
+          <Btn onClick={()=>{notify("Configuration TPE enregistrée sur CET appareil (chaque caisse a son propre terminal)","success");}} style={{height:40,background:C.primary}}>
             <Save size={14}/> Sauvegarder</Btn>
           {paymentId==="concert"&&<Btn onClick={async()=>{
             setDiagLoading(true);
