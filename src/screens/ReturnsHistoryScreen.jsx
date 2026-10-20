@@ -6,7 +6,7 @@ import { useApp } from "../context.jsx";
 import { getAvoirRemaining, formatAmount } from "../lib/formatters.js";
 
 function ReturnsHistoryScreen(){
-  const{avoirs,tickets,notify,settings,setSettings,saveSettingsToAPI,addAudit,isAvoirExpired}=useApp();
+  const{avoirs,tickets,notify,settings,setSettings,saveSettingsToAPI,addAudit,isAvoirExpired,saveSettingsNotify}=useApp();
   const[filter,setFilter]=useState("all");const[search,setSearch]=useState("");
   const[tab,setTab]=useState(avoirs.length>0?"history":"settings");
   const sorted=[...avoirs].sort((a,b)=>new Date(b.date)-new Date(a.date));
@@ -88,7 +88,7 @@ function ReturnsHistoryScreen(){
               <div style={{width:16,height:16,borderRadius:8,background:"#fff",position:"absolute",top:3,left:val?21:3,transition:"all 0.2s",boxShadow:"0 1px 3px rgba(0,0,0,0.15)"}}/></button>
           </div>);})}
       </div>
-      <Btn onClick={()=>{saveSettingsToAPI(settings);addAudit("CONFIG","Politique de retour mise à jour");notify("Paramètres sauvegardés","success");}} style={{width:"100%",height:44,background:C.primary}}><Save size={14}/> Enregistrer</Btn>
+      <Btn onClick={()=>{saveSettingsNotify(settings,"Paramètres");addAudit("CONFIG","Politique de retour mise à jour");}} style={{width:"100%",height:44,background:C.primary}}><Save size={14}/> Enregistrer</Btn>
     </div>}
 
     {tab==="history"&&<>

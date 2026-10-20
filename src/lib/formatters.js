@@ -1,3 +1,4 @@
+import { dayKey } from "./dates.js";
 // ════════════════════════════════════════════════════════════
 //  Helpers de formatage & normalisation (purs, testables)
 //  Centralisent des patterns dupliqués dans context/screens/print.
@@ -34,11 +35,12 @@ export const isAvoirPartiallyUsed = (avoir) => {
 };
 
 // ── Dates ──
-export const getTodayDate = () => new Date().toISOString().split("T")[0];
+// Journée LOCALE (voir lib/dates.js) : en UTC, les ventes d'après minuit tombaient la veille.
+export const getTodayDate = () => dayKey();
 export const getDateField = (obj) => (obj && (obj.date || obj.createdAt || obj.created_at)) || "";
 export const filterByToday = (items) => {
   const today = getTodayDate();
-  return (items || []).filter((i) => getDateField(i).startsWith(today));
+  return (items || []).filter((i) => dayKey(new Date(getDateField(i))) === today);
 };
 
 // ── Clôtures : normalisation snake_case (backend) → camelCase ──

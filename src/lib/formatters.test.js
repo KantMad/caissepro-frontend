@@ -162,9 +162,13 @@ describe("isAvoirPartiallyUsed", () => {
 });
 
 describe("filterByToday", () => {
-  it("ne garde que les éléments du jour", () => {
-    const today = getTodayDate();
-    const items = [{ date: `${today}T10:00:00Z` }, { created_at: "2020-01-01T00:00:00Z" }, { date: `${today}T23:59:59Z` }];
+  it("ne garde que les éléments du jour — en heure LOCALE", () => {
+    // Journée commerciale locale : 00h05 et 23h55 d'aujourd'hui en sont, pas la veille.
+    const d = new Date();
+    const local = (h, m) => new Date(d.getFullYear(), d.getMonth(), d.getDate(), h, m).toISOString();
+    const hier = new Date(d); hier.setDate(hier.getDate() - 1);
+    const items = [{ date: local(0, 5) }, { created_at: "2020-01-01T00:00:00Z" },
+                   { date: local(23, 55) }, { date: hier.toISOString() }];
     expect(filterByToday(items)).toHaveLength(2);
   });
   it("liste vide/nulle → []", () => {

@@ -13,6 +13,7 @@ import { useApp } from "./context.jsx";
 import { useViewport } from "./useViewport.js";
 import logo from "./assets/logo.png";
 import { formatAmount } from "./lib/formatters.js";
+import { dayKey, rangeToInstants } from "./lib/dates.js";
 import {
   LoginScreen, CashRegControl, SalesScreen, StatsScreen, StockScreen,
   HistoryScreen, ReturnScreen, ClosureScreen, CustomersScreen, FiscalScreen,
@@ -270,16 +271,21 @@ function DashboardNav({active,onNav,vp,mobileOpen,onCloseMobile}){
 function DashOverview(){
   const{gt,tickets,closures,stockAlerts,bestSellers,perm:p}=useApp();
   const[apiStats,setApiStats]=useState(null);const[apiBest,setApiBest]=useState(null);
+  const[apiToday,setApiToday]=useState(null);
   useEffect(()=>{
     API.sales.stats().then(d=>setApiStats(d)).catch(()=>{});
+    // CA du jour : demande au SERVEUR sur la journee LOCALE (minuit -> 23h59 ici).
+    // Avant, on filtrait les 200 derniers tickets sur la date UTC : les ventes
+    // d'apres minuit tombaient la veille et un gros volume depassait la fenetre.
+    API.sales.stats(rangeToInstants(dayKey(),dayKey())).then(d=>setApiToday(d)).catch(()=>{});
     API.sales.bestSellers().then(d=>setApiBest(Array.isArray(d)?d:[])).catch(()=>{});
   },[]);
   // Use backend stats if available, fallback to local computation
   const margin=apiStats?parseFloat(apiStats.total_margin)||0:tickets.reduce((s,t)=>s+(parseFloat(t.margin)||0),0);
-  const todayStr=new Date().toISOString().split("T")[0];
-  const todayTk=tickets.filter(t=>(t.date||t.createdAt||t.created_at||"").startsWith(todayStr));
-  const todayCA=todayTk.reduce((s,t)=>s+(t.totalTTC||parseFloat(t.total_ttc)||0),0);
-  const todayCount=todayTk.length;
+  const todayStr=dayKey();
+  const todayTk=tickets.filter(t=>dayKey(new Date(t.date||t.createdAt||t.created_at||0))===todayStr);
+  const todayCA=apiToday?parseFloat(apiToday.total_ttc)||0:todayTk.reduce((s,t)=>s+(t.totalTTC||parseFloat(t.total_ttc)||0),0);
+  const todayCount=apiToday?parseInt(apiToday.ticket_count)||0:todayTk.length;
   const todayAvg=todayCount?todayCA/todayCount:0;
   const totalTickets=apiStats?parseInt(apiStats.ticket_count)||tickets.length:tickets.length;
   const totalCA=apiStats?parseFloat(apiStats.grand_total)||parseFloat(gt)||0:parseFloat(gt)||0;

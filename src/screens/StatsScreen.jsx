@@ -6,35 +6,65 @@ import { C } from "../constants.jsx";
 import { Btn, Input, Badge, SC } from "../ui.jsx";
 import { useApp } from "../context.jsx";
 import { getPaymentLabel, ticketPieces, salesIndex, formatAmount } from "../lib/formatters.js";
+import { dayKey, rangeToInstants, previousRange } from "../lib/dates.js";
 
 function StatsScreen(){
   const{tickets,products,avoirs,bestSellers:allBestSellers,salesBySeller,salesByVariant,caEvolution,salesByCollection,exportCSVReport,perm,commissions,salesGoals,setSellerGoal,settings,mode}=useApp();
   const[tab,setTab]=useState("ca");
   const[dateFrom,setDateFrom]=useState("");const[dateTo,setDateTo]=useState("");const[catFilter,setCatFilter]=useState("");
   const[apiSummary,setApiSummary]=useState(null);const[apiBySeller,setApiBySeller]=useState(null);const[apiByDay,setApiByDay]=useState(null);const[apiBestSellers,setApiBestSellers]=useState(null);
+  // Les cartes du haut viennent du SERVEUR : l'ecran ne garde en memoire que les
+  // 200 derniers tickets, les totaux calcules dessus etaient tronques sans le dire.
+  const[srvStats,setSrvStats]=useState(null);const[srvPrev,setSrvPrev]=useState(null);
+  const[srvErreur,setSrvErreur]=useState(false);
   useEffect(()=>{
-    API.sales.stats().then(d=>setApiSummary(d)).catch(()=>{});
-    API.sales.bestSellers().then(d=>setApiBestSellers(Array.isArray(d)?d:[])).catch(()=>{});
-    API.sales.bySeller().then(d=>setApiBySeller(Array.isArray(d)?d:[])).catch(()=>{});
-    API.sales.byDay().then(d=>setApiByDay(Array.isArray(d)?d:[])).catch(()=>{});
+    let annule=false;
+    (async()=>{
+      try{
+        const prev=previousRange(dateFrom,dateTo);
+        const [cur,pre]=await Promise.all([
+          API.sales.stats(rangeToInstants(dateFrom,dateTo)),
+          prev.from?API.sales.stats(rangeToInstants(prev.from,prev.to)):Promise.resolve(null),
+        ]);
+        if(annule)return;
+        setSrvStats(cur||null);setSrvPrev(pre||null);setSrvErreur(false);
+      }catch(e){if(!annule){setSrvErreur(true);setSrvStats(null);}}
+    })();
+    return()=>{annule=true;};
+  },[dateFrom,dateTo]);
+  useEffect(()=>{
+    API.sales.byDay().then(d=>setApiByDay(d)).catch(()=>{});
   },[]);
-  const setPreset=(p)=>{const now=new Date();const fmt=d=>d.toISOString().split("T")[0];
+  const setPreset=(p)=>{const now=new Date();const fmt=dayKey;   // journée LOCALE
     if(p==="today"){setDateFrom(fmt(now));setDateTo(fmt(now));}
     else if(p==="week"){const d=new Date(now);d.setDate(d.getDate()-d.getDay()+1);setDateFrom(fmt(d));setDateTo(fmt(now));}
     else if(p==="month"){setDateFrom(fmt(new Date(now.getFullYear(),now.getMonth(),1)));setDateTo(fmt(now));}
     else if(p==="lastmonth"){setDateFrom(fmt(new Date(now.getFullYear(),now.getMonth()-1,1)));setDateTo(fmt(new Date(now.getFullYear(),now.getMonth(),0)));}
     else if(p==="year"){setDateFrom(fmt(new Date(now.getFullYear(),0,1)));setDateTo(fmt(now));}
     else{setDateFrom("");setDateTo("");}};
-  const fTickets=useMemo(()=>{return tickets.filter(t=>{const d=(t.date||t.createdAt||t.created_at||"").split("T")[0];
+  const fTickets=useMemo(()=>{return tickets.filter(t=>{const d=dayKey(new Date(t.date||t.createdAt||t.created_at||0));
     if(dateFrom&&d<dateFrom)return false;if(dateTo&&d>dateTo)return false;
     if(catFilter){const hasItem=(t.items||[]).some(i=>(i.product?.category||"")===catFilter);if(!hasItem)return false;}return true;});},[tickets,dateFrom,dateTo,catFilter]);
   const prevTickets=useMemo(()=>{if(!dateFrom||!dateTo)return[];const from=new Date(dateFrom);const to=new Date(dateTo);
     const span=to-from;const pFrom=new Date(from-span-86400000);const pTo=new Date(from-86400000);
-    const fmt=d=>d.toISOString().split("T")[0];
+    const fmt=dayKey;
     return tickets.filter(t=>{const d=(t.date||t.createdAt||t.created_at||"").split("T")[0];return d>=fmt(pFrom)&&d<=fmt(pTo);});},[tickets,dateFrom,dateTo]);
-  const stats=useMemo(()=>{const t=fTickets.reduce((s,t)=>s+(t.totalTTC||parseFloat(t.total_ttc)||0),0);const h=fTickets.reduce((s,t)=>s+(t.totalHT||parseFloat(t.total_ht)||0),0);
+  // Totaux de la periode : SERVEUR (toutes les ventes) ; repli local seulement si l'API
+  // est injoignable — et dans ce cas l'ecran le dit, au lieu d'afficher un chiffre tronque.
+  const statsLocal=useMemo(()=>{const t=fTickets.reduce((s,t)=>s+(t.totalTTC||parseFloat(t.total_ttc)||0),0);const h=fTickets.reduce((s,t)=>s+(t.totalHT||parseFloat(t.total_ht)||0),0);
     const m=fTickets.reduce((s,t)=>s+(parseFloat(t.margin)||0),0);return{tTTC:t,tHT:h,margin:m,avg:fTickets.length?t/fTickets.length:0,count:fTickets.length,pieces:fTickets.reduce((s,t)=>s+ticketPieces(t),0),upt:salesIndex(fTickets)};},[fTickets]);
-  const prevStats=useMemo(()=>{const t=prevTickets.reduce((s,t)=>s+(t.totalTTC||parseFloat(t.total_ttc)||0),0);return{tTTC:t,count:prevTickets.length,upt:salesIndex(prevTickets)};},[prevTickets]);
+  const stats=useMemo(()=>{
+    if(!srvStats||catFilter)return statsLocal;   // filtre categorie = calcul local assume
+    const n=(v)=>parseFloat(v)||0;
+    const count=n(srvStats.ticket_count),pieces=n(srvStats.total_pieces);
+    return{tTTC:n(srvStats.total_ttc),tHT:n(srvStats.total_ht),margin:n(srvStats.total_margin),
+      avg:count?n(srvStats.total_ttc)/count:0,count,pieces,upt:count?pieces/count:0};
+  },[srvStats,statsLocal,catFilter]);
+  const prevStats=useMemo(()=>{
+    if(srvPrev&&!catFilter){const n=(v)=>parseFloat(v)||0;const c=n(srvPrev.ticket_count);
+      return{tTTC:n(srvPrev.total_ttc),count:c,upt:c?n(srvPrev.total_pieces)/c:0};}
+    const t=prevTickets.reduce((s,t)=>s+(t.totalTTC||parseFloat(t.total_ttc)||0),0);
+    return{tTTC:t,count:prevTickets.length,upt:salesIndex(prevTickets)};},[srvPrev,prevTickets,catFilter]);
   const pctChange=(cur,prev)=>{if(!prev)return null;const pct=((cur-prev)/prev*100);return pct;};
   const PctBadge=({cur,prev})=>{const p=pctChange(cur,prev);if(p===null||!dateFrom)return null;
     return<Badge color={p>=0?"#059669":C.danger}>{p>=0?"+":""}{p.toFixed(1)}%</Badge>;};
@@ -116,6 +146,9 @@ function StatsScreen(){
       <Input type="date" value={dateTo} onChange={e=>setDateTo(e.target.value)} style={{width:120,height:28,fontSize:10,padding:"2px 6px"}}/>
       <select value={catFilter} onChange={e=>setCatFilter(e.target.value)} style={{padding:"4px 8px",borderRadius:6,border:`1px solid ${C.border}`,fontSize:10,fontFamily:"inherit"}}>
         <option value="">Toutes catégories</option>{allCats.map(c=>(<option key={c} value={c}>{c}</option>))}</select></div>
+    {(srvErreur||(catFilter&&tickets.length>=200))&&<div style={{background:C.warnLight,border:`1px solid ${C.warn}33`,borderRadius:10,padding:"8px 12px",marginBottom:10,fontSize:11,color:"#92400E"}}>
+      {srvErreur?"Totaux indisponibles côté serveur — chiffres calculés sur les 200 derniers tickets chargés."
+       :"Filtre catégorie actif : les totaux portent sur les 200 derniers tickets chargés, pas sur toute la période."}</div>}
     <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:10,marginBottom:16}}>
       <div><SC icon={Euro} label="CA TTC" value={`${formatAmount(stats.tTTC)}€`} color={C.primary} sub={<PctBadge cur={stats.tTTC} prev={prevStats.tTTC}/>}/></div>
       <div><SC icon={Receipt} label="Tickets" value={stats.count} color={C.info} sub={<PctBadge cur={stats.count} prev={prevStats.count}/>}/></div>

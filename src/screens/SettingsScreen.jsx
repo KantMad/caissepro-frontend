@@ -1045,7 +1045,7 @@ function BackupPanel({notify,addAudit}){
 }
 
 function SettingsScreen(){
-  const{settings,setSettings,saveSettingsToAPI,addAudit,theme,setTheme,clockEntries,priceHistory,printerConnected,printerType,connectPrinter,disconnectPrinter,thermalPrint,notify,users,hwId,hwProfile,switchHardware,hardwareProfiles,paymentId,paymentConfig,switchPayment,updatePaymentConfig,paymentProfiles,perm,effectiveStoreId,allCategories,products,updateProduct}=useApp();
+  const{settings,setSettings,saveSettingsToAPI,saveSettingsNotify,addAudit,theme,setTheme,clockEntries,priceHistory,printerConnected,printerType,connectPrinter,disconnectPrinter,thermalPrint,notify,users,hwId,hwProfile,switchHardware,hardwareProfiles,paymentId,paymentConfig,switchPayment,updatePaymentConfig,paymentProfiles,perm,effectiveStoreId,allCategories,products,updateProduct}=useApp();
   if(!perm().canSettings) return <div style={{padding:40,textAlign:"center",color:C.textMuted,fontSize:16,fontWeight:600}}>Accès refusé</div>;
   const[tab,setTab]=useState("general");
   const[expandedCat,setExpandedCat]=useState(null);
@@ -1065,7 +1065,7 @@ function SettingsScreen(){
       {[{l:"Nom boutique",k:"name"},{l:"Adresse",k:"address"},{l:"Code postal",k:"postalCode"},{l:"Ville",k:"city"},{l:"SIRET",k:"siret"},{l:"N° TVA Intra",k:"tvaIntra"},{l:"Téléphone",k:"phone"},{l:"Message ticket",k:"footerMsg"}].map(f=>(
         <div key={f.k} style={{marginBottom:10}}><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>{f.l}</label>
           <Input value={settings[f.k]||""} onChange={e=>setSettings(s=>({...s,[f.k]:e.target.value}))}/></div>))}
-      <Btn onClick={()=>{saveSettingsToAPI(settings);addAudit("CONFIG","Paramètres mis à jour");notify("Paramètres sauvegardés","success");}} style={{width:"100%",height:40,marginTop:8,background:C.primary}}><Save size={14}/> Enregistrer</Btn></div>}
+      <Btn onClick={()=>{saveSettingsNotify(settings,"Paramètres");addAudit("CONFIG","Paramètres mis à jour");}} style={{width:"100%",height:40,marginTop:8,background:C.primary}}><Save size={14}/> Enregistrer</Btn></div>}
 
     {tab==="retouche"&&<div style={{maxWidth:650}}>
       <div style={{background:C.primaryLight,borderRadius:16,padding:20,border:`1.5px solid ${C.primary}22`,marginBottom:16}}>
@@ -1112,7 +1112,7 @@ function SettingsScreen(){
         <div style={{fontSize:11,color:"#92400E",lineHeight:1.5}}>
           <strong>Utilisation :</strong> En caisse, cliquez sur le bouton <strong>Retouche</strong> pour créer un bon. Les prestations configurées ici apparaissent comme boutons rapides. Le bon de retouche s'imprime au format ticket de caisse et les articles sont ajoutés au panier.</div></div>
 
-      <Btn onClick={()=>{saveSettingsToAPI(settings);addAudit("CONFIG","Types de retouches mis à jour");notify("Paramètres retouches sauvegardés","success");}}
+      <Btn onClick={()=>{saveSettingsNotify(settings,"Paramètres retouches");addAudit("CONFIG","Types de retouches mis à jour");}}
         style={{width:"100%",height:44,background:C.primary}}><Save size={14}/> Enregistrer</Btn>
     </div>}
 
@@ -1190,7 +1190,7 @@ function SettingsScreen(){
             onChange={e=>setNum("commissionCaps",k,e.target.value)} placeholder="plaf." style={{textAlign:"right",padding:"6px 6px"}}/>
         </div>);})}
       </div>
-      <Btn onClick={()=>{saveSettingsToAPI(settings);addAudit("CONFIG","Commissions mises à jour");notify("Commissions sauvegardées","success");}} style={{width:"100%",height:40,background:C.primary}}><Save size={14}/> Enregistrer</Btn>
+      <Btn onClick={()=>{saveSettingsNotify(settings,"Commissions");addAudit("CONFIG","Commissions mises à jour");}} style={{width:"100%",height:40,background:C.primary}}><Save size={14}/> Enregistrer</Btn>
     </div>;})()}
 
     {tab==="stores"&&<div style={{maxWidth:600}}>
@@ -1212,7 +1212,7 @@ function SettingsScreen(){
       </div>
       <Btn variant="outline" onClick={()=>{const stores=[...(settings.stores||[]),{name:"",address:"",id:`store-${Date.now()}`}];setSettings(s=>({...s,stores}));}}
         style={{width:"100%",height:36,marginBottom:12,borderRadius:10,fontSize:11}}><Plus size={12}/> Ajouter un magasin</Btn>
-      <Btn onClick={()=>{saveSettingsToAPI(settings);addAudit("CONFIG","Configuration magasins mise à jour");notify("Magasins sauvegardés","success");}}
+      <Btn onClick={()=>{saveSettingsNotify(settings,"Magasins");addAudit("CONFIG","Configuration magasins mise à jour");}}
         style={{width:"100%",height:40,background:C.primary}}><Save size={14}/> Enregistrer</Btn>
     </div>}
 
@@ -1373,7 +1373,7 @@ function SettingsScreen(){
           Ces réglages valent pour <strong>ce magasin</strong>. Pour imprimer, allez dans <strong>Étiquettes</strong> :
           scannez ou cherchez des articles, choisissez les quantités, puis imprimez. Dans la fenêtre d'impression,
           sélectionnez l'étiqueteuse, marges « aucune » et échelle 100 %.</p>
-        <Btn onClick={()=>{saveSettingsToAPI(settings);notify("Paramètres étiquettes sauvegardés","success");}}
+        <Btn onClick={()=>{saveSettingsNotify(settings,"Paramètres étiquettes");}}
           style={{width:"100%",height:40,background:C.accent}}><Save size={14}/> Enregistrer les paramètres étiquettes</Btn>
       </div>
 
@@ -1458,7 +1458,7 @@ function SettingsScreen(){
         </div>
       </div>
 
-      <Btn onClick={()=>{saveSettingsToAPI(settings);addAudit("CONFIG","Politique de retour mise à jour");notify("Paramètres de retour sauvegardés","success");}} style={{width:"100%",height:44,background:C.primary}}><Save size={14}/> Enregistrer les paramètres de retour</Btn>
+      <Btn onClick={()=>{saveSettingsNotify(settings,"Paramètres de retour");addAudit("CONFIG","Politique de retour mise à jour");}} style={{width:"100%",height:44,background:C.primary}}><Save size={14}/> Enregistrer les paramètres de retour</Btn>
     </div>}
 
     {tab==="sizes"&&<SizeSettingsTab notify={notify}/>}
@@ -1649,7 +1649,7 @@ function SettingsScreen(){
             <div style={{width:18,height:18,borderRadius:4,border:`2px solid ${checked?C.primary:C.border}`,background:checked?C.primary:"transparent",display:"flex",alignItems:"center",justifyContent:"center"}}>
               {checked&&<Check size={12} color="#fff"/>}</div>
             <span style={{fontSize:12,fontWeight:500}}>{f.l}</span></div>);})}</div>
-      <Btn onClick={()=>{saveSettingsToAPI(settings);addAudit("CONFIG","Paramètres ticket mis à jour");notify("Paramètres ticket sauvegardés","success");}} style={{width:"100%",height:40,background:C.primary}}><Save size={14}/> Enregistrer</Btn>
+      <Btn onClick={()=>{saveSettingsNotify(settings,"Paramètres ticket");addAudit("CONFIG","Paramètres ticket mis à jour");}} style={{width:"100%",height:40,background:C.primary}}><Save size={14}/> Enregistrer</Btn>
     </div>}
 
     {tab==="screen2"&&<div style={{maxWidth:600}}>
@@ -1673,7 +1673,7 @@ function SettingsScreen(){
           {settings.screen2Logo&&<img src={settings.screen2Logo} alt="logo" style={{maxHeight:40,maxWidth:120,objectFit:"contain"}}/>}
           <div style={{fontSize:20,fontWeight:800,color:settings.screen2AccentColor||C.primary}}>{settings.screen2WelcomeMsg||"Bienvenue"}</div>
           <div style={{fontSize:10,color:"rgba(255,255,255,0.5)"}}>Aperçu de l'écran client</div></div></div>
-      <Btn onClick={()=>{saveSettingsToAPI(settings);addAudit("CONFIG","Paramètres Écran 2 mis à jour");notify("Paramètres Écran 2 sauvegardés","success");}} style={{width:"100%",height:40,background:C.primary}}><Save size={14}/> Enregistrer</Btn>
+      <Btn onClick={()=>{saveSettingsNotify(settings,"Paramètres Écran 2");addAudit("CONFIG","Paramètres Écran 2 mis à jour");}} style={{width:"100%",height:40,background:C.primary}}><Save size={14}/> Enregistrer</Btn>
 
       <div style={{background:C.surface,borderRadius:16,padding:20,border:`1.5px solid ${C.border}`,marginTop:20}}>
         <h3 style={{fontSize:14,fontWeight:800,margin:"0 0 4px"}}>Configuration Sunmi T2 / D2</h3>
@@ -1819,7 +1819,7 @@ function SettingsScreen(){
           </div>
         </div>
 
-        <Btn onClick={()=>{saveSettingsToAPI(settings);addAudit("CONFIG","Catégories et icônes mis à jour");notify("Catégories sauvegardées","success");}} style={{width:"100%",height:44,background:C.primary,fontSize:13}}><Save size={14}/> Enregistrer les catégories</Btn>
+        <Btn onClick={()=>{saveSettingsNotify(settings,"Catégories");addAudit("CONFIG","Catégories et icônes mis à jour");}} style={{width:"100%",height:44,background:C.primary,fontSize:13}}><Save size={14}/> Enregistrer les catégories</Btn>
       </div>);})()}
 
     {tab==="backup"&&<BackupPanel notify={notify} addAudit={addAudit}/>}

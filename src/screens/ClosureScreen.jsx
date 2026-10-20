@@ -5,10 +5,11 @@ import printer from "../printer.js";
 import { CO, C } from "../constants.jsx";
 import { Modal, Btn, Input, SC } from "../ui.jsx";
 import { useApp } from "../context.jsx";
+import { dayKey } from "../lib/dates.js";
 import { formatAmount } from "../lib/formatters.js";
 
 function ClosureScreen(){
-  const{tickets,cashReg,closures,createClosure,gt,closeReg,perm:p,avoirs,settings,printerConnected,thermalPrint,notify,trainingMode,mode}=useApp();
+  const{tickets,cashReg,closures,createClosure,gt,closeReg,perm:p,avoirs,settings,printerConnected,thermalPrint,notify,trainingMode,mode,cashMovements}=useApp();
   const[aCash,setACash]=useState("");const[aCard,setACard]=useState("");
   const[reportModal,setReportModal]=useState(null);
   const[denomMode,setDenomMode]=useState(false);
@@ -18,16 +19,26 @@ function ClosureScreen(){
   const setDenom=(d,v)=>{setDenomCounts(p=>({...p,[d]:Math.max(0,parseInt(v)||0)}));};
   useEffect(()=>{if(denomMode)setACash(denomTotal.toFixed(2));},[denomMode,denomTotal]);
   if(!p().canCloseZ)return<div style={{padding:40,textAlign:"center",color:C.textMuted}}>Accès réservé aux administrateurs</div>;
-  const today=new Date().toISOString().split("T")[0];const pt=tickets.filter(t=>(t.date||t.createdAt||t.created_at||"").startsWith(today));
-  const todayAvoirs=avoirs.filter(a=>(a.date||a.createdAt||"").startsWith(today));
-  const cash=pt.reduce((s,t)=>s+(t.payments?.filter(p=>p.method==="cash").reduce((a,p)=>a+p.amount,0)||0),0);
-  const card=pt.reduce((s,t)=>s+(t.payments?.filter(p=>p.method==="card").reduce((a,p)=>a+p.amount,0)||0),0);
-  const cheque=pt.reduce((s,t)=>s+(t.payments?.filter(p=>p.method==="cheque").reduce((a,p)=>a+p.amount,0)||0),0);
-  const giftcard=pt.reduce((s,t)=>s+(t.payments?.filter(p=>p.method==="giftcard").reduce((a,p)=>a+p.amount,0)||0),0);
+  // Journée LOCALE, mode formation exclu (le Z serveur l'exclut : l'aperçu doit dire pareil)
+  const today=dayKey();
+  const estFormation=(t)=>t.trainingMode||String(t.ticketNumber||t.ticket_number||"").match(/^(FACTICE|FORMATION)/);
+  const pt=tickets.filter(t=>dayKey(new Date(t.date||t.createdAt||t.created_at||0))===today&&!estFormation(t));
+  const todayAvoirs=avoirs.filter(a=>dayKey(new Date(a.date||a.createdAt||0))===today);
+  const somme=(methodes)=>pt.reduce((s,t)=>s+(t.payments?.filter(p=>methodes.includes(p.method)).reduce((a,p)=>a+Number(p.amount||0),0)||0),0);
+  const cash=somme(["cash"]);
+  // « Carte » = CB + Amex + sans-contact, comme le TPE et le Z
+  const card=somme(["card","amex","contactless"]);
+  const cheque=somme(["cheque"]);
+  const giftcard=somme(["giftcard"]);
   const totalTTC=pt.reduce((s,t)=>s+(t.totalTTC||parseFloat(t.total_ttc)||0),0);const totalHT=pt.reduce((s,t)=>s+(t.totalHT||parseFloat(t.total_ht)||0),0);
   const totalTVA=pt.reduce((s,t)=>s+(t.totalTVA||parseFloat(t.total_tva)||0),0);const totalMargin=pt.reduce((s,t)=>s+(parseFloat(t.margin)||0),0);
   const totalReturns=todayAvoirs.reduce((s,a)=>s+(a.totalTTC||parseFloat(a.total_ttc)||0),0);
-  const expected=(cashReg?.openingAmount||0)+cash;
+  // Espèces attendues = fond d'ouverture + encaissements + apports − prélèvements du jour,
+  // exactement la formule du Z serveur (sinon l'écart affiché avant et après diffère).
+  const mvtsJour=(cashMovements||[]).filter(m=>dayKey(new Date(m.date||m.created_at||0))===today);
+  const apports=mvtsJour.filter(m=>(m.direction||m.kind)==="in").reduce((s,m)=>s+Number(m.amount||0),0);
+  const prelevements=mvtsJour.filter(m=>(m.direction||m.kind)==="out").reduce((s,m)=>s+Number(m.amount||0),0);
+  const expected=Math.round(((cashReg?.openingAmount||0)+cash+apports-prelevements)*100)/100;
   const cashDiff=aCash?(parseFloat(aCash)-expected):null;
   const cardDiff=aCard?(parseFloat(aCard)-card):null;
 

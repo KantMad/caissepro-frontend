@@ -2,6 +2,7 @@ import React, { useState, useMemo } from "react";
 import { TrendingUp, ShoppingBag, Package, CreditCard, Users as UsersIcon } from "lucide-react";
 import { useApp } from "../context.jsx";
 import { C } from "../constants.jsx";
+import { dayKey, rangeToInstants } from "../lib/dates.js";
 import { formatAmount, getPaymentLabel, getDateField, aggregatePaymentsByMethod, salesIndex, ticketPieces } from "../lib/formatters.js";
 
 // ════════════════════════════════════════════════════════════
@@ -11,7 +12,7 @@ import { formatAmount, getPaymentLabel, getDateField, aggregatePaymentsByMethod,
 // ════════════════════════════════════════════════════════════
 const ttcOf = (t) => t.totalTTC || parseFloat(t.total_ttc) || 0;
 const isTraining = (t) => t.trainingMode || String(t.ticketNumber || t.ticket_number || "").match(/^(FACTICE|FORMATION)/);
-const dayStr = (d) => d.toISOString().split("T")[0];
+const dayStr = (d) => dayKey(d);   // journée LOCALE (et non UTC)
 
 export default function MobileStatsScreen() {
   const { tickets, currentStore } = useApp();
@@ -24,7 +25,7 @@ export default function MobileStatsScreen() {
     const ym = today.slice(0, 7);
     return (tickets || []).filter((t) => {
       if (isTraining(t)) return false;
-      const ds = getDateField(t).split("T")[0];
+      const ds = dayKey(new Date(getDateField(t)));
       if (!ds) return false;
       if (period === "today") return ds === today;
       if (period === "7d") return ds >= from7;

@@ -13,7 +13,7 @@ import { LABEL_FORMATS, printLabels, isValidEAN13, EAN13Svg, labelSize } from ".
 //  La recherche passe par l'API : le catalogue complet n'est plus en mémoire.
 // ════════════════════════════════════════════════════════════
 function LabelsScreen() {
-  const { settings, notify, findByEAN, addAudit, perm, saveSettingsToAPI, setSettings } = useApp();
+  const { settings, notify, findByEAN, addAudit, perm, saveSettingsNotify, setSettings } = useApp();
   const [q, setQ] = useState("");
   const [results, setResults] = useState([]);
   const [busy, setBusy] = useState(false);
@@ -75,7 +75,7 @@ function LabelsScreen() {
 
   const saveDefaults = async () => {
     const next = { ...settings, labelFormat: format, labelWidth: dim.w, labelHeight: dim.h, labelMode: mode, labelFields: opts };
-    try { setSettings(next); await saveSettingsToAPI(next); notify("Réglages d'étiquettes enregistrés pour ce magasin", "success"); }
+    try { setSettings(next); await saveSettingsNotify(next,"Réglages d'étiquettes"); }
     catch (e) { notify("Enregistrement impossible : " + e.message, "error"); }
   };
 

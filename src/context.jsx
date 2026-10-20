@@ -80,9 +80,20 @@ function AppProvider({children}){
   useEffect(()=>{try{localStorage.setItem("caissepro_stockmoves",JSON.stringify(stockMoves.slice(0,500)));}catch(e){}},[stockMoves]);
   const[settings,setSettings]=useState(()=>{try{const s=localStorage.getItem("caissepro_settings");return s?{...CO,loyaltyTiers:LOYALTY_TIERS,returnPolicy:{days:30,conditions:"Article non porté, étiquette présente"},pricingMode:"TTC",...JSON.parse(s)}:{...CO,loyaltyTiers:LOYALTY_TIERS,returnPolicy:{days:30,conditions:"Article non porté, étiquette présente"},pricingMode:"TTC"};}catch(e){return{...CO,loyaltyTiers:LOYALTY_TIERS,returnPolicy:{days:30,conditions:"Article non porté, étiquette présente"},pricingMode:"TTC"};}});
   useEffect(()=>{try{localStorage.setItem("caissepro_settings",JSON.stringify(settings));}catch(e){}},[settings]);
+  // Enregistrement des parametres : renvoie {ok, ignoredKeys, error}. L'erreur n'est PLUS
+  // avalee — avant, les boutons « Enregistrer » affichaient un succes meme sur un refus du
+  // serveur (403) ou quand l'API jetait les champs inconnus (ecran 2, champs du ticket...).
   const saveSettingsToAPI_base=useCallback(async(newSettings)=>{
     setSettings(s=>({...s,...newSettings}));
-    try{await API.settings.update(newSettings);}catch(e){console.warn("Settings sauvés localement uniquement:",e.message);}
+    try{
+      const r=await API.settings.update(newSettings);
+      const ignoredKeys=(r&&r.ignoredKeys)||[];
+      if(ignoredKeys.length)console.warn("Champs non enregistres par le serveur :",ignoredKeys.join(", "));
+      return{ok:true,ignoredKeys};
+    }catch(e){
+      console.warn("Parametres non enregistres :",e.message);
+      return{ok:false,ignoredKeys:[],error:e.message};
+    }
   },[]);
   const[saleNote,setSaleNote]=useState("");
   const[clockEntries,setClockEntries]=useState(()=>{try{const s=localStorage.getItem("caissepro_clock");return s?JSON.parse(s):[];}catch(e){return[];}});
@@ -385,6 +396,19 @@ function AppProvider({children}){
     else addJET("PARAM_CHANGE",`Modification paramètres: ${Object.keys(newSettings).join(", ")}`);
     return saveSettingsToAPI_base(newSettings);
   },[addJET,saveSettingsToAPI_base,settings]);
+
+  // Enregistre ET notifie honnetement : succes seulement si le serveur a accepte,
+  // avertissement si des champs ont ete ignores, erreur sinon.
+  const saveSettingsNotify=useCallback(async(newSettings,libelle)=>{
+    const r=await saveSettingsToAPI(newSettings);
+    if(!r.ok){notify(`${libelle} : non enregistré — ${r.error||"serveur indisponible"}`,"error");return r;}
+    if(r.ignoredKeys&&r.ignoredKeys.length){
+      notify(`${libelle} : enregistré, sauf ${r.ignoredKeys.length} champ(s) non pris en charge (${r.ignoredKeys.slice(0,3).join(", ")})`,"warn");
+      return r;
+    }
+    notify(`${libelle} enregistré(s)`,"success");
+    return r;
+  },[saveSettingsToAPI,notify]);
 
   const[offlineMode,setOfflineMode]=useState(false);
   // NF525: Mode formation/test — les données sont marquées FACTICE
@@ -1659,7 +1683,7 @@ function AppProvider({children}){
     checkout,createClosure,exportArchive,exportFEC,exportCSVReport,exportCustomerRGPD,addAudit,addJET,
     promos,setPromos,activePromos,parked,parkCart,restoreCart,removeParked,retoucheBons,addRetoucheBon,updateRetoucheStatus,tenues,addTenue,reloadTenues,cashMovements,addCashMovement,reloadCashMovements,selCust,setSelCust,
     stockAlerts,stockMoves,addStockMove,receiveStock,receiveBatchStock,
-    refreshProducts,findByEAN,perm,settings,setSettings,saveSettingsToAPI,getLoyaltyTier,avoirPayment,selectedAvoir,setSelectedAvoir,
+    refreshProducts,findByEAN,perm,settings,setSettings,saveSettingsToAPI,saveSettingsNotify,getLoyaltyTier,avoirPayment,selectedAvoir,setSelectedAvoir,
     bestSellers,salesBySeller,salesByVariant,caEvolution,salesByCollection,
     saleNote,setSaleNote,clockIn,clockOut,clockEntries,verifyChain,exportCatalog,
     updateProductPrice,priceHistory,reorderSuggestions,toggleFavorite,favorites,tvaSummary,stockAging,
