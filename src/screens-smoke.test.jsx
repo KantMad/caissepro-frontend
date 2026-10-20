@@ -11,33 +11,85 @@ vi.mock("./printer.js", () => ({ default: { connect: vi.fn(), isConnected: () =>
 vi.mock("./hardware.js", () => ({
   default: { init: () => "browser", currentProfile: { id: "browser" }, setHardware: vi.fn(), getActiveAdapter: () => null, detect: vi.fn(), on: () => () => {}, charge: vi.fn() },
 }));
-// Simulacre d'API : chaque espace de noms renvoie une liste vide pour toute méthode.
-// Un ecran ajoute au test n'oblige donc pas a enrichir le mock appel par appel.
+// Simulacre d'API avec des donnees REALISTES, au format exact du serveur :
+// snake_case, montants NUMERIC renvoyes en CHAINES par PostgreSQL, champs parfois nuls.
+// C'est la forme qui fait planter un ecran, pas le tableau vide.
 vi.mock("./api.js", () => {
-  const empty = () => Promise.resolve([]);
-  const ns = (fixes = {}) => new Proxy(fixes, { get: (t, k) => (k in t ? t[k] : (k === "then" ? undefined : empty)) });
-  const NAMESPACES = ["auth", "products", "sales", "returns", "customers", "stock", "fiscal", "audit",
-    "settings", "stores", "giftcards", "parked", "pricehistory", "favorites", "footfall", "retouches",
-    "tenues", "cashMovements", "exports", "barcodes", "customerDisplay", "backup", "productPhotos",
-    "integrations", "health"];
+  const STORE = "s1";
+  const VENTE = {
+    id: "sale1", ticket_number: "2026-000045", seq: 45, store_id: STORE,
+    total_ht: "282.91", total_tva: "56.59", total_ttc: "339.50", margin: "155.59",
+    global_discount: "10.00", grand_total: "8990.25", created_at: "2026-10-20T09:24:43.000Z",
+    user_name: "Sophie", seller_name: "Sophie", customer_id: "c1", customer_name: "Inès Démo",
+    payment_method: "card", sale_note: null, fingerprint: "DA2A575D393BC816", ticket_hash: "a".repeat(64),
+    is_training: false,
+    items: [{ id: "i1", product_id: "p1", variant_id: "v1", product_name: "Jean droit coupe mom",
+      variant_color: "Bleu", variant_size: "38", quantity: 2, unit_price: "62.42", cost_price: "20.00",
+      tax_rate: "0.2000", discount_percent: "10.00", line_ht: "112.35", line_tva: "22.47", line_ttc: "134.82",
+      is_custom: false, sku: "DEMO-JN02", ean: "2996000000028", category: "Jeans", collection: "Femme", color_code: "001" },
+      { id: "i2", product_id: null, variant_id: null, product_name: "Retouche: ourlet", variant_color: null,
+        variant_size: null, quantity: 1, unit_price: "16.67", cost_price: "0", tax_rate: "0.2000",
+        discount_percent: "0", line_ht: "16.67", line_tva: "3.33", line_ttc: "20.00", is_custom: true }],
+    payments: [{ method: "card", amount: "339.50" }],
+  };
+  const AVOIR = { id: "a1", avoir_number: "AV-2026-000001", original_ticket: "2026-000045",
+    amount: "59.90", total_ht: "49.92", total_tva: "9.98", total_ttc: "59.90", remaining: "59.90",
+    refund_method: "avoir", reason: "Taille", user_name: "Sophie", customer_name: null,
+    is_exchange: false, used_in_ticket: null, created_at: "2026-10-20T10:00:00.000Z", fingerprint: "ABCD1234",
+    items: [{ product_id: "p1", variant_id: "v1", product_name: "Jean droit", variant_color: "Bleu",
+      variant_size: "38", quantity: 1, unit_price: "59.90", line_ht: "49.92", line_tva: "9.98", line_ttc: "59.90",
+      sku: "DEMO-JN02", ean: "2996000000028" }] };
+  const PRODUIT = { id: "p1", name: "Jean droit coupe mom", sku: "DEMO-JN02", price: "74.90",
+    cost_price: "30.00", tax_rate: "0.2000", category: "Jeans", collection: "Femme", active: true,
+    store_id: STORE, created_at: "2026-09-01T00:00:00.000Z",
+    variants: [{ id: "v1", color: "Bleu", color_code: "001", size: "38", ean: "2996000000028", stock: 4, stock_alert: 3 },
+               { id: "v2", color: "Écru", color_code: "", size: "40", ean: null, stock: 0, stock_alert: 3 }] };
+  const CLIENT = { id: "c1", first_name: "Inès", last_name: "Démo", email: "ines@example.com",
+    phone: "0600000003", city: "Bordeaux", points: 310, total_spent: "806.09", notes: null };
+  const CLOTURE = { id: "z1", closure_number: "Z-2026-000012", total_ht: "7491.88", total_tva: "1498.37",
+    total_ttc: "8990.25", total_sales: 45, cash_expected: "1200.00", cash_counted: "1198.50",
+    created_at: "2026-10-19T19:00:00.000Z", user_name: "Admin", grand_total: "8990.25", fingerprint: "ZZZ123" };
+  const MOUVEMENT = { id: "m1", movement_number: "MV-2026-000003", kind: "in", direction: "in",
+    amount: "150.00", reason: "Apport", user_name: "Admin", created_at: "2026-10-20T08:00:00.000Z" };
+  const SESSION = { id: "r1", opened_at: "2026-10-20T08:00:00.000Z", closed_at: null,
+    opening_amount: "200.00", closing_amount: null, user_name: "Sophie" };
+  const liste = (v) => () => Promise.resolve(v);
+  const ns = (fixes = {}, defaut = []) => new Proxy(fixes, {
+    get: (t, k) => (k in t ? t[k] : (k === "then" ? undefined : () => Promise.resolve(defaut))),
+  });
   const mod = {
     setOnAuthExpired: () => {}, setStoreId: () => {}, clearStoreId: () => {},
-    setToken: () => {}, getToken: () => "t", clearToken: () => {}, getStoreId: () => "s1",
+    setToken: () => {}, getToken: () => "t", clearToken: () => {}, getStoreId: () => STORE,
+    sales: ns({ list: liste([VENTE]), stats: liste({ totalTTC: "339.50", count: 1 }) }),
+    products: ns({ list: liste([PRODUIT]), exportCSV: () => "http://x" }),
+    customers: ns({ list: liste([CLIENT]) }),
+    returns: ns({ list: liste([AVOIR]), counter: liste({ seq: 1 }) }),
+    fiscal: ns({ closures: liste([CLOTURE]), counter: liste({ grand_total: "8990.25", seq: 45 }) }),
+    cashMovements: ns({ list: liste([MOUVEMENT]), exportUrl: () => "http://x" }),
+    settings: ns({ get: liste({ name: "Boutique", pricingMode: "TTC", gestlogEnabled: true }) }),
+    stores: ns({ list: liste([{ id: STORE, name: "Boutique" }]) }),
+    exports: ns({ url: () => "http://x", salesDetailUrl: () => "http://x" }),
+    integrations: ns({ gestlogDeliveries: liste([]), gestlogCatalogImports: liste([]) }),
+    audit: ns({ list: liste([{ id: "au1", action: "VENTE", detail: "Ticket", user_name: "Sophie", created_at: "2026-10-20T09:00:00.000Z" }]) }),
   };
-  for (const n of NAMESPACES) mod[n] = ns();
-  mod.exports = ns({ url: () => "http://x", salesDetailUrl: () => "http://x" });
-  mod.cashMovements = ns({ exportUrl: () => "http://x" });
-  mod.products = ns({ exportCSV: () => "http://x" });
+  for (const n of ["auth", "stock", "giftcards", "parked", "pricehistory", "favorites",
+                   "footfall", "retouches", "tenues", "barcodes", "customerDisplay", "backup",
+                   "productPhotos", "health"]) if (!mod[n]) mod[n] = ns();
+  mod.settings = ns({ get: liste({ name: "Boutique", pricingMode: "TTC", gestlogEnabled: true }),
+                      registerSessions: liste([SESSION]) });
   return mod;
 });
 
 import AppProvider from "./context.jsx";
-import ExportsScreen from "./screens/ExportsScreen.jsx";
-import FiscalScreen from "./screens/FiscalScreen.jsx";
-import StockScreen from "./screens/StockScreen.jsx";
-import StatsScreen from "./screens/StatsScreen.jsx";
-import LabelsScreen from "./screens/LabelsScreen.jsx";
-import ProductsScreen from "./screens/ProductsScreen.jsx";
+import {
+  SalesScreen, StatsScreen, StockScreen, HistoryScreen, ReturnScreen, ClosureScreen,
+  CustomersScreen, FiscalScreen, AuditScreen, ProductsScreen, LabelsScreen,
+  ReturnsHistoryScreen, SettingsScreen, GiftCardScreen, PromosScreen, FootfallScreen,
+  HelpCashierScreen, HelpDashboardScreen, ExportsScreen, GestlogDeliveriesScreen,
+  TiroirCaisseScreen, CashMovementsScreen, RegisterSessionsScreen, MobileStatsScreen,
+  CashRegControl, CSVImportWizard,
+} from "./screens/index.js";
+import { UsersScreen, DashOverview, TVAScreen } from "./nav.jsx";
 
 // Un admin en session : sans cela les ecrans affichent « Acces reserve aux administrateurs »
 const asAdmin = () => {
@@ -57,49 +109,59 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
 describe("Écrans — rendu sans plantage", () => {
-  it("Exports se monte (tous les onglets)", () => {
-    const { container } = render(<AppProvider><ExportsScreen /></AppProvider>);
-    expect(container.textContent).toContain("Exports");
-    expect(errors.join("\n")).not.toMatch(/is not defined|Cannot read/);
+  // Monte CHAQUE écran de l'application. Un écran qui plante au rendu
+  // (variable oubliée, import manquant, champ absent) échoue ici.
+  const ECRANS = [
+    ["Vente", SalesScreen], ["Statistiques", StatsScreen], ["Résumé mobile", MobileStatsScreen],
+    ["Stock", StockScreen], ["Tickets", HistoryScreen], ["Retour", ReturnScreen],
+    ["Clôture", ClosureScreen], ["Clients", CustomersScreen], ["Fiscal", FiscalScreen],
+    ["Journal d'audit", AuditScreen], ["Produits", ProductsScreen], ["Étiquettes", LabelsScreen],
+    ["Retours & avoirs", ReturnsHistoryScreen], ["Paramètres", SettingsScreen],
+    ["Cartes cadeaux", GiftCardScreen], ["Promotions", PromosScreen], ["Entrées", FootfallScreen],
+    ["Aide caisse", HelpCashierScreen], ["Aide dashboard", HelpDashboardScreen],
+    ["Exports", ExportsScreen], ["Livraisons gestlog", GestlogDeliveriesScreen],
+    ["Tiroir-caisse (caisse)", TiroirCaisseScreen], ["Tiroir-caisse (dashboard)", CashMovementsScreen],
+    ["Ouv./Ferm. caisse", RegisterSessionsScreen], ["Ouverture de caisse", CashRegControl],
+    ["Utilisateurs", UsersScreen],
+    ["Vue d'ensemble", DashOverview], ["Taux de TVA", TVAScreen],
+  ];
+
+  for (const [nom, Ecran] of ECRANS) {
+    it(`${nom} se monte`, () => {
+      const { container } = render(<AppProvider><Ecran /></AppProvider>);
+      expect(errors.join("\n"), nom).not.toMatch(/is not defined|Cannot read|is not a function/);
+      expect(container.textContent.length, nom).toBeGreaterThan(0);
+    });
+  }
+
+  it("Import CSV se monte (modale ouverte)", () => {
+    const { container } = render(<AppProvider>
+      <CSVImportWizard open onClose={() => {}} existingProducts={[]} onImportComplete={() => {}} />
+    </AppProvider>);
+    expect(errors.join("\n")).not.toMatch(/is not defined|Cannot read|is not a function/);
+    expect(container.textContent.length).toBeGreaterThan(0);
   });
 
-  it("Stock se monte, TOUS ses onglets compris", () => {
-    // Le plantage « trPreview is not defined » n'apparaissait que sur l'onglet Tenues :
-    // un rendu de l'onglet par defaut ne suffit pas, on clique chaque onglet.
-    const { container, getAllByText } = render(<AppProvider><StockScreen /></AppProvider>);
+  it("Stock : tous les onglets s'ouvrent", () => {
+    // Le plantage « trPreview is not defined » n'apparaissait que sur l'onglet Tenues.
+    const { getAllByText } = render(<AppProvider><StockScreen /></AppProvider>);
     for (const t of ["Matrice", "Réception", "Alertes", "Mouvements", "Inventaire",
                      "Ajustement", "Défectueux", "Tenues", "Transferts", "Vieillissement"]) {
-      // plusieurs boutons peuvent porter le meme libelle : le dernier est l'onglet
-      const boutons = getAllByText(t);
-      fireEvent.click(boutons[boutons.length - 1]);
-      expect(errors.join("\n"), `onglet ${t}`).not.toMatch(/is not defined|Cannot read/);
+      const b = getAllByText(t);
+      fireEvent.click(b[b.length - 1]);
+      expect(errors.join("\n"), `onglet ${t}`).not.toMatch(/is not defined|Cannot read|is not a function/);
     }
-    expect(container.textContent.length).toBeGreaterThan(0);
   });
 
-  it("Stats se monte et affiche les montants au centime", () => {
-    const { container } = render(<AppProvider><StatsScreen /></AppProvider>);
-    expect(errors.join("\n")).not.toMatch(/is not defined|Cannot read/);
-    // Le CA TTC etait arrondi a l'euro (toFixed(0)) : on exige deux decimales.
-    expect(container.textContent).toMatch(/\d+\.\d{2}€/);
-    expect(container.textContent).not.toMatch(/CA TTC\s*\d+€/);
-  });
-
-  it("Étiquettes se monte", () => {
-    const { container } = render(<AppProvider><LabelsScreen /></AppProvider>);
-    expect(container.textContent).toContain("Étiquettes");
-    expect(errors.join("\n")).not.toMatch(/is not defined|Cannot read/);
-  });
-
-  it("Produits se monte", () => {
-    const { container } = render(<AppProvider><ProductsScreen /></AppProvider>);
-    expect(container.textContent.length).toBeGreaterThan(0);
-    expect(errors.join("\n")).not.toMatch(/is not defined|Cannot read/);
-  });
-
-  it("Fiscal se monte (FEC + archive)", () => {
-    const { container } = render(<AppProvider><FiscalScreen /></AppProvider>);
-    expect(container.textContent.length).toBeGreaterThan(0);
-    expect(errors.join("\n")).not.toMatch(/is not defined|Cannot read/);
+  it("Statistiques : tous les onglets s'ouvrent", () => {
+    const { getAllByText, container } = render(<AppProvider><StatsScreen /></AppProvider>);
+    for (const t of ["Évolution CA", "Comparaison", "CA par heure", "CA par jour", "Best-sellers",
+                     "Détail variantes", "Par vendeur", "Tailles/Couleurs", "Collections",
+                     "Clients", "Retours", "Paiements", "Remises"]) {
+      const b = getAllByText(t);
+      fireEvent.click(b[b.length - 1]);
+      expect(errors.join("\n"), `onglet ${t}`).not.toMatch(/is not defined|Cannot read|is not a function/);
+    }
+    expect(container.textContent).toMatch(/\d+\.\d{2}€/);   // montants au centime
   });
 });
