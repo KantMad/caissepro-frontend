@@ -412,7 +412,56 @@ function AppProvider({children}){
 
   const[offlineMode,setOfflineMode]=useState(false);
   // NF525: Mode formation/test — les données sont marquées FACTICE
-  const[trainingMode,setTrainingMode]=useState(false);
+  // ══ MODE FORMATION (NF525) ══
+  // Avant : simple etat React -> un rechargement de page (F5, mise a jour, crash) remettait
+  // la caisse en PRODUCTION sans prevenir, et les ventes d'entrainement suivantes devenaient
+  // de vraies ventes fiscales, immuables. Desormais :
+  //  - l'etat survit au rechargement (stockage local de l'appareil, propre a cette caisse) ;
+  //  - il expire seul au bout de TRAINING_MAX_H heures (un mode oublie ne doit pas avaler les
+  //    vraies ventes du lendemain) ;
+  //  - chaque changement, y compris automatique, est trace dans le JET ;
+  //  - un bandeau permanent l'affiche sur tous les ecrans de caisse.
+  const TRAINING_KEY="caissepro_training";const TRAINING_MAX_H=8;
+  const lireFormation=()=>{try{const t=JSON.parse(localStorage.getItem(TRAINING_KEY)||"null");
+    return t&&t.active?t:null;}catch(e){return null;}};
+  const[trainingMode,setTrainingModeRaw]=useState(()=>{const t=lireFormation();
+    return !!(t&&Date.now()<t.expiresAt);});
+  const[trainingInfo,setTrainingInfo]=useState(()=>lireFormation());
+  const setTrainingMode=useCallback((on)=>{
+    const actif=!!on;
+    setTrainingModeRaw(actif);
+    try{
+      if(actif){const info={active:true,since:Date.now(),expiresAt:Date.now()+TRAINING_MAX_H*3600*1000,
+          by:(()=>{try{return JSON.parse(sessionStorage.getItem("caissepro_user")||"{}").name||"";}catch(e){return"";}})()};
+        localStorage.setItem(TRAINING_KEY,JSON.stringify(info));setTrainingInfo(info);}
+      else{localStorage.removeItem(TRAINING_KEY);setTrainingInfo(null);}
+    }catch(e){}
+  },[]);
+  // Verification au chargement (apres un rechargement de page, une mise a jour, un crash)
+  const formationVerifiee=useRef(false);
+  useEffect(()=>{
+    if(formationVerifiee.current||!currentUser)return;formationVerifiee.current=true;
+    const t=lireFormation();if(!t)return;
+    if(Date.now()>=t.expiresAt){
+      setTrainingMode(false);
+      addJET("PARAM_CHANGE",`Mode formation expiré automatiquement (actif depuis ${new Date(t.since).toLocaleString("fr-FR")}) — retour en production`);
+      notify("Mode formation expiré : la caisse est revenue en PRODUCTION. Les prochaines ventes sont réelles.","warn");
+    }else{
+      addJET("PARAM_CHANGE",`Mode formation toujours actif après rechargement (depuis ${new Date(t.since).toLocaleString("fr-FR")})`);
+      notify("Mode formation toujours ACTIF : les ventes ne sont pas comptabilisées.","warn");
+    }
+  },[currentUser,addJET,notify,setTrainingMode]);
+  // Expiration en cours de journee, sans attendre un rechargement
+  useEffect(()=>{
+    if(!trainingMode||!trainingInfo)return;
+    const reste=trainingInfo.expiresAt-Date.now();
+    const id=setTimeout(()=>{
+      setTrainingMode(false);
+      addJET("PARAM_CHANGE","Mode formation expiré automatiquement — retour en production");
+      notify("Mode formation expiré : la caisse est revenue en PRODUCTION.","warn");
+    },Math.max(0,reste));
+    return()=>clearTimeout(id);
+  },[trainingMode,trainingInfo,addJET,notify,setTrainingMode]);
 
   // ══ Load store data after selecting a store ══
   const loadStoreData=useCallback(async()=>{
@@ -508,7 +557,17 @@ function AppProvider({children}){
         setOfflineMode(true);setFiscalWarning(true);addJET("LOGIN_OFFLINE",n);
         notify("Mode hors-ligne — chaîne fiscale non sécurisée, synchronisez dès que possible","warn");return{ok:true,stores:[]};}
       return{ok:false};}};
-  const logout=()=>{API.clearToken();addJET("LOGOUT",currentUser?.name);setCurrentUser(null);setCurrentStore(null);setStores([]);setViewingStoreId(null);setCart([]);setGDiscPct(0);setGDiscAmt(0);setSelCust(null);setOfflineMode(false);};
+  const logout=async()=>{
+    // Le mode formation ne survit pas a la fin de session : le caissier suivant doit
+    // demarrer en production, et le changement est trace.
+    // NF525 : on ATTEND l'envoi des evenements JET AVANT d'effacer le jeton. Avant, le jeton
+    // etait efface pendant le calcul de l'empreinte : l'evenement LOGOUT n'atteignait jamais
+    // le serveur (le journal fiscal ne contenait aucune deconnexion).
+    try{
+      if(trainingMode){setTrainingMode(false);await addJET("PARAM_CHANGE",`Mode formation désactivé à la déconnexion de ${currentUser?.name||"?"}`);}
+      await addJET("LOGOUT",currentUser?.name);
+    }catch(e){/* la deconnexion ne doit jamais etre bloquee par le journal */}
+    API.clearToken();setCurrentUser(null);setCurrentStore(null);setStores([]);setViewingStoreId(null);setCart([]);setGDiscPct(0);setGDiscAmt(0);setSelCust(null);setOfflineMode(false);};
 
   // H1/H2 fix: Auto-logout on token expiration
   useEffect(()=>{setOnAuthExpired(()=>{notify("Session expirée — veuillez vous reconnecter","error");logout();});return()=>setOnAuthExpired(null);},[]);
@@ -1722,7 +1781,7 @@ function AppProvider({children}){
     paymentId,paymentConfig,switchPayment,updatePaymentConfig,chargePayment,refundPayment,
     paymentProfiles:hardwareManager.paymentProfiles,
     users,setUsers,tvaRates,setTvaRates,addPendingSync,pendingSync,clearPendingSync,
-    trainingMode,setTrainingMode,
+    trainingMode,setTrainingMode,trainingInfo,
     cartTotals,allCategories,
     scanBarcode,setScanBarcode,
     setScanOverride,clearScanOverride,

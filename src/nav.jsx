@@ -124,6 +124,19 @@ function CashierNav({active,onNav}){
         <LogOut size={14}/><span style={{fontSize:8,fontWeight:500}}>Sortir</span></button></div></div>);
 }
 
+// Bandeau mode formation : visible en permanence sur tous les ecrans de caisse.
+// Avant, l'etat n'etait affiche que dans les ecrans Fiscal et Cloture : la caissiere
+// ne voyait pas, en vendant, si ses tickets etaient reels ou d'entrainement.
+function TrainingBanner(){
+  const{trainingMode,trainingInfo}=useApp();
+  if(!trainingMode)return null;
+  const fin=trainingInfo?.expiresAt?new Date(trainingInfo.expiresAt).toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"}):null;
+  return(<div role="alert" data-testid="training-banner" style={{background:"repeating-linear-gradient(45deg,#F59E0B,#F59E0B 12px,#FBBF24 12px,#FBBF24 24px)",
+    color:"#451A03",fontWeight:800,fontSize:13,padding:"7px 14px",textAlign:"center",letterSpacing:"0.02em",flexShrink:0}}>
+    MODE FORMATION — les ventes ne sont PAS comptabilisées{fin?` · retour automatique en production à ${fin}`:""}
+  </div>);
+}
+
 function CashierInterface(){
   const{cashReg}=useApp();
   const vp=useViewport();
@@ -134,8 +147,10 @@ function CashierInterface(){
   const S={sales:SalesScreen,returns:ReturnScreen,stats:StatsScreen,stock:StockScreen,history:HistoryScreen,customers:CustomersScreen,
     giftcards:GiftCardScreen,promos:PromosScreen,cashdrawer:TiroirCaisseScreen,closure:ClosureScreen,footfall:FootfallScreen,audit:AuditScreen,fiscal:FiscalScreen,settings:SettingsScreen,help:HelpCashierScreen};
   const Sc=S[sc]||SalesScreen;
-  return(<div style={{display:"flex",height:"100vh",fontFamily:"'DM Sans',system-ui,sans-serif"}}><CashierNav active={sc} onNav={setSc}/>
-    <div style={{flex:1,overflow:"hidden",paddingBottom:vp.isMobile?"var(--bottomnav-h,60px)":0}}><ErrorBoundary><Sc/></ErrorBoundary></div></div>);
+  return(<div style={{display:"flex",flexDirection:"column",height:"100vh",fontFamily:"'DM Sans',system-ui,sans-serif"}}>
+    <TrainingBanner/>
+    <div style={{display:"flex",flex:1,minHeight:0}}><CashierNav active={sc} onNav={setSc}/>
+      <div style={{flex:1,overflow:"hidden",paddingBottom:vp.isMobile?"var(--bottomnav-h,60px)":0}}><ErrorBoundary><Sc/></ErrorBoundary></div></div></div>);
 }
 
 /* ══════════ USERS SCREEN ══════════ */
@@ -538,12 +553,14 @@ function DashboardInterface(){
         <img src={logo} alt="" style={{width:28,height:28,objectFit:"contain"}}/>
         <div style={{color:"#fff",fontSize:16,fontWeight:700,letterSpacing:"-0.3px"}}>{titles[sc]||"Tech in Cash"}</div>
       </div>
+      <TrainingBanner/>
       <DashboardNav active={sc} onNav={setSc} vp={vp} mobileOpen={drawerOpen} onCloseMobile={()=>setDrawerOpen(false)}/>
       <div style={{flex:1,overflow:"hidden"}}><ErrorBoundary><Sc/></ErrorBoundary></div></div>);
   }
-  return(<div style={{display:"flex",height:"100vh",fontFamily:"'DM Sans',system-ui,sans-serif"}}><DashboardNav active={sc} onNav={setSc} vp={vp}/><div style={{flex:1,overflow:"hidden"}}><ErrorBoundary><Sc/></ErrorBoundary></div></div>);
+  return(<div style={{display:"flex",flexDirection:"column",height:"100vh",fontFamily:"'DM Sans',system-ui,sans-serif"}}><TrainingBanner/>
+    <div style={{display:"flex",flex:1,minHeight:0}}><DashboardNav active={sc} onNav={setSc} vp={vp}/><div style={{flex:1,overflow:"hidden"}}><ErrorBoundary><Sc/></ErrorBoundary></div></div></div>);
 }
 
 function AppContent(){const{currentUser,mode}=useApp();if(!currentUser)return<LoginScreen/>;return mode==="cashier"?<CashierInterface/>:<DashboardInterface/>;}
 
-export { CashierNav, CashierInterface, UsersScreen, DashboardNav, DashOverview, TVAScreen, DashboardInterface, AppContent };
+export { TrainingBanner, CashierNav, CashierInterface, UsersScreen, DashboardNav, DashOverview, TVAScreen, DashboardInterface, AppContent };
