@@ -155,6 +155,8 @@ export const stock = {
 // ══ Fiscal ══
 export const fiscal = {
   closure: (data) => api('/api/fiscal/closure', { method: 'POST', body: JSON.stringify(data) }),
+  // Journees de vente pas encore cloturees (fermeture le lendemain matin, oubli...)
+  pendingClosures: () => api('/api/fiscal/closure/pending'),
   closures: () => api('/api/fiscal/closures'),
   fec: (params) => api('/api/fiscal/fec?' + new URLSearchParams(params || {})),
   // Archive NF525 : les 10 CSV sont produits par le serveur (periode + historique complet),

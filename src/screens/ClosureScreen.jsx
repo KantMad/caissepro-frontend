@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useCallback } from "react";
 import { CreditCard, Banknote, Lock, Receipt, RotateCcw, TrendingUp, AlertTriangle, Archive, Printer, Calendar } from "lucide-react";
 import * as API from "../api.js";
 import printer from "../printer.js";
@@ -18,9 +18,18 @@ function ClosureScreen(){
   const denomTotal=useMemo(()=>Object.entries(denomCounts).reduce((s,[d,c])=>s+parseFloat(d)*c,0),[denomCounts]);
   const setDenom=(d,v)=>{setDenomCounts(p=>({...p,[d]:Math.max(0,parseInt(v)||0)}));};
   useEffect(()=>{if(denomMode)setACash(denomTotal.toFixed(2));},[denomMode,denomTotal]);
+  // Journées de vente pas encore clôturées : si la caisse n'a pas été fermée la veille,
+  // la clôture doit porter sur CETTE journée-là, pas sur aujourd'hui (Z à 0,00 €).
+  const[pending,setPending]=useState(null);
+  const chargerPending=useCallback(()=>{API.fiscal.pendingClosures().then(setPending).catch(()=>setPending(null));},[]);
+  useEffect(()=>{chargerPending();},[chargerPending,closures.length]);
   if(!p().canCloseZ)return<div style={{padding:40,textAlign:"center",color:C.textMuted}}>Accès réservé aux administrateurs</div>;
   // Journée LOCALE, mode formation exclu (le Z serveur l'exclut : l'aperçu doit dire pareil)
-  const today=dayKey();
+  const aujourdhui=dayKey();
+  const enAttente=(pending?.days||[]);
+  const today=enAttente[0]?.day||aujourdhui;   // journée que le Z va clôturer
+  const enRetard=today!==aujourdhui;
+  const fmtJour=(d)=>new Date(`${d}T12:00:00`).toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long"});
   const estFormation=(t)=>t.trainingMode||String(t.ticketNumber||t.ticket_number||"").match(/^(FACTICE|FORMATION)/);
   const pt=tickets.filter(t=>dayKey(new Date(t.date||t.createdAt||t.created_at||0))===today&&!estFormation(t));
   const todayAvoirs=avoirs.filter(a=>dayKey(new Date(a.date||a.createdAt||0))===today);
@@ -43,6 +52,14 @@ function ClosureScreen(){
   const cardDiff=aCard?(parseFloat(aCard)-card):null;
 
   return(<div style={{height:"100%",overflowY:"auto",padding:20,background:C.bg}}>
+    {enRetard&&<div style={{background:C.warnLight,border:`2px solid ${C.warn}`,borderRadius:12,padding:14,marginBottom:14}}>
+      <div style={{fontSize:14,fontWeight:800,color:"#92400E",marginBottom:4}}>
+        Journée non clôturée : {fmtJour(today)}</div>
+      <div style={{fontSize:12,color:"#92400E",lineHeight:1.5}}>
+        {enAttente[0].ticket_count} ticket(s) — {Number(enAttente[0].total_ttc).toFixed(2)} € TTC. La clôture ci‑dessous
+        porte sur <b>cette journée</b>, pas sur aujourd'hui. Comptez le tiroir tel qu'il était à la fermeture.
+        {enAttente.length>1&&<> Autres journées en attente : {enAttente.slice(1).map(d=>d.day.split("-").reverse().join("/")).join(", ")}
+          — elles seront proposées l'une après l'autre.</>}</div></div>}
     <h2 style={{fontSize:22,fontWeight:800,marginBottom:14}}>Clôture Z</h2>
     {trainingMode&&<div style={{background:"#FEF3C7",border:"2px dashed #D97706",borderRadius:12,padding:12,marginBottom:12,display:"flex",alignItems:"center",gap:10}}>
       <AlertTriangle size={18} color="#D97706"/><div><div style={{fontSize:12,fontWeight:700,color:"#92400E"}}>MODE FORMATION ACTIF</div>
@@ -120,7 +137,7 @@ function ClosureScreen(){
           if(serverClosures?.some(c=>c.closure_type==="daily"&&(c.period||c.created_at||"").startsWith(todayStr))){
             notify("Une clôture Z existe déjà sur le serveur pour aujourd'hui","error");return;}
         }catch(e){/* offline — local check is our best guard */}
-        const cl=await createClosure("daily",aCash?parseFloat(aCash):null,aCard?parseFloat(aCard):null);if(cl){closeReg(aCash?parseFloat(aCash):null,aCard?parseFloat(aCard):null,{ticketCount:cl.ticketCount,totalHT:cl.totalHT,totalTVA:cl.totalTVA,totalTTC:cl.totalTTC,byPayment:cl.byPayment,byPaymentCount:cl.byPaymentCount,tvaByRate:cl.tvaByRate,bySeller:cl.bySeller,byCategory:cl.byCategory,discounts:cl.discounts,cancellations:cl.cancellations,returns:cl.returns,itemCount:cl.itemCount,avgItemsPerSale:cl.avgItemsPerSale,avgBasketHT:cl.avgBasketHT,avgBasketTTC:cl.avgBasketTTC,expectedCash:cl.expectedCash,cashIn:cl.cashIn,cashOut:cl.cashOut,returnCount:cl.returns?.count??todayAvoirs.length,totalReturns:cl.returns?.totalTTC??totalReturns,netRevenue:(cl.totalTTC||0)-(cl.returns?.totalTTC??totalReturns),grandTotal:cl.grandTotal});setReportModal(cl);}else{notify("Erreur lors de la clôture","danger");}}}
+        const cl=await createClosure("daily",aCash?parseFloat(aCash):null,aCard?parseFloat(aCard):null,today);chargerPending();if(cl){closeReg(aCash?parseFloat(aCash):null,aCard?parseFloat(aCard):null,{ticketCount:cl.ticketCount,totalHT:cl.totalHT,totalTVA:cl.totalTVA,totalTTC:cl.totalTTC,byPayment:cl.byPayment,byPaymentCount:cl.byPaymentCount,tvaByRate:cl.tvaByRate,bySeller:cl.bySeller,byCategory:cl.byCategory,discounts:cl.discounts,cancellations:cl.cancellations,returns:cl.returns,itemCount:cl.itemCount,avgItemsPerSale:cl.avgItemsPerSale,avgBasketHT:cl.avgBasketHT,avgBasketTTC:cl.avgBasketTTC,expectedCash:cl.expectedCash,cashIn:cl.cashIn,cashOut:cl.cashOut,returnCount:cl.returns?.count??todayAvoirs.length,totalReturns:cl.returns?.totalTTC??totalReturns,netRevenue:(cl.totalTTC||0)-(cl.returns?.totalTTC??totalReturns),grandTotal:cl.grandTotal});setReportModal(cl);}else{notify("Erreur lors de la clôture","danger");}}}
         style={{width:"100%",height:44,marginBottom:8}}><Lock size={16}/> Clôture journalière (Z)</Btn>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
         <Btn variant="outline" onClick={async()=>{const cl=await createClosure("monthly",null,null);if(cl)setReportModal(cl);}} style={{height:36,fontSize:11}}><Calendar size={14}/> Clôture mensuelle</Btn>

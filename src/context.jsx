@@ -6,6 +6,7 @@ import hardwareManager from "./hardware.js";
 import { CO, DEFAULT_TVA_RATES, PERMS, initProducts, initUsers, initCustomers, LOYALTY_TIERS, initPromos, C, categories as defaultCategories } from "./constants.jsx";
 import { hashPin, verifyPin, sha256, norm, loadVariantOrderFromSettings, autoImportSizesFromProducts, generateEAN13, DEFAULT_CAT_ICONS } from "./utils.jsx";
 import { computeTotals, lineNetTTC } from "./lib/totals.js";
+import { dayKey } from "./lib/dates.js";
 import { getLoyaltyTier as loyaltyTierOf } from "./lib/loyalty.js";
 import { calcPromoDiscount as calcPromos } from "./lib/promos.js";
 import { aggregatePaymentsByMethod, normClosure, computeCommission } from "./lib/formatters.js";
@@ -1004,22 +1005,27 @@ function AppProvider({children}){
   const[theme,setTheme]=useState({primaryColor:C.primary,accentColor:C.accent});
 
   // Closures — via API
-  const createClosure=useCallback(async(type,aCash,aCard)=>{
-    try{const raw=await API.fiscal.closure({type,actualCash:aCash,actualCard:aCard});
+  // date (AAAA-MM-JJ, journee LOCALE) : journee a cloturer. Sans date, le serveur clot la plus
+  // ancienne journee de vente non encore cloturee (cas de la fermeture le lendemain matin).
+  const createClosure=useCallback(async(type,aCash,aCard,date)=>{
+    try{const raw=await API.fiscal.closure({type,actualCash:aCash,actualCard:aCard,...(date?{date}:{})});
       if(!raw||raw.error){throw new Error(raw?.error||"Réponse invalide du serveur");}
       // Normalisation snake_case → camelCase : sans ça le ticket de fermeture affiche 0 partout
       const cl=normClosure(raw);
       setClosures(p=>[cl,...p]);
       if(cl.grandTotal)setGt(parseFloat(cl.grandTotal));
       addAudit("CLOTURE",`Z ${type}`);notify("Clôture enregistrée","success");return cl;}catch(e){
-      // Fallback local
-      console.warn("Closure API failed, local fallback:",e.message);
-      const today=new Date().toISOString().split("T")[0];
-      const pt=tickets.filter(t=>(t.date||t.createdAt||t.created_at||"").startsWith(today));
+      // Le secours LOCAL n'est legitime qu'en cas de coupure reseau (fetch -> TypeError).
+      // Un refus du serveur (journee deja cloturee, journee future...) ne doit JAMAIS produire
+      // un Z local : ce serait un faux document fiscal.
+      if(!(e instanceof TypeError)){notify("Clôture refusée : "+e.message,"error");return null;}
+      console.warn("Closure API unreachable, local fallback:",e.message);
+      const today=date||dayKey();
+      const pt=tickets.filter(t=>dayKey(new Date(t.date||t.createdAt||t.created_at||0))===today);
       const byMethod=aggregatePaymentsByMethod(pt);
       const cash=byMethod.cash,card=byMethod.card;
       // Tiroir-caisse : apports/prélèvements du jour (hors CA, mais impactent le fond théorique)
-      const movesToday=(cashMovements||[]).filter(m=>(m.created_at||m.date||"").startsWith(today));
+      const movesToday=(cashMovements||[]).filter(m=>dayKey(new Date(m.created_at||m.date||0))===today);
       const cashIn=movesToday.filter(m=>m.direction==="in").reduce((s,m)=>s+(parseFloat(m.amount)||0),0);
       const cashOut=movesToday.filter(m=>m.direction==="out").reduce((s,m)=>s+(parseFloat(m.amount)||0),0);
       const totalTTC=pt.reduce((s,t)=>s+(t.totalTTC),0);

@@ -64,7 +64,9 @@ vi.mock("./api.js", () => {
     products: ns({ list: liste([PRODUIT]), exportCSV: () => "http://x" }),
     customers: ns({ list: liste([CLIENT]) }),
     returns: ns({ list: liste([AVOIR]), counter: liste({ seq: 1 }) }),
-    fiscal: ns({ closures: liste([CLOTURE]), counter: liste({ grand_total: "8990.25", seq: 45 }) }),
+    fiscal: ns({ closures: liste([CLOTURE]), counter: liste({ grand_total: "8990.25", seq: 45 }),
+      pendingClosures: liste({ today: "2026-10-10", timezone: "Europe/Paris",
+        days: [{ day: "2026-10-09", ticket_count: 7, total_ttc: "555.60" }] }) }),
     cashMovements: ns({ list: liste([MOUVEMENT]), exportUrl: () => "http://x" }),
     settings: ns({ get: liste({ name: "Boutique", pricingMode: "TTC", gestlogEnabled: true }) }),
     stores: ns({ list: liste([{ id: STORE, name: "Boutique" }]) }),
@@ -140,6 +142,13 @@ describe("Écrans — rendu sans plantage", () => {
     </AppProvider>);
     expect(errors.join("\n")).not.toMatch(/is not defined|Cannot read|is not a function/);
     expect(container.textContent.length).toBeGreaterThan(0);
+  });
+
+  it("Clôture : annonce la journée NON clôturée de la veille (cas Fred, 09/10)", async () => {
+    const { findByText, container } = render(<AppProvider><ClosureScreen /></AppProvider>);
+    await findByText(/Journée non clôturée/);
+    expect(container.textContent).toMatch(/555\.60/);
+    expect(container.textContent).toMatch(/porte sur cette journée/);
   });
 
   it("Stock : tous les onglets s'ouvrent", () => {
