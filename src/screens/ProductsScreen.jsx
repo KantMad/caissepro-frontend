@@ -91,7 +91,18 @@ function ProductsScreen(){
         {/* Variants list */}
         <div style={{fontSize:12,fontWeight:700,marginBottom:8,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
           <span>Variantes ({editModal.variants.length})</span>
-          <Btn variant="outline" onClick={()=>{setAddVarModal(editModal.id);setNewVar({color:"",colorCode:"",size:"",ean:"",stock:"0",stockAlert:"5"});}} style={{fontSize:10,padding:"4px 10px"}}><Plus size={11}/> Variante</Btn></div>
+          <div style={{display:"flex",gap:6}}>
+          {editModal.variants.some(v=>!v.ean)&&<Btn variant="outline" onClick={async()=>{
+            // Article sans EAN fournisseur : la caisse lui attribue ses propres codes-barres
+            try{const r=await API.products.generateEans(editModal.id);
+              const parId=Object.fromEntries((r.variants||[]).map(x=>[x.variantId,x.ean]));
+              setEditModal(m=>m?{...m,variants:m.variants.map(v=>parId[v.id]?{...v,ean:parId[v.id]}:v)}:m);
+              await refreshProducts();
+              notify(`${r.count} code(s)-barres créé(s) — vous pouvez imprimer les étiquettes`,"success");}
+            catch(e){notify("Génération impossible : "+e.message,"error");}}}
+            style={{fontSize:10,padding:"4px 10px",color:C.accent,borderColor:C.accent+"55"}}>
+            Générer les codes-barres ({editModal.variants.filter(v=>!v.ean).length})</Btn>}
+          <Btn variant="outline" onClick={()=>{setAddVarModal(editModal.id);setNewVar({color:"",colorCode:"",size:"",ean:"",stock:"0",stockAlert:"5"});}} style={{fontSize:10,padding:"4px 10px"}}><Plus size={11}/> Variante</Btn></div></div>
         <div style={{display:"flex",flexDirection:"column",gap:4,marginBottom:14}}>
           {editModal.variants.map(v=>(<div key={v.id} style={{display:"flex",alignItems:"center",gap:8,padding:6,borderRadius:8,border:`1px solid ${C.border}`,fontSize:11}}>
             <Badge color={C.primary}>{v.color}</Badge>{v.colorCode&&<span style={{fontSize:8,fontFamily:"monospace",color:C.accent,background:C.accentLight,padding:"1px 4px",borderRadius:4}}>{v.colorCode}</span>}<Badge color={C.info}>{v.size}</Badge>
@@ -137,7 +148,7 @@ function ProductsScreen(){
         <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>COULEUR</label><Input value={newVar.color} onChange={e=>setNewVar(v=>({...v,color:e.target.value}))}/></div>
         <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>CODE COULEUR</label><Input value={newVar.colorCode} onChange={e=>setNewVar(v=>({...v,colorCode:e.target.value}))} placeholder="ex: BLK, NVY, 001"/></div>
         <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>TAILLE</label><Input value={newVar.size} onChange={e=>setNewVar(v=>({...v,size:e.target.value}))}/></div>
-        <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>EAN</label><Input value={newVar.ean} onChange={e=>setNewVar(v=>({...v,ean:e.target.value}))}/></div>
+        <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>EAN</label><Input value={newVar.ean} placeholder="Vide = code interne généré" onChange={e=>setNewVar(v=>({...v,ean:e.target.value}))}/></div>
         <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>STOCK INITIAL</label><Input type="number" value={newVar.stock} onChange={e=>setNewVar(v=>({...v,stock:e.target.value}))}/></div>
         <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>SEUIL ALERTE</label><Input type="number" value={newVar.stockAlert} onChange={e=>setNewVar(v=>({...v,stockAlert:e.target.value}))}/></div></div>
       <Btn onClick={()=>{if(newVar.color&&newVar.size){
@@ -167,7 +178,7 @@ function ProductsScreen(){
         <div><label style={{fontSize:9,color:C.textMuted}}>COULEUR</label><Input value={nv.color} onChange={e=>setNv(v=>({...v,color:e.target.value}))}/></div>
         <div><label style={{fontSize:9,color:C.textMuted}}>CODE COULEUR</label><Input value={nv.colorCode} onChange={e=>setNv(v=>({...v,colorCode:e.target.value}))} placeholder="BLK"/></div>
         <div><label style={{fontSize:9,color:C.textMuted}}>TAILLE</label><Input value={nv.size} onChange={e=>setNv(v=>({...v,size:e.target.value}))}/></div>
-        <div><label style={{fontSize:9,color:C.textMuted}}>EAN</label><Input value={nv.ean} onChange={e=>setNv(v=>({...v,ean:e.target.value}))}/></div>
+        <div><label style={{fontSize:9,color:C.textMuted}}>EAN</label><Input value={nv.ean} placeholder="Vide = code interne généré" onChange={e=>setNv(v=>({...v,ean:e.target.value}))}/></div>
         <div><label style={{fontSize:9,color:C.textMuted}}>STOCK</label><Input type="number" value={nv.stock} onChange={e=>setNv(v=>({...v,stock:e.target.value}))}/></div>
         <div><label style={{fontSize:9,color:C.textMuted}}>ALERTE</label><Input type="number" value={nv.stockAlert} onChange={e=>setNv(v=>({...v,stockAlert:e.target.value}))}/></div></div>
       <Btn onClick={()=>{if(np.name&&np.sku&&np.price){
