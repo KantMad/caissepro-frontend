@@ -56,7 +56,7 @@ describe("Paiement — mode online (API OK)", () => {
 
 describe("Paiement — mode offline (API échoue → fallback local)", () => {
   it("recalcule le ticket localement (TTC ancré) et le conserve", async () => {
-    API.sales.checkout.mockRejectedValue(new Error("network down"));
+    API.sales.checkout.mockRejectedValue(new TypeError("Failed to fetch"));
     mount();
     act(() => { ctx.addToCart(prod(), variant()); });
     act(() => { ctx.addToCart(prod(), variant()); });
@@ -75,7 +75,7 @@ describe("Paiement — mode offline (API échoue → fallback local)", () => {
   });
 
   it("multi-taux offline reste cohérent (HT+TVA=TTC)", async () => {
-    API.sales.checkout.mockRejectedValue(new Error("offline"));
+    API.sales.checkout.mockRejectedValue(new TypeError("Failed to fetch"));
     mount();
     act(() => { ctx.addToCart(prod({ id: "p1", price: 209, taxRate: 0.20 }), variant("v1")); });
     act(() => { ctx.addToCart(prod({ id: "p2", price: 10, taxRate: 0.055 }), variant("v2")); });
@@ -84,5 +84,22 @@ describe("Paiement — mode offline (API échoue → fallback local)", () => {
     await act(async () => { ticket = await ctx.checkout([{ method: "cash", amount: 219 }], "V"); });
     expect(ticket.totalTTC).toBe(219);
     expect(Math.round((ticket.totalHT + ticket.totalTVA) * 100) / 100).toBe(219);
+  });
+});
+
+// Piege du 09/10/2026 : le serveur refusait les ventes (400 « Période clôturée ») et la caisse
+// les traitait comme une coupure reseau — ticket imprime, CA affiche, puis vente abandonnee.
+describe("Paiement — refus du serveur (ce n'est PAS une coupure réseau)", () => {
+  it("ne crée aucun ticket local, garde le panier et ne met rien en file", async () => {
+    API.sales.checkout.mockRejectedValue(new Error("Période clôturée — impossible de créer une vente après la clôture du mois"));
+    mount();
+    act(() => { ctx.addToCart(prod(), variant()); });
+
+    let ticket;
+    await act(async () => { ticket = await ctx.checkout([{ method: "cash", amount: 209 }], "V"); });
+    expect(ticket).toBeNull();
+    expect(ctx.cart).toHaveLength(1);       // panier conservé
+    expect(ctx.tickets).toHaveLength(0);    // aucun faux ticket dans l'historique / le CA
+    expect(ctx.pendingSync.filter(a => a.type === "offlineSale")).toHaveLength(0);
   });
 });

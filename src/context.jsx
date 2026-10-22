@@ -14,6 +14,8 @@ import Papa from "papaparse";
 
 /* ══════════ CONTEXT ══════════ */
 const AppCtx = createContext(null);
+// Operations fiscales / monetaires : jamais abandonnees ni videes de la file de synchro.
+export const SYNC_CRITIQUE = ["offlineSale","offlineAvoir","offlineClosure","consumeAvoir","createGiftCard","useGiftCard"];
 export const useApp = () => useContext(AppCtx);
 
 // TVA_RATES mutable — keep module-level ref so context can update it
@@ -291,7 +293,11 @@ function AppProvider({children}){
   },[currentUser]);
 
   // ══ Retry pending sync when back online ══
-  const clearPendingSync=useCallback(()=>{setPendingSync([]);notify("File de synchronisation vidée","info");},[notify]);
+  const clearPendingSync=useCallback(()=>{
+    const critiques=pendingSync.filter(a=>SYNC_CRITIQUE.includes(a.type));
+    setPendingSync(critiques);
+    notify(critiques.length?`File vidée — ${critiques.length} vente(s)/opération(s) fiscale(s) conservée(s) jusqu'à leur enregistrement`:"File de synchronisation vidée",critiques.length?"warn":"info");
+  },[notify,pendingSync]);
   useEffect(()=>{if(!isOnline||!pendingSync.length||!API.getToken())return;
     // Debounce — ne pas retenter en boucle
     const timer=setTimeout(async()=>{const failed=[];let synced=0;
@@ -318,8 +324,11 @@ function AppProvider({children}){
           synced++;
         }catch(e){
           const retries=(action.retries||0)+1;
+          // Une vente, un avoir, une cloture ou un mouvement de carte cadeau n'est JAMAIS abandonne :
+          // il reste en file (signale en rouge) tant que le serveur ne l'a pas enregistre.
+          if(SYNC_CRITIQUE.includes(action.type))failed.push({...action,retries,lastError:e.message});
           // Abandon après 3 tentatives — l'action est probablement invalide (ex: password ****)
-          if(retries>=3){console.warn(`Sync abandonné après ${retries} tentatives:`,action.type,e.message);
+          else if(retries>=3){console.warn(`Sync abandonné après ${retries} tentatives:`,action.type,e.message);
           }else{failed.push({...action,retries,lastError:e.message});}
         }
       }
@@ -329,7 +338,9 @@ function AppProvider({children}){
         // Rafraichir les produits (stock) apres sync d'avoirs ou ventes
         try{const prods=await API.products.list();setProducts(norm.products(prods));}catch(e){console.warn("Rafraîchissement produits échoué:",e.message);}
       }
-      if(failed.length>0&&failed.some(f=>f.retries<3))notify(`${failed.length} synchro(s) en attente — nouvelle tentative prochainement`,"warn");
+      const bloquees=failed.filter(f=>SYNC_CRITIQUE.includes(f.type)&&f.retries>=3);
+      if(bloquees.length)notify(`${bloquees.length} vente(s)/opération(s) refusée(s) par le serveur et conservée(s) sur cet appareil : ${bloquees[0].lastError}. Contactez le support, ne videz pas les données.`,"danger");
+      else if(failed.length>0&&failed.some(f=>f.retries<3))notify(`${failed.length} synchro(s) en attente — nouvelle tentative prochainement`,"warn");
     },2000);// 2s debounce
     return()=>clearTimeout(timer);
   },[isOnline,pendingSync.length]);// eslint-disable-line react-hooks/exhaustive-deps
@@ -749,6 +760,15 @@ function AppProvider({children}){
       setTickets(prev=>[fullTicket,...prev]);
       notify("Vente enregistrée","success");return fullTicket;
     }catch(e){
+      // Seule une COUPURE RESEAU (fetch -> TypeError) bascule en vente hors-ligne.
+      // Un REFUS du serveur (journee cloturee, session expiree, donnee invalide...) n'est pas
+      // une vente : avant, la caisse imprimait quand meme le ticket, l'ajoutait au CA affiche,
+      // puis l'abandonnait apres 3 refus (ventes perdues du 09/10/2026).
+      if(!(e instanceof TypeError)){
+        const carteDebitee=payments.some(p=>cardMethods.includes(p.method)&&(p.authCode||p.transactionId));
+        notify(`Vente REFUSÉE par le serveur : ${e.message}. Rien n'a été enregistré.${carteDebitee?" Le paiement carte a été débité : annulez-le sur le TPE.":""}`,"danger");
+        return null;
+      }
       // Fallback local
       console.warn("Checkout API échoué, mode local:",e.message);
       const seq=tSeq+1;const date=new Date().toISOString();

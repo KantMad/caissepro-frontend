@@ -9,7 +9,7 @@ import * as API from "./api.js";
 import { CO, PERMS, C, initUsers } from "./constants.jsx";
 import { hashPin, verifyPin } from "./utils.jsx";
 import { Modal, Btn, Input, Badge, SC, ErrorBoundary, ToastContainer, ConfirmDialog } from "./ui.jsx";
-import { useApp } from "./context.jsx";
+import { useApp, SYNC_CRITIQUE } from "./context.jsx";
 import { useViewport } from "./useViewport.js";
 import logo from "./assets/logo.png";
 import { formatAmount } from "./lib/formatters.js";
@@ -79,7 +79,7 @@ function CashierNav({active,onNav}){
             <button onClick={()=>{openCustomerDisplay();setMoreOpen(false);}} style={{flex:1,minHeight:48,borderRadius:12,border:"none",cursor:"pointer",background:"rgba(56,189,248,0.1)",color:"#0369A1",fontSize:13,fontWeight:700,fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:6}}><LayoutDashboard size={15}/> Écran client</button>
             <button onClick={()=>{logout();}} style={{flex:1,minHeight:48,borderRadius:12,border:"none",cursor:"pointer",background:"rgba(248,113,113,0.1)",color:C.danger,fontSize:13,fontWeight:700,fontFamily:"inherit",display:"flex",alignItems:"center",justifyContent:"center",gap:6}}><LogOut size={15}/> Déconnexion</button>
           </div>
-          {pendingSync.length>0&&<button onClick={()=>{clearPendingSync();setMoreOpen(false);}} style={{width:"100%",marginTop:8,minHeight:40,borderRadius:10,border:"none",cursor:"pointer",background:C.warnLight,color:"#92400E",fontSize:12,fontWeight:600,fontFamily:"inherit"}}>{pendingSync.length} synchro(s) en attente — vider</button>}
+          {pendingSync.length>0&&<button onClick={()=>{if(confirm("Vider la file de synchronisation ? (les ventes et opérations fiscales sont conservées)")){clearPendingSync();setMoreOpen(false);}}} style={{width:"100%",marginTop:8,minHeight:40,borderRadius:10,border:"none",cursor:"pointer",background:C.warnLight,color:"#92400E",fontSize:12,fontWeight:600,fontFamily:"inherit"}}>{pendingSync.length} synchro(s) en attente — vider</button>}
         </div>
       </div>}
     </>);
@@ -94,8 +94,9 @@ function CashierNav({active,onNav}){
     <div style={{display:"flex",alignItems:"center",gap:3,marginBottom:4}}>
       <div style={{width:6,height:6,borderRadius:3,background:isOnline?"#34D399":"#F87171"}}/>
       <span style={{fontSize:8,color:"rgba(255,255,255,0.5)",fontWeight:500}}>{isOnline?"En ligne":"Offline"}</span></div>
-    {pendingSync.length>0&&<div onClick={()=>clearPendingSync()}
-      style={{fontSize:8,color:"#FBBF24",fontWeight:600,marginBottom:2,cursor:"pointer"}} title="Cliquer pour vider la file de synchro">{pendingSync.length} sync</div>}
+    {pendingSync.length>0&&(()=>{const bloq=pendingSync.filter(a=>SYNC_CRITIQUE.includes(a.type)&&(a.retries||0)>=3);
+      return <div onClick={()=>{if(confirm(bloq.length?`${bloq.length} vente(s)/opération(s) refusée(s) par le serveur : ${bloq[0].lastError||""}\n\nElles restent conservées sur cet appareil. Vider les autres éléments de la file ?`:"Vider la file de synchronisation ? (les ventes et opérations fiscales sont conservées)"))clearPendingSync();}}
+        style={{fontSize:8,color:bloq.length?"#F87171":"#FBBF24",fontWeight:bloq.length?800:600,marginBottom:2,cursor:"pointer"}} title={bloq.length?`Refusé par le serveur : ${bloq[0].lastError||""}`:"Synchronisations en attente"}>{bloq.length?`${bloq.length} REFUSÉE(S)`:`${pendingSync.length} sync`}</div>;})()}
     <div style={{display:"flex",gap:3,marginBottom:10}}>
       <button onClick={clockIn} title="Pointer entree" style={{width:26,height:22,borderRadius:6,border:"none",cursor:"pointer",background:"rgba(52,211,153,0.15)",color:"#34D399",fontSize:8,fontWeight:600,display:"flex",alignItems:"center",justifyContent:"center",transition:"all 0.15s"}}>IN</button>
       <button onClick={clockOut} title="Pointer sortie" style={{width:26,height:22,borderRadius:6,border:"none",cursor:"pointer",background:"rgba(248,113,113,0.15)",color:"#F87171",fontSize:8,fontWeight:600,display:"flex",alignItems:"center",justifyContent:"center",transition:"all 0.15s"}}>OUT</button></div>

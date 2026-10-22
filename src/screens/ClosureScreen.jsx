@@ -140,8 +140,13 @@ function ClosureScreen(){
         const cl=await createClosure("daily",aCash?parseFloat(aCash):null,aCard?parseFloat(aCard):null,today);chargerPending();if(cl){closeReg(aCash?parseFloat(aCash):null,aCard?parseFloat(aCard):null,{ticketCount:cl.ticketCount,totalHT:cl.totalHT,totalTVA:cl.totalTVA,totalTTC:cl.totalTTC,byPayment:cl.byPayment,byPaymentCount:cl.byPaymentCount,tvaByRate:cl.tvaByRate,bySeller:cl.bySeller,byCategory:cl.byCategory,discounts:cl.discounts,cancellations:cl.cancellations,returns:cl.returns,itemCount:cl.itemCount,avgItemsPerSale:cl.avgItemsPerSale,avgBasketHT:cl.avgBasketHT,avgBasketTTC:cl.avgBasketTTC,expectedCash:cl.expectedCash,cashIn:cl.cashIn,cashOut:cl.cashOut,returnCount:cl.returns?.count??todayAvoirs.length,totalReturns:cl.returns?.totalTTC??totalReturns,netRevenue:(cl.totalTTC||0)-(cl.returns?.totalTTC??totalReturns),grandTotal:cl.grandTotal});setReportModal(cl);}else{notify("Erreur lors de la clôture","danger");}}}
         style={{width:"100%",height:44,marginBottom:8}}><Lock size={16}/> Clôture journalière (Z)</Btn>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
-        <Btn variant="outline" onClick={async()=>{const cl=await createClosure("monthly",null,null);if(cl)setReportModal(cl);}} style={{height:36,fontSize:11}}><Calendar size={14}/> Clôture mensuelle</Btn>
-        <Btn variant="outline" onClick={async()=>{const cl=await createClosure("annual",null,null);if(cl)setReportModal(cl);}} style={{height:36,fontSize:11}}><Archive size={14}/> Clôture annuelle</Btn>
+        <Btn variant="outline" onClick={async()=>{const d=new Date();const mp=new Date(d.getFullYear(),d.getMonth()-1,1);
+          // Z mensuel = mois PRECEDENT, termine (le serveur le garantit). Irreversible (NF525) : confirmation.
+          if(!confirm(`Clôture mensuelle de ${mp.toLocaleDateString("fr-FR",{month:"long",year:"numeric"})} ?\n\nOpération définitive (NF525). À faire une fois le mois terminé, après le dernier Z journalier.`))return;
+          const cl=await createClosure("monthly",null,null);if(cl)setReportModal(cl);}} style={{height:36,fontSize:11}}><Calendar size={14}/> Clôture mensuelle</Btn>
+        <Btn variant="outline" onClick={async()=>{const an=new Date().getFullYear()-1;
+          if(!confirm(`Clôture annuelle de l'exercice ${an} ?\n\nOpération définitive (NF525). À faire une fois l'année terminée et le Z mensuel de décembre effectué.`))return;
+          const cl=await createClosure("annual",null,null);if(cl)setReportModal(cl);}} style={{height:36,fontSize:11}}><Archive size={14}/> Clôture annuelle</Btn>
       </div></div>
 
     {/* Closure history */}
