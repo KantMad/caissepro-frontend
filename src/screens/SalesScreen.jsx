@@ -9,6 +9,7 @@ import { Modal, Btn, Input, Badge, Numpad } from "../ui.jsx";
 import { useApp } from "../context.jsx";
 import { getPaymentLabel, getAvoirRemaining } from "../lib/formatters.js";
 import { lineNetTTC, round2 } from "../lib/totals.js";
+import { dayKey } from "../lib/dates.js";
 import { useViewport } from "../useViewport.js";
 import hardwareManager from "../hardware.js";
 
@@ -40,7 +41,10 @@ function SalesScreen(){
   const[confirmVoid,setConfirmVoid]=useState(false);const[voidReason,setVoidReason]=useState("");
   const[showShortcuts,setShowShortcuts]=useState(false);const[confirmClear,setConfirmClear]=useState(false);
   // Garde post-clôture: vérifier si une clôture journalière existe pour aujourd'hui
-  const todayClosed=useMemo(()=>{const today=new Date().toISOString().split("T")[0];return closures?.some(c=>(c.type||c.closure_type)==="daily"&&(c.date||c.createdAt||c.created_at||"").startsWith(today));},[closures]);
+  // Journée clôturée = un Z journalier dont la PÉRIODE est aujourd'hui (jour local).
+  // Avant : date de CRÉATION du Z, en UTC → un Z tardif du 22/10 ou le Z de la veille fait
+  // ce matin affichait « caisse clôturée » alors que la journée du jour était ouverte.
+  const todayClosed=useMemo(()=>{const today=dayKey();return closures?.some(c=>(c.type||c.closure_type)==="daily"&&String(c.period||"").slice(0,10)===today);},[closures]);
 
   // Keyboard shortcuts
   useEffect(()=>{const handler=(e)=>{
@@ -139,8 +143,8 @@ function SalesScreen(){
     }finally{setEmailSending(false);}
   };
 
-  const todayTickets=useMemo(()=>{const today=new Date().toISOString().split("T")[0];
-    return tickets.filter(t=>(t.date||t.createdAt||t.created_at||"").startsWith(today));},[tickets]);
+  const todayTickets=useMemo(()=>{const today=dayKey();
+    return tickets.filter(t=>dayKey(new Date(t.date||t.createdAt||t.created_at||0))===today);},[tickets]);
   const todayCA=todayTickets.reduce((s,t)=>s+(t.totalTTC||parseFloat(t.total_ttc)||0),0);
 
   return(<div style={{display:"flex",height:"100%",background:C.bg,fontSize:"var(--font-base,13px)"}}>

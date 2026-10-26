@@ -49,6 +49,11 @@ vi.mock("./api.js", () => {
   const CLOTURE = { id: "z1", closure_number: "Z-2026-000012", total_ht: "7491.88", total_tva: "1498.37",
     total_ttc: "8990.25", total_sales: 45, cash_expected: "1200.00", cash_counted: "1198.50",
     created_at: "2026-10-19T19:00:00.000Z", user_name: "Admin", grand_total: "8990.25", fingerprint: "ZZZ123" };
+  // Z de la VEILLE fait ce matin (fermeture le lendemain / Z tardif) : cree aujourd'hui, periode = hier.
+  const hier = (() => { const d = new Date(); d.setDate(d.getDate() - 1);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; })();
+  const Z_HIER = { id: "z2", closure_type: "daily", period: hier, total_ht: "100.00", total_tva: "20.00",
+    total_ttc: "120.00", ticket_count: 2, created_at: new Date().toISOString(), grand_total: "9110.25", fingerprint: "ZH" };
   const MOUVEMENT = { id: "m1", movement_number: "MV-2026-000003", kind: "in", direction: "in",
     amount: "150.00", reason: "Apport", user_name: "Admin", created_at: "2026-10-20T08:00:00.000Z" };
   const SESSION = { id: "r1", opened_at: "2026-10-20T08:00:00.000Z", closed_at: null,
@@ -64,7 +69,7 @@ vi.mock("./api.js", () => {
     products: ns({ list: liste([PRODUIT]), exportCSV: () => "http://x" }),
     customers: ns({ list: liste([CLIENT]) }),
     returns: ns({ list: liste([AVOIR]), counter: liste({ seq: 1 }) }),
-    fiscal: ns({ closures: liste([CLOTURE]), counter: liste({ grand_total: "8990.25", seq: 45 }),
+    fiscal: ns({ closures: liste([Z_HIER, CLOTURE]), counter: liste({ grand_total: "8990.25", seq: 45 }),
       // Veille non cloturee (cas Fred) + une tres ancienne journee oubliee (cas du 12 mai).
       pendingClosures: liste((() => { const k = (n) => { const d = new Date(); d.setDate(d.getDate() - n);
           return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
@@ -153,6 +158,13 @@ describe("Écrans — rendu sans plantage", () => {
     await findByText(/Journée non clôturée/);
     expect(container.textContent).toMatch(/555\.60/);
     expect(container.textContent).toMatch(/porte sur cette journée/);
+  });
+
+  it("Vente : un Z de la veille fait ce matin ne déclare pas la caisse clôturée", async () => {
+    const { findAllByText, container } = render(<AppProvider><SalesScreen /></AppProvider>);
+    await findAllByText(/./);
+    await new Promise(r => setTimeout(r, 50));   // chargement des clotures
+    expect(container.textContent).not.toMatch(/CAISSE CLOTUREE/);
   });
 
   it("Clôture : une très ancienne journée oubliée ne prend pas le Z du jour (cas 12 mai)", async () => {

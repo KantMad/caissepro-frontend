@@ -147,9 +147,9 @@ function ClosureScreen(){
           Écart: {cardDiff>=0?"+":""}{cardDiff.toFixed(2)}€ {Math.abs(cardDiff)<0.01?"(OK)":"(attention)"}</div>}</div>
       <Btn variant="danger" onClick={async()=>{
         // M2 fix: check both local AND server for existing daily closure
-        const todayStr=new Date().toISOString().split("T")[0];
-        if(closures.some(c=>c.type==="daily"&&(c.period||c.date||c.created_at||"").startsWith(todayStr))){
-          notify("Une clôture Z a déjà été faite aujourd'hui","error");return;}
+        // Journée visée déjà clôturée ? (par PÉRIODE, jamais par date de création du Z)
+        if(closures.some(c=>c.type==="daily"&&String(c.period||"").slice(0,10)===today)){
+          notify(`La journée du ${today.split("-").reverse().join("/")} est déjà clôturée`,"error");return;}
         // Also verify server-side to prevent multi-tab/device duplicates
         try{const serverClosures=await API.fiscal.closures();
           if(serverClosures?.some(c=>c.closure_type==="daily"&&(c.period||c.created_at||"").startsWith(todayStr))){
