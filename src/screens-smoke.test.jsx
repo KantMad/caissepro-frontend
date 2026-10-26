@@ -65,8 +65,12 @@ vi.mock("./api.js", () => {
     customers: ns({ list: liste([CLIENT]) }),
     returns: ns({ list: liste([AVOIR]), counter: liste({ seq: 1 }) }),
     fiscal: ns({ closures: liste([CLOTURE]), counter: liste({ grand_total: "8990.25", seq: 45 }),
-      pendingClosures: liste({ today: "2026-10-10", timezone: "Europe/Paris",
-        days: [{ day: "2026-10-09", ticket_count: 7, total_ttc: "555.60" }] }) }),
+      // Veille non cloturee (cas Fred) + une tres ancienne journee oubliee (cas du 12 mai).
+      pendingClosures: liste((() => { const k = (n) => { const d = new Date(); d.setDate(d.getDate() - n);
+          return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
+        return { today: k(0), timezone: "Europe/Paris", days: [
+          { day: k(167), ticket_count: 13, total_ttc: "1240.00" },
+          { day: k(1), ticket_count: 7, total_ttc: "555.60" }] }; })()) }),
     cashMovements: ns({ list: liste([MOUVEMENT]), exportUrl: () => "http://x" }),
     settings: ns({ get: liste({ name: "Boutique", pricingMode: "TTC", gestlogEnabled: true }) }),
     stores: ns({ list: liste([{ id: STORE, name: "Boutique" }]) }),
@@ -149,6 +153,14 @@ describe("Écrans — rendu sans plantage", () => {
     await findByText(/Journée non clôturée/);
     expect(container.textContent).toMatch(/555\.60/);
     expect(container.textContent).toMatch(/porte sur cette journée/);
+  });
+
+  it("Clôture : une très ancienne journée oubliée ne prend pas le Z du jour (cas 12 mai)", async () => {
+    const { findByText, container } = render(<AppProvider><ClosureScreen /></AppProvider>);
+    await findByText(/Anciennes journées jamais clôturées \(1\)/);
+    expect(container.textContent).toMatch(/13 ticket\(s\), 1240\.00/);   // listée à part, en Z tardif
+    expect(container.textContent).toMatch(/Z tardif/);
+    expect(container.textContent).not.toMatch(/Journée non clôturée : [a-z]+ 12 mai/);
   });
 
   it("Stock : tous les onglets s'ouvrent", () => {

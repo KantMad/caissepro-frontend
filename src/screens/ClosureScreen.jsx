@@ -27,8 +27,19 @@ function ClosureScreen(){
   // Journée LOCALE, mode formation exclu (le Z serveur l'exclut : l'aperçu doit dire pareil)
   const aujourdhui=dayKey();
   const enAttente=(pending?.days||[]);
-  const today=enAttente[0]?.day||aujourdhui;   // journée que le Z va clôturer
+  // Journée que le Z principal clôture (avec le comptage du tiroir) : aujourd'hui, ou la
+  // DERNIÈRE journée non clôturée si elle est récente (fermeture le lendemain matin, week-end).
+  // Les journées plus anciennes oubliées (ex. 12 mai) ne prennent JAMAIS le comptage du jour :
+  // elles se clôturent à part, une par une, en Z tardif (sans comptage).
+  const ecartJours=(d)=>Math.round((new Date(`${aujourdhui}T12:00:00`)-new Date(`${d}T12:00:00`))/86400000);
+  const derniere=enAttente[enAttente.length-1];
+  const today=derniere&&ecartJours(derniere.day)<=4?derniere.day:aujourdhui;
   const enRetard=today!==aujourdhui;
+  const ciblePending=enAttente.find(d=>d.day===today);
+  const anciennes=enAttente.filter(d=>d.day!==today&&d.day<today);
+  const zTardif=async(d)=>{
+    if(!confirm(`Z tardif du ${fmtJour(d.day)} : ${d.ticket_count} ticket(s), ${Number(d.total_ttc).toFixed(2)} € TTC.\n\nCette journée n'avait jamais été clôturée. Le Z est définitif (NF525) et sera daté d'aujourd'hui, sans comptage du tiroir. Continuer ?`))return;
+    const cl=await createClosure("daily",null,null,d.day);chargerPending();if(cl)setReportModal(cl);};
   const fmtJour=(d)=>new Date(`${d}T12:00:00`).toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long"});
   const estFormation=(t)=>t.trainingMode||String(t.ticketNumber||t.ticket_number||"").match(/^(FACTICE|FORMATION)/);
   const pt=tickets.filter(t=>dayKey(new Date(t.date||t.createdAt||t.created_at||0))===today&&!estFormation(t));
@@ -56,10 +67,17 @@ function ClosureScreen(){
       <div style={{fontSize:14,fontWeight:800,color:"#92400E",marginBottom:4}}>
         Journée non clôturée : {fmtJour(today)}</div>
       <div style={{fontSize:12,color:"#92400E",lineHeight:1.5}}>
-        {enAttente[0].ticket_count} ticket(s) — {Number(enAttente[0].total_ttc).toFixed(2)} € TTC. La clôture ci‑dessous
-        porte sur <b>cette journée</b>, pas sur aujourd'hui. Comptez le tiroir tel qu'il était à la fermeture.
-        {enAttente.length>1&&<> Autres journées en attente : {enAttente.slice(1).map(d=>d.day.split("-").reverse().join("/")).join(", ")}
-          — elles seront proposées l'une après l'autre.</>}</div></div>}
+        {ciblePending?.ticket_count} ticket(s) — {Number(ciblePending?.total_ttc||0).toFixed(2)} € TTC. La clôture ci‑dessous
+        porte sur <b>cette journée</b>, pas sur aujourd'hui. Comptez le tiroir tel qu'il était à la fermeture.</div></div>}
+    {anciennes.length>0&&<div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:12,padding:14,marginBottom:14}}>
+      <div style={{fontSize:13,fontWeight:800,marginBottom:4}}>Anciennes journées jamais clôturées ({anciennes.length})</div>
+      <div style={{fontSize:11,color:C.textMuted,marginBottom:8,lineHeight:1.5}}>
+        Ces journées n'ont pas de Z. Elles n'empêchent pas de clôturer aujourd'hui. Clôturez‑les une par une
+        (Z tardif, sans comptage du tiroir) — à valider avec votre expert‑comptable.</div>
+      {anciennes.map(d=><div key={d.day} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 0",borderTop:`1px solid ${C.border}`,fontSize:12}}>
+        <span style={{flex:1}}>{fmtJour(d.day)} {d.day.slice(0,4)} — {d.ticket_count} ticket(s), {Number(d.total_ttc).toFixed(2)} € TTC</span>
+        <Btn variant="outline" onClick={()=>zTardif(d)} style={{height:30,fontSize:11}}>Z tardif</Btn></div>)}
+    </div>}
     <h2 style={{fontSize:22,fontWeight:800,marginBottom:14}}>Clôture Z</h2>
     {trainingMode&&<div style={{background:"#FEF3C7",border:"2px dashed #D97706",borderRadius:12,padding:12,marginBottom:12,display:"flex",alignItems:"center",gap:10}}>
       <AlertTriangle size={18} color="#D97706"/><div><div style={{fontSize:12,fontWeight:700,color:"#92400E"}}>MODE FORMATION ACTIF</div>
