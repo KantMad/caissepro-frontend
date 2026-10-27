@@ -203,13 +203,13 @@ function HelpCashierScreen(){
     ]},
     {icon:"👥",title:"Gérer les clients",desc:"Ajouter, modifier ou consulter les fiches clients.",steps:[
       "Cliquez sur « Clients » dans la barre latérale gauche (7ème bouton, icône personnes).",
-      "La liste de tous les clients s'affiche avec nom, email, téléphone, points de fidélité et tier (Bronze/Silver/Gold).",
+      "La liste de tous les clients s'affiche avec nom, email, téléphone, points de fidélité et niveau (Bronze, Argent, Or, Platine).",
       "Barre de recherche en haut pour filtrer par nom, email ou téléphone.",
       "« + Nouveau client » en haut à droite : remplissez Prénom, Nom, Email, Téléphone, Ville, Notes, puis « Créer ».",
       "Bouton « Modifier » (icône crayon) : ouvre la fiche pour modifier les informations.",
       "Bouton « Historique » : affiche toutes les ventes passées de ce client avec les dates et montants.",
       "Bouton « RGPD » : exporte ou supprime les données personnelles du client (conformité RGPD).",
-      "Les points de fidélité sont attribués automatiquement (+1 point par euro dépensé). Les tiers sont : Bronze (0-199), Silver (200-499), Gold (500+)."
+      "Les points de fidélité sont attribués automatiquement (+1 point par euro dépensé). Les seuils des niveaux sont réglés dans les Paramètres. Le niveau est indicatif : il n'applique aucune remise automatique."
     ]},
     {icon:"🎁",title:"Cartes cadeaux",desc:"Créer, vendre et utiliser des cartes cadeaux.",steps:[
       "Cliquez sur « Cadeaux » dans la barre latérale gauche (8ème bouton, icône cadeau).",

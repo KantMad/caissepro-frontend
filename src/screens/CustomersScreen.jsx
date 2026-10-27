@@ -110,7 +110,7 @@ function CustomersScreen(){
               placeholder="Préférences, taille habituelle, remarques…"/></div>
           <div style={{fontSize:12,fontWeight:700,marginBottom:6}}>Paliers de fidélité</div>
           <div style={{display:"flex",gap:6,marginBottom:10}}>
-            {((settings?.loyaltyTiers?.length?settings.loyaltyTiers:LOYALTY_TIERS)).map(t=>(<Badge key={t.name} color={sel.points>=t.minPoints?C.primary:C.textLight}>{t.name} ({t.minPoints}pts) = -{t.discount}%</Badge>))}</div>
+            {((settings?.loyaltyTiers?.length?settings.loyaltyTiers:LOYALTY_TIERS)).map(t=>(<Badge key={t.name} color={sel.points>=t.minPoints?C.primary:C.textLight}>{t.name} ({t.minPoints}pts)</Badge>))}</div>
         </div>
         <div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`}}>
           <div style={{fontSize:14,fontWeight:700,marginBottom:8}}>Historique d'achat ({custTickets.length})</div>

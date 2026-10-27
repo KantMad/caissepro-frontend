@@ -64,12 +64,12 @@ function HelpDashboardScreen(){
     ]},
     {icon:"👥",title:"Gestion des clients",desc:"Base de données clients et programme de fidélité.",steps:[
       "Cliquez sur « Clients » dans la barre latérale gauche (6ème élément, icône personnes).",
-      "La liste de tous les clients s'affiche avec nom, email, téléphone, points de fidélité et tier (Bronze/Silver/Gold).",
+      "La liste de tous les clients s'affiche avec nom, email, téléphone, points de fidélité et niveau (Bronze, Argent, Or, Platine).",
       "AJOUTER un client : cliquez « + Nouveau client » en haut à droite. Renseignez le nom, l'email et le téléphone, puis « Créer ».",
       "MODIFIER un client : cliquez sur le bouton « Modifier » (icône crayon) à droite de la ligne du client.",
       "HISTORIQUE D'ACHATS : cliquez sur « Historique » à côté du client pour voir toutes ses ventes passées, les montants et les dates.",
       "RGPD : cliquez sur « RGPD » pour exporter ou supprimer les données personnelles du client (conformité RGPD).",
-      "FIDÉLITÉ : les points sont attribués automatiquement à chaque achat. Les seuils des tiers sont configurables."
+      "FIDÉLITÉ : les points sont attribués automatiquement à chaque achat. Les seuils des niveaux sont configurables. Le niveau est indicatif : aucune remise automatique."
     ]},
     {icon:"👤",title:"Utilisateurs & rôles",desc:"Créer des comptes et gérer les permissions de l'équipe.",steps:[
       "Cliquez sur « Utilisateurs » dans la barre latérale gauche (7ème élément, icône personne).",
