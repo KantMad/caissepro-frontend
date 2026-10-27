@@ -821,6 +821,7 @@ function AppProvider({children}){
       addPendingSync({type:"offlineSale",data:{
         items:items.map(({product,variant,...rest})=>rest),payments,customerId:selCust?.id||null,
         globalDiscount:gd,saleNote:saleNote||null,promosApplied:applied,sessionId:cashReg?.id||null,
+        sellerName:sellerName||null,
         offlineTicketNumber:ticketNumber,offlineDate:date
       }});
       // Consume avoir locally + queue for sync (avoir not consumed yet in offline mode)

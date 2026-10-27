@@ -1065,6 +1065,13 @@ function SettingsScreen(){
       {[{l:"Nom boutique",k:"name"},{l:"Adresse",k:"address"},{l:"Code postal",k:"postalCode"},{l:"Ville",k:"city"},{l:"SIRET",k:"siret"},{l:"N° TVA Intra",k:"tvaIntra"},{l:"Téléphone",k:"phone"},{l:"Message ticket",k:"footerMsg"}].map(f=>(
         <div key={f.k} style={{marginBottom:10}}><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>{f.l}</label>
           <Input value={settings[f.k]||""} onChange={e=>setSettings(s=>({...s,[f.k]:e.target.value}))}/></div>))}
+      {/* Borne basse des stats, FEC, exports et journees a cloturer (ventes d'essai d'avant).
+          Les tickets anterieurs restent en base ; chaque changement est journalise cote serveur. */}
+      <div style={{marginBottom:10,padding:10,borderRadius:10,background:C.surfaceAlt,border:`1px solid ${C.border}`}}>
+        <label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>Date de mise en service de la caisse</label>
+        <Input type="date" value={(settings.serviceStartDate||"").slice(0,10)} onChange={e=>setSettings(s=>({...s,serviceStartDate:e.target.value}))}/>
+        <div style={{fontSize:10,color:C.textMuted,marginTop:4,lineHeight:1.5}}>Premier jour d'utilisation réelle. Les ventes d'essai antérieures sont
+          écartées des statistiques, du FEC, des exports et des clôtures (elles restent conservées). Ne la changez pas sans l'accord de votre expert‑comptable.</div></div>
       <Btn onClick={()=>{saveSettingsNotify(settings,"Paramètres");addAudit("CONFIG","Paramètres mis à jour");}} style={{width:"100%",height:40,marginTop:8,background:C.primary}}><Save size={14}/> Enregistrer</Btn></div>}
 
     {tab==="retouche"&&<div style={{maxWidth:650}}>

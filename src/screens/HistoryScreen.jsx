@@ -27,7 +27,7 @@ function HistoryScreen(){
   useEffect(()=>{setPage(0);},[search,dateFilter]);
   const filteredTickets=useMemo(()=>tickets.filter(t=>{
     const q=search.toLowerCase();
-    const matchSearch=!q||(t.ticketNumber||"").toLowerCase().includes(q)||(t.customerName||"").toLowerCase().includes(q)||(t.userName||t.user_name||"").toLowerCase().includes(q)||(t.barcode||"").includes(q);
+    const matchSearch=!q||(t.ticketNumber||"").toLowerCase().includes(q)||(t.offlineTicketNumber||"").toLowerCase().includes(q)||(t.customerName||"").toLowerCase().includes(q)||(t.userName||t.user_name||"").toLowerCase().includes(q)||(t.barcode||"").includes(q);
     const matchDate=!dateFilter||(t.date||t.createdAt||t.created_at||"").startsWith(dateFilter);
     return matchSearch&&matchDate;
   }),[tickets,search,dateFilter]);
@@ -80,8 +80,10 @@ function HistoryScreen(){
         <Receipt size={14} color={C.textMuted}/>
         <div style={{flex:1,cursor:"pointer"}} onClick={()=>setReprintTk({...t})}>
           <div style={{fontSize:11,fontWeight:700}}>N° {t.ticketNumber} <Badge color={C.info}>{t.paymentMethod}</Badge>
-          {t.customerName&&<Badge color={C.accent}>{t.customerName}</Badge>}</div>
-          <div style={{fontSize:9,color:C.textMuted}}>{new Date(t.date||t.createdAt||t.created_at).toLocaleString("fr-FR")} — {t.userName||t.user_name||"?"} — {(t.items||[]).length} art.</div></div>
+          {t.customerName&&<Badge color={C.accent}>{t.customerName}</Badge>}
+          {t.offlineAt&&<Badge color={C.warn}>HORS-LIGNE</Badge>}</div>
+          <div style={{fontSize:9,color:C.textMuted}}>{new Date(t.date||t.createdAt||t.created_at).toLocaleString("fr-FR")} — {t.userName||t.user_name||"?"} — {(t.items||[]).length} art.</div>
+          {t.offlineAt&&<div style={{fontSize:9,color:"#92400E"}}>Vendu hors-ligne le {new Date(t.offlineAt).toLocaleString("fr-FR")}{t.offlineTicketNumber?` — ticket papier ${t.offlineTicketNumber}`:""} · enregistré à la synchronisation</div>}</div>
         <div style={{textAlign:"right",marginRight:8}}><div style={{fontSize:13,fontWeight:700,color:C.primary}}>{(t.totalTTC||parseFloat(t.total_ttc)||0).toFixed(2)}€</div>
           <div style={{fontSize:7,color:C.fiscal,fontFamily:"monospace"}}>{t.fingerprint}</div></div>
         {p().canVoid&&<Btn variant="outline" onClick={()=>openReturn(t)} style={{fontSize:10,padding:"4px 10px",borderColor:C.danger+"44",color:C.danger}}>

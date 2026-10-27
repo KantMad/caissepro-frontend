@@ -72,6 +72,11 @@ describe("Paiement — mode offline (API échoue → fallback local)", () => {
     expect(ctx.cart).toEqual([]); // panier vidé
     expect(ctx.tickets[0].ticketNumber).toBe(ticket.ticketNumber); // ajouté à l'historique
     expect(ctx.pendingSync.length).toBeGreaterThan(0); // mis en file de synchro
+    // La file garde l'heure réelle, le n° du ticket papier et le vendeur (rapprochement à la synchro)
+    const enFile = ctx.pendingSync.find(x => x.type === "offlineSale").data;
+    expect(enFile.offlineTicketNumber).toBe(ticket.ticketNumber);
+    expect(new Date(enFile.offlineDate).toISOString()).toBe(enFile.offlineDate);
+    expect(enFile.sellerName).toBe("Vendeur");
   });
 
   it("multi-taux offline reste cohérent (HT+TVA=TTC)", async () => {

@@ -9,7 +9,7 @@ import { dayKey } from "../lib/dates.js";
 import { formatAmount } from "../lib/formatters.js";
 
 function ClosureScreen(){
-  const{tickets,cashReg,closures,createClosure,gt,closeReg,perm:p,avoirs,settings,printerConnected,thermalPrint,notify,trainingMode,mode,cashMovements}=useApp();
+  const{tickets,cashReg,closures,createClosure,gt,closeReg,perm:p,avoirs,settings,printerConnected,thermalPrint,notify,trainingMode,mode,cashMovements,pendingSync}=useApp();
   const[aCash,setACash]=useState("");const[aCard,setACard]=useState("");
   const[reportModal,setReportModal]=useState(null);
   const[denomMode,setDenomMode]=useState(false);
@@ -147,6 +147,9 @@ function ClosureScreen(){
           Écart: {cardDiff>=0?"+":""}{cardDiff.toFixed(2)}€ {Math.abs(cardDiff)<0.01?"(OK)":"(attention)"}</div>}</div>
       <Btn variant="danger" onClick={async()=>{
         // M2 fix: check both local AND server for existing daily closure
+        // Ventes hors-ligne pas encore reçues par le serveur : le Z les oublierait.
+        const ventesEnFile=(pendingSync||[]).filter(a=>a.type==="offlineSale").length;
+        if(ventesEnFile){notify(`${ventesEnFile} vente(s) hors-ligne pas encore envoyée(s) au serveur : attendez la synchronisation (connexion internet) avant de clôturer.`,"error");return;}
         // Journée visée déjà clôturée ? (par PÉRIODE, jamais par date de création du Z)
         if(closures.some(c=>c.type==="daily"&&String(c.period||"").slice(0,10)===today)){
           notify(`La journée du ${today.split("-").reverse().join("/")} est déjà clôturée`,"error");return;}

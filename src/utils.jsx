@@ -176,6 +176,9 @@ export const norm={
     fingerprint:s.fingerprint||"",
     hash:s.hash||s.ticket_hash||"",
     barcode:s.barcode||"",
+    // Vente faite hors-ligne : heure reelle + numero du ticket papier remis au client
+    offlineAt:s.offlineAt||s.offline_at||null,
+    offlineTicketNumber:s.offlineTicketNumber||s.offline_ticket_number||null,
     items:(s.items||[]).map(i=>({...i,
       product:i.product||{id:i.product_id,name:i.product_name||i.name,sku:i.sku||i.product_sku||"",
         category:i.category||"",collection:i.collection||""},
