@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, lazy, Suspense } from "react";
 import {
   ShoppingCart, Lock, User as UserIcon, Store, LayoutDashboard, LogOut, Wallet,
   BarChart3, Package, Receipt, RotateCcw, Users, TrendingUp, DollarSign, Euro,
@@ -14,13 +14,46 @@ import { useViewport } from "./useViewport.js";
 import logo from "./assets/logo.png";
 import { formatAmount, libelleRole } from "./lib/formatters.js";
 import { dayKey, rangeToInstants } from "./lib/dates.js";
-import {
-  LoginScreen, CashRegControl, SalesScreen, StatsScreen, StockScreen,
-  HistoryScreen, ReturnScreen, ClosureScreen, CustomersScreen, FiscalScreen,
-  AuditScreen, CSVImportWizard, ProductsScreen, LabelsScreen, ReturnsHistoryScreen,
-  SettingsScreen, GiftCardScreen, PromosScreen, FootfallScreen,
-  HelpCashierScreen, HelpDashboardScreen, ExportsScreen, GestlogDeliveriesScreen, TiroirCaisseScreen, CashMovementsScreen, RegisterSessionsScreen, MobileStatsScreen
-} from "./screens.jsx";
+import { LoginScreen } from "./screens/LoginScreen.jsx";
+import { CashRegControl } from "./screens/CashRegControl.jsx";
+import { SalesScreen } from "./screens/SalesScreen.jsx";
+import { StockScreen } from "./screens/StockScreen.jsx";
+import { HistoryScreen } from "./screens/HistoryScreen.jsx";
+import { ReturnScreen } from "./screens/ReturnScreen.jsx";
+import { ClosureScreen } from "./screens/ClosureScreen.jsx";
+import { CustomersScreen } from "./screens/CustomersScreen.jsx";
+import { GiftCardScreen } from "./screens/GiftCardScreen.jsx";
+import { PromosScreen } from "./screens/PromosScreen.jsx";
+import TiroirCaisseScreen from "./screens/TiroirCaisseScreen.jsx";
+import MobileStatsScreen from "./screens/MobileStatsScreen.jsx";
+
+// Ecrans de GESTION chargés à la demande : le caissier ne les ouvre presque jamais, la caisse
+// démarre sans eux (graphiques, paramètres, NF525, exports, aides…). Si le fichier a disparu du
+// serveur (mise à jour pendant que la caisse était ouverte), on recharge l'application une fois.
+const differe = (charger, nom) => lazy(() => charger().then(m => {
+  try { sessionStorage.removeItem("caissepro_rechargement_ecran"); } catch (e) { /* stockage indisponible */ }
+  return { default: m[nom] || m.default };
+}).catch(err => {
+  let deja = false;
+  try { deja = sessionStorage.getItem("caissepro_rechargement_ecran") === "1"; sessionStorage.setItem("caissepro_rechargement_ecran", "1"); } catch (e) { /* idem */ }
+  if (!deja && typeof window !== "undefined") { window.location.reload(); return new Promise(() => {}); }
+  throw err;
+}));
+const StatsScreen = differe(() => import("./screens/StatsScreen.jsx"), "StatsScreen");
+const FiscalScreen = differe(() => import("./screens/FiscalScreen.jsx"), "FiscalScreen");
+const AuditScreen = differe(() => import("./screens/AuditScreen.jsx"), "AuditScreen");
+const ProductsScreen = differe(() => import("./screens/ProductsScreen.jsx"), "ProductsScreen");
+const LabelsScreen = differe(() => import("./screens/LabelsScreen.jsx"), "LabelsScreen");
+const ReturnsHistoryScreen = differe(() => import("./screens/ReturnsHistoryScreen.jsx"), "ReturnsHistoryScreen");
+const SettingsScreen = differe(() => import("./screens/SettingsScreen.jsx"), "SettingsScreen");
+const FootfallScreen = differe(() => import("./screens/FootfallScreen.jsx"), "FootfallScreen");
+const HelpCashierScreen = differe(() => import("./screens/HelpCashierScreen.jsx"), "HelpCashierScreen");
+const HelpDashboardScreen = differe(() => import("./screens/HelpDashboardScreen.jsx"), "HelpDashboardScreen");
+const ExportsScreen = differe(() => import("./screens/ExportsScreen.jsx"), "ExportsScreen");
+const GestlogDeliveriesScreen = differe(() => import("./screens/GestlogDeliveriesScreen.jsx"), "GestlogDeliveriesScreen");
+const CashMovementsScreen = differe(() => import("./screens/CashMovementsScreen.jsx"), "default");
+const RegisterSessionsScreen = differe(() => import("./screens/RegisterSessionsScreen.jsx"), "default");
+const ChargementEcran = () => <div style={{padding:40,textAlign:"center",color:"#64748B",fontSize:13}}>Chargement…</div>;
 
 function CashierNav({active,onNav}){
   const{currentUser,logout,isOnline,stockAlerts,clockIn,clockOut,pendingSync,clearPendingSync,openCustomerDisplay,currentStore}=useApp();
@@ -151,7 +184,7 @@ function CashierInterface(){
   return(<div style={{display:"flex",flexDirection:"column",height:"100vh",fontFamily:"'DM Sans',system-ui,sans-serif"}}>
     <TrainingBanner/>
     <div style={{display:"flex",flex:1,minHeight:0}}><CashierNav active={sc} onNav={setSc}/>
-      <div style={{flex:1,overflow:"hidden",paddingBottom:vp.isMobile?"var(--bottomnav-h,60px)":0}}><ErrorBoundary><Sc/></ErrorBoundary></div></div></div>);
+      <div style={{flex:1,overflow:"hidden",paddingBottom:vp.isMobile?"var(--bottomnav-h,60px)":0}}><ErrorBoundary><Suspense fallback={<ChargementEcran/>}><Sc/></Suspense></ErrorBoundary></div></div></div>);
 }
 
 /* ══════════ USERS SCREEN ══════════ */
@@ -562,10 +595,10 @@ function DashboardInterface(){
       </div>
       <TrainingBanner/>
       <DashboardNav active={sc} onNav={setSc} vp={vp} mobileOpen={drawerOpen} onCloseMobile={()=>setDrawerOpen(false)}/>
-      <div style={{flex:1,overflow:"hidden"}}><ErrorBoundary><Sc/></ErrorBoundary></div></div>);
+      <div style={{flex:1,overflow:"hidden"}}><ErrorBoundary><Suspense fallback={<ChargementEcran/>}><Sc/></Suspense></ErrorBoundary></div></div>);
   }
   return(<div style={{display:"flex",flexDirection:"column",height:"100vh",fontFamily:"'DM Sans',system-ui,sans-serif"}}><TrainingBanner/>
-    <div style={{display:"flex",flex:1,minHeight:0}}><DashboardNav active={sc} onNav={setSc} vp={vp}/><div style={{flex:1,overflow:"hidden"}}><ErrorBoundary><Sc/></ErrorBoundary></div></div></div>);
+    <div style={{display:"flex",flex:1,minHeight:0}}><DashboardNav active={sc} onNav={setSc} vp={vp}/><div style={{flex:1,overflow:"hidden"}}><ErrorBoundary><Suspense fallback={<ChargementEcran/>}><Sc/></Suspense></ErrorBoundary></div></div></div>);
 }
 
 function AppContent(){const{currentUser,mode}=useApp();if(!currentUser)return<LoginScreen/>;return mode==="cashier"?<CashierInterface/>:<DashboardInterface/>;}

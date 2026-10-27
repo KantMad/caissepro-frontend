@@ -58,4 +58,22 @@ export default defineConfig({
     }),
   ],
   server: { port: 5173 },
+  // Bibliotheques dans des fichiers a part : elles changent rarement, la caisse les garde en
+  // cache et ne retelecharge que le code de l'application a chaque mise a jour. Et le fichier
+  // principal reste loin de la limite de 2 Mo du cache hors-ligne (Workbox) : au-dela, il
+  // n'etait plus mis en cache et la caisse ne demarrait plus sans reseau, sans aucun message.
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (!id.includes('node_modules')) return undefined;
+          if (/[\\/]node_modules[\\/](react|react-dom|scheduler)[\\/]/.test(id)) return 'vendor-react';
+          if (/[\\/]node_modules[\\/](recharts|d3-[^\\/]+|victory-vendor|internmap|decimal\.js-light|eventemitter3|lodash|react-smooth|recharts-scale|tiny-invariant|fast-equals|clsx|react-is|prop-types)[\\/]/.test(id)) return 'vendor-charts';
+          if (/[\\/]node_modules[\\/](papaparse|jszip)[\\/]/.test(id)) return 'vendor-fichiers';
+          if (/[\\/]node_modules[\\/]lucide-react[\\/]/.test(id)) return 'vendor-icones';
+          return 'vendor';
+        },
+      },
+    },
+  },
 });
