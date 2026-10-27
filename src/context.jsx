@@ -803,11 +803,19 @@ function AppProvider({children}){
       if(cardMethods.includes(p.method)&&p.amount>0){
         try{
           const ref=`CP-${Date.now()}`;
-          // Race between charge and a 3-min safety timeout
-          const result=await Promise.race([
-            hardwareManager.charge(p.amount,{currency:'EUR',reference:ref,method:p.method}),
-            new Promise(r=>setTimeout(()=>r({success:false,status:'cancelled',error:'Timeout TPE (3min)'}),180000))
-          ]);
+          // Délai de sécurité de 3 min. À l'échéance, le TPE peut encore accepter la carte : annuler
+          // d'office la vente laissait un client débité SANS ticket. On demande au caissier ce que
+          // le TPE affiche ; si le TPE répond « accepté » plus tard, on l'alerte (rembourser).
+          const charge=hardwareManager.charge(p.amount,{currency:'EUR',reference:ref,method:p.method});
+          let result=await Promise.race([charge,new Promise(r=>setTimeout(()=>r({_timeout:true}),180000))]);
+          if(result&&result._timeout){
+            const accepte=window.confirm(`Le TPE ne répond plus depuis 3 minutes (${p.amount.toFixed(2)} €).\n\nOK = le TPE a ACCEPTÉ le paiement (ticket client imprimé) → la vente est enregistrée.\nAnnuler = paiement non passé → la vente est abandonnée.`);
+            addAudit("TPE_TIMEOUT",`Délai TPE dépassé ${p.amount.toFixed(2)}€ (${ref}) — caissier : ${accepte?"accepté":"non passé"}`,ref);
+            if(!accepte)charge.then(late=>{if(late&&late.success){
+              addAudit("TPE_LATE_SUCCESS",`Paiement CB ${p.amount.toFixed(2)}€ accepté APRÈS abandon de la vente (${ref}) — à rembourser`,ref);
+              notify(`ATTENTION : le TPE a accepté ${p.amount.toFixed(2)} € après l'abandon de la vente — remboursez le client ou refaites la vente`,"danger");}}).catch(()=>{});
+            result=accepte?{success:true,authCode:'',transactionId:'',cardType:p.method,maskedPan:'',manualConfirm:true}:{success:false,status:'cancelled',error:'Paiement abandonné (TPE sans réponse)'};
+          }
           if(result&&result.success){
             p.authCode=result.authCode||'';p.transactionId=result.transactionId||'';
             p.cardType=result.cardType||p.method;p.maskedPan=result.maskedPan||'';
@@ -1152,10 +1160,20 @@ function AppProvider({children}){
   },[commissionBase,salesBySeller,tickets,salesGoals,settings]);
 
   // ══ P3: Last price paid by customer ══
+  // Prix unitaire RÉELLEMENT payé lors du DERNIER achat (avant : 1er ticket trouvé dans la liste,
+  // pas forcément le plus récent — les tickets retrouvés par recherche sont ajoutés en fin — et
+  // remise panier ignorée). Les ventes de formation ne comptent pas.
   const getLastPriceForCustomer=useCallback((customerId,productId)=>{
-    const t=tickets.find(t=>t.customerId===customerId&&(t.items||[]).some(i=>(i.product?.id||i.product_id)===productId));
-    if(!t)return null;const item=(t.items||[]).find(i=>(i.product?.id||i.product_id)===productId);
-    return item?(item.lineTTC||item.line_ttc||0)/item.quantity:null;
+    let best=null,bestT=-Infinity;
+    for(const t of tickets){
+      if(!customerId||t.customerId!==customerId||t.isTraining||t.is_training)continue;
+      const d=new Date(t.date||t.createdAt||0).getTime()||0;if(d<=bestT)continue;
+      const item=(t.items||[]).find(i=>(i.product?.id||i.product_id)===productId);
+      if(item){best={t,item};bestT=d;}
+    }
+    if(!best)return null;
+    const q=Number(best.item.quantity)||1;
+    return Math.round((Number(best.item.lineTTC??best.item.line_ttc)||0)*(1-ratioRemiseGlobale(best.t))/q*100)/100;
   },[tickets]);
 
   // ══ P3: Theme customization ══
@@ -1287,6 +1305,9 @@ function AppProvider({children}){
     const off=s.onScan(async code=>{
       // 0. If a screen has registered a scan override, delegate to it
       if(scanOverrideRef.current){scanOverrideRef.current(code);return;}
+      // Encaissement en cours (TPE en attente de la carte…) : l'article scanné serait ajouté au
+      // panier puis effacé avec lui à la fin de la vente, sans avoir été vendu.
+      if(checkoutLock.current){notifyRef.current("Paiement en cours — article non ajouté, rescannez-le après la vente","error");return;}
       // 1. Try product EAN
       const found=findByEANRef.current(code);
       if(found){addToCartRef.current(found.product,found.variant);notifyRef.current(found.product.name+" ajouté ("+code+")");return;}
@@ -1307,6 +1328,32 @@ function AppProvider({children}){
         return;}
       const tn=tenuesRef.current.find(t=>t.barcode===code);
       if(tn){setScanBarcode(code);notifyRef.current(`Bon tenue ${tn.num} — ${tn.employee}`,"info");return;}
+      // Document interne (200 ticket, 201 avoir, 202 carte cadeau, 203 retouche, 204 tenue) absent
+      // de la mémoire (seuls les ~200 derniers tickets sont chargés) → recherche serveur.
+      // Avant : « Code-barres inconnu » pour tout ticket un peu ancien et pour les cartes cadeau.
+      if(/^20[0-4]\d{10}$/.test(code)){
+        try{
+          const r=await API.barcodes.lookup(code);
+          if(r?.type==="sale"){
+            const t=norm.sales([r.data])[0];
+            setTickets(prev=>prev.some(x=>x.id===t.id)?prev:[t,...prev]);
+            if(currentMode==="cashier")notifyRef.current(`Ticket ${t.ticketNumber} — allez dans Historique pour le consulter`,"info");
+            else{setScanBarcode(code);notifyRef.current(`Ticket ${t.ticketNumber} trouvé`,"info");setMode("history");}
+            return;}
+          if(r?.type==="avoir"){const d=r.data;
+            notifyRef.current(`Avoir ${d.avoir_number} trouvé (${(Number(d.remaining)||0).toFixed(2)}€) — utilisez le bouton Avoir pour l'appliquer`,"info");return;}
+          if(r?.type==="giftcard"){const d=r.data;
+            notifyRef.current(`Carte cadeau ${d.code} — solde ${(Number(d.remaining)||0).toFixed(2)}€${d.active===false?" (désactivée)":""}`,"info");return;}
+          if(r?.type==="retouche"||r?.type==="tenue"){
+            const lib=r.type==="retouche"?"Bon retouche":"Bon tenue";const num=r.data.retouche_number||r.data.tenue_number||"";
+            if(currentMode==="cashier")notifyRef.current(`${lib} ${num} — allez dans Historique pour le consulter`,"info");
+            else{setScanBarcode(code);notifyRef.current(`${lib} ${num} trouvé`,"info");setMode("history");}
+            return;}
+        }catch(e){
+          if(e instanceof TypeError){notifyRef.current("Hors ligne : document introuvable sur cette caisse ("+code+")","error");return;}
+          /* 404 → peut être un EAN produit en 20x : on continue */
+        }
+      }
       // Repli : produit absent de la mémoire (gros catalogue / pas encore chargé)
       // → recherche backend indexée (rapide). Rend le scan fiable au démarrage.
       try{

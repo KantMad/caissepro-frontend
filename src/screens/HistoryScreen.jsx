@@ -3,7 +3,7 @@ import { CreditCard, Banknote, Gift, Plus, Minus, User as UserIcon, Receipt, Rot
 import * as API from "../api.js";
 import printer from "../printer.js";
 import { CO, C } from "../constants.jsx";
-import { EAN13Svg, ean13SvgHtml } from "../utils.jsx";
+import { EAN13Svg, ean13SvgHtml, norm } from "../utils.jsx";
 import { Modal, Btn, Input, Badge } from "../ui.jsx";
 import { useApp } from "../context.jsx";
 import { getPaymentLabel, getAvoirRemaining, isAvoirPartiallyUsed, lineDiscountEuro, globalDiscountTTC, ratioRemiseGlobale, tvaParTaux, libelleTaux, libellePaiementTicket, pointsFidelite } from "../lib/formatters.js";
@@ -33,6 +33,13 @@ function HistoryScreen(){
     const matchDate=!dateFilter||dayKey(new Date(t.date||t.createdAt||t.created_at||0))===dateFilter;
     return matchSearch&&matchDate;
   }),[tickets,search,dateFilter]);
+  // Ticket introuvable dans les ventes chargées (les ~200 dernières) : recherche serveur par
+  // numéro ou code-barres, résultat ajouté à la liste. Avant : un ticket ancien était introuvable.
+  const rechercheVide=tab==="tickets"&&search.trim().length>=3&&filteredTickets.length===0;
+  useEffect(()=>{if(!rechercheVide)return;let annule=false;
+    const t=setTimeout(()=>{API.sales.lookup(search.trim()).then(r=>{if(annule||!r?.length)return;
+      const trouves=norm.sales(r);setTickets(prev=>[...prev,...trouves.filter(x=>!prev.some(p=>p.id===x.id))]);}).catch(()=>{});},300);
+    return()=>{annule=true;clearTimeout(t);};},[rechercheVide,search,setTickets]);
   const totalPages=Math.ceil(filteredTickets.length/PAGE_SIZE);
   const pagedTickets=filteredTickets.slice(page*PAGE_SIZE,(page+1)*PAGE_SIZE);
 
