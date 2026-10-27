@@ -50,6 +50,7 @@ describe("Paiement — mode online (API OK)", () => {
     expect(payload.items[0].quantity).toBe(2);
     expect(payload.items[0].tax_rate).toBe(0.20);
     expect(payload.globalDiscount).toBe(0);
+    expect(payload.items[0].cost_price).toBe(80);   // prix d'achat HT envoyé tel quel (plus /1,2)
     expect(ticket.totalTTC).toBe(418);
     expect(ctx.cart).toEqual([]); // panier vidé après succès
   });
@@ -70,6 +71,8 @@ describe("Paiement — mode offline (API échoue → fallback local)", () => {
     expect(Math.round((ticket.totalHT + ticket.totalTVA) * 100) / 100).toBe(418);
     expect(ticket.barcode).toMatch(/^\d{13}$/); // EAN-13 hors-ligne généré
     expect(ticket.fingerprint).toHaveLength(16); // empreinte NF525
+    // Marge HT = 418/1,2 - 2 x 80 (prix d'achat HT) = 188,33
+    expect(Math.round(ticket.margin * 100) / 100).toBe(188.33);
     expect(ctx.cart).toEqual([]); // panier vidé
     expect(ctx.tickets[0].ticketNumber).toBe(ticket.ticketNumber); // ajouté à l'historique
     expect(ctx.pendingSync.length).toBeGreaterThan(0); // mis en file de synchro

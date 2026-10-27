@@ -691,7 +691,7 @@ function AppProvider({children}){
       return{
       product_id:i.isCustom?null:i.product.id,variant_id:i.isCustom?null:i.variant?.id,
       product_name:i.product.name,variant_color:i.variant?.color||"—",variant_size:i.variant?.size||"—",
-      quantity:i.quantity,unit_price:pm==="TTC"?i.product.price/(1+(i.product.taxRate||0.20)):i.product.price,cost_price:pm==="TTC"?(i.product.costPrice||0)/(1+(i.product.taxRate||0.20)):i.product.costPrice||0,
+      quantity:i.quantity,unit_price:pm==="TTC"?i.product.price/(1+(i.product.taxRate||0.20)):i.product.price,cost_price:i.product.costPrice||0,// prix d'achat saisi HT (confirme 27/10/2026) : jamais divise par la TVA
       tax_rate:i.product.taxRate||0.20,discount_percent:i.discountPercent??(i.discountType==="amount"?0:i.discount)??0,
       discount_amount:i.discountAmount??(i.discountType==="amount"?(i.discount||0)*i.quantity:0),is_custom:i.isCustom||false,
       lineHT,lineTVA,lineTTC,
@@ -785,9 +785,11 @@ function AppProvider({children}){
       const seq=tSeq+1;const date=new Date().toISOString();
       const ticketNumber=`TK-${new Date().getFullYear()}-${String(seq).padStart(6,"0")}`;
       const paymentMethod=payments.length===1?payments[0].method:"MIXTE";
-      const margin=cart.reduce((s,i)=>{const netRevenue=lineNetTTC({price:i.product.price,quantity:i.quantity,taxRate:i.product.taxRate,
-        discountPercent:i.discountPercent??i.discount,discountAmount:i.discountAmount,discount:i.discount,discountType:i.discountType},pm);
-        return s+(netRevenue-i.product.costPrice*i.quantity);},0)*(tHT/sHT||0);
+      // Marge HT = CA net HT (remise globale comprise) - cout d'achat HT (le cout n'est pas remise)
+      const netHTLignes=cart.reduce((s,i)=>s+lineNetTTC({price:i.product.price,quantity:i.quantity,taxRate:i.product.taxRate,
+        discountPercent:i.discountPercent??i.discount,discountAmount:i.discountAmount,discount:i.discount,discountType:i.discountType},pm)/(1+(i.product.taxRate||0.20)),0);
+      const coutHT=cart.reduce((s,i)=>s+(i.product.costPrice||0)*i.quantity,0);
+      const margin=netHTLignes*(sHT?tHT/sHT:1)-coutHT;
       // Décrémenter stock local (autorise négatif)
       setProducts(prev=>prev.map(p=>{const ci=cart.find(c=>c.product.id===p.id);if(!ci)return p;
         return{...p,variants:p.variants.map(v=>{const cv=cart.find(c=>c.product.id===p.id&&c.variant?.id===v.id);

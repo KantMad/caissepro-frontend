@@ -5,6 +5,7 @@ import { DEFAULT_TVA_RATES, C } from "../constants.jsx";
 import { norm, printBarcodeLabels } from "../utils.jsx";
 import { Modal, Btn, Input, Badge, ConfirmDialog } from "../ui.jsx";
 import { useApp } from "../context.jsx";
+import { tauxMarque } from "../lib/formatters.js";
 import { sortVariantsBySize } from "./_shared.js";
 import CSVImportWizard from "./CSVImportWizard.jsx";
 
@@ -54,7 +55,7 @@ function ProductsScreen(){
         <thead><tr style={{background:C.surfaceAlt}}>
           {["Produit","SKU","Collection",`Prix ${pm}`,"Coût","Marge","TVA","Stock","Var.","Actions"].map(h=>(
             <th key={h} style={{padding:"8px 10px",textAlign:"left",fontWeight:700,color:C.textMuted,fontSize:9,borderBottom:`2px solid ${C.border}`}}>{h}</th>))}</tr></thead>
-        <tbody>{filtered.map(q=>{const ts=q.variants.reduce((s,v)=>s+v.stock,0);const mg=q.costPrice?((q.price-q.costPrice)/q.price*100):0;
+        <tbody>{filtered.map(q=>{const ts=q.variants.reduce((s,v)=>s+v.stock,0);const mg=tauxMarque(q,pm)??0;
           return(<tr key={q.id} style={{borderBottom:`1px solid ${C.border}`,cursor:"pointer"}} onClick={()=>openEdit(q)}>
             <td data-label="Produit" style={{padding:"6px 10px",fontWeight:600}}>{q.name}</td>
             <td data-label="SKU" style={{padding:"6px 10px",fontFamily:"monospace",color:C.textMuted}}>{q.sku}</td>

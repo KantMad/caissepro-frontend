@@ -204,3 +204,18 @@ export const libelleCloture = (c) => {
   }
   return { titre, periode, detail };
 };
+
+// Prix de vente HT et taux de marque d'un produit. Le prix d'achat (costPrice) est saisi HT ;
+// le prix de vente est saisi dans le mode de la boutique (TTC par defaut). Comparer un prix TTC a
+// un cout HT gonflait le taux de marge affiche.
+export const prixVenteHT = (p, pricingMode = "TTC") => {
+  const prix = parseFloat(p?.price) || 0;
+  return pricingMode === "HT" ? prix : prix / (1 + (parseFloat(p?.taxRate) || 0.20));
+};
+export const tauxMarque = (p, pricingMode = "TTC") => {
+  const ht = prixVenteHT(p, pricingMode), cout = parseFloat(p?.costPrice) || 0;
+  return cout && ht ? ((ht - cout) / ht) * 100 : null;
+};
+
+// Libelle d'un role (le role « manager » existait cote serveur mais l'ecran ne le proposait pas)
+export const libelleRole = (role) => role === "admin" ? "Administrateur" : role === "manager" ? "Gérant(e)" : "Caissier(e)";

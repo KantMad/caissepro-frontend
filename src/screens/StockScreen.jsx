@@ -6,14 +6,14 @@ import { C, CO } from "../constants.jsx";
 import { norm, EAN13Svg } from "../utils.jsx";
 import { Modal, Btn, Input, Badge } from "../ui.jsx";
 import { useApp } from "../context.jsx";
+import { tauxMarque } from "../lib/formatters.js";
 import { sortSizes } from "./_shared.js";
 
 function StockScreen(){
   const{products,setProducts,stockAlerts,stockMoves,receiveStock,receiveBatchStock,stockAging,reorderSuggestions,adjustStock,notify,findByEAN,users,addStockMove,addAudit,settings,perm,defectiveStock,loadDefectiveStock,receiveDefectiveStock,adjustDefectiveStock,setScanOverride,clearScanOverride,mode,thermalPrint,printReceiptOnly,currentStore,currentUser}=useApp();
   // Valorisation du stock au PRIX D'ACHAT (cost_price de l'import) — DASHBOARD uniquement
-  // Prix d'achat HT : costPrice est saisi dans le mode de prix de la boutique (TTC par défaut,
-  // comme au checkout) -> en mode TTC la valeur du stock sortait TTC, TVA comprise.
-  const coutHT=(p)=>{const c=parseFloat(p.costPrice)||0;return settings?.pricingMode==="HT"?c:c/(1+(parseFloat(p.taxRate)||0.20));};
+  // Prix d'achat : saisi HT (confirmé le 27/10/2026), utilisé tel quel.
+  const coutHT=(p)=>parseFloat(p.costPrice)||0;
   const stockValuation=useMemo(()=>{let value=0,units=0,valued=0,unvalued=0;
     (products||[]).forEach(p=>{const cost=coutHT(p);(p.variants||[]).forEach(v=>{const st=parseInt(v.stock)||0;if(st<=0)return;units+=st;if(cost>0){value+=st*cost;valued+=st;}else unvalued+=st;});});
     return{value:Math.round(value*100)/100,units,valued,unvalued};
@@ -146,7 +146,7 @@ function StockScreen(){
             const bg=st===0?C.dangerLight:st<=(v?.stockAlert||5)?C.warnLight:C.primaryLight;
             return(<td key={s} style={{padding:8,textAlign:"center",borderBottom:`1px solid ${C.border}`,background:bg,fontWeight:700,
               color:st===0?C.danger:st<=(v?.stockAlert||5)?C.warn:C.primary}}>{v?st:"—"}</td>);})}</tr>))}</tbody></table>
-      <div style={{marginTop:10,fontSize:11,color:C.textMuted}}>Prix: {p.price.toFixed(2)}€ — Coût: {p.costPrice?.toFixed(2)||"—"}€ — Marge: {p.costPrice?((p.price-p.costPrice)/p.price*100).toFixed(1)+"%":"—"} — TVA: {(p.taxRate*100).toFixed(0)}% — Collection: {p.collection||"—"}</div>
+      <div style={{marginTop:10,fontSize:11,color:C.textMuted}}>Prix: {p.price.toFixed(2)}€ — Coût: {p.costPrice?.toFixed(2)||"—"}€ — Marge: {tauxMarque(p,settings?.pricingMode||"TTC")!=null?tauxMarque(p,settings?.pricingMode||"TTC").toFixed(1)+"%":"—"} — TVA: {(p.taxRate*100).toFixed(0)}% — Collection: {p.collection||"—"}</div>
     </div>}</>}
 
     {tab==="reception"&&<div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`}}>

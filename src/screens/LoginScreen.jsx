@@ -4,6 +4,7 @@ import * as API from "../api.js";
 import { CO, initUsers, C } from "../constants.jsx";
 import { Btn, Input } from "../ui.jsx";
 import { useApp } from "../context.jsx";
+import { libelleRole } from "../lib/formatters.js";
 import logo from "../assets/logo.png";
 
 function LoginScreen(){
@@ -39,7 +40,7 @@ function LoginScreen(){
           border:`1.5px solid ${su===u.id?C.primary:C.border}`,background:su===u.id?C.primaryLight:C.surface,cursor:"pointer",transition:"all 0.2s cubic-bezier(0.16,1,0.3,1)"}}>
           <div style={{width:36,height:36,borderRadius:10,background:su===u.id?C.primary:C.surfaceAlt,display:"flex",alignItems:"center",justifyContent:"center",transition:"all 0.2s"}}>
             <UserIcon size={16} color={su===u.id?"#fff":C.textMuted}/></div>
-          <div style={{textAlign:"left",flex:1}}><div style={{fontSize:13,fontWeight:600,color:C.text}}>{u.name}</div><div style={{fontSize:10,color:C.textMuted}}>{u.role==="admin"?"Administrateur":"Caissier(e)"}</div></div>
+          <div style={{textAlign:"left",flex:1}}><div style={{fontSize:13,fontWeight:600,color:C.text}}>{u.name}</div><div style={{fontSize:10,color:C.textMuted}}>{libelleRole(u.role)}</div></div>
           {su===u.id&&<CheckCircle2 size={16} color={C.primary}/>}</button>))}</div>
       <div style={{position:"relative",marginBottom:8}}>
         <Input type="password" value={pw} onChange={e=>setPw(e.target.value)} onKeyDown={e=>e.key==="Enter"&&!loading&&go()} placeholder="Code PIN" style={{height:44,fontSize:14,paddingRight:36}}/>

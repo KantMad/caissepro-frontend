@@ -12,7 +12,7 @@ import { Modal, Btn, Input, Badge, SC, ErrorBoundary, ToastContainer, ConfirmDia
 import { useApp, SYNC_CRITIQUE } from "./context.jsx";
 import { useViewport } from "./useViewport.js";
 import logo from "./assets/logo.png";
-import { formatAmount } from "./lib/formatters.js";
+import { formatAmount, libelleRole } from "./lib/formatters.js";
 import { dayKey, rangeToInstants } from "./lib/dates.js";
 import {
   LoginScreen, CashRegControl, SalesScreen, StatsScreen, StockScreen,
@@ -208,8 +208,8 @@ function UsersScreen(){
         <div style={{width:36,height:36,borderRadius:18,background:u.role==="admin"?C.accent:C.primary,
           display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:700,fontSize:13}}>{u.name[0]}</div>
         <div style={{flex:1}}><div style={{fontSize:13,fontWeight:600}}>{u.name}</div>
-          <div style={{fontSize:10,color:C.textMuted}}>{u.role==="admin"?"Administrateur":"Caissier(e)"} — PIN: ****</div></div>
-        <Badge color={u.role==="admin"?C.accent:C.primary}>{u.role}</Badge>
+          <div style={{fontSize:10,color:C.textMuted}}>{libelleRole(u.role)} — PIN: ****</div></div>
+        <Badge color={u.role==="admin"?C.accent:u.role==="manager"?C.info:C.primary}>{libelleRole(u.role)}</Badge>
         {u.pendingSync&&<Badge color={C.warn}>⏳ Synchro en attente</Badge>}
         <Btn variant="outline" onClick={()=>openEdit(u)} style={{fontSize:10,padding:"4px 10px"}}><Settings size={11}/> Modifier</Btn>
         <Btn variant="ghost" onClick={()=>setConfirmDel(u)} style={{color:C.danger,padding:"4px 8px"}}><Trash2 size={11}/></Btn>
@@ -219,7 +219,11 @@ function UsersScreen(){
         <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>NOM</label><Input value={form.name} onChange={e=>setForm(p=>({...p,name:e.target.value}))}/></div>
         <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>RÔLE</label>
           <select value={form.role} onChange={e=>setForm(p=>({...p,role:e.target.value}))} style={{width:"100%",padding:10,borderRadius:10,border:`2px solid ${C.border}`,fontSize:12,fontFamily:"inherit"}}>
-            <option value="admin">Administrateur</option><option value="cashier">Caissier(e)</option></select></div>
+            <option value="admin">Administrateur</option><option value="manager">Gérant(e)</option><option value="cashier">Caissier(e)</option></select>
+          <div style={{fontSize:10,color:"#64748B",marginTop:4,lineHeight:1.5}}>
+            {form.role==="admin"?"Tous les droits, y compris Paramètres et Utilisateurs."
+             :form.role==="manager"?"Produits et prix, stock, promotions, clôtures Z, exports, marges. Pas les Paramètres ni les Utilisateurs."
+             :"Vente, retours (sous validation au-delà du plafond), remise limitée à 20 %. Ne modifie ni produits ni prix."}</div></div>
         <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>CODE PIN {editUser?"(laisser vide pour ne pas changer)":""}</label><Input type="password" value={form.pin} onChange={e=>setForm(p=>({...p,pin:e.target.value}))} placeholder={editUser?"Nouveau PIN (optionnel)":"1234"}/></div></div>
       <Btn onClick={saveUser} style={{width:"100%",height:40,background:C.primary}}><Save size={14}/> {editUser?"Enregistrer":"Créer"}</Btn></Modal>
     <ConfirmDialog open={!!confirmDel} onClose={()=>setConfirmDel(null)} onConfirm={async()=>{
@@ -248,7 +252,7 @@ function DashboardNav({active,onNav,vp,mobileOpen,onCloseMobile}){
       <div style={{padding:"10px 12px",borderRadius:10,background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.06)",display:"flex",alignItems:"center",gap:10}}>
         <div style={{width:30,height:30,borderRadius:8,background:"rgba(255,255,255,0.1)",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontSize:12,fontWeight:600}}>{currentUser?.name?.[0]}</div>
         <div><div style={{color:"#fff",fontSize:12,fontWeight:500}}>{currentUser?.name}</div>
-          <div style={{color:"rgba(255,255,255,0.35)",fontSize:10}}>{currentUser?.role==="admin"?"Administrateur":"Caissier"}</div></div></div>
+          <div style={{color:"rgba(255,255,255,0.35)",fontSize:10}}>{libelleRole(currentUser?.role)}</div></div></div>
       {/* ══ Store selector ══ */}
       {stores.length>1&&<div style={{marginTop:10}}>
         <div style={{fontSize:9,fontWeight:500,color:"rgba(255,255,255,0.35)",marginBottom:4,letterSpacing:"0.03em"}}>MAGASIN</div>

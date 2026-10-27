@@ -433,3 +433,14 @@ describe("libelleCloture (5 canaux d'impression + écran)", () => {
     expect(l.detail.length).toBeLessThanOrEqual(32);                 // tient sur 58 mm
   });
 });
+
+import { tauxMarque, prixVenteHT } from "./lib/formatters.js";
+describe("tauxMarque (prix d'achat HT)", () => {
+  it("compare le prix de vente HT au coût HT", () => {
+    const p = { price: 120, costPrice: 50, taxRate: 0.2 };
+    expect(prixVenteHT(p, "TTC")).toBe(100);
+    expect(tauxMarque(p, "TTC")).toBe(50);          // et non (120-50)/120 = 58 %
+    expect(tauxMarque({ price: 100, costPrice: 50, taxRate: 0.2 }, "HT")).toBe(50);
+    expect(tauxMarque({ price: 100, costPrice: 0 }, "TTC")).toBeNull();
+  });
+});
