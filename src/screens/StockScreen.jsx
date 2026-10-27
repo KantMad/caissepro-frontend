@@ -11,13 +11,29 @@ import { sortSizes } from "./_shared.js";
 function StockScreen(){
   const{products,setProducts,stockAlerts,stockMoves,receiveStock,receiveBatchStock,stockAging,reorderSuggestions,adjustStock,notify,findByEAN,users,addStockMove,addAudit,settings,perm,defectiveStock,loadDefectiveStock,receiveDefectiveStock,adjustDefectiveStock,setScanOverride,clearScanOverride,mode,thermalPrint,printReceiptOnly,currentStore,currentUser}=useApp();
   // Valorisation du stock au PRIX D'ACHAT (cost_price de l'import) — DASHBOARD uniquement
+  // Prix d'achat HT : costPrice est saisi dans le mode de prix de la boutique (TTC par défaut,
+  // comme au checkout) -> en mode TTC la valeur du stock sortait TTC, TVA comprise.
+  const coutHT=(p)=>{const c=parseFloat(p.costPrice)||0;return settings?.pricingMode==="HT"?c:c/(1+(parseFloat(p.taxRate)||0.20));};
   const stockValuation=useMemo(()=>{let value=0,units=0,valued=0,unvalued=0;
-    (products||[]).forEach(p=>{const cost=parseFloat(p.costPrice)||0;(p.variants||[]).forEach(v=>{const st=parseInt(v.stock)||0;if(st<=0)return;units+=st;if(cost>0){value+=st*cost;valued+=st;}else unvalued+=st;});});
+    (products||[]).forEach(p=>{const cost=coutHT(p);(p.variants||[]).forEach(v=>{const st=parseInt(v.stock)||0;if(st<=0)return;units+=st;if(cost>0){value+=st*cost;valued+=st;}else unvalued+=st;});});
     return{value:Math.round(value*100)/100,units,valued,unvalued};
-  },[products]);
+  },[products,settings?.pricingMode]);// eslint-disable-line react-hooks/exhaustive-deps
   const isDashboard=mode!=="cashier";
   if(!perm().canCreateProduct)return<div style={{padding:40,textAlign:"center",color:"#94a3b8",fontSize:16,fontWeight:600}}>Accès réservé aux administrateurs</div>;
   const[sel,setSel]=useState(products[0]?.id||"");const[tab,setTab]=useState("matrix");
+  // Vieillissement : date de dernière vente prise sur TOUTES les ventes (serveur), et non
+  // dans les 200 derniers tickets en mémoire (tout le reste paraissait « jamais vendu »).
+  const[derniereVente,setDerniereVente]=useState(null);
+  useEffect(()=>{if(tab!=="aging"||derniereVente)return;
+    API.sales.lastSold().then(rows=>{const m={};(rows||[]).forEach(r=>{m[r.product_id]=r.last_sold_at;});setDerniereVente(m);}).catch(()=>{});
+  },[tab]);// eslint-disable-line react-hooks/exhaustive-deps
+  const agingRows=useMemo(()=>{if(!derniereVente)return stockAging;
+    return(products||[]).map(p=>{const totalStock=(p.variants||[]).reduce((s,v)=>s+(parseInt(v.stock)||0),0);
+      const d=derniereVente[p.id];
+      const daysSinceLastSale=d?Math.floor((Date.now()-new Date(d).getTime())/86400000):999;
+      return{...p,totalStock,totalValue:totalStock*coutHT(p),daysSinceLastSale};})
+      .filter(p=>p.totalStock>0).sort((a,b)=>b.daysSinceLastSale-a.daysSinceLastSale||b.totalValue-a.totalValue);
+  },[derniereVente,products,stockAging,settings?.pricingMode]);// eslint-disable-line react-hooks/exhaustive-deps
   const[rcModal,setRcModal]=useState(false);const[rcProd,setRcProd]=useState("");const[rcVar,setRcVar]=useState("");const[rcQty,setRcQty]=useState("");const[rcSup,setRcSup]=useState("");
   // Batch reception state
   const[batchItems,setBatchItems]=useState([]);const[batchSupplier,setBatchSupplier]=useState("");const[batchSaving,setBatchSaving]=useState(false);
@@ -106,7 +122,7 @@ function StockScreen(){
       <div style={{flex:1}}/>
       <Btn variant="outline" onClick={()=>setTab("reception")}><Upload size={14}/> Réception</Btn></div>
     {isDashboard&&<div style={{display:"flex",alignItems:"center",gap:16,flexWrap:"wrap",background:`${C.primary}0D`,border:`1.5px solid ${C.primary}22`,borderRadius:12,padding:"12px 16px",marginBottom:12}}>
-      <div><div style={{fontSize:10,fontWeight:700,color:C.textMuted,textTransform:"uppercase",letterSpacing:"0.5px"}}>Valeur du stock (prix d'achat)</div>
+      <div><div style={{fontSize:10,fontWeight:700,color:C.textMuted,textTransform:"uppercase",letterSpacing:"0.5px"}}>Valeur du stock (prix d'achat HT)</div>
         <div style={{fontSize:24,fontWeight:900,color:C.primary,letterSpacing:"-0.6px"}}>{stockValuation.value.toFixed(2)}€</div></div>
       <div style={{height:34,width:1,background:C.border}}/>
       <div><div style={{fontSize:10,fontWeight:700,color:C.textMuted}}>Unités en stock</div><div style={{fontSize:16,fontWeight:800}}>{stockValuation.units}</div></div>
@@ -230,9 +246,9 @@ function StockScreen(){
       <h3 style={{fontSize:14,fontWeight:700,marginBottom:10}}>Vieillissement du stock</h3>
       <table className="rtable" style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
         <thead><tr style={{borderBottom:`2px solid ${C.border}`}}>
-          {["Produit","Stock","Valeur","Jours sans vente","Statut"].map(h=>(
+          {["Produit","Stock","Valeur (achat HT)","Jours sans vente","Statut"].map(h=>(
             <th key={h} style={{padding:8,textAlign:"left",fontSize:9,fontWeight:700,color:C.textMuted}}>{h}</th>))}</tr></thead>
-        <tbody>{stockAging.slice(0,20).map(p=>(<tr key={p.id} style={{borderBottom:`1px solid ${C.border}`}}>
+        <tbody>{agingRows.slice(0,50).map(p=>(<tr key={p.id} style={{borderBottom:`1px solid ${C.border}`}}>
           <td data-label="Produit" style={{padding:8,fontWeight:600}}>{p.name} <span style={{color:C.textMuted,fontSize:10}}>({p.sku})</span></td>
           <td data-label="Stock" style={{padding:8}}>{p.totalStock}</td>
           <td data-label="Valeur" style={{padding:8,color:C.primary,fontWeight:600}}>{p.totalValue.toFixed(2)}€</td>

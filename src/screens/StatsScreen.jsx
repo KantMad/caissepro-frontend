@@ -7,6 +7,7 @@ import { Btn, Input, Badge, SC } from "../ui.jsx";
 import { useApp } from "../context.jsx";
 import { getPaymentLabel, ticketPieces, salesIndex, formatAmount } from "../lib/formatters.js";
 import { dayKey, rangeToInstants, previousRange } from "../lib/dates.js";
+import { norm } from "../utils.jsx";
 
 function StatsScreen(){
   const{tickets,products,avoirs,bestSellers:allBestSellers,salesBySeller,salesByVariant,caEvolution,salesByCollection,exportCSVReport,perm,commissions,salesGoals,setSellerGoal,settings,mode}=useApp();
@@ -32,6 +33,17 @@ function StatsScreen(){
     })();
     return()=>{annule=true;};
   },[dateFrom,dateTo]);
+  // Tickets de la période chargés depuis le SERVEUR (lignes comprises) : best-sellers,
+  // collections, tailles/couleurs, vendeurs, heures... portaient avant sur les 200 derniers
+  // tickets en mémoire, quelle que soit la période choisie.
+  const[srvTickets,setSrvTickets]=useState(null);const[srvTronque,setSrvTronque]=useState(false);
+  useEffect(()=>{
+    let annule=false;setSrvTickets(null);
+    API.sales.period(rangeToInstants(dateFrom,dateTo))
+      .then(r=>{if(annule)return;setSrvTickets(norm.sales(r?.sales||[]));setSrvTronque(!!r?.truncated);})
+      .catch(()=>{if(!annule)setSrvTickets(null);});
+    return()=>{annule=true;};
+  },[dateFrom,dateTo]);
   useEffect(()=>{
     API.sales.byDay().then(d=>setApiByDay(d)).catch(()=>{});
   },[]);
@@ -42,9 +54,10 @@ function StatsScreen(){
     else if(p==="lastmonth"){setDateFrom(fmt(new Date(now.getFullYear(),now.getMonth()-1,1)));setDateTo(fmt(new Date(now.getFullYear(),now.getMonth(),0)));}
     else if(p==="year"){setDateFrom(fmt(new Date(now.getFullYear(),0,1)));setDateTo(fmt(now));}
     else{setDateFrom("");setDateTo("");}};
-  const fTickets=useMemo(()=>{return tickets.filter(t=>{const d=dayKey(new Date(t.date||t.createdAt||t.created_at||0));
+  const baseTickets=srvTickets||tickets;
+  const fTickets=useMemo(()=>{return baseTickets.filter(t=>{const d=dayKey(new Date(t.date||t.createdAt||t.created_at||0));
     if(dateFrom&&d<dateFrom)return false;if(dateTo&&d>dateTo)return false;
-    if(catFilter){const hasItem=(t.items||[]).some(i=>(i.product?.category||"")===catFilter);if(!hasItem)return false;}return true;});},[tickets,dateFrom,dateTo,catFilter]);
+    if(catFilter){const hasItem=(t.items||[]).some(i=>(i.product?.category||"")===catFilter);if(!hasItem)return false;}return true;});},[baseTickets,dateFrom,dateTo,catFilter]);
   const prevTickets=useMemo(()=>{if(!dateFrom||!dateTo)return[];const from=new Date(dateFrom);const to=new Date(dateTo);
     const span=to-from;const pFrom=new Date(from-span-86400000);const pTo=new Date(from-86400000);
     const fmt=dayKey;
@@ -70,6 +83,15 @@ function StatsScreen(){
     return<Badge color={p>=0?"#059669":C.danger}>{p>=0?"+":""}{p.toFixed(1)}%</Badge>;};
   // Lookup maps: product_id→{sku,name}, variant_id→{colorCode}
   const prodMap=useMemo(()=>{const m={};products.forEach(p=>{m[p.id]={sku:p.sku,name:p.name};(p.variants||[]).forEach(v=>{m[`v_${v.id}`]={colorCode:v.colorCode||"",color:v.color,size:v.size};});});return m;},[products]);
+  // Lignes NETTES de la remise globale du panier : sales.global_discount (HT) n'est pas
+  // reporté sur les lignes ; sans prorata, CA et marge par produit / collection dépassaient
+  // le CA réellement encaissé. Même prorata que le FEC et les exports.
+  const lignesNettes=(t)=>{const items=t.items||[];
+    const brutHT=items.reduce((s,i)=>s+(parseFloat(i.lineHT??i.line_ht)||0),0);
+    const gd=parseFloat(t.globalDiscount??t.global_discount)||0;
+    const r=gd>0&&brutHT>0?Math.min(gd/brutHT,1):0;
+    return items.map(i=>({...i,nTTC:(parseFloat(i.lineTTC??i.line_ttc)||0)*(1-r),nHT:(parseFloat(i.lineHT??i.line_ht)||0)*(1-r)}));};
+  const coutLigne=(i)=>(parseFloat(i.product?.costPrice??i.cost_price)||0)*(i.quantity||0);
   const enrichItem=(i)=>{
     const pid=i.product_id||i.product?.id;const vid=i.variant_id||i.variant?.id;
     const pm=pid?prodMap[pid]:null;const vm=vid?prodMap[`v_${vid}`]:null;
@@ -77,10 +99,10 @@ function StatsScreen(){
       colorCode:i.variant?.colorCode||vm?.colorCode||"",color:i.variant?.color||i.variant_color||vm?.color||"?",
       size:i.variant?.size||i.variant_size||vm?.size||"?"};
   };
-  const fBestSellers=useMemo(()=>{const m={};fTickets.forEach(t=>(t.items||[]).forEach(i=>{
+  const fBestSellers=useMemo(()=>{const m={};fTickets.forEach(t=>lignesNettes(t).forEach(i=>{
     const e=enrichItem(i);const k=e.sku||e.name;
     if(!m[k])m[k]={name:e.name,sku:e.sku,qty:0,revenue:0,margin:0,colors:new Set()};
-    m[k].qty+=i.quantity;m[k].revenue+=(i.lineTTC||i.line_ttc||0);m[k].margin+=((i.lineHT||i.line_ht||0)-(i.product?.costPrice||i.cost_price||0)*i.quantity);
+    m[k].qty+=i.quantity;m[k].revenue+=i.nTTC;m[k].margin+=(i.nHT-coutLigne(i));
     if(e.colorCode)m[k].colors.add(e.colorCode);}));
     return Object.values(m).map(p=>({...p,colors:[...p.colors]})).sort((a,b)=>b.qty-a.qty);},[fTickets,prodMap]);
   const fCommissions=useMemo(()=>{const m={};fTickets.forEach(t=>{
@@ -106,9 +128,9 @@ function StatsScreen(){
     return{bySize:Object.entries(bySize).sort((a,b)=>b[1]-a[1]).map(([k,v])=>({name:k,qty:v})),
       byColor:Object.entries(byColor).sort((a,b)=>b[1]-a[1]).map(([k,v])=>({name:k,qty:v}))};
   },[fTickets]);
-  const fByCollection=useMemo(()=>{const m={};fTickets.forEach(t=>(t.items||[]).forEach(i=>{
+  const fByCollection=useMemo(()=>{const m={};fTickets.forEach(t=>lignesNettes(t).forEach(i=>{
     const col=i.product?.collection||"Sans collection";if(!m[col])m[col]={name:col,qty:0,revenue:0,margin:0};
-    m[col].qty+=i.quantity;m[col].revenue+=(i.lineTTC||i.line_ttc||0);m[col].margin+=((i.lineHT||i.line_ht||0)-(i.product?.costPrice||i.cost_price||0)*i.quantity);}));
+    m[col].qty+=i.quantity;m[col].revenue+=i.nTTC;m[col].margin+=(i.nHT-coutLigne(i));}));
     return Object.values(m).sort((a,b)=>b.revenue-a.revenue);},[fTickets]);
   const fCAEvol=useMemo(()=>{const m={};fTickets.forEach(t=>{
     const d=new Date(t.date||t.createdAt||t.created_at).toLocaleDateString("fr-FR",{day:"2-digit",month:"short"});
@@ -146,9 +168,10 @@ function StatsScreen(){
       <Input type="date" value={dateTo} onChange={e=>setDateTo(e.target.value)} style={{width:120,height:28,fontSize:10,padding:"2px 6px"}}/>
       <select value={catFilter} onChange={e=>setCatFilter(e.target.value)} style={{padding:"4px 8px",borderRadius:6,border:`1px solid ${C.border}`,fontSize:10,fontFamily:"inherit"}}>
         <option value="">Toutes catégories</option>{allCats.map(c=>(<option key={c} value={c}>{c}</option>))}</select></div>
-    {(srvErreur||(catFilter&&tickets.length>=200))&&<div style={{background:C.warnLight,border:`1px solid ${C.warn}33`,borderRadius:10,padding:"8px 12px",marginBottom:10,fontSize:11,color:"#92400E"}}>
-      {srvErreur?"Totaux indisponibles côté serveur — chiffres calculés sur les 200 derniers tickets chargés."
-       :"Filtre catégorie actif : les totaux portent sur les 200 derniers tickets chargés, pas sur toute la période."}</div>}
+    {(srvErreur||!srvTickets||srvTronque)&&<div style={{background:C.warnLight,border:`1px solid ${C.warn}33`,borderRadius:10,padding:"8px 12px",marginBottom:10,fontSize:11,color:"#92400E"}}>
+      {srvTronque?"Période très longue : seuls les 20 000 tickets les plus récents sont détaillés. Réduisez la période pour un détail complet."
+       :srvErreur?"Totaux indisponibles côté serveur — chiffres calculés sur les 200 derniers tickets chargés."
+       :"Chargement du détail de la période… (en attendant : 200 derniers tickets)"}</div>}
     <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:10,marginBottom:16}}>
       <div><SC icon={Euro} label="CA TTC" value={`${formatAmount(stats.tTTC)}€`} color={C.primary} sub={<PctBadge cur={stats.tTTC} prev={prevStats.tTTC}/>}/></div>
       <div><SC icon={Receipt} label="Tickets" value={stats.count} color={C.info} sub={<PctBadge cur={stats.count} prev={prevStats.count}/>}/></div>
@@ -285,11 +308,11 @@ function StatsScreen(){
         </div>}</div>);})()}
 
     {/* Détail variantes vendues */}
-    {tab==="variantDetail"&&(()=>{const byProd={};fTickets.forEach(t=>(t.items||[]).forEach(i=>{
+    {tab==="variantDetail"&&(()=>{const byProd={};fTickets.forEach(t=>lignesNettes(t).forEach(i=>{
       const e=enrichItem(i);
       const pk=e.sku||e.name;if(!byProd[pk])byProd[pk]={name:e.name,sku:e.sku,variants:{}};const vk=`${e.color}/${e.size}`;
       if(!byProd[pk].variants[vk])byProd[pk].variants[vk]={color:e.color,colorCode:e.colorCode,size:e.size,qty:0,revenue:0};
-      byProd[pk].variants[vk].qty+=i.quantity;byProd[pk].variants[vk].revenue+=(i.lineTTC||i.line_ttc||0);}));
+      byProd[pk].variants[vk].qty+=i.quantity;byProd[pk].variants[vk].revenue+=i.nTTC;}));
       const prodList=Object.values(byProd).sort((a,b)=>{const aq=Object.values(a.variants).reduce((s,v)=>s+v.qty,0);
         const bq=Object.values(b.variants).reduce((s,v)=>s+v.qty,0);return bq-aq;});
       const exportVariantCSV=()=>{

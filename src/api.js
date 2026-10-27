@@ -108,6 +108,10 @@ export const sales = {
   bestSellers: () => api('/api/sales/stats/best-sellers'),
   bySeller: () => api('/api/sales/stats/by-seller'),
   byDay: () => api('/api/sales/stats/by-day'),
+  // Tous les tickets d'une periode (Statistiques) — { sales, truncated }
+  period: (params) => api('/api/sales/stats/period?' + new URLSearchParams(params || {})),
+  // Date de derniere vente par produit (vieillissement du stock)
+  lastSold: () => api('/api/sales/stats/last-sold'),
   emailTicket: (saleId, to) => api(`/api/sales/${saleId}/email`, { method: 'POST', body: JSON.stringify({ to }) }),
   commissions: () => api('/api/sales/stats/commissions'),
   reassignCustomer: (saleId, customerId) => api(`/api/sales/${saleId}/customer`, { method: 'PATCH', body: JSON.stringify({ customerId }) }),

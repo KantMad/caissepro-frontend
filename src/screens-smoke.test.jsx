@@ -65,7 +65,8 @@ vi.mock("./api.js", () => {
   const mod = {
     setOnAuthExpired: () => {}, setStoreId: () => {}, clearStoreId: () => {},
     setToken: () => {}, getToken: () => "t", clearToken: () => {}, getStoreId: () => STORE,
-    sales: ns({ list: liste([VENTE]), stats: liste({ totalTTC: "339.50", count: 1 }) }),
+    sales: ns({ list: liste([VENTE]), stats: liste({ totalTTC: "339.50", count: 1 }),
+      period: liste({ sales: [VENTE], truncated: false }), lastSold: liste([{ product_id: "p1", last_sold_at: "2026-10-20T09:24:43.000Z" }]) }),
     products: ns({ list: liste([PRODUIT]), exportCSV: () => "http://x" }),
     customers: ns({ list: liste([CLIENT]) }),
     returns: ns({ list: liste([AVOIR]), counter: liste({ seq: 1 }) }),
@@ -165,6 +166,14 @@ describe("Écrans — rendu sans plantage", () => {
     const t = getAllByText("Formation"); fireEvent.click(t[t.length - 1]);
     expect(container.textContent).toMatch(/demo\.techincash\.app/);
     expect(container.textContent).not.toMatch(/Mode production/);
+  });
+
+  it("Statistiques : best-sellers nets de la remise globale du panier (prorata HT)", async () => {
+    // Jean 134,82 € TTC ; remise panier 10 € HT sur 129,02 € HT de lignes -> 124,37 € net
+    const { getAllByText, findAllByText, container } = render(<AppProvider><StatsScreen /></AppProvider>);
+    const b = getAllByText("Best-sellers"); fireEvent.click(b[b.length - 1]);
+    await findAllByText(/124[.,]37/);
+    expect(container.textContent).not.toMatch(/134[.,]82/);
   });
 
   it("Vente : un Z de la veille fait ce matin ne déclare pas la caisse clôturée", async () => {
