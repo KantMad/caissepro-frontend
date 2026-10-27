@@ -204,6 +204,14 @@ describe("Écrans — rendu sans plantage", () => {
     expect(await findByText(/2025-000999/, {}, { timeout: 2000 })).toBeTruthy();
   });
 
+  it("Retour : caissier + ticket hors délai -> validation d'un gérant demandée (plus de blocage sec)", async () => {
+    sessionStorage.setItem("caissepro_user", JSON.stringify({ id: "u2", name: "Caissier", role: "cashier" }));
+    const { getByPlaceholderText, findByText } = render(<AppProvider><ReturnScreen /></AppProvider>);
+    fireEvent.change(getByPlaceholderText("N° ticket, nom client…"), { target: { value: "2025-000999" } });
+    fireEvent.click(await findByText(/2025-000999/, {}, { timeout: 2000 }));
+    expect(await findByText(/Ticket de plus de 30 jours/)).toBeTruthy();
+  });
+
   it("Stock : tous les onglets s'ouvrent", () => {
     // Le plantage « trPreview is not defined » n'apparaissait que sur l'onglet Tenues.
     const { getAllByText } = render(<AppProvider><StockScreen /></AppProvider>);

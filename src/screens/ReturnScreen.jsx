@@ -98,9 +98,7 @@ function ReturnScreen(){
 
   const doReturn=async()=>{if(returnBusy)return;if(!returnItems.length){notify("Selectionnez au moins un article","error");return;}
     // Enforce maxNoApproval
-    const maxNA=rp.maxNoApproval||Infinity;
-    if(returnTotal>maxNA&&currentUser?.role!=="admin"&&!managerApproved){
-      notify(`Montant > ${maxNA}EUR -- approbation manager requise`,"error");return;}
+    if(besoinValidation){notify(motifValidation,"error");return;}
     // Anti-doublon par article: le backend verifie les quantites deja retournees
     // Le alreadyReturnedMap + effectiveMax dans toggleItem empechent deja de depasser cote UI
     setReturnBusy(true);
@@ -136,6 +134,15 @@ function ReturnScreen(){
   const returnWindow=settings.returnPolicy?.days||30;
   const isExpired=(tk)=>{if(!tk)return false;const d=new Date(tk.date||tk.createdAt||tk.created_at);
     return(Date.now()-d.getTime())/(1000*60*60*24)>returnWindow;};
+  // Validation d'un gérant / admin (PIN, revérifié par le serveur) pour un caissier :
+  // retour sans ticket, ticket hors délai, ou montant au-dessus du plafond sans validation.
+  const estResponsable=["admin","manager"].includes(currentUser?.role);
+  const horsDelai=mode==="ticket"&&selectedTk&&isExpired(selectedTk);
+  const auDessusPlafond=returnTotal>(rp.maxNoApproval||Infinity);
+  const besoinValidation=!estResponsable&&!managerApproved&&(mode==="scan"||mode==="free"||horsDelai||auDessusPlafond);
+  const motifValidation=horsDelai?`Ticket de plus de ${returnWindow} jours : le retour doit être validé par un gérant.`
+    :auDessusPlafond&&mode==="ticket"?`Retour de plus de ${rp.maxNoApproval} € : validation d'un gérant requise.`
+    :"Les retours sans ticket nécessitent la validation d'un responsable.";
 
   return(<div style={{height:"100%",overflowY:"auto",padding:"var(--pad,16px)",background:C.bg}}>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
@@ -164,13 +171,13 @@ function ReturnScreen(){
           <label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:4}}>RECHERCHER UN TICKET</label>
           <Input value={searchTk} onChange={e=>setSearchTk(e.target.value)} placeholder="N° ticket, nom client…" style={{marginBottom:8,height:40}}/>
           {!selectedTk&&foundTickets.map(t=>{const expired=isExpired(t);return(
-            <div key={t.ticketNumber} onClick={()=>{if(!expired){setSelectedTk(t);setReturnItems([]);}}}
+            <div key={t.ticketNumber} onClick={()=>{setSelectedTk(t);setReturnItems([]);}}
               style={{display:"flex",alignItems:"center",gap:10,padding:10,borderRadius:10,border:`1.5px solid ${expired?C.danger+"44":C.border}`,
-                marginBottom:4,cursor:expired?"not-allowed":"pointer",opacity:expired?0.6:1,background:expired?C.dangerLight+"20":"transparent"}}>
+                marginBottom:4,cursor:"pointer",background:expired?C.dangerLight+"20":"transparent"}}>
               <Receipt size={14} color={expired?C.danger:C.primary}/>
               <div style={{flex:1}}><div style={{fontSize:12,fontWeight:600}}>{t.ticketNumber}</div>
                 <div style={{fontSize:10,color:C.textMuted}}>{new Date(t.date||t.createdAt||t.created_at).toLocaleDateString("fr-FR")} — {(t.items||[]).length} art. — {(t.totalTTC||parseFloat(t.total_ttc)||0).toFixed(2)}€{t.customerName?` — ${t.customerName}`:""}</div></div>
-              {expired&&<Badge color={C.danger}>Hors délai</Badge>}
+              {expired&&<Badge color={C.danger}>Hors délai — validation gérant</Badge>}
               <span style={{fontSize:14,fontWeight:800,color:C.primary}}>{(t.totalTTC||parseFloat(t.total_ttc)||0).toFixed(2)}€</span>
             </div>);})}
           {selectedTk&&<div>
@@ -192,16 +199,16 @@ function ReturnScreen(){
           </div>}
         </div>}
 
-        {(mode==="scan"||mode==="free")&&!managerApproved&&currentUser?.role!=="admin"&&<div style={{background:C.surface,borderRadius:14,padding:20,border:`1.5px solid ${C.warn}44`,textAlign:"center"}}>
+        {besoinValidation&&<div style={{background:C.surface,borderRadius:14,padding:20,border:`1.5px solid ${C.warn}44`,textAlign:"center",marginTop:mode==="ticket"?12:0}}>
           <Shield size={32} color={C.warn} style={{marginBottom:10}}/>
           <div style={{fontSize:14,fontWeight:700,marginBottom:4}}>Approbation manager requise</div>
-          <div style={{fontSize:11,color:C.textMuted,marginBottom:14}}>Les retours sans ticket nécessitent la validation d'un responsable.</div>
+          <div style={{fontSize:11,color:C.textMuted,marginBottom:14}}>{motifValidation}</div>
           <Input type="password" value={managerPinInput} onChange={e=>setManagerPinInput(e.target.value)} onKeyDown={e=>e.key==="Enter"&&verifyManagerPin()} placeholder="PIN Manager / Admin" style={{width:200,margin:"0 auto 8px",textAlign:"center"}}/>
           {managerPinError&&<div style={{fontSize:11,color:C.danger,marginBottom:6}}>{managerPinError}</div>}
           <Btn onClick={verifyManagerPin} style={{fontSize:12}}>Valider</Btn>
         </div>}
 
-        {mode==="scan"&&(managerApproved||currentUser?.role==="admin")&&<div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`}}>
+        {mode==="scan"&&(managerApproved||estResponsable)&&<div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`}}>
           <label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:4}}>SCANNER OU RECHERCHER UN PRODUIT</label>
           <Input value={searchProd} onChange={e=>setSearchProd(e.target.value)} placeholder="Nom, SKU ou scanner code-barres…" style={{marginBottom:8,height:40}}/>
           {foundProducts.map(p=>(<div key={p.id}>
@@ -215,7 +222,7 @@ function ReturnScreen(){
                 <span style={{fontSize:12,fontWeight:700,color:C.primary}}>{(p.price||0).toFixed(2)}€</span>
               </div>);})}</div>))}</div>}
 
-        {mode==="free"&&(managerApproved||currentUser?.role==="admin")&&<div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`}}>
+        {mode==="free"&&(managerApproved||estResponsable)&&<div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`}}>
           <label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:4}}>RETOUR LIBRE — RECHERCHER DANS LE CATALOGUE</label>
           <Input value={searchProd} onChange={e=>setSearchProd(e.target.value)} placeholder="Nom, SKU ou scanner…" style={{marginBottom:8,height:40}}/>
           <div style={{padding:8,background:C.warnLight,borderRadius:8,marginBottom:10,fontSize:11,color:"#92400E",border:`1px solid ${C.warn}33`}}>
