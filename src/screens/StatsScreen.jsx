@@ -379,7 +379,8 @@ function StatsScreen(){
     {/* Retours stats */}
     {tab==="returns"&&(()=>{
       // Filtrer les avoirs par plage de dates
-      const returnData=avoirs.filter(a=>{const d=(a.date||a.createdAt||"").slice(0,10);return(!dateFrom||d>=dateFrom)&&(!dateTo||d<=dateTo);});
+      const returnData=avoirs.filter(a=>{const brut=a.date||a.createdAt||a.created_at;const d=brut?dayKey(new Date(brut)):"";   // journée LOCALE (UTC : retours de 0 h-2 h la veille)
+return(!dateFrom||d>=dateFrom)&&(!dateTo||d<=dateTo);});
       const totalReturns=returnData.length;const totalReturnValue=returnData.reduce((s,a)=>s+(a.totalTTC||0),0);
       const returnRate=fTickets.length?(totalReturns/fTickets.length*100):0;
       const byReason={};returnData.forEach(a=>{const r=a.reason||"Autre";byReason[r]=(byReason[r]||0)+1;});

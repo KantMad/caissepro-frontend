@@ -46,7 +46,7 @@ function ReturnsHistoryScreen(){
           <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>DÉLAI DE RETOUR (jours)</label>
             <Input type="number" value={settings.returnPolicy?.days||30} onChange={e=>setSettings(s=>({...s,returnPolicy:{...s.returnPolicy,days:parseInt(e.target.value)||30}}))}/></div>
           <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>MONTANT MAX SANS APPROBATION (EUR)</label>
-            <Input type="number" value={settings.returnPolicy?.maxNoApproval||100} onChange={e=>setSettings(s=>({...s,returnPolicy:{...s.returnPolicy,maxNoApproval:parseFloat(e.target.value)||100}}))}/></div></div>
+            <Input type="number" value={settings.returnPolicy?.maxNoApproval??""} placeholder="Sans plafond" onChange={e=>{const v=parseFloat(e.target.value);setSettings(s=>({...s,returnPolicy:{...s.returnPolicy,maxNoApproval:v>0?v:null}}));}}/></div></div>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:12}}>
           <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>VALIDITE AVOIR (mois)</label>
             <Input type="number" value={settings.returnPolicy?.avoirExpiryMonths||12} onChange={e=>setSettings(s=>({...s,returnPolicy:{...s.returnPolicy,avoirExpiryMonths:parseInt(e.target.value)||12}}))}/></div>

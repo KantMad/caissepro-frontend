@@ -1167,8 +1167,8 @@ function SettingsScreen(){
       <div style={{fontSize:12,fontWeight:700,marginBottom:8}}>Défauts (tous les vendeurs)</div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:16}}>
         <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>Taux (%)</label>
-          <Input type="number" step="0.5" min="0" max="100" value={((settings.defaultCommissionRate||0.05)*100).toFixed(1)}
-            onChange={e=>setSettings(s=>({...s,defaultCommissionRate:parseFloat(e.target.value)/100||0.05}))}/></div>
+          <Input type="number" step="0.5" min="0" max="100" value={((settings.defaultCommissionRate??0.05)*100).toFixed(1)}
+            onChange={e=>{const v=parseFloat(e.target.value);setSettings(s=>({...s,defaultCommissionRate:Number.isFinite(v)?Math.min(100,Math.max(0,v))/100:0.05}));}}/></div>
         <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>Période</label>
           <select value={defPeriod} onChange={e=>setSettings(s=>({...s,defaultCommissionPeriod:e.target.value}))}
             style={{width:"100%",height:38,borderRadius:10,border:`1.5px solid ${C.border}`,padding:"0 10px",fontFamily:"inherit",background:C.surface}}>
@@ -1384,7 +1384,7 @@ function SettingsScreen(){
           <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>DÉLAI DE RETOUR (jours)</label>
             <Input type="number" value={settings.returnPolicy?.days||30} onChange={e=>setSettings(s=>({...s,returnPolicy:{...s.returnPolicy,days:parseInt(e.target.value)||30}}))}/></div>
           <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>MONTANT MAX SANS APPROBATION (€)</label>
-            <Input type="number" value={settings.returnPolicy?.maxNoApproval||100} onChange={e=>setSettings(s=>({...s,returnPolicy:{...s.returnPolicy,maxNoApproval:parseFloat(e.target.value)||100}}))}/></div>
+            <Input type="number" value={settings.returnPolicy?.maxNoApproval??""} placeholder="Sans plafond" onChange={e=>{const v=parseFloat(e.target.value);setSettings(s=>({...s,returnPolicy:{...s.returnPolicy,maxNoApproval:v>0?v:null}}));}}/></div>
         </div>
         <div style={{marginBottom:12}}><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>CONDITIONS DE RETOUR</label>
           <textarea value={settings.returnPolicy?.conditions||""} onChange={e=>setSettings(s=>({...s,returnPolicy:{...s.returnPolicy,conditions:e.target.value}}))}
