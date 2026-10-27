@@ -234,6 +234,7 @@ export const stores = {
   update: (id, data) => api(`/api/stores/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   remove: (id) => api(`/api/stores/${id}`, { method: 'DELETE' }),
   users: (id) => api(`/api/stores/${id}/users`),
+  transferTargets: () => api('/api/stores/transfer-targets'),
   assignUser: (id, data) => api(`/api/stores/${id}/users`, { method: 'POST', body: JSON.stringify(data) }),
   removeUser: (id, userId) => api(`/api/stores/${id}/users/${userId}`, { method: 'DELETE' }),
 };

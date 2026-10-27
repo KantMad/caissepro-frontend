@@ -91,7 +91,11 @@ function StockScreen(){
   const[trProd,setTrProd]=useState("");const[trVar,setTrVar]=useState("");const[trQty,setTrQty]=useState("1");const[trDest,setTrDest]=useState("");const[trRef,setTrRef]=useState("");
   // Destination = un magasin Tech in Cash (stock ajouté là-bas) ou « autre » (texte libre, sortie seule)
   const[trCible,setTrCible]=useState("");
-  const autresMagasins=(stores||[]).filter(st=>st.id&&st.id!==currentStore?.id&&st.active!==false);
+  // Destinations : TOUS les magasins de l'enseigne (un gérant peut envoyer partout), pas
+  // seulement ceux où il est affecté. Repli sur ses magasins hors connexion.
+  const[cibles,setCibles]=useState(null);
+  useEffect(()=>{let ok=true;API.stores.transferTargets().then(r=>{if(ok&&Array.isArray(r))setCibles(r);}).catch(()=>{});return()=>{ok=false;};},[]);
+  const autresMagasins=(cibles||stores||[]).filter(st=>st.id&&st.id!==currentStore?.id&&st.active!==false);
   // ── Bon de transfert multi-articles (sortie de stock vers une destination) ──
   const[trLines,setTrLines]=useState([]);const[trHist,setTrHist]=useState([]);const[trPreview,setTrPreview]=useState(null);const[trBusy,setTrBusy]=useState(false);
   const trAddLine=useCallback((product,variant,qty)=>{
