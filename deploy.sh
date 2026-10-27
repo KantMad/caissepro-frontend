@@ -32,7 +32,7 @@ fi
 # npm install seulement si les dépendances ont changé
 if [ "$BEFORE" != "$AFTER" ] && git diff --name-only "$BEFORE" "$AFTER" | grep -qE 'package(-lock)?\.json'; then
   echo "▶ Dépendances modifiées → npm install"
-  npm install
+  npm install --include=dev   # build = vite + @vitejs/plugin-react (devDependencies, omis si NODE_ENV=production)
 fi
 
 echo "▶ Build (vite)"
