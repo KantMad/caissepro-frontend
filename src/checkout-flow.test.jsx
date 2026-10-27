@@ -143,3 +143,18 @@ describe("Avoir en paiement — plafonné au panier", () => {
     expect(ctx.cartTotals.tTTC).toBe(0);
   });
 });
+
+// L'avoir est débité par le serveur DANS la vente : la caisse ne fait plus de 2e appel,
+// et une vente hors-ligne transmet l'avoir à débiter lors de la synchronisation.
+describe("Avoir en paiement — débit atomique côté serveur", () => {
+  it("hors-ligne : la vente mise en file porte l'avoir à débiter (plus de file consumeAvoir séparée)", async () => {
+    API.sales.checkout.mockRejectedValue(new TypeError("Failed to fetch"));
+    mount();
+    act(() => { ctx.addToCart(prod({ price: 60 }), variant()); });
+    act(() => { ctx.setSelectedAvoir({ avoirNumber: "AV-2026-000009", totalTTC: 100, remaining: 100, applied: 100 }); });
+    await act(async () => { await ctx.checkout([{ method: "avoir", amount: 60 }], "V"); });
+    const vente = ctx.pendingSync.find(x => x.type === "offlineSale");
+    expect(vente.data.avoirUsed).toEqual({ avoirNumber: "AV-2026-000009", amount: 60 });
+    expect(ctx.pendingSync.some(x => x.type === "consumeAvoir")).toBe(false);
+  });
+});

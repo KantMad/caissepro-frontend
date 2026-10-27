@@ -663,6 +663,12 @@ function AppProvider({children}){
       variantColor:variant?.color,variantSize:variant?.size,qty,ref,user:currentUser?.name||"Sys"},...p]);
   },[currentUser]);
 
+  // Solde d'avoir mis a jour LOCALEMENT (le debit serveur est fait par le checkout lui-meme)
+  const debiterAvoirLocal=useCallback((avoirNumber,amount,resteServeur)=>{
+    setAvoirs(p=>p.map(a=>{if(a.avoirNumber!==avoirNumber)return a;
+      const rem=resteServeur!=null?resteServeur:Math.max(0,(a.remaining??a.totalTTC)-amount);
+      return{...a,remaining:rem,used:rem<=0};}));
+  },[]);
   // ══ CONSUME AVOIR (deduct amount when used as payment) ══
   const consumeAvoir=useCallback(async(avoirNumber,amount)=>{
     setAvoirs(p=>p.map(a=>{if(a.avoirNumber!==avoirNumber)return a;
@@ -766,8 +772,9 @@ function AppProvider({children}){
       });
       // ── Vente CRÉÉE en backend — les appels suivants ne doivent PAS déclencher le fallback offline ──
       // Consume avoir (non-bloquant — échec ne doit pas invalider la vente)
-      try{if(selectedAvoir&&avoirPayment>0){await consumeAvoir(selectedAvoir.avoirNumber,avoirPayment);}}
-      catch(avoirErr){console.warn("Avoir consume failed (sale OK):",avoirErr.message);}
+      // Avoir : deja debite par le serveur DANS la vente (atomique) -> mise a jour locale seulement
+      if(selectedAvoir&&avoirPayment>0){debiterAvoirLocal(selectedAvoir.avoirNumber,avoirPayment,ticket.avoirConsumed?.remaining);
+        addAudit("AVOIR_USE",`Avoir ${selectedAvoir.avoirNumber} utilise: ${avoirPayment.toFixed(2)}EUR (ticket ${ticket.ticketNumber||ticket.ticket_number||""})`);}
       // Perf : décrément LOCAL du stock (le backend a déjà décrémenté). Évite de
       // recharger tout le catalogue (plusieurs Mo) à chaque vente → gros gain de vitesse.
       setProducts(prev=>prev.map(p=>{
@@ -842,10 +849,12 @@ function AppProvider({children}){
         items:items.map(({product,variant,...rest})=>rest),payments,customerId:selCust?.id||null,
         globalDiscount:gd,saleNote:saleNote||null,promosApplied:applied,sessionId:cashReg?.id||null,
         sellerName:sellerName||null,
+        // l'avoir sera debite par le serveur a la synchronisation, dans la meme transaction
+        avoirUsed:selectedAvoir&&avoirPayment>0?{avoirNumber:selectedAvoir.avoirNumber,amount:avoirPayment}:null,
         offlineTicketNumber:ticketNumber,offlineDate:date
       }});
       // Consume avoir locally + queue for sync (avoir not consumed yet in offline mode)
-      if(selectedAvoir&&avoirPayment>0){await consumeAvoir(selectedAvoir.avoirNumber,avoirPayment);}
+      if(selectedAvoir&&avoirPayment>0){debiterAvoirLocal(selectedAvoir.avoirNumber,avoirPayment);}
       notify("Vente enregistrée (hors-ligne) — synchro en attente","warn");return ticket;
     }
   },[cart,gDiscPct,gDiscAmt,currentUser,selCust,calcPromoDiscount,promoCode,saleNote,cashReg,tSeq,gt,lastHash,avoirPayment,selectedAvoir,consumeAvoir,addStockMove,notify,settings.pricingMode,addPendingSync,trainingMode,currentStore,hardwareManager]);
