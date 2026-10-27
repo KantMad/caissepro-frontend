@@ -10,7 +10,7 @@ import { tauxMarque } from "../lib/formatters.js";
 import { sortSizes } from "./_shared.js";
 
 function StockScreen(){
-  const{products,setProducts,stockAlerts,stockMoves,receiveStock,receiveBatchStock,stockAging,reorderSuggestions,adjustStock,notify,findByEAN,users,addStockMove,addAudit,settings,perm,defectiveStock,loadDefectiveStock,receiveDefectiveStock,adjustDefectiveStock,setScanOverride,clearScanOverride,mode,thermalPrint,printReceiptOnly,currentStore,currentUser}=useApp();
+  const{products,setProducts,stockAlerts,stockMoves,receiveStock,receiveBatchStock,stockAging,reorderSuggestions,adjustStock,notify,findByEAN,users,addStockMove,addAudit,settings,perm,defectiveStock,loadDefectiveStock,receiveDefectiveStock,adjustDefectiveStock,setScanOverride,clearScanOverride,mode,thermalPrint,printReceiptOnly,currentStore,currentUser,stores}=useApp();
   // Valorisation du stock au PRIX D'ACHAT (cost_price de l'import) — DASHBOARD uniquement
   // Prix d'achat : saisi HT (confirmé le 27/10/2026), utilisé tel quel.
   const coutHT=(p)=>parseFloat(p.costPrice)||0;
@@ -76,6 +76,9 @@ function StockScreen(){
     notify(`${p.name} ${v.color}/${v.size} ajouté`,"info");
   },[findByEAN,notify]);
   const[trProd,setTrProd]=useState("");const[trVar,setTrVar]=useState("");const[trQty,setTrQty]=useState("1");const[trDest,setTrDest]=useState("");const[trRef,setTrRef]=useState("");
+  // Destination = un magasin Tech in Cash (stock ajouté là-bas) ou « autre » (texte libre, sortie seule)
+  const[trCible,setTrCible]=useState("");
+  const autresMagasins=(stores||[]).filter(st=>st.id&&st.id!==currentStore?.id&&st.active!==false);
   // ── Bon de transfert multi-articles (sortie de stock vers une destination) ──
   const[trLines,setTrLines]=useState([]);const[trHist,setTrHist]=useState([]);const[trPreview,setTrPreview]=useState(null);const[trBusy,setTrBusy]=useState(false);
   const trAddLine=useCallback((product,variant,qty)=>{
@@ -96,18 +99,18 @@ function StockScreen(){
   const trTotal=trLines.reduce((s,l)=>s+(parseInt(l.quantity)||0),0);
   const trSubmit=async()=>{
     if(!trLines.length){notify("Ajoutez au moins un article","error");return;}
-    if(!trDest.trim()){notify("Indiquez la destination","error");return;}
+    if(!trCible&&!trDest.trim()){notify("Indiquez la destination","error");return;}
     if(!trRef.trim()){notify("Indiquez la référence / le motif","error");return;}
     const over=trLines.find(l=>l.quantity>l.stock);
     if(over){notify(`Stock insuffisant : ${over.productName} ${over.color}/${over.size} (${over.stock} dispo)`,"error");return;}
     setTrBusy(true);
     try{
-      const t=await API.stock.transferOut({destination:trDest.trim(),note:trRef.trim(),
+      const t=await API.stock.transferOut({destination:trCible?"":trDest.trim(),targetStoreId:trCible||undefined,note:trRef.trim(),
         items:trLines.map(l=>({productId:l.productId,variantId:l.variantId,quantity:parseInt(l.quantity)}))});
       // Décrément local (pas de rechargement complet du catalogue)
       setProducts(prev=>prev.map(p=>{const ls=trLines.filter(l=>l.productId===p.id);if(!ls.length)return p;
         return{...p,variants:(p.variants||[]).map(v=>{const l=ls.find(x=>x.variantId===v.id);return l?{...v,stock:Math.max(0,(v.stock||0)-l.quantity)}:v;})};}));
-      setTrPreview(t);setTrLines([]);setTrDest("");setTrRef("");loadTrHist();
+      setTrPreview(t);setTrLines([]);setTrDest("");setTrCible("");setTrRef("");loadTrHist();
       notify(`Bon ${t.number} — ${t.totalQty} pièce(s) → ${t.destination}`,"success");
       try{await thermalPrint("transfer",t);}catch(e){console.warn("Impression bon de transfert:",e.message);}
     }catch(e){notify("Transfert refusé : "+e.message,"error");}
@@ -579,7 +582,7 @@ function StockScreen(){
     {tab==="transfers"&&<div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`}}>
       <h3 style={{fontSize:14,fontWeight:700,marginBottom:10}}>Bon de transfert</h3>
       <div style={{padding:10,background:C.primaryLight,borderRadius:8,marginBottom:12,fontSize:11,color:C.primaryDark,border:`1px solid ${C.primary}22`}}>
-        Sortie de stock vers un autre magasin ou une entité externe (site web, dépôt…). Scannez ou ajoutez les articles, puis validez : le stock est décrémenté et un ticket récapitulatif est imprimé.</div>
+        Vers un magasin Tech in Cash : le stock est retiré d'ici et ajouté là-bas en une seule opération. Vers une autre destination (site web, dépôt…) : sortie de stock seule. Scannez ou ajoutez les articles, puis validez : un ticket récapitulatif est imprimé.</div>
       <Input placeholder="Scanner EAN ou saisir code-barres puis Entrée..." style={{marginBottom:10,height:36,fontSize:12,borderColor:C.info,borderWidth:2}}
         onKeyDown={e=>{if(e.key==="Enter"){const c=e.target.value.trim();e.target.value="";if(c)trScan(c);}}}/>
       <div style={{display:"grid",gridTemplateColumns:"2fr 1.4fr 70px auto",gap:8,alignItems:"end",marginBottom:12}}>
@@ -606,7 +609,11 @@ function StockScreen(){
         <div style={{display:"flex",justifyContent:"space-between",padding:"8px 10px",background:C.surfaceAlt,fontWeight:700,fontSize:12}}><span>Total</span><span>{trTotal} pièce{trTotal>1?"s":""}</span></div></div>}
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
         <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>DESTINATION *</label>
-          <Input value={trDest} onChange={e=>setTrDest(e.target.value)} placeholder="Boutique Paris, Site web, Dépôt…" style={{height:36}}/></div>
+          {autresMagasins.length>0&&<select value={trCible} onChange={e=>setTrCible(e.target.value)} style={{width:"100%",padding:8,borderRadius:8,border:`1.5px solid ${C.border}`,fontSize:11,fontFamily:"inherit",marginBottom:6}}>
+            <option value="">Autre destination (site web, dépôt…) — sortie seule</option>
+            {autresMagasins.map(st=>(<option key={st.id} value={st.id}>Magasin {st.name} — stock ajouté à l'arrivée</option>))}</select>}
+          {!trCible&&<Input value={trDest} onChange={e=>setTrDest(e.target.value)} placeholder="Site web, Dépôt, autre enseigne…" style={{height:36}}/>}
+          {trCible&&<div style={{fontSize:10,color:"#059669",fontWeight:600}}>Les pièces seront retirées d'ici ET ajoutées au stock du magasin destinataire.</div>}</div>
         <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>RÉFÉRENCE / MOTIF *</label>
           <Input value={trRef} onChange={e=>setTrRef(e.target.value)} placeholder="N° bon, motif du transfert…" style={{height:36}}/></div></div>
       <Btn onClick={trSubmit} disabled={trBusy} style={{width:"100%",height:44,background:C.info}}><Printer size={15}/> {trBusy?"Transfert en cours…":`Valider le transfert et imprimer (${trTotal} pièce${trTotal>1?"s":""})`}</Btn>
