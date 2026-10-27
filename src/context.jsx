@@ -322,8 +322,10 @@ function AppProvider({children}){
           else if(action.type==="createUser")await API.auth.createUser(action.data);
           else if(action.type==="deleteUser")await API.auth.deleteUser(action.userId);
           else if(action.type==="updateSettings")await API.settings.update(action.data);
-          else if(action.type==="openRegister")await API.settings.openRegister(action.data.openingAmount);
-          else if(action.type==="closeRegister")await API.settings.closeRegister(action.data.registerId,{closedAt:new Date().toISOString()});
+          else if(action.type==="openRegister"){const r=await API.settings.openRegister(action.data.openingAmount);
+            // la session ouverte hors-ligne reçoit enfin son identifiant serveur (sinon sa fermeture n'était jamais envoyée)
+            if(r?.id)setCashReg(prev=>prev&&!prev.id?{...prev,id:r.id,openingAmount:r.alreadyOpen?(parseFloat(r.opening_amount)||prev.openingAmount):prev.openingAmount}:prev);}
+          else if(action.type==="closeRegister")await API.settings.closeRegister(action.data.registerId,{closingCash:action.data.closingCash??null,closingCard:action.data.closingCard??null});
           else if(action.type==="offlineSale")await API.sales.checkout(action.data);
           else if(action.type==="offlineClosure")await API.fiscal.closure(action.data);
           else if(action.type==="offlineAvoir"){await API.returns.create(action.data);/* FE-08: backend handles restock — no local increment here */}
@@ -1395,15 +1397,27 @@ function AppProvider({children}){
 
   const openReg=async(a,denominations)=>{
     const reg={openingAmount:a,openDate:new Date().toISOString(),denominations:denominations||null};
-    setCashReg(reg);addAudit("CAISSE","Ouverture "+a+"€");
-    try{const res=await API.settings.openRegister(a);if(res?.id)setCashReg(prev=>({...prev,id:res.id}));
-    }catch(e){addPendingSync({type:"openRegister",data:{openingAmount:a}});console.warn("Ouverture caisse locale:",e.message);}
+    // Journal d'audit « Ouverture » écrit par le serveur (plus de doublon local)
+    try{const res=await API.settings.openRegister(a);
+      if(res?.alreadyOpen){
+        // Une session est déjà ouverte aujourd'hui (autre terminal, cache vidé…) : on la reprend,
+        // avec SON fond — c'est celui que le Z utilisera.
+        const fond=parseFloat(res.opening_amount)||0;
+        setCashReg({openingAmount:fond,openDate:res.opened_at||reg.openDate,id:res.id,denominations:null});
+        notify(`Caisse déjà ouverte aujourd'hui (fond ${fond.toFixed(2)} €) : session reprise`,"info");return;}
+      setCashReg({...reg,id:res?.id});
+    }catch(e){
+      if(!(e instanceof TypeError)){notify("Ouverture de caisse refusée : "+e.message,"error");return;}
+      setCashReg(reg);addPendingSync({type:"openRegister",data:{openingAmount:a}});console.warn("Ouverture caisse locale:",e.message);}
     // Print opening ticket
     try{await thermalPrint("register-open",{openingAmount:a,openDate:reg.openDate,userName:currentUser?.name,storeName:currentStore?.name,denominations:denominations||null});}catch(e){console.warn("Impression ouverture:",e.message);}
   };
   const closeReg=async(closingCash,closingCard,closeData)=>{
     if(cashReg?.id){try{await API.settings.closeRegister(cashReg.id,{closingCash:closingCash||null,closingCard:closingCard||null});
-    }catch(e){addPendingSync({type:"closeRegister",data:{registerId:cashReg.id}});console.warn("Fermeture caisse locale:",e.message);}}
+    }catch(e){
+      // Session déjà fermée côté serveur (autre terminal) : rien à rejouer
+      if(!(e instanceof TypeError))notify("Fermeture de session : "+e.message,"warn");
+      else addPendingSync({type:"closeRegister",data:{registerId:cashReg.id,closingCash:closingCash||null,closingCard:closingCard||null}});}}
     // Print closing ticket
     if(closeData){try{await thermalPrint("register-close",{...closeData,openDate:cashReg?.openDate,closeDate:new Date().toISOString(),openingAmount:cashReg?.openingAmount||0,userName:currentUser?.name,storeName:currentStore?.name,actualCash:closingCash,actualCard:closingCard});}catch(e){console.warn("Impression fermeture:",e.message);}}
     setCashReg(null);
@@ -1559,6 +1573,8 @@ function AppProvider({children}){
         hash:apiResult.hash||"",fingerprint:apiResult.fingerprint||"",
         barcode:apiResult.barcode||""};
       if(apiResult.seq)setAvoirSeq(apiResult.seq);
+      // Remboursement espèces : prélèvement créé par le serveur -> tiroir et aperçu du Z justes
+      if(apiResult.cashMovement)setCashMovements(prev=>{const next=[apiResult.cashMovement,...prev].slice(0,500);try{localStorage.setItem("caissepro_cashmoves",JSON.stringify(next));}catch(e){}return next;});
     }catch(e){
       // Refus du serveur (doublon, quantite/montant depasse, droits, vente d'un autre magasin...) :
       // AUCUN avoir. Seule une coupure reseau (TypeError) justifie un avoir provisoire hors-ligne.

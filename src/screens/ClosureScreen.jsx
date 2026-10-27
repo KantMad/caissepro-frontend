@@ -55,10 +55,13 @@ function ClosureScreen(){
   const estFormation=(t)=>t.trainingMode||String(t.ticketNumber||t.ticket_number||"").match(/^(FACTICE|FORMATION)/);
   const pt=tickets.filter(t=>dayKey(new Date(t.date||t.createdAt||t.created_at||0))===today&&!estFormation(t));
   const todayAvoirs=avoirs.filter(a=>dayKey(new Date(a.date||a.createdAt||0))===today);
+  const todayAvoirsRembourses=(mode)=>todayAvoirs.filter(a=>(a.refundMethod||a.refund_method)===mode).reduce((s,a)=>s+(Number(a.totalTTC??a.total_ttc)||0),0);
   const somme=(methodes)=>pt.reduce((s,t)=>s+(t.payments?.filter(p=>methodes.includes(p.method)).reduce((a,p)=>a+Number(p.amount||0),0)||0),0);
   const cash=somme(["cash"]);
   // « Carte » = CB + Amex + sans-contact, comme le TPE et le Z
-  const card=somme(["card","amex","contactless"]);
+  // Carte attendue au TPE = encaissements carte − remboursements carte du jour
+  const remboursCarte=todayAvoirsRembourses("card");
+  const card=Math.round((somme(["card","amex","contactless"])-remboursCarte)*100)/100;
   const cheque=somme(["cheque"]);
   const giftcard=somme(["giftcard"]);
   const totalTTC=pt.reduce((s,t)=>s+(t.totalTTC||parseFloat(t.total_ttc)||0),0);const totalHT=pt.reduce((s,t)=>s+(t.totalHT||parseFloat(t.total_ht)||0),0);
