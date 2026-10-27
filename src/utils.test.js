@@ -492,3 +492,10 @@ describe("Panier en attente relu du serveur", () => {
     expect(d.isCustom).toBe(true); expect(d.product.name).toBe("Retouche: ourlet"); expect(d.product.price).toBe(15);
   });
 });
+
+describe("TVA 0 % (retouche exonérée)", () => {
+  it("une ligne à 0 % reste à 0 % : HT = TTC, TVA nulle", () => {
+    const t = computeTotals([{ price: 15, quantity: 1, taxRate: 0 }], { pricingMode: "TTC" });
+    expect(t.tTTC).toBe(15); expect(t.tHT).toBe(15); expect(t.tTVA).toBe(0);
+  });
+});

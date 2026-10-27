@@ -20,7 +20,7 @@ export function calcPromoDiscount(cartItems, activePromos, opts = {}) {
   const items = cartItems || [];
   const promos = activePromos || [];
 
-  const rate = (ci) => ci.product.taxRate || 0.20;
+  const rate = (ci) => ci.product.taxRate ?? 0.20;
   const ligne = (ci) => ({ price: ci.product.price, quantity: ci.quantity, taxRate: ci.product.taxRate,
     discount: ci.discount, discountType: ci.discountType, discountPercent: ci.discountPercent, discountAmount: ci.discountAmount });
   const netTTC = (ci) => lineNetTTC(ligne(ci), pm);

@@ -36,7 +36,7 @@ export function lineDiscounts(i = {}) {
 
 /** Total TTC réellement payé pour une ligne (remises cumulées appliquées) */
 export function lineNetTTC(i, pricingMode = "TTC") {
-  const rate = i.taxRate || 0.20;
+  const rate = i.taxRate ?? 0.20;   // 0 % est un taux valide (retouches exonérées)
   const qty = i.quantity || 0;
   const { pct, amtTTC } = lineDiscounts(i);
   const brut = (i.price || 0) * qty * (1 - pct / 100);
@@ -67,7 +67,7 @@ export function computeTotals(lines, opts = {}) {
   if (!lines || !lines.length) return { sHT: 0, gd: 0, gdTTC: 0, tHT: 0, tTVA: 0, tTTC: 0 };
 
   // Ligne TTC réelle (prix payé, remises de ligne cumulées) + taux
-  const computed = lines.map((i) => ({ rate: i.taxRate || 0.20, lineTTC: lineNetTTC(i, pm) }));
+  const computed = lines.map((i) => ({ rate: i.taxRate ?? 0.20, lineTTC: lineNetTTC(i, pm) }));
 
   // Sous-total (avant remise globale)
   const sHT = round2(computed.reduce((s, l) => s + l.lineTTC / (1 + l.rate), 0));

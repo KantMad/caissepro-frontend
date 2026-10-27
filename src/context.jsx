@@ -648,7 +648,10 @@ function AppProvider({children}){
     // Baisse de quantité = retrait partiel : tracé comme une suppression de ligne (NF525)
     const ligne=cart.find(c=>c.product.id===pid&&c.variant?.id===vid);
     if(ligne&&q<ligne.quantity){const txt=`Quantité réduite ${ligne.quantity} → ${q} : ${decrireLigne(ligne,ligne.quantity-q)}`;addAudit("VOID_LINE",txt,pid);addJET("VOID_LINE",txt);}
-    setCart(p=>p.map(c=>c.product.id===pid&&c.variant?.id===vid?{...c,quantity:q}:c));};
+    // Remise en € de la ligne : ramenée à la nouvelle quantité (même remise PAR ARTICLE) — sinon
+    // 10 € sur 5 articles devenaient 10 € sur 1 article (100 %) en baissant la quantité.
+    setCart(p=>p.map(c=>c.product.id===pid&&c.variant?.id===vid?{...c,quantity:q,
+      ...(c.discountAmount&&c.quantity>0&&q<c.quantity?{discountAmount:Math.round(c.discountAmount*q/c.quantity*100)/100}:{})}:c));};
   // Remise de ligne cumulable : pct (%) puis amt (euros TTC sur la ligne entiere)
   const updateItemDisc=(pid,vid,pct,amt)=>setCart(p=>p.map(c=>c.product.id===pid&&c.variant?.id===vid
     ?{...c,discountPercent:Number(pct)||0,discountAmount:Number(amt)||0,
@@ -762,7 +765,7 @@ function AppProvider({children}){
     const pm=settings.pricingMode||"TTC";
     const items=cart.map(i=>{
       // Ligne nette (remises cumulees) — meme fonction que l'apercu panier
-      const rate=i.product.taxRate||0.20;
+      const rate=i.product.taxRate??0.20;
       const lineTTC=lineNetTTC({price:i.product.price,quantity:i.quantity,taxRate:rate,
         discountPercent:i.discountPercent??i.discount,discountAmount:i.discountAmount,discount:i.discount,discountType:i.discountType},pm);
       const lineHT=lineTTC/(1+rate);
@@ -770,8 +773,8 @@ function AppProvider({children}){
       return{
       product_id:i.isCustom?null:i.product.id,variant_id:i.isCustom?null:i.variant?.id,
       product_name:i.product.name,variant_color:i.variant?.color||"—",variant_size:i.variant?.size||"—",
-      quantity:i.quantity,unit_price:pm==="TTC"?i.product.price/(1+(i.product.taxRate||0.20)):i.product.price,cost_price:i.product.costPrice||0,// prix d'achat saisi HT (confirme 27/10/2026) : jamais divise par la TVA
-      tax_rate:i.product.taxRate||0.20,discount_percent:i.discountPercent??(i.discountType==="amount"?0:i.discount)??0,
+      quantity:i.quantity,unit_price:pm==="TTC"?i.product.price/(1+(i.product.taxRate??0.20)):i.product.price,cost_price:i.product.costPrice||0,// prix d'achat saisi HT (confirme 27/10/2026) : jamais divise par la TVA
+      tax_rate:i.product.taxRate??0.20,discount_percent:i.discountPercent??(i.discountType==="amount"?0:i.discount)??0,
       discount_amount:i.discountAmount??(i.discountType==="amount"?(i.discount||0)*i.quantity:0),is_custom:i.isCustom||false,
       lineHT,lineTVA,lineTTC,
       product:{id:i.product.id,name:i.product.name,sku:i.product.sku,price:i.product.price,costPrice:i.product.costPrice,taxRate:i.product.taxRate,collection:i.product.collection,category:i.product.category},
@@ -861,8 +864,17 @@ function AppProvider({children}){
       // une vente : avant, la caisse imprimait quand meme le ticket, l'ajoutait au CA affiche,
       // puis l'abandonnait apres 3 refus (ventes perdues du 09/10/2026).
       if(!(e instanceof TypeError)){
-        const carteDebitee=payments.some(p=>cardMethods.includes(p.method)&&(p.authCode||p.transactionId));
-        notify(`Vente REFUSÉE par le serveur : ${e.message}. Rien n'a été enregistré.${carteDebitee?" Le paiement carte a été débité : annulez-le sur le TPE.":""}`,"danger");
+        // Carte déjà débitée au TPE alors que la vente est refusée : remboursement AUTOMATIQUE
+        // demandé au terminal (avant : simple message, et un nouvel essai débitait une 2e fois).
+        const debits=payments.filter(p=>cardMethods.includes(p.method)&&(p.authCode||p.transactionId));
+        let nonAnnules=0;
+        for(const p of debits){
+          let r=null;try{r=await hardwareManager.refund(p.amount,{currency:"EUR",reference:`ANNUL-${p.transactionId||p.authCode||Date.now()}`,originalTransactionId:p.transactionId});}catch(err){r={success:false,error:err.message};}
+          addJET("PARAM_CHANGE",`Paiement carte ${p.amount.toFixed(2)}€ (vente refusée) : ${r?.success?"remboursé au TPE":"remboursement TPE impossible — "+(r?.error||"?")}`);
+          if(!r?.success)nonAnnules+=p.amount;
+        }
+        notify(`Vente REFUSÉE par le serveur : ${e.message}. Rien n'a été enregistré.`+
+          (debits.length?(nonAnnules>0?` ⚠ ${nonAnnules.toFixed(2)} € débités par carte : remboursez le client sur le TPE AVANT tout nouvel essai.`:" Le paiement carte a été remboursé automatiquement au TPE."):""),"danger");
         return null;
       }
       // Fallback local
@@ -872,7 +884,7 @@ function AppProvider({children}){
       const paymentMethod=payments.length===1?payments[0].method:"MIXTE";
       // Marge HT = CA net HT (remise globale comprise) - cout d'achat HT (le cout n'est pas remise)
       const netHTLignes=cart.reduce((s,i)=>s+lineNetTTC({price:i.product.price,quantity:i.quantity,taxRate:i.product.taxRate,
-        discountPercent:i.discountPercent??i.discount,discountAmount:i.discountAmount,discount:i.discount,discountType:i.discountType},pm)/(1+(i.product.taxRate||0.20)),0);
+        discountPercent:i.discountPercent??i.discount,discountAmount:i.discountAmount,discount:i.discount,discountType:i.discountType},pm)/(1+(i.product.taxRate??0.20)),0);
       const coutHT=cart.reduce((s,i)=>s+(i.product.costPrice||0)*i.quantity,0);
       const margin=netHTLignes*(sHT?tHT/sHT:1)-coutHT;
       // Décrémenter stock local (autorise négatif)
@@ -1018,7 +1030,7 @@ function AppProvider({children}){
       const gd=t.globalDiscount||0;const tHT=t.totalHT||0;const rawHT=(t.items||[]).reduce((s,i)=>s+(i.lineHT),0);
       const discRatio=rawHT>0?gd/rawHT:0;
       (t.items||[]).forEach(i=>{
-        const taxR=i.product?.taxRate||i.tax_rate||0.20;const r=(taxR*100).toFixed(1)+"%";
+        const taxR=i.product?.taxRate??(i.tax_rate!=null?Number(i.tax_rate):0.20);const r=(taxR*100).toFixed(1)+"%";
         if(!byRate[r])byRate[r]={rate:r,baseHT:0,tva:0};
         // Utiliser lineHT pré-calculé (déjà correct pour TTC/HT) puis appliquer la remise globale proportionnellement
         const lHT=(i.lineHT)*(1-discRatio);
@@ -1284,7 +1296,7 @@ function AppProvider({children}){
       try{
         const row=await API.products.findByEAN(code);
         if(row&&row.variant_id){
-          const p={id:row.id,name:row.name,sku:row.sku,price:Number(row.price),costPrice:Number(row.cost_price||0),taxRate:Number(row.tax_rate||0.20),category:row.category,collection:row.collection};
+          const p={id:row.id,name:row.name,sku:row.sku,price:Number(row.price),costPrice:Number(row.cost_price||0),taxRate:Number(row.tax_rate??0.20),category:row.category,collection:row.collection};
           const v={id:row.variant_id,color:row.color,colorCode:row.color_code,size:row.size,ean:row.ean,stock:Number(row.stock||0)};
           addToCartRef.current(p,v);notifyRef.current(p.name+" ajouté ("+code+")");return;
         }
@@ -1563,7 +1575,7 @@ function AppProvider({children}){
     let totalTTC=0,totalHT=0,totalTVA=0;
     const items=returnItems.map(ri=>{
       const origItem=ticket.items?.find(i=>(i.product?.id||i.product_id)===ri.productId&&(i.variant?.id||i.variant_id)===ri.variantId);
-      const taxRate=origItem?.tax_rate||origItem?.product?.taxRate||ri.taxRate||0.20;
+      const taxRate=Number(origItem?.tax_rate??origItem?.product?.taxRate??ri.taxRate??0.20);
       let lTTC;
       if(origItem){
         // Depuis le ticket original: prix TTC unitaire = lineTTC / quantity

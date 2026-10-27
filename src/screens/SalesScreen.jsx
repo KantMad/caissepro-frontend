@@ -56,7 +56,8 @@ function SalesScreen(){
     if(e.key==="F8"){e.preventDefault();if(cart.length){if(!perm().canVoid){notify("Annulation de panier réservée au gérant","error");return;}setConfirmVoid(true);}}
     if(e.key==="?"&&e.shiftKey){e.preventDefault();setShowShortcuts(s=>!s);}
   };window.addEventListener("keydown",handler);return()=>window.removeEventListener("keydown",handler);
-  },[cart,busy,parkCart]);
+  });   // ré-abonné à CHAQUE rendu : F2/F3 encaissent le total ACTUEL (remise panier, avoir, vendeur).
+        // Avant, [cart,busy,parkCart] figeait quickPay : après une remise, le TPE était débité de l'ancien total.
 
   // Barcode scanning is handled centrally by hardwareManager.scanner in context.jsx
   // (removed duplicate keydown listener that caused double-scan issue)
@@ -439,7 +440,9 @@ function SalesScreen(){
 
     <Modal open={!!dm} onClose={()=>setDm(null)} title="Remise article" sub="Le % s'applique d'abord, puis les euros sur le reste">
       {(()=>{const it=dm?.item;if(!it)return null;
-        const brut=round2(it.product.price*it.quantity);
+        // Brut TTC (en mode HT, prix x (1 + TVA)) : comparé au net TTC, sinon le % effectif était
+        // sous-estimé du taux de TVA et le plafond du rôle contourné.
+        const brut=round2(it.product.price*it.quantity*(settings.pricingMode==="HT"?1+(it.product.taxRate??0.20):1));
         const pct=Math.max(0,Math.min(100,parseFloat(dPct)||0));
         const eur=Math.max(0,parseFloat(dEur)||0);
         const net=lineNetTTC({price:it.product.price,quantity:it.quantity,taxRate:it.product.taxRate,discountPercent:pct,discountAmount:eur},settings.pricingMode);
@@ -494,7 +497,10 @@ function SalesScreen(){
               <span style={{fontSize:11,fontWeight:600,color:C.textMuted,marginLeft:6}}>(-{round2(brutTTC-net).toFixed(2)}€)</span></span></div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
             <Btn variant="outline" onClick={()=>{setCartGD(0,0);setGm(false);}}>Supprimer</Btn>
-            <Btn variant="success" onClick={()=>{setCartGD(pct,eur);setGm(false);}}>Appliquer</Btn></div>
+            {/* Plafond du rôle sur la remise panier (% puis €) — avant : aucun contrôle (-100 % possible) */}
+            {brutTTC>0&&round2(brutTTC-net)/brutTTC*100>maxDisc+0.01?
+              <Btn variant="success" disabled style={{opacity:0.5}}>Plafond {maxDisc}% dépassé</Btn>:
+              <Btn variant="success" onClick={()=>{setCartGD(pct,eur);setGm(false);}}>Appliquer</Btn>}</div>
         </>);})()}
     </Modal>
 
