@@ -171,6 +171,20 @@ function TrainingBanner(){
   </div>);
 }
 
+// Bandeau ADMIN : serveur en état dégradé (migrations en échec au démarrage). Le 27/10/2026, les
+// migrations 034 à 042 étaient bloquées depuis des semaines sans que rien ne le montre.
+export function ServerHealthBanner(){
+  const{currentUser}=useApp();
+  const[etat,setEtat]=useState(null);
+  useEffect(()=>{if(currentUser?.role!=="admin")return;let ok=true;
+    const lire=()=>Promise.resolve().then(()=>API.health()).then(h=>{if(ok)setEtat(h);}).catch(()=>{});
+    lire();const t=setInterval(lire,5*60000);return()=>{ok=false;clearInterval(t);};},[currentUser?.role]);
+  if(!etat||etat.status!=="degraded")return null;
+  return(<div role="alert" data-testid="server-health-banner" style={{background:"#B91C1C",color:"#fff",fontWeight:700,fontSize:12,padding:"7px 14px",textAlign:"center",flexShrink:0}}>
+    Serveur en état dégradé — {etat.migrations||"mise à jour incomplète"}. Lancer « node scripts/diagnostic-nf525.js » sur le serveur.
+  </div>);
+}
+
 function CashierInterface(){
   const{cashReg}=useApp();
   const vp=useViewport();
@@ -593,11 +607,11 @@ function DashboardInterface(){
         <img src={logo} alt="" style={{width:28,height:28,objectFit:"contain"}}/>
         <div style={{color:"#fff",fontSize:16,fontWeight:700,letterSpacing:"-0.3px"}}>{titles[sc]||"Tech in Cash"}</div>
       </div>
-      <TrainingBanner/>
+      <TrainingBanner/><ServerHealthBanner/>
       <DashboardNav active={sc} onNav={setSc} vp={vp} mobileOpen={drawerOpen} onCloseMobile={()=>setDrawerOpen(false)}/>
       <div style={{flex:1,overflow:"hidden"}}><ErrorBoundary><Suspense fallback={<ChargementEcran/>}><Sc/></Suspense></ErrorBoundary></div></div>);
   }
-  return(<div style={{display:"flex",flexDirection:"column",height:"100vh",fontFamily:"'DM Sans',system-ui,sans-serif"}}><TrainingBanner/>
+  return(<div style={{display:"flex",flexDirection:"column",height:"100vh",fontFamily:"'DM Sans',system-ui,sans-serif"}}><TrainingBanner/><ServerHealthBanner/>
     <div style={{display:"flex",flex:1,minHeight:0}}><DashboardNav active={sc} onNav={setSc} vp={vp}/><div style={{flex:1,overflow:"hidden"}}><ErrorBoundary><Suspense fallback={<ChargementEcran/>}><Sc/></Suspense></ErrorBoundary></div></div></div>);
 }
 
