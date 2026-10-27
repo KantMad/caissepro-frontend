@@ -75,7 +75,7 @@ function LabelsScreen() {
 
   const saveDefaults = async () => {
     const next = { ...settings, labelFormat: format, labelWidth: dim.w, labelHeight: dim.h, labelMode: mode, labelFields: opts };
-    try { setSettings(next); await saveSettingsNotify(next,"Réglages d'étiquettes"); }
+    try { await saveSettingsNotify(next,"Réglages d'étiquettes"); }   // réglages mis à jour (ou rétablis si refus)
     catch (e) { notify("Enregistrement impossible : " + e.message, "error"); }
   };
 

@@ -12,6 +12,10 @@ function FiscalScreen(){
   const storeName=viewingStoreId==="all"?"Tous les magasins":viewingStoreId?stores.find(s=>s.id===viewingStoreId)?.name:currentStore?.name||"";
   const[chainResult,setChainResult]=useState(null);
   const[fiscalTab,setFiscalTab]=useState("status");
+  // Vérification serveur de la chaîne, lancée à l'ouverture de l'écran (alimente les contrôles)
+  const[chaineAuto,setChaineAuto]=useState(null);
+  useEffect(()=>{let annule=false;API.fiscal.verifyChain().then(r=>{if(!annule)setChaineAuto(r);}).catch(e=>{if(!annule)setChaineAuto({valid:false,message:"Vérification impossible : "+e.message});});
+    return()=>{annule=true;};},[]);
   // Onglet TVA : calcul SERVEUR sur le mois choisi (avant : tickets en mémoire seulement, sans
   // période, sans avoirs, ventes de formation comprises)
   const[tvaMois,setTvaMois]=useState(()=>dayKey().slice(0,7));const[tvaSrv,setTvaSrv]=useState(null);const[tvaErreur,setTvaErreur]=useState("");
@@ -27,18 +31,19 @@ function FiscalScreen(){
   const[archivePeriod,setArchivePeriod]=useState("J");
   if(!p().canExport)return<div style={{padding:40,textAlign:"center",color:C.textMuted}}>Accès réservé aux administrateurs</div>;
 
-  // NF525 compliance checks
+  // NF525 : les contrôles « chaîne », « séquence » et « JET » viennent de la VÉRIFICATION SERVEUR
+  // (recalcul de toutes les empreintes) — avant, ils étaient déduits du cache local (500 tickets)
+  // ou figés à « conforme ». Les autres lignes décrivent des règles de conception.
+  const chaine=chaineAuto;
   const checks=[
-    {id:"hash",label:"Chaîne de hachage SHA-256",desc:"Chaque ticket, avoir et clôture est chaîné par SHA-256 avec le hash précédent",
-      ok:!!lastHash&&lastHash!=="0".repeat(64)||tSeq===0},
-    {id:"seq",label:"Numérotation séquentielle continue",desc:"Les tickets sont numérotés séquentiellement sans rupture (TK-YYYY-XXXXXX)",
-      ok:(()=>{const sorted=[...tickets].filter(t=>t.seq).sort((a,b)=>a.seq-b.seq);for(let i=1;i<sorted.length;i++){if(sorted[i].seq-sorted[i-1].seq>1)return false;}return true;})()},
+    {id:"hash",label:"Chaîne de hachage SHA-256",desc:chaine?chaine.message:"Vérification serveur en cours…",ok:!!chaine?.valid},
+    {id:"seq",label:"Numérotation séquentielle continue",desc:"Contrôlée par la vérification serveur (chaînage ticket par ticket, par magasin)",ok:!!chaine?.valid},
     {id:"gt",label:"Grand Total perpétuel (GT)",desc:"Compteur cumulatif depuis la mise en service, jamais remis à zéro",ok:gt>=0},
     {id:"jet",label:"Journal des Événements Techniques",desc:"JET chaîné avec signature SHA-256, codes événements NF525 (80, 90, 95, 250, 410...)",
-      ok:jet.length>0&&jet[0]?.hash},
+      ok:!!chaine?.valid&&(chaine?.jet||0)>0},
     {id:"immutable",label:"Inaltérabilité des données",desc:"Aucune fonction de suppression de tickets validés. Corrections par écriture inverse (avoir)",ok:true},
     {id:"closures",label:"Clôtures périodiques",desc:"Clôtures Z journalières avec totaux cumulatifs et GT",ok:closures.length>0||tSeq===0},
-    {id:"archive",label:"Archive NF525 (10 fichiers CSV)",desc:"Export conforme: Entete, Lignes, TVA, Pied, Client, Reglements, Duplicata, JET, GTT, GTJ",ok:true},
+    {id:"archive",label:"Archive NF525 (14 fichiers CSV + manifeste)",desc:"Entete, Lignes, TVA, Pied, Client, Reglements, Duplicata, JET, GTT, GTJ, Avoirs, AvoirsLignes, Clotures, Tiroir — SHA-256 + HMAC",ok:true},
     {id:"retention",label:"Conservation 6 ans (Art. L.102 B LPF)",desc:"Données conservées côté serveur pendant 6 ans. Cache local limité à 500 tickets",ok:true},
     {id:"duplicata",label:"Traçabilité des duplicata",desc:"Chaque réimpression de ticket est enregistrée dans le JET et l'audit",
       ok:true},
@@ -126,10 +131,11 @@ function FiscalScreen(){
       <div style={{background:C.surface,borderRadius:12,padding:14,border:`1.5px solid ${C.border}`,marginBottom:12}}>
         <div style={{fontSize:12,fontWeight:700,marginBottom:4}}>Format de chaînage</div>
         <div style={{fontFamily:"monospace",fontSize:9,background:C.surfaceAlt,padding:10,borderRadius:8,color:C.textMuted}}>
-          <div>TICKETS: SHA-256( prevHash | seq | VENTE | caisseId | ticketNum | date | totalTTC | GT )</div>
-          <div style={{marginTop:4}}>AVOIRS: SHA-256( prevHash | seq | AVOIR | caisseId | avoirNum | date | totalTTC | ticketOrigine )</div>
-          <div style={{marginTop:4}}>JET: SHA-256( prevHash | seq | codeJet | type | date | detail | userId )</div>
-          <div style={{marginTop:4}}>CLOTURES: SHA-256( prevHash | Z-type | date | totalTTC | GT | nbTickets )</div></div></div>
+          {/* Formules RÉELLEMENT calculées par le serveur (create_sale, returns.js, fiscal.js, utils/jet.js) */}
+          <div>TICKETS: SHA-256( n° ticket | seq | horodatage | total HT | total TTC | GT | mode de paiement | hash précédent )</div>
+          <div style={{marginTop:4}}>AVOIRS: SHA-256( hash précédent | seq | AVOIR | magasin | n° avoir | horodatage | total TTC | ticket d'origine )</div>
+          <div style={{marginTop:4}}>JET: SHA-256( hash précédent | n° | type | détail | utilisateur | horodatage | magasin )</div>
+          <div style={{marginTop:4}}>CLOTURES: SHA-256( Z | type [| complément | début] | horodatage | total TTC | GT | hash précédent )</div></div></div>
       <Btn variant="outline" onClick={async()=>{const r=await verifyChain();setChainResult(r);}} style={{width:"100%",marginBottom:8,height:40}}>
         <Shield size={14}/> Vérifier l'intégrité de la chaîne (serveur)</Btn>
       {chainResult&&<div style={{padding:10,borderRadius:10,marginBottom:14,background:chainResult.valid?C.primaryLight:C.dangerLight,

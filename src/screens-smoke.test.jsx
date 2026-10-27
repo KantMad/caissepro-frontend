@@ -4,7 +4,7 @@
 // Objectif : attraper les plantages au rendu (variable non définie, import manquant)
 // que `vite build` ne voit pas — ils n'apparaissaient qu'à l'écran, en production.
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, cleanup, fireEvent } from "@testing-library/react";
+import { render, cleanup, fireEvent, waitFor } from "@testing-library/react";
 import React from "react";
 
 vi.mock("./printer.js", () => ({ default: { connect: vi.fn(), isConnected: () => false, disconnect: vi.fn(), on: () => () => {} } }));
@@ -217,6 +217,20 @@ describe("Écrans — rendu sans plantage", () => {
     fireEvent.change(getByPlaceholderText("N° ticket, nom client…"), { target: { value: "2025-000999" } });
     fireEvent.click(await findByText(/2025-000999/, {}, { timeout: 2000 }));
     expect(await findByText(/Ticket de plus de 30 jours/)).toBeTruthy();
+  });
+
+  it("Stock : saisie d'un comptage d'inventaire sans erreur", async () => {
+    const { getAllByText, container } = render(<AppProvider><StockScreen /></AppProvider>);
+    const b = getAllByText("Inventaire"); fireEvent.click(b[b.length - 1]);
+    let champ = null;
+    await waitFor(() => { champ = container.querySelector('input[type="number"][min="0"]'); expect(champ).toBeTruthy(); });
+    // une erreur levée dans un gestionnaire d'événement remonte à window, pas à console.error
+    const pageErr = []; const h = (e) => { pageErr.push(String(e.error || e.message)); e.preventDefault(); };
+    window.addEventListener("error", h);
+    fireEvent.change(champ, { target: { value: "3" } });
+    window.removeEventListener("error", h);
+    expect(pageErr).toEqual([]);
+    expect(errors.join("\n")).not.toMatch(/is not defined|Cannot read|is not a function/);
   });
 
   it("Stock : tous les onglets s'ouvrent", () => {

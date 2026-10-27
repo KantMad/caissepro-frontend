@@ -94,7 +94,8 @@ function AppProvider({children}){
   // avalee — avant, les boutons « Enregistrer » affichaient un succes meme sur un refus du
   // serveur (403) ou quand l'API jetait les champs inconnus (ecran 2, champs du ticket...).
   const saveSettingsToAPI_base=useCallback(async(newSettings)=>{
-    setSettings(s=>({...s,...newSettings}));
+    let precedent=null;
+    setSettings(s=>{precedent=s;return{...s,...newSettings};});
     try{
       const r=await API.settings.update(newSettings);
       const ignoredKeys=(r&&r.ignoredKeys)||[];
@@ -102,6 +103,9 @@ function AppProvider({children}){
       return{ok:true,ignoredKeys};
     }catch(e){
       console.warn("Parametres non enregistres :",e.message);
+      // Refus du serveur (ex. droits : réglages réservés à l'admin) : l'écran revient aux valeurs
+      // enregistrées. Avant, il restait modifié jusqu'au rechargement.
+      if(!(e instanceof TypeError)&&precedent)setSettings(precedent);
       return{ok:false,ignoredKeys:[],error:e.message};
     }
   },[]);
@@ -193,10 +197,11 @@ function AppProvider({children}){
     if(!reason||!String(reason).trim())throw new Error("Motif requis (NF525)");
     // Le backend journalise déjà ce mouvement (audit_log CASH_IN/CASH_OUT) → pas de double log local
     const saved=await API.cashMovements.create({direction,amount:amt,reason:String(reason).trim(),
-      denominations:opts.denominations||null,kind:opts.kind||"standard"});
+      denominations:opts.denominations||null,kind:opts.kind||"standard",
+      sessionId:cashReg?.id||null});   // rattaché à la session de caisse ouverte (était toujours vide)
     setCashMovements(prev=>{const next=[saved,...prev].slice(0,500);try{localStorage.setItem("caissepro_cashmoves",JSON.stringify(next));}catch(e){}return next;});
     return saved;
-  },[]);
+  },[cashReg?.id]);
   const reloadCashMovements=useCallback(async(params)=>{
     try{const data=await API.cashMovements.list(params||{});
       setCashMovements((data||[]).slice(0,500));try{localStorage.setItem("caissepro_cashmoves",JSON.stringify((data||[]).slice(0,500)));}catch(e){}
@@ -890,7 +895,7 @@ function AppProvider({children}){
       const prods=await API.products.list();
       setProducts(norm.products(prods));
       const totalQty=items.reduce((s,i)=>s+i.quantity,0);
-      addAudit("RECEPTION_BATCH",`Réassort: ${items.length} réf, ${totalQty} pièces — ${supplier||"N/A"}`);
+      // audit écrit par le serveur (pas de doublon local)
       return res;}catch(e){notify("Erreur: "+e.message,"error");throw e;}
   },[addAudit,notify]);
 
@@ -1728,14 +1733,14 @@ function AppProvider({children}){
   const adjustStock=useCallback(async(productId,variantId,newStock,reason,opts={})=>{
     const p=products.find(x=>x.id===productId);const v=p?.variants.find(x=>x.id===variantId);
     if(!p||!v)return false;
-    try{await API.stock.adjust({productId,variantId,newStock,reason});
+    try{await API.stock.adjust({productId,variantId,newStock,reason,...(opts.expectedStock!=null?{expectedStock:opts.expectedStock}:{})});
       if(opts.lot){
         setProducts(prev=>prev.map(x=>x.id===productId?{...x,variants:x.variants.map(vr=>vr.id===variantId?{...vr,stock:newStock}:vr)}:x));
       }else{
         const prods=await API.products.list();setProducts(norm.products(prods));
         notify(`Stock ajusté: ${p.name} ${v.color}/${v.size}`,"info");
       }
-      addAudit("STOCK",`${p.name} ${v.color}/${v.size}: ${v.stock} → ${newStock} (${reason||"Ajustement"})`);
+      // Journal d'audit « INVENTAIRE » écrit par le serveur (plus de doublon local)
       return true;
     }catch(e){if(!opts.lot)notify("Erreur: "+e.message,"error");return false;}
   },[products,addAudit,notify]);
@@ -1750,7 +1755,7 @@ function AppProvider({children}){
     if(!p||!v)return;
     try{await API.stock.receiveDefective({productId,variantId,quantity:qty,reason});
       await loadDefectiveStock();
-      addAudit("DEFECTUEUX",`Réception défectueux: +${qty} ${p.name} ${v.color}/${v.size}`);
+      // audit écrit par le serveur (pas de doublon local)
       notify(`Défectueux reçu: +${qty} ${p.name} ${v.color}/${v.size}`,"info");
     }catch(e){notify("Erreur: "+e.message,"error");}
   },[products,addAudit,notify,loadDefectiveStock]);
@@ -1759,7 +1764,7 @@ function AppProvider({children}){
     if(!p||!v)return;
     try{await API.stock.adjustDefective({productId,variantId,newDefective,reason});
       await loadDefectiveStock();
-      addAudit("INVENTAIRE_DEFECTUEUX",`${p.name} ${v.color}/${v.size}: ${v.defective||0} → ${newDefective}`);
+      // audit écrit par le serveur (pas de doublon local)
       notify(`Défectueux ajusté: ${p.name} ${v.color}/${v.size}`,"info");
     }catch(e){notify("Erreur: "+e.message,"error");}
   },[products,addAudit,notify,loadDefectiveStock]);

@@ -21,6 +21,9 @@ function StockScreen(){
   const isDashboard=mode!=="cashier";
   if(!perm().canCreateProduct)return<div style={{padding:40,textAlign:"center",color:"#94a3b8",fontSize:16,fontWeight:600}}>Accès réservé aux administrateurs</div>;
   const[sel,setSel]=useState(products[0]?.id||"");const[tab,setTab]=useState("matrix");
+  const[invVu,setInvVu]=useState({});   // inventaire : stock affiché au moment de la saisie du comptage
+  // Ouverture de l'Inventaire : catalogue rechargé (stocks à jour avant de compter)
+  useEffect(()=>{if(tab==="inventory")refreshProducts();},[tab]);// eslint-disable-line react-hooks/exhaustive-deps
   // Mouvements : rechargés depuis le SERVEUR à l'ouverture de l'onglet, et normalisés (les lignes
   // serveur ont d'autres noms de champs : l'onglet affichait « Invalid Date » et des colonnes vides).
   const[mvServeur,setMvServeur]=useState(null);
@@ -386,7 +389,9 @@ function StockScreen(){
                 <td style={{padding:6,fontFamily:"monospace",fontSize:9}}>{v.ean||"—"}</td>
                 <td style={{padding:6,fontWeight:700}}>{v.stock}</td>
                 <td style={{padding:6}}><input type="number" min="0" value={invCounts[key]??""}
-                  onChange={e=>setInvCounts(prev=>({...prev,[key]:e.target.value}))}
+                  onChange={e=>{const val=e.target.value;setInvCounts(prev=>({...prev,[key]:val}));
+                    // stock vu au moment du comptage : le serveur refuse si l'article a bougé depuis
+                    setInvVu(prev=>key in prev?prev:{...prev,[key]:v.stock});}}
                   style={{width:60,padding:"3px 6px",borderRadius:6,border:`1.5px solid ${C.border}`,fontSize:11,textAlign:"center",fontFamily:"inherit"}}/></td>
                 <td style={{padding:6,fontWeight:700,color:diff===null||diff===0?C.textMuted:diff>0?"#059669":C.danger}}>
                   {diff!==null?(diff>0?`+${diff}`:diff):"—"}</td></tr>);})
@@ -396,11 +401,12 @@ function StockScreen(){
         // « N ajustement(s) valide(s) » partait avant la reponse du serveur.
         const aFaire=[];Object.entries(invCounts).forEach(([key,val])=>{if(val===""||val===undefined)return;
           const[pid,vid]=key.split("_");const pr=products.find(x=>x.id===pid);const vr=pr?.variants.find(x=>x.id===vid);
-          if(pr&&vr&&parseInt(val)!==vr.stock)aFaire.push([pid,vid,parseInt(val)]);});
+          const vu=invVu[key]??vr?.stock;
+          if(pr&&vr&&parseInt(val)!==vu)aFaire.push([pid,vid,parseInt(val),vu]);});
         let ok=0,ko=0;
-        for(const [pid,vid,val] of aFaire){try{const r=await adjustStock(pid,vid,val,"INVENTAIRE",{lot:true});if(r)ok++;else ko++;}catch(e){ko++;}}
-        setInvCounts({});
-        if(ko)notify(`${ok} ajustement(s) enregistré(s), ${ko} refusé(s) — vérifiez les lignes en écart`,"error");
+        for(const [pid,vid,val,vu] of aFaire){try{const r=await adjustStock(pid,vid,val,"INVENTAIRE",{lot:true,expectedStock:vu});if(r)ok++;else ko++;}catch(e){ko++;}}
+        setInvCounts({});setInvVu({});refreshProducts();
+        if(ko)notify(`${ok} ajustement(s) enregistré(s), ${ko} refusé(s) : article vendu ou reçu pendant le comptage — recomptez-le`,"error");
         else notify(`${ok} ajustement(s) enregistré(s)`,"success");}}
         disabled={!Object.values(invCounts).some(v=>v!==""&&v!==undefined)}
         style={{width:"100%",height:40,background:C.primary}}><Save size={14}/> Valider l'inventaire</Btn>
