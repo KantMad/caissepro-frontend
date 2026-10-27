@@ -9,7 +9,7 @@ import { useApp } from "../context.jsx";
 function GiftCardScreen(){
   const{giftCards,createGiftCard,checkGiftCard,settings,notify,perm,printerConnected,thermalPrint}=useApp();
   if(!perm().canCreateProduct) return <div style={{padding:40,textAlign:"center",color:C.textMuted,fontSize:16,fontWeight:600}}>Accès refusé</div>;
-  const[amount,setAmount]=useState("");const[custName,setCustName]=useState("");
+  const[amount,setAmount]=useState("");const[custName,setCustName]=useState("");const[payMode,setPayMode]=useState("cash");
   const[checkCode,setCheckCode]=useState("");const[checkResult,setCheckResult]=useState(null);
   return(<div style={{height:"100%",overflowY:"auto",padding:20,background:C.bg}}>
     <h2 style={{fontSize:22,fontWeight:800,marginBottom:14}}>Cartes cadeaux</h2>
@@ -21,9 +21,14 @@ function GiftCardScreen(){
             <Input type="number" step="0.01" value={amount} onChange={e=>setAmount(e.target.value)} placeholder="50.00"/></div>
           <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>NOM DU BÉNÉFICIAIRE (optionnel)</label>
             <Input value={custName} onChange={e=>setCustName(e.target.value)} placeholder="Nom…"/></div>
-          <div style={{display:"flex",gap:6}}>{[25,50,75,100].map(v=>(<Btn key={v} variant="outline" onClick={()=>setAmount(String(v))} style={{flex:1,fontSize:11}}>{v}€</Btn>))}</div></div>
+          <div style={{display:"flex",gap:6}}>{[25,50,75,100].map(v=>(<Btn key={v} variant="outline" onClick={()=>setAmount(String(v))} style={{flex:1,fontSize:11}}>{v}€</Btn>))}</div>
+          <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>PAYÉE PAR LE CLIENT EN</label>
+            <div style={{display:"flex",gap:6,marginTop:3}}>{[["cash","Espèces"],["card","Carte bancaire"],["other","Autre"]].map(([k,l])=>(
+              <Btn key={k} variant={payMode===k?"primary":"outline"} onClick={()=>setPayMode(k)} style={{flex:1,fontSize:11}}>{l}</Btn>))}</div>
+            <div style={{fontSize:9,color:C.textMuted,marginTop:4,lineHeight:1.4}}>
+              {payMode==="cash"?"Un apport « Vente carte cadeau » est ajouté au tiroir-caisse : l'espèce attendue au Z reste juste. Hors chiffre d'affaires (TVA due à l'utilisation).":"Hors chiffre d'affaires (TVA due à l'utilisation de la carte)."}</div></div></div>
         <div style={{display:"flex",gap:6}}>
-        <Btn onClick={async()=>{if(amount){const gc=await createGiftCard(parseFloat(amount),custName);setAmount("");setCustName("");
+        <Btn onClick={async()=>{if(amount){const gc=await createGiftCard(parseFloat(amount),custName,payMode);setAmount("");setCustName("");
           if(gc){const w=window.open("","_blank","width=400,height=400");if(w){w.document.write(`<html><head><title>Étiquette carte cadeau</title><style>body{font-family:'Courier New',monospace;font-size:12px;padding:10px;max-width:280px;margin:0 auto;text-align:center;}h2{font-size:16px;margin:8px 0;}h3{font-size:22px;margin:6px 0;}.code{font-size:18px;font-weight:bold;letter-spacing:2px;padding:8px;border:2px dashed #333;margin:8px 0;display:inline-block;}hr{border:none;border-top:1px dashed #333;margin:8px 0;}</style></head><body>`+
             `<h2>CARTE CADEAU</h2><div class="code">${gc.code}</div><hr>`+
             `<h3>${parseFloat(amount).toFixed(2)} EUR</h3>`+
@@ -34,7 +39,7 @@ function GiftCardScreen(){
             `</body></html>`);w.document.close();setTimeout(()=>w.print(),300);}}
           }}}
           disabled={!amount} style={{flex:1,height:40,background:C.accent}}><Gift size={14}/> Créer + Étiquette</Btn>
-        <Btn variant="outline" onClick={async()=>{if(amount){await createGiftCard(parseFloat(amount),custName);setAmount("");setCustName("");}}}
+        <Btn variant="outline" onClick={async()=>{if(amount){await createGiftCard(parseFloat(amount),custName,payMode);setAmount("");setCustName("");}}}
           disabled={!amount} style={{height:40}}><Plus size={14}/> Sans impression</Btn>
         </div>
       </div>

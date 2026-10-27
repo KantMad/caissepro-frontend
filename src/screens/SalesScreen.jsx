@@ -20,7 +20,7 @@ function SalesScreen(){
     gDiscPct,gDiscAmt,setCartGD,promoCode,setPromoCode,calcPromoDiscount,isOnline,findByEAN,offlineMode,
     parked,parkCart,restoreCart,removeParked,customers,addCustomer,selCust,setSelCust,perm,notify,
     stockAlerts,activePromos,avoirPayment,selectedAvoir,setSelectedAvoir,getLoyaltyTier,tickets,saleNote,setSaleNote,favorites,toggleFavorite,getLastPriceForCustomer,settings,
-    printerConnected,thermalPrint,pendingSync,clearPendingSync,users,currentUser,currentStore,avoirs,consumeAvoir,isAvoirExpired,addAudit,addJET,trainingMode,cartTotals,retoucheBons,addRetoucheBon,cashReg,closures,allCategories,getVariantPhotos}=useApp();
+    printerConnected,thermalPrint,pendingSync,clearPendingSync,users,currentUser,currentStore,avoirs,consumeAvoir,checkGiftCard,setScanOverride,clearScanOverride,isAvoirExpired,addAudit,addJET,trainingMode,cartTotals,retoucheBons,addRetoucheBon,cashReg,closures,allCategories,getVariantPhotos}=useApp();
   const categories=allCategories;
   const[search,setSearch]=useState("");const[cat,setCat]=useState("Tous");const[vm,setVm]=useState(null);const[selSeller,setSelSeller]=useState(null);
   // Remises cumulables : pourcentage d'abord, puis euros TTC sur le reste
@@ -102,11 +102,28 @@ function SalesScreen(){
   },[cartTotals,avoirPayment]);
 
   const[payCard,setPayCard]=useState("");const[payCash,setPayCash]=useState("");const[payGC,setPayGC]=useState("");const[payChq,setPayChq]=useState("");const[payAmex,setPayAmex]=useState("");const[cardType,setCardType]=useState("card");
-  const openPay=()=>{setPayCard("");setPayCash("");setPayGC("");setPayChq("");setPayAmex("");setCashGiven("");setCardType("card");setPayModal(true);};
+  // Carte cadeau : carte Tech in Cash scannée (débitée par le serveur dans la vente) ou carte EXTERNE
+  const[gcCode,setGcCode]=useState("");const[gcExterne,setGcExterne]=useState(false);const[gcSolde,setGcSolde]=useState(null);
+  const verifierCarte=async(code)=>{const c=String(code||"").trim();if(!c){setGcSolde(null);return;}
+    const gc=await checkGiftCard(c);
+    if(!gc){setGcSolde({erreur:"Carte introuvable"});return;}
+    const exp=gc.expires_at&&new Date(gc.expires_at)<new Date();
+    if(gc.active===false||exp){setGcSolde({erreur:exp?"Carte expirée":"Carte désactivée"});return;}
+    setGcSolde({code:gc.code,solde:gc.balance});};
+  // Fenêtre de paiement ouverte avec un montant carte cadeau : le scan va dans le champ carte
+  // (sinon le lecteur ajouterait le code au panier ou chercherait un ticket)
+  const gcActif=payModal&&(parseFloat(payGC)||0)>0&&!gcExterne;
+  useEffect(()=>{if(!gcActif)return;
+    setScanOverride(code=>{setGcCode(code);verifierCarte(code);});
+    return()=>clearScanOverride();},[gcActif]);// eslint-disable-line react-hooks/exhaustive-deps
+  const openPay=()=>{setPayCard("");setPayCash("");setPayGC("");setPayChq("");setPayAmex("");setCashGiven("");setCardType("card");setGcCode("");setGcExterne(false);setGcSolde(null);setPayModal(true);};
   const doSplitPay=async()=>{const payments=[];
     const c=parseFloat(payCard)||0;const ca=parseFloat(payCash)||0;const g=parseFloat(payGC)||0;const chq=parseFloat(payChq)||0;
     if(c>0)payments.push({method:cardType,amount:c});if(ca>0)payments.push({method:"cash",amount:ca});
-    if(g>0)payments.push({method:"giftcard",amount:g});if(chq>0)payments.push({method:"cheque",amount:chq});if(avoirPayment>0)payments.push({method:"avoir",amount:avoirPayment});
+    if(g>0){
+      if(!gcExterne&&!gcCode.trim()){notify("Carte cadeau : scannez la carte ou cochez « Carte externe »","error");return;}
+      if(!gcExterne&&gcSolde?.solde!=null&&g>gcSolde.solde+0.01){notify(`Solde de la carte insuffisant (${gcSolde.solde.toFixed(2)}€)`,"error");return;}
+      payments.push(gcExterne?{method:"giftcard",amount:g,external:true}:{method:"giftcard",amount:g,giftCardCode:gcCode.trim()});}if(chq>0)payments.push({method:"cheque",amount:chq});if(avoirPayment>0)payments.push({method:"avoir",amount:avoirPayment});
     if(!payments.length)return;setBusy(true);try{const t=await checkout(payments,selSeller);if(t){setLastTk({...t});setPayModal(false);setTkModal(true);setSelSeller(null);}}finally{setBusy(false);setCashGiven("");}};
   const quickPay=async(method)=>{if(!cart.length||busy)return;setBusy(true);
     // Ne pas envoyer de paiement à 0€ (ex: avoir couvrant tout le panier → tTTC=0)
@@ -511,7 +528,18 @@ function SalesScreen(){
         {[{l:"ESPÈCES",v:payCash,s:setPayCash,i:Banknote,c:C.primary,oth:othersExceptCash},{l:"CARTE CADEAU",v:payGC,s:setPayGC,i:Gift,c:C.accent,oth:othersExceptGC},{l:"CHÈQUE",v:payChq||"",s:v=>setPayChq(v),i:FileText,c:"#7B8794",oth:othersExceptChq}].map(x=>(
           <div key={x.l}><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"flex",alignItems:"center",gap:4,marginBottom:3}}><x.i size={11} color={x.c}/>{x.l}
             <button onClick={()=>x.s(String(remaining.toFixed(2)))} style={{marginLeft:"auto",background:"none",border:"none",cursor:"pointer",fontSize:9,color:C.primary,fontWeight:600}}>= Reste</button></label>
-            <Input type="number" step="0.01" value={x.v} onChange={e=>capPay(e.target.value,x.s,x.oth)} placeholder="0.00"/></div>))}
+            <Input type="number" step="0.01" value={x.v} onChange={e=>capPay(e.target.value,x.s,x.oth)} placeholder="0.00"/>
+            {x.l==="CARTE CADEAU"&&(parseFloat(payGC)||0)>0&&<div style={{marginTop:6,padding:8,borderRadius:8,background:C.surfaceAlt,border:`1px solid ${C.border}`}}>
+              {!gcExterne&&<div style={{display:"flex",gap:6}}>
+                <Input value={gcCode} onChange={e=>{setGcCode(e.target.value);setGcSolde(null);}} onKeyDown={e=>{if(e.key==="Enter")verifierCarte(gcCode);}}
+                  onBlur={()=>verifierCarte(gcCode)} placeholder="Scanner ou saisir la carte (GC-… ou 202…)" style={{flex:1,fontSize:11}}/>
+                <Btn variant="outline" onClick={()=>verifierCarte(gcCode)} style={{fontSize:10,padding:"4px 10px"}}>Solde</Btn></div>}
+              {!gcExterne&&gcSolde&&<div style={{fontSize:10,marginTop:4,fontWeight:700,color:gcSolde.erreur?C.danger:"#059669"}}>
+                {gcSolde.erreur||`${gcSolde.code} — solde ${gcSolde.solde.toFixed(2)}€`}</div>}
+              <label style={{display:"flex",alignItems:"center",gap:6,fontSize:10,marginTop:6,color:C.textMuted,cursor:"pointer"}}>
+                <input type="checkbox" checked={gcExterne} onChange={e=>{setGcExterne(e.target.checked);setGcSolde(null);}}/>
+                Carte externe (autre organisme) : encaissée sans débit de carte Tech in Cash</label></div>}
+          </div>))}
         {selectedAvoir&&avoirPayment>0&&<div><label style={{fontSize:10,fontWeight:600,color:C.fiscal,display:"flex",alignItems:"center",gap:4,marginBottom:3}}>
           <RotateCcw size={11} color={C.fiscal}/> AVOIR {selectedAvoir.avoirNumber}</label>
           <Input type="number" step="0.01" value={avoirPayment} readOnly style={{background:C.surfaceAlt,opacity:0.7}} placeholder="0.00"/></div>}
@@ -704,9 +732,9 @@ function SalesScreen(){
         <button onClick={async()=>{setPayMethodModal(false);await quickPay("cheque");}} style={{padding:16,borderRadius:14,border:`2px solid #7B879425`,background:"#7B879406",cursor:"pointer",textAlign:"center",transition:"all 0.15s"}}
           onMouseEnter={e=>e.currentTarget.style.borderColor="#7B8794"} onMouseLeave={e=>e.currentTarget.style.borderColor="#7B879425"}>
           <FileText size={24} color="#7B8794" style={{marginBottom:6}}/><div style={{fontSize:13,fontWeight:700,color:C.text}}>Chèque</div><div style={{fontSize:10,color:C.textMuted}}>Paiement par chèque</div></button>
-        <button onClick={()=>{setPayMethodModal(false);setPayGC(String(totals.tTTC.toFixed(2)));openPay();}} style={{padding:16,borderRadius:14,border:`2px solid ${C.accent}25`,background:`${C.accent}06`,cursor:"pointer",textAlign:"center",transition:"all 0.15s"}}
+        <button onClick={()=>{setPayMethodModal(false);openPay();setPayGC(String(totals.tTTC.toFixed(2)));}} style={{padding:16,borderRadius:14,border:`2px solid ${C.accent}25`,background:`${C.accent}06`,cursor:"pointer",textAlign:"center",transition:"all 0.15s"}}
           onMouseEnter={e=>e.currentTarget.style.borderColor=C.accent} onMouseLeave={e=>e.currentTarget.style.borderColor=`${C.accent}25`}>
-          <Gift size={24} color={C.accent} style={{marginBottom:6}}/><div style={{fontSize:13,fontWeight:700,color:C.text}}>Carte cadeau</div><div style={{fontSize:10,color:C.textMuted}}>Saisir le montant manuellement</div></button>
+          <Gift size={24} color={C.accent} style={{marginBottom:6}}/><div style={{fontSize:13,fontWeight:700,color:C.text}}>Carte cadeau</div><div style={{fontSize:10,color:C.textMuted}}>Scanner la carte (ou carte externe)</div></button>
         <button onClick={()=>{setPayMethodModal(false);setAvoirSelectModal(true);}}
           style={{padding:16,borderRadius:14,border:`2px solid ${C.fiscal}25`,background:avoirs.filter(a=>!a.used&&getAvoirRemaining(a)>0).length?`${C.fiscal}06`:`${C.border}08`,cursor:"pointer",textAlign:"center",transition:"all 0.15s",opacity:avoirs.filter(a=>!a.used&&getAvoirRemaining(a)>0).length?1:0.5}}
           onMouseEnter={e=>e.currentTarget.style.borderColor=C.fiscal} onMouseLeave={e=>e.currentTarget.style.borderColor=`${C.fiscal}25`}>

@@ -775,6 +775,9 @@ function AppProvider({children}){
       // Avoir : deja debite par le serveur DANS la vente (atomique) -> mise a jour locale seulement
       if(selectedAvoir&&avoirPayment>0){debiterAvoirLocal(selectedAvoir.avoirNumber,avoirPayment,ticket.avoirConsumed?.remaining);
         addAudit("AVOIR_USE",`Avoir ${selectedAvoir.avoirNumber} utilise: ${avoirPayment.toFixed(2)}EUR (ticket ${ticket.ticketNumber||ticket.ticket_number||""})`);}
+      // Cartes cadeaux débitées par le serveur dans la vente : solde local aligné sur sa réponse
+      if(ticket.giftCardsUsed?.length)setGiftCards(p=>p.map(g=>{const u=ticket.giftCardsUsed.find(x=>x.code===g.code);
+        return u?{...g,balance:u.remaining,transactions:[...(g.transactions||[]),{date:new Date().toISOString(),amount:-u.amount,type:"DEBIT"}]}:g;}));
       // Perf : décrément LOCAL du stock (le backend a déjà décrémenté). Évite de
       // recharger tout le catalogue (plusieurs Mo) à chaque vente → gros gain de vitesse.
       setProducts(prev=>prev.map(p=>{
@@ -1402,12 +1405,15 @@ function AppProvider({children}){
   const[giftCards,setGiftCards]=useState(()=>{try{const s=localStorage.getItem("caissepro_giftcards");return s?JSON.parse(s):[];}catch(e){return[];}});
   useEffect(()=>{try{localStorage.setItem("caissepro_giftcards",JSON.stringify(giftCards));}catch(e){}},[giftCards]);
   const giftcardLock=useRef(false);
-  const createGiftCard=useCallback(async(amount,customerName)=>{
+  // paymentMethod : mode de paiement de la carte VENDUE ; en espèces, le serveur crée l'apport
+  // « Vente carte cadeau » au tiroir-caisse (le fond théorique du Z reste juste).
+  const createGiftCard=useCallback(async(amount,customerName,paymentMethod="cash")=>{
     if(giftcardLock.current)return null;
     giftcardLock.current=true;
     const code=`GC-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2,6).toUpperCase()}`;
     try{
-      const gc=await API.giftcards.create({code,initialAmount:amount,customerName:customerName||""});
+      const gc=await API.giftcards.create({code,initialAmount:amount,customerName:customerName||"",paymentMethod});
+      if(gc.cashMovement)setCashMovements(prev=>{const next=[gc.cashMovement,...prev].slice(0,500);try{localStorage.setItem("caissepro_cashmoves",JSON.stringify(next));}catch(e){}return next;});
       const mapped={id:gc.id,code:gc.code,initialAmount:parseFloat(gc.initial_amount||gc.initialAmount||amount),
         balance:parseFloat(gc.remaining||gc.balance||amount),createdDate:gc.created_at||new Date().toISOString(),
         customerName:customerName||"",barcode:gc.barcode||null,transactions:[]};
@@ -1422,7 +1428,7 @@ function AppProvider({children}){
       const gc={id:Date.now(),code,initialAmount:amount,balance:amount,createdDate:new Date().toISOString(),
         customerName:customerName||"",transactions:[]};
       setGiftCards(p=>[gc,...p]);addAudit("GIFT_CARD",`Carte cadeau ${code} creee (offline): ${amount.toFixed(2)}EUR`);
-      addPendingSync({type:"createGiftCard",data:{code,initialAmount:amount,customerName:customerName||""}});
+      addPendingSync({type:"createGiftCard",data:{code,initialAmount:amount,customerName:customerName||"",paymentMethod}});
       notify(`Carte cadeau creee (offline): ${code}`,"warn");return gc;
     }finally{giftcardLock.current=false;}
   },[addAudit,notify,addPendingSync]);
