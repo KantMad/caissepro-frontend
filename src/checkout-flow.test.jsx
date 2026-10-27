@@ -158,3 +158,17 @@ describe("Avoir en paiement — débit atomique côté serveur", () => {
     expect(ctx.pendingSync.some(x => x.type === "consumeAvoir")).toBe(false);
   });
 });
+
+// Idempotence : le même identifiant de vente est envoyé en ligne et conservé dans la file hors-ligne
+describe("Vente : identifiant unique (pas de doublon à la synchro)", () => {
+  it("la vente mise en file hors-ligne porte un clientSaleId (UUID) et le vendeur", async () => {
+    API.sales.checkout.mockRejectedValue(new TypeError("Failed to fetch"));
+    mount();
+    act(() => { ctx.addToCart(prod(), variant()); });
+    await act(async () => { await ctx.checkout([{ method: "cash", amount: 209 }], "Vendeur"); });
+    const envoi = API.sales.checkout.mock.calls[0][0];
+    const file = ctx.pendingSync.find(x => x.type === "offlineSale").data;
+    expect(envoi.clientSaleId).toMatch(/^[0-9a-f-]{36}$/);
+    expect(file.clientSaleId).toBe(envoi.clientSaleId);
+  });
+});

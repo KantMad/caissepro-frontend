@@ -334,10 +334,15 @@ function AppProvider({children}){
     setPendingSync(critiques);
     notify(critiques.length?`File vidée — ${critiques.length} vente(s)/opération(s) fiscale(s) conservée(s) jusqu'à leur enregistrement`:"File de synchronisation vidée",critiques.length?"warn":"info");
   },[notify,pendingSync]);
+  // Une seule synchronisation à la fois (avant : un 2e passage pouvait démarrer sur la même file
+  // et renvoyer la même vente — doublon fiscal).
+  const syncEnCours=useRef(false);
   useEffect(()=>{if(!isOnline||!pendingSync.length||!API.getToken())return;
     // Debounce — ne pas retenter en boucle
-    const timer=setTimeout(async()=>{const failed=[];let synced=0;
-      for(const action of pendingSync){
+    const timer=setTimeout(async()=>{if(syncEnCours.current)return;syncEnCours.current=true;
+      const lot=pendingSync;const failed=[];let synced=0;
+      try{
+      for(const action of lot){
         try{
           if(action.type==="updateUser")await API.auth.updateUser(action.userId,action.data);
           else if(action.type==="createUser")await API.auth.createUser(action.data);
@@ -371,7 +376,9 @@ function AppProvider({children}){
           }else{failed.push({...action,retries,lastError:e.message});}
         }
       }
-      setPendingSync(failed);
+      // On ne retire de la file QUE les éléments traités par ce passage : ce qui a été ajouté pendant
+      // la synchro (nouvelle vente hors-ligne…) est conservé (avant : la file entière était remplacée).
+      setPendingSync(prev=>[...failed,...prev.filter(a=>!lot.includes(a))]);
       if(synced>0){
         notify(`${synced} modification(s) synchronisée(s) avec le serveur`,"success");
         // Rafraichir les produits (stock) apres sync d'avoirs ou ventes
@@ -380,6 +387,7 @@ function AppProvider({children}){
       const bloquees=failed.filter(f=>SYNC_CRITIQUE.includes(f.type)&&f.retries>=3);
       if(bloquees.length)notify(`${bloquees.length} vente(s)/opération(s) refusée(s) par le serveur et conservée(s) sur cet appareil : ${bloquees[0].lastError}. Contactez le support, ne videz pas les données.`,"danger");
       else if(failed.length>0&&failed.some(f=>f.retries<3))notify(`${failed.length} synchro(s) en attente — nouvelle tentative prochainement`,"warn");
+      }finally{syncEnCours.current=false;}
     },2000);// 2s debounce
     return()=>clearTimeout(timer);
   },[isOnline,pendingSync.length]);// eslint-disable-line react-hooks/exhaustive-deps
@@ -762,6 +770,9 @@ function AppProvider({children}){
   },[cart,notify]);
   const _doCheckout=useCallback(async(payments,sellerName)=>{
     if(!cart.length)return null;
+    // Identifiant UNIQUE de cette vente, envoyé en ligne ET dans la file hors-ligne : si le serveur
+    // l'a déjà enregistrée (réponse perdue, synchro rejouée), il renvoie la même vente — pas de doublon.
+    const clientSaleId=(globalThis.crypto?.randomUUID?.())||`${Date.now().toString(16).padStart(12,"0").slice(-8)}-${Math.random().toString(16).slice(2,6)}-4${Math.random().toString(16).slice(2,5)}-a${Math.random().toString(16).slice(2,5)}-${Math.random().toString(16).slice(2,14).padEnd(12,"0")}`;
     const pm=settings.pricingMode||"TTC";
     const items=cart.map(i=>{
       // Ligne nette (remises cumulees) — meme fonction que l'apercu panier
@@ -826,6 +837,7 @@ function AppProvider({children}){
         // TTC de la caisse (avant avoir) : le serveur l'adopte s'il ne diffère que d'un arrondi
         totalTTC:Math.round((tHT+tTVA)*100)/100,
         promosApplied:applied,sessionId:cashReg?.id||null,
+        clientSaleId,
         sellerName:sellerName||null,
         trainingMode:trainingMode||false,
         avoirUsed:selectedAvoir&&avoirPayment>0?{avoirNumber:selectedAvoir.avoirNumber,amount:avoirPayment,remainingAfter:avoirRemainingAfterSale}:null
@@ -920,14 +932,18 @@ function AppProvider({children}){
       addPendingSync({type:"offlineSale",data:{
         items:items.map(({product,variant,...rest})=>rest),payments,customerId:selCust?.id||null,
         globalDiscount:gd,saleNote:saleNote||null,promosApplied:applied,sessionId:cashReg?.id||null,
-        totalTTC:Math.round((tHT+tTVA)*100)/100,
-        sellerName:sellerName||null,
+        totalTTC:Math.round((tHT+tTVA)*100)/100,clientSaleId,
+        sellerName:sellerName||currentUser?.name||null,   // même vendeur que le ticket imprimé hors-ligne
         // l'avoir sera debite par le serveur a la synchronisation, dans la meme transaction
         avoirUsed:selectedAvoir&&avoirPayment>0?{avoirNumber:selectedAvoir.avoirNumber,amount:avoirPayment}:null,
         offlineTicketNumber:ticketNumber,offlineDate:date
       }});
       // Consume avoir locally + queue for sync (avoir not consumed yet in offline mode)
       if(selectedAvoir&&avoirPayment>0){debiterAvoirLocal(selectedAvoir.avoirNumber,avoirPayment);}
+      // Carte cadeau payée hors-ligne : solde local débité tout de suite (sinon la même carte pouvait
+      // payer plusieurs ventes hors-ligne, refusées ensuite pour solde insuffisant à la synchro)
+      payments.filter(p=>p.method==="giftcard"&&p.giftCardCode).forEach(p=>{const code=String(p.giftCardCode).toUpperCase();
+        setGiftCards(gs=>gs.map(g=>(g.code.toUpperCase()===code||String(g.barcode||"")===code)?{...g,balance:Math.max(0,Math.round(((g.balance||0)-p.amount)*100)/100)}:g));});
       notify("Vente enregistrée (hors-ligne) — synchro en attente","warn");return ticket;
     }
   },[cart,gDiscPct,gDiscAmt,currentUser,selCust,calcPromoDiscount,promoCode,saleNote,cashReg,tSeq,gt,lastHash,avoirPayment,selectedAvoir,consumeAvoir,addStockMove,notify,settings.pricingMode,addPendingSync,trainingMode,currentStore,hardwareManager]);
