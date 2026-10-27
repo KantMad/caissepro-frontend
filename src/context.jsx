@@ -771,6 +771,8 @@ function AppProvider({children}){
       const ticket=await API.sales.checkout({
         items:items.map(({product,variant,...rest})=>rest),payments,customerId:selCust?.id||null,
         globalDiscount:gd,saleNote:saleNote||null,
+        // TTC de la caisse (avant avoir) : le serveur l'adopte s'il ne diffère que d'un arrondi
+        totalTTC:Math.round((tHT+tTVA)*100)/100,
         promosApplied:applied,sessionId:cashReg?.id||null,
         sellerName:sellerName||null,
         trainingMode:trainingMode||false,
@@ -857,6 +859,7 @@ function AppProvider({children}){
       addPendingSync({type:"offlineSale",data:{
         items:items.map(({product,variant,...rest})=>rest),payments,customerId:selCust?.id||null,
         globalDiscount:gd,saleNote:saleNote||null,promosApplied:applied,sessionId:cashReg?.id||null,
+        totalTTC:Math.round((tHT+tTVA)*100)/100,
         sellerName:sellerName||null,
         // l'avoir sera debite par le serveur a la synchronisation, dans la meme transaction
         avoirUsed:selectedAvoir&&avoirPayment>0?{avoirNumber:selectedAvoir.avoirNumber,amount:avoirPayment}:null,
