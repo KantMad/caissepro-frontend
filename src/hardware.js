@@ -562,7 +562,7 @@ class SunmiPrinterAdapter {
       cmds.push({ cmd: 'line', char: '-', len: 32 });
     }
 
-    const tvaRate = (s.retoucheTVA || 20) / 100;
+    const tvaRate = (s.retoucheTVA ?? 20) / 100;   // 0 % autorisé
     let totalTTC = 0;
     for (const item of (bon.items || [])) {
       if (!item.desc) continue;

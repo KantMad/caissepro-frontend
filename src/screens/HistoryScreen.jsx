@@ -122,7 +122,7 @@ function HistoryScreen(){
       const fBons=retoucheBons.filter(b=>{
         const q=search.toLowerCase();const sc=b.shortCode||(b.num||"").slice(-4);
         const matchS=!q||(b.num||"").toLowerCase().includes(q)||(b.client||"").toLowerCase().includes(q)||(b.seller||"").toLowerCase().includes(q)||(b.barcode||"").includes(q)||sc.includes(q);
-        const bDate=(b.date||"").slice(0,10);
+        const bDate=b.date?dayKey(new Date(b.date)):"";   // jour LOCAL (le serveur renvoie de l'UTC)
         const matchFrom=!retDateFrom||bDate>=retDateFrom;
         const matchTo=!retDateTo||bDate<=retDateTo;
         const matchClient=!retClientFilter||(b.client||"")===retClientFilter;
@@ -132,7 +132,7 @@ function HistoryScreen(){
       const statusLabel={pending:"En attente",ready:"Prêt",delivered:"Livré",cancelled:"Annulé"};
       const statusColor={pending:"#F59E0B",ready:"#10B981",delivered:"#6366F1",cancelled:"#EF4444"};
       const countByStatus={pending:0,ready:0,delivered:0,cancelled:0};retoucheBons.forEach(b=>{const s=b.status||"pending";if(countByStatus[s]!==undefined)countByStatus[s]++;});
-      const totalCA=fBons.reduce((s,b)=>s+(b.total||0),0);
+      const totalCA=fBons.filter(b=>(b.status||"pending")!=="cancelled").reduce((s,b)=>s+(parseFloat(b.total)||0),0);   // bons annulés exclus
       return<>
         {/* Compteurs par statut */}
         <div style={{display:"flex",gap:8,marginBottom:10,flexWrap:"wrap"}}>

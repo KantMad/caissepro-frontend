@@ -800,7 +800,7 @@ function SalesScreen(){
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
         <Btn variant="outline" onClick={()=>{
           const retTotal=retForm.items.reduce((s,i)=>s+(parseFloat(i.price)||0),0);
-          const tva=(settings.retoucheTVA||20)/100;
+          const tva=(settings.retoucheTVA??20)/100;   // 0 % autorisé (retouches exonérées)
           const pm=settings.pricingMode||"TTC";
           retForm.items.filter(i=>i.desc&&i.price).forEach(i=>{const p=parseFloat(i.price);addCustomItem(`Retouche: ${i.desc}`,pm==="TTC"?p:p/(1+tva),tva);});
           setRetoucheModal(false);notify(`Retouche ajoutée au panier (${retTotal.toFixed(2)}€)`);
@@ -811,11 +811,12 @@ function SalesScreen(){
           const bonDraft={client:retForm.client,phone:retForm.phone,dateRetrait:retForm.date,items:retForm.items.filter(i=>i.desc),notes:retForm.notes,total:retTotal,date:new Date().toISOString(),seller:selSeller||currentUser?.name};
           // 1. Create in backend first to get real number + shortCode
           const saved=await addRetoucheBon(bonDraft);
+          if(!saved)return;   // refusé par le serveur : ni impression, ni panier (message déjà affiché)
           const bonNum=saved.num||`RET-${Date.now().toString(36).toUpperCase()}`;
           const sc=saved.shortCode||(bonNum.slice(-4));
           const bon={...saved,...bonDraft,num:bonNum,shortCode:sc};
           // 2. Add items to cart
-          const tva2=(settings.retoucheTVA||20)/100;
+          const tva2=(settings.retoucheTVA??20)/100;
           const pm2=settings.pricingMode||"TTC";
           retForm.items.filter(i=>i.desc&&i.price).forEach(i=>{const p=parseFloat(i.price);addCustomItem(`Retouche: ${i.desc}`,pm2==="TTC"?p:p/(1+tva2),tva2);});
           // 3. Print with real number + shortCode bien visible

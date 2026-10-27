@@ -142,6 +142,8 @@ function AppProvider({children}){
   const[pendingSync,setPendingSync]=useState(()=>{try{const s=localStorage.getItem("caissepro_pendingSync");return s?JSON.parse(s):[];}catch(e){return[];}});
   useEffect(()=>{try{localStorage.setItem("caissepro_pendingSync",JSON.stringify(pendingSync));}catch(e){}},[pendingSync]);
   const addPendingSync=useCallback((action)=>{setPendingSync(p=>[...p,{...action,ts:Date.now()}]);},[]);
+  // notify est declare plus bas dans le provider : les retouches y accedent par cette reference
+  const notifyTot=useRef(()=>{});
   const addRetoucheBon=useCallback(async(bon)=>{
     try{
       const saved=await API.retouches.create({client:bon.client||"",phone:bon.phone||"",seller:bon.seller||"",items:(bon.items||[]).filter(i=>i.desc).map(i=>({desc:i.desc||i.description||"",price:parseFloat(i.price)||0})),dateRetrait:bon.dateRetrait||null,notes:bon.notes||"",total:parseFloat(bon.total)||0});
@@ -149,6 +151,9 @@ function AppProvider({children}){
       setRetoucheBons(prev=>{const next=[mapped,...prev].slice(0,500);try{localStorage.setItem("caissepro_retouches",JSON.stringify(next));}catch(e){}return next;});
       return mapped;
     }catch(e){
+      // Refus du serveur (champ trop long, droits...) : le bon N'EXISTE PAS. Avant, il etait
+      // imprime avec un faux numero puis abandonne apres 3 essais de synchro.
+      if(!(e instanceof TypeError)){notifyTot.current("Bon de retouche NON enregistré : "+e.message,"error");return null;}
       console.warn("Retouche API failed, saving locally:",e.message);
       setRetoucheBons(prev=>{const next=[bon,...prev].slice(0,500);try{localStorage.setItem("caissepro_retouches",JSON.stringify(next));}catch(e){}return next;});
       addPendingSync({type:"createRetouche",data:bon});
@@ -156,7 +161,9 @@ function AppProvider({children}){
     }
   },[addPendingSync]);
   const updateRetoucheStatus=useCallback(async(id,status)=>{
-    try{await API.retouches.updateStatus(id,status);setRetoucheBons(prev=>prev.map(b=>b.id===id?{...b,status}:b));return true;}catch(e){console.warn("Retouche status update failed:",e.message);return false;}
+    if(!id){notifyTot.current("Bon pas encore enregistré sur le serveur (hors-ligne) : statut non modifiable pour l'instant","warn");return false;}
+    try{await API.retouches.updateStatus(id,status);setRetoucheBons(prev=>prev.map(b=>b.id===id?{...b,status}:b));return true;}
+    catch(e){notifyTot.current("Statut non modifié : "+e.message,"error");return false;}
   },[]);
   // ══ Tenues employé : normalisation backend(snake/camel)→front ══
   const _mapTenue=(t)=>({id:t.id,num:t.tenue_number||t.num,barcode:t.barcode||"",employee:t.employee||"",
@@ -202,6 +209,7 @@ function AppProvider({children}){
   const notify=useCallback((msg,type="info")=>{const id=Date.now();
     setNotifications(p=>[...p,{id,msg,type}]);
     setTimeout(()=>setNotifications(p=>p.filter(n=>n.id!==id)),3500);},[]);
+  notifyTot.current=notify;
 
   // Printer event listener
   useEffect(()=>{
@@ -598,7 +606,11 @@ function AppProvider({children}){
   // Cart
   const addToCart=(p,v)=>setCart(prev=>{const i=prev.findIndex(c=>c.product.id===p.id&&c.variant?.id===v?.id);
     if(i>=0){const n=[...prev];n[i]={...n[i],quantity:n[i].quantity+1};return n;}return[...prev,{product:p,variant:v,quantity:1,discount:0,isCustom:false}];});
-  const addCustomItem=(name,price,taxRate)=>setCart(p=>[...p,{product:{id:`custom-${Date.now()}`,name,sku:"DIVERS",price,costPrice:0,taxRate,category:"Divers"},variant:{id:`cv-${Date.now()}`,color:"—",size:"—",ean:""},quantity:1,discount:0,isCustom:true}]);
+  // Identifiant unique par ligne : une retouche a plusieurs prestations ajoute ses lignes dans le
+  // meme instant -> avec Date.now() seul, elles partageaient l'id (suppression/remise sur toutes).
+  const customSeq=useRef(0);
+  const addCustomItem=(name,price,taxRate)=>{const k=`${Date.now().toString(36)}-${++customSeq.current}`;
+    setCart(p=>[...p,{product:{id:`custom-${k}`,name,sku:"DIVERS",price,costPrice:0,taxRate,category:"Divers"},variant:{id:`cv-${k}`,color:"—",size:"—",ean:""},quantity:1,discount:0,isCustom:true}]);};
   const removeFromCart=(pid,vid,reason)=>{addAudit("VOID_LINE",`Suppression: ${pid}${reason?` — Motif: ${reason}`:""}`,pid);addJET("VOID_LINE",`Suppression ligne produit ${pid}${reason?` — ${reason}`:""}`);setCart(p=>p.filter(c=>!(c.product.id===pid&&(c.variant?.id===vid||!vid))));};
   const voidSale=(reason)=>{if(cart.length){addAudit("VOID_SALE",`Annulation panier: ${cart.length} articles — Motif: ${reason||"Non spécifié"}`);addJET("VOID_SALE",`Annulation panier ${cart.length} art. — ${reason||"Non spécifié"}`);setCart([]);setGDiscPct(0);setGDiscAmt(0);setSelCust(null);setSelectedAvoir(null);setPromoCode("");setSaleNote("");}};
   const updateQty=(pid,vid,q)=>{if(q<1)return removeFromCart(pid,vid);setCart(p=>p.map(c=>c.product.id===pid&&c.variant?.id===vid?{...c,quantity:q}:c));};
@@ -1388,6 +1400,9 @@ function AppProvider({children}){
       addAudit("GIFT_CARD",`Carte cadeau ${code} creee: ${amount.toFixed(2)}EUR`);
       notify(`Carte cadeau creee: ${code}`,"success");return mapped;
     }catch(e){
+      // Refus du serveur (droits, montant...) : erreur claire. Le secours local n'est
+      // legitime qu'en cas de coupure reseau (fetch -> TypeError).
+      if(!(e instanceof TypeError)){notify("Carte cadeau NON créée : "+e.message,"error");return null;}
       // Fallback local si API indisponible
       const gc={id:Date.now(),code,initialAmount:amount,balance:amount,createdDate:new Date().toISOString(),
         customerName:customerName||"",transactions:[]};
@@ -1406,7 +1421,10 @@ function AppProvider({children}){
         transactions:[...(g.transactions||[]),{date:new Date().toISOString(),amount:-amount,type:"DEBIT"}]}:g));
       return{ok:true,remaining:parseFloat(result.remaining||0)};
     }catch(e){
-      // Fallback local
+      // Refus du serveur (carte expiree, desactivee, solde insuffisant, inconnue) : on refuse.
+      // Avant, toute erreur passait par le solde en cache et la carte etait acceptee.
+      if(!(e instanceof TypeError))return{ok:false,msg:e.message};
+      // Fallback local (coupure reseau uniquement)
       const gc=giftCards.find(g=>g.code.toUpperCase()===code.toUpperCase());
       if(!gc)return{ok:false,msg:"Carte introuvable"};
       if(gc.balance<amount)return{ok:false,msg:`Solde insuffisant: ${gc.balance.toFixed(2)}EUR`};
@@ -1417,7 +1435,12 @@ function AppProvider({children}){
     }finally{useGiftcardLock.current=false;}
   },[giftCards,addPendingSync]);
   const checkGiftCard=useCallback(async(code)=>{
-    try{const gc=await API.giftcards.get(code);return gc||null;}
+    // Carte renvoyee par le serveur en snake_case (initial_amount / remaining en texte) :
+    // l'ecran attend des nombres -> sans conversion, « Vérifier » plantait l'ecran.
+    try{const gc=await API.giftcards.get(code);if(!gc)return null;
+      return{...gc,initialAmount:parseFloat(gc.initial_amount??gc.initialAmount)||0,balance:parseFloat(gc.remaining??gc.balance)||0,
+        createdDate:gc.created_at||gc.createdDate,customerName:gc.customer_name||gc.customerName||"",
+        transactions:(gc.transactions||[]).map(t=>({...t,amount:(t.type==="debit"?-1:1)*(parseFloat(t.amount)||0),date:t.created_at||t.date}))};}
     catch(e){return giftCards.find(g=>g.code.toUpperCase()===code.toUpperCase())||null;}
   },[giftCards]);
 

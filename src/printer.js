@@ -1431,7 +1431,7 @@ class ThermalPrinter {
 
       // ── Items (retouche services) ──
       const items = bon.items || [];
-      const tvaRate = (s.retoucheTVA || 20) / 100;
+      const tvaRate = (s.retoucheTVA ?? 20) / 100;   // 0 % autorisé
       let totalTTC = 0;
       for (const item of items) {
         if (!item.desc) continue;

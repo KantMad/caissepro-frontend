@@ -1106,7 +1106,7 @@ function SettingsScreen(){
         <h4 style={{fontSize:13,fontWeight:700,marginBottom:8}}>Paramètres du bon de retouche</h4>
         <div style={{display:"flex",flexDirection:"column",gap:10}}>
           <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>TAUX DE TVA RETOUCHE (%)</label>
-            <Input type="number" step="0.1" value={settings.retoucheTVA||20} onChange={e=>setSettings(s=>({...s,retoucheTVA:parseFloat(e.target.value)||20}))} style={{width:120}}/></div>
+            <Input type="number" step="0.1" value={settings.retoucheTVA??20} onChange={e=>setSettings(s=>({...s,retoucheTVA:Number.isFinite(parseFloat(e.target.value))?parseFloat(e.target.value):20}))} style={{width:120}}/></div>
           <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>MESSAGE SUR LE BON</label>
             <Input value={settings.retoucheMsg||""} onChange={e=>setSettings(s=>({...s,retoucheMsg:e.target.value}))} placeholder="Ex: Retrait sous 5 jours ouvrés"/></div>
           <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>DÉLAI PAR DÉFAUT (jours)</label>
