@@ -194,7 +194,7 @@ function ClosureScreen(){
 
     {/* Closure detail/print modal */}
     <Modal open={!!reportModal} onClose={()=>setReportModal(null)} title={`Rapport Z — ${reportModal?.period}`} wide>
-      {reportModal&&<div data-print-receipt style={{fontFamily:"'Courier New',monospace",fontSize:10,background:"#FAFAF8",borderRadius:10,padding:20,border:`1px solid ${C.border}`}}>
+      {reportModal&&<div data-print-receipt data-doc="closure" style={{fontFamily:"'Courier New',monospace",fontSize:10,background:"#FAFAF8",borderRadius:10,padding:20,border:`1px solid ${C.border}`}}>
         <div style={{textAlign:"center",marginBottom:8}}>
           <div style={{fontSize:14,fontWeight:700}}>RAPPORT DE CLÔTURE</div>
           <div style={{fontSize:12,fontWeight:700}}>{settings.name||CO.name}</div>

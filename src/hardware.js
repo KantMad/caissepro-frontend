@@ -1362,7 +1362,8 @@ class BrowserPrintAdapter {
   }
 
   async printClosure(closure, settings, companyInfo) {
-    const el = document.querySelector('[data-print-receipt]');
+    // Apercu du rapport de Z seulement (ecran Clotures) — jamais un autre document affiche
+    const el = document.querySelector('[data-print-receipt][data-doc="closure"]');
     if (el) return this._printViaIframe(el.innerHTML);
     const lib = libelleCloture(closure);
     return this._printViaIframe(`<div class="center bold big">CLOTURE</div><div class="center bold">${lib.titre}${lib.periode ? ' - ' + lib.periode : ''}</div>${lib.detail ? `<div class="center">${lib.detail}</div>` : ''}<div class="sep"></div><div class="bold">CA TTC: ${(closure.totalTTC||closure.totalCA||0).toFixed(2)} EUR</div>`);
@@ -1372,14 +1373,19 @@ class BrowserPrintAdapter {
     const s = settings || {}; const co = companyInfo || {};
     let h = `<div class="center bold big">${s.name || co.name || 'Ma Boutique'}</div><div class="sep"></div>`;
     h += `<div class="center bold big">BON DE RETOUCHE</div>`;
+    const sc = bon.shortCode || bon.short_code || '';
+    if (sc) h += `<div class="center bold" style="font-size:32px">${escapeHtml(sc)}</div>`;
     h += `<div class="center">N: ${bon.num || bon.retouche_number || '?'}</div><div class="sep"></div>`;
     if (bon.client || bon.client_name) h += `<div class="row"><span>Client:</span><span class="bold">${bon.client || bon.client_name}</span></div>`;
     if (bon.phone || bon.client_phone) h += `<div class="row"><span>Tel:</span><span>${bon.phone || bon.client_phone}</span></div>`;
     for (const item of (bon.items || []).filter(i => i.desc || i.description)) {
       h += `<div class="row"><span>${item.desc || item.description}</span><span>${parseFloat(item.price || 0).toFixed(2)}EUR</span></div>`;
     }
-    h += `<div class="sep"></div><div class="row bold"><span>TOTAL</span><span>${(bon.total || 0).toFixed(2)} EUR TTC</span></div>`;
-    if (bon.dateRetrait || bon.pickup_date) h += `<div class="center">Retrait: ${new Date(bon.dateRetrait || bon.pickup_date).toLocaleDateString('fr-FR')}</div>`;
+    h += `<div class="sep"></div><div class="row bold"><span>TOTAL</span><span>${(Number(bon.total ?? bon.total_ttc) || 0).toFixed(2)} EUR TTC</span></div>`;
+    if (bon.dateRetrait || bon.date_retrait || bon.pickup_date) h += `<div class="center">Retrait: ${new Date(bon.dateRetrait || bon.date_retrait || bon.pickup_date).toLocaleDateString('fr-FR')}</div>`;
+    if (bon.notes) h += `<div>Notes: ${escapeHtml(bon.notes)}</div>`;
+    if (bon.seller) h += `<div class="center small">Vendeur: ${escapeHtml(bon.seller)}</div>`;
+    if (bon.barcode && String(bon.barcode).length === 13) h += `<div class="center">${ean13SvgHtml(bon.barcode, 160, 45)}</div>`;
     return this._printViaIframe(h);
   }
 
@@ -1458,8 +1464,8 @@ class BrowserPrintAdapter {
   }
 
   async printRegisterClose(data, settings, companyInfo) {
-    const el = document.querySelector('[data-print-receipt]');
-    if (el) return this._printViaIframe(el.innerHTML);
+    // Toujours genere depuis les donnees : l'apercu a l'ecran pouvait etre un autre document
+    // (fermeture lancee depuis Tiroir-caisse -> le dernier mouvement d'especes etait imprime).
     const s = settings || {}; const co = companyInfo || {};
     const bp = data.byPayment || {};
     const payLbl = { cash: 'Especes', card: 'CB', amex: 'AMEX', contactless: 'Sans contact', giftcard: 'Cadeau', cheque: 'Cheque', avoir: 'Avoir' };
