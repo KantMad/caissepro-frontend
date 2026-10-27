@@ -2,7 +2,8 @@ import React, { useState, useMemo, useEffect, useCallback } from "react";
 import { Search, Trash2, CreditCard, Banknote, Gift, Plus, Minus, Receipt, RotateCcw, Shield, CheckCircle2, AlertTriangle, Printer, ScanLine, Edit } from "lucide-react";
 import printer from "../printer.js";
 import { CO, C } from "../constants.jsx";
-import { verifyPin, EAN13Svg } from "../utils.jsx";
+import { verifyPin, EAN13Svg, norm } from "../utils.jsx";
+import * as API from "../api.js";
 import { Modal, Btn, Input, Badge } from "../ui.jsx";
 import { useApp } from "../context.jsx";
 import { getPaymentLabel, getAvoirRemaining, formatAmount, ratioRemiseGlobale } from "../lib/formatters.js";
@@ -27,19 +28,28 @@ function ReturnScreen(){
   const[avoirLookup,setAvoirLookup]=useState("");const[avoirDetail,setAvoirDetail]=useState(null);
   // C5 fix: Manager approval required for free/scan returns
   const[managerApproved,setManagerApproved]=useState(false);const[managerPinInput,setManagerPinInput]=useState("");const[managerPinError,setManagerPinError]=useState("");
-  const verifyManagerPin=async()=>{const admin=users.find(u=>u.role==="admin");
-    if(!admin){setManagerPinError("Aucun admin trouve");return;}
-    const ok=await verifyPin(managerPinInput,admin.pin);
-    if(ok){setManagerApproved(true);setManagerPinError("");setManagerPinInput("");addAudit("MANAGER_APPROVE","Approbation manager pour retour libre/scan");}
+  // PIN d'un gérant ou d'un admin. Il est conservé pour le retour : le serveur le revérifie
+  // (avant, la validation n'existait que sur la tablette).
+  const[approvalPin,setApprovalPin]=useState("");
+  const verifyManagerPin=async()=>{const resp=users.filter(u=>u.role==="admin"||u.role==="manager");
+    if(!resp.length){setManagerPinError("Aucun gérant ni admin trouvé");return;}
+    let ok=false;for(const u of resp){if(u.pin&&await verifyPin(managerPinInput,u.pin)){ok=true;break;}}
+    if(ok){setManagerApproved(true);setApprovalPin(managerPinInput);setManagerPinError("");setManagerPinInput("");addAudit("MANAGER_APPROVE","Approbation manager pour retour libre/scan");}
     else{setManagerPinError("PIN manager incorrect");}};
   // Avoir search for history panel
   const filteredAvoirs=useMemo(()=>{if(!avoirLookup)return avoirs.slice(0,20);const q=avoirLookup.toLowerCase();
     return avoirs.filter(a=>(a.avoirNumber||"").toLowerCase().includes(q)||(a.customerName||"").toLowerCase().includes(q)||
       (a.originalTicket||"").toLowerCase().includes(q)).slice(0,30);},[avoirs,avoirLookup]);
 
+  // Recherche aussi dans TOUT l'historique du serveur (la mémoire ne garde que 200 tickets)
+  const[srvTk,setSrvTk]=useState([]);
+  useEffect(()=>{if(!searchTk||searchTk.trim().length<3){setSrvTk([]);return;}
+    let annule=false;const t=setTimeout(()=>{API.sales.lookup(searchTk.trim()).then(r=>{if(!annule)setSrvTk(norm.sales(r||[]));}).catch(()=>{});},300);
+    return()=>{annule=true;clearTimeout(t);};},[searchTk]);
   const foundTickets=useMemo(()=>{if(!searchTk||searchTk.length<2)return[];const q=searchTk.toLowerCase();
-    return tickets.filter(t=>(t.ticketNumber||"").toLowerCase().includes(q)||(t.customerName||"").toLowerCase().includes(q)||(t.barcode||"").includes(q))
-      .slice(0,10);},[tickets,searchTk]);
+    const local=tickets.filter(t=>(t.ticketNumber||"").toLowerCase().includes(q)||(t.customerName||"").toLowerCase().includes(q)||(t.barcode||"").includes(q));
+    const vus=new Set(local.map(t=>t.ticketNumber));
+    return[...local,...srvTk.filter(t=>!vus.has(t.ticketNumber))].slice(0,10);},[tickets,searchTk,srvTk]);
 
   const foundProducts=useMemo(()=>{if(!searchProd||searchProd.length<2)return[];const q=searchProd.toLowerCase();
     return products.filter(p=>p.name.toLowerCase().includes(q)||p.sku.toLowerCase().includes(q)||p.variants.some(v=>(v.ean||"").includes(q)))
@@ -50,6 +60,8 @@ function ReturnScreen(){
     // Try as ticket barcode first
     const tk=tickets.find(t=>t.barcode===code);
     if(tk){setSearchTk(code);setMode("ticket");notify(`Ticket ${tk.ticketNumber} trouvé`,"info");return;}
+    // Ticket ancien (hors des 200 en mémoire) : recherche serveur par code-barres de vente (200…)
+    if(/^200\d{10}$/.test(code)){setSearchTk(code);setMode("ticket");notify("Recherche du ticket dans l'historique…","info");return;}
     // Try as avoir barcode
     const av=avoirs.find(a=>a.barcode===code);
     if(av){setAvoirLookup(code);notify(`Avoir ${av.avoirNumber} trouvé`,"info");return;}
@@ -109,7 +121,7 @@ function ReturnScreen(){
       unitPrice:r.unitPrice||0,
       taxRate:products.find(p=>p.id===r.productId)?.taxRate||0.20}));
     try{
-    const avoir=await processReturn(syntheticTicket,enrichedItems,reason,refundMethod,restock,defective,{approved:managerApproved});
+    const avoir=await processReturn(syntheticTicket,enrichedItems,reason,refundMethod,restock,defective,{approved:managerApproved,approvalPin:managerApproved?approvalPin:""});
     if(avoir){
       if(refundMethod==="exchange"){
         setSelectedAvoir({avoirNumber:avoir.avoirNumber,totalTTC:avoir.totalTTC||0,remaining:avoir.remaining||avoir.totalTTC||0,applied:avoir.totalTTC||0});

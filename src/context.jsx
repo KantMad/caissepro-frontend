@@ -1519,6 +1519,8 @@ function AppProvider({children}){
         productName:i.product_name,variantColor:i.variant_color,variantSize:i.variant_size,
         qty:i.quantity,lineHT:i.lineHT,lineTVA:i.lineTVA,lineTTC:i.lineTTC,taxRate:i.taxRate})),
       totalHT,totalTVA,totalTTC,
+      // PIN du responsable qui a valide (verifie a nouveau par le serveur)
+      ...(opts.approvalPin?{approval:{pin:opts.approvalPin}}:{}),
       restock:doRestock!==undefined?doRestock:(rp.autoRestock!==false),defective};
 
     let avoir;

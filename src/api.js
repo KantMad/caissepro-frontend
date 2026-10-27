@@ -113,6 +113,8 @@ export const sales = {
   period: (params) => api('/api/sales/stats/period?' + new URLSearchParams(params || {})),
   // Date de derniere vente par produit (vieillissement du stock)
   lastSold: () => api('/api/sales/stats/last-sold'),
+  // Recherche d'un ticket (n° ou code-barres) dans tout l'historique du magasin
+  lookup: (q) => api('/api/sales/lookup?' + new URLSearchParams({ q })),
   emailTicket: (saleId, to) => api(`/api/sales/${saleId}/email`, { method: 'POST', body: JSON.stringify({ to }) }),
   commissions: () => api('/api/sales/stats/commissions'),
   reassignCustomer: (saleId, customerId) => api(`/api/sales/${saleId}/customer`, { method: 'PATCH', body: JSON.stringify({ customerId }) }),

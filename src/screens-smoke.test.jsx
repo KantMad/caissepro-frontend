@@ -66,7 +66,7 @@ vi.mock("./api.js", () => {
     setOnAuthExpired: () => {}, setStoreId: () => {}, clearStoreId: () => {},
     setToken: () => {}, getToken: () => "t", clearToken: () => {}, getStoreId: () => STORE,
     sales: ns({ list: liste([VENTE]), stats: liste({ totalTTC: "339.50", count: 1 }),
-      period: liste({ sales: [VENTE], truncated: false }), lastSold: liste([{ product_id: "p1", last_sold_at: "2026-10-20T09:24:43.000Z" }]) }),
+      period: liste({ sales: [VENTE], truncated: false }), lookup: liste([{ ...VENTE, id: "old1", ticket_number: "2025-000999", created_at: "2025-03-02T10:00:00.000Z" }]), lastSold: liste([{ product_id: "p1", last_sold_at: "2026-10-20T09:24:43.000Z" }]) }),
     products: ns({ list: liste([PRODUIT]), exportCSV: () => "http://x" }),
     customers: ns({ list: liste([CLIENT]) }),
     returns: ns({ list: liste([AVOIR]), counter: liste({ seq: 1 }) }),
@@ -196,6 +196,12 @@ describe("Écrans — rendu sans plantage", () => {
     const b = getAllByText(/^Retouches \(/); fireEvent.click(b[b.length - 1]);
     expect(errors.join("\n")).not.toMatch(/is not defined|Cannot read|is not a function/);
     expect(container.textContent).toMatch(/CA retouches/);
+  });
+
+  it("Retour : un ancien ticket (hors des 200 en mémoire) est trouvé via le serveur", async () => {
+    const { getByPlaceholderText, findByText } = render(<AppProvider><ReturnScreen /></AppProvider>);
+    fireEvent.change(getByPlaceholderText("N° ticket, nom client…"), { target: { value: "2025-000999" } });
+    expect(await findByText(/2025-000999/, {}, { timeout: 2000 })).toBeTruthy();
   });
 
   it("Stock : tous les onglets s'ouvrent", () => {
