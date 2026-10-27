@@ -138,7 +138,9 @@ function ExportsScreen(){
 
   // --- Filtered data ---
   const filterByDate=(items,dateField="date")=>items.filter(i=>{
-    const d=(i[dateField]||i.createdAt||i.created_at||"").slice(0,10);
+    const brut=i[dateField]||i.createdAt||i.created_at||"";
+    // Jour LOCAL (horodatage serveur en UTC) — même découpage que l'export serveur
+    const d=brut?(/^\d{4}-\d{2}-\d{2}$/.test(brut)?brut:dayKey(new Date(brut))):"";
     return(!dateFrom||d>=dateFrom)&&(!dateTo||d<=dateTo);
   });
   const filterByAmount=(items,field="totalTTC")=>items.filter(i=>{
@@ -304,7 +306,9 @@ function ExportsScreen(){
     const url=API.exports.url(conf.kind,{from:dateFrom+"T00:00:00",to:dateTo+"T23:59:59",format,...(conf.params||{})});
     window.open(url,"_blank");
     addAudit&&addAudit("EXPORT",`Export ${conf.label} (${format}) ${dateFrom} → ${dateTo}`);
-    notify(`Export ${conf.label} lancé`,"success");
+    // Le fichier s'ouvre dans un nouvel onglet : en cas de refus (session expirée, droits),
+    // c'est là que s'affiche le message — on ne prétend donc pas que l'export a réussi.
+    notify(`Export ${conf.label} : téléchargement demandé (vérifiez le fichier reçu)`,"info");
   };
   const downloadSalesDetail=downloadServerExport;
 
