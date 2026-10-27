@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect, useRef, createContext, useContext,
 import * as API from "./api.js";
 import { setOnAuthExpired, setStoreId, clearStoreId } from "./api.js";
 import printer from "./printer.js";
-import hardwareManager from "./hardware.js";
+import hardwareManager, { BrowserPrintAdapter } from "./hardware.js";
 import { CO, DEFAULT_TVA_RATES, PERMS, initProducts, initUsers, initCustomers, LOYALTY_TIERS, initPromos, C, categories as defaultCategories } from "./constants.jsx";
 import { hashPin, verifyPin, sha256, norm, loadVariantOrderFromSettings, autoImportSizesFromProducts, generateEAN13, DEFAULT_CAT_ICONS } from "./utils.jsx";
 import { computeTotals, lineNetTTC } from "./lib/totals.js";
@@ -1350,11 +1350,21 @@ function AppProvider({children}){
     setTimeout(()=>{try{iframe.contentWindow.focus();iframe.contentWindow.print();}catch(e){window.print();}},200);
   },[]);
 
+  // Tickets déjà imprimés sur ce poste : la 2e impression d'un même ticket est un duplicata.
+  const ticketsImprimes=useRef(new Set());
   const thermalPrint=useCallback(async(type,data)=>{
-    // NF525: tracer les duplicata (réimpressions de tickets validés)
-    if(type==="receipt"&&data?.ticketNumber){
-      addAudit("DUPLICATA",`Réimpression ticket ${data.ticketNumber}`,data.ticketNumber);
-      addJET("DUPLICATA",`Duplicata ticket ${data.ticketNumber} — ${(data.totalTTC||0).toFixed(2)}€`);
+    // NF525 : seule une RÉIMPRESSION est un duplicata — tracée (audit + JET) et imprimée avec la
+    // mention « DUPLICATA ». Avant : le ticket original était tracé comme duplicata, sans mention.
+    // Le ticket cadeau n'est pas une copie du ticket fiscal (aucun montant) : jamais duplicata.
+    if(type==="receipt"&&data){
+      const num=data.ticketNumber||data.ticket_number;
+      if(num&&!data._giftCard){
+        if(data._duplicata||ticketsImprimes.current.has(num)){
+          data={...data,_duplicata:true};
+          addAudit("DUPLICATA",`Réimpression ticket ${num}`,num);
+          addJET("DUPLICATA",`Duplicata ticket ${num} — ${(Number(data.totalTTC??data.total_ttc)||0).toFixed(2)}€`);
+        }else ticketsImprimes.current.add(num);
+      }
     }
     const halPrinter=hardwareManager.printer;
     if(halPrinter&&!halPrinter.connected){
@@ -1389,7 +1399,9 @@ function AppProvider({children}){
       }catch(e){notify(e.message,"danger");}
     }
     // Fallback: browser print
-    if(type==="receipt"){printReceiptOnly();return false;}
+    // Navigateur : ticket généré depuis les DONNÉES (cadeau sans prix, mention duplicata),
+    // pas l'aperçu à l'écran qui est toujours le ticket complet.
+    if(type==="receipt"){await new BrowserPrintAdapter().printReceipt(data,settings,CO);return true;}
     if(type==="register-open"||type==="register-close"){
       // Generate HTML and print via popup — same approach as receipt tickets
       const d=data||{};const co=settings||{};

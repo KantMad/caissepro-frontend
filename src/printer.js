@@ -4,7 +4,7 @@
 // ═══════════════════════════════════════
 
 // ESC/POS Command Constants
-import { lineDiscountEuro, globalDiscountTTC, libelleCloture } from './lib/formatters.js';
+import { lineDiscountEuro, globalDiscountTTC, libelleCloture, tvaParTaux, libelleTaux, pointsFidelite, libellePaiementTicket } from './lib/formatters.js';
 
 const ESC = 0x1B;
 const GS = 0x1D;
@@ -454,12 +454,18 @@ class ThermalPrinter {
         await this.normalSize();
         await this.bold(false);
         await this.alignLeft();
+      } else if (ticket._duplicata) {
+        // NF525 : toute reimpression d'un ticket deja emis porte la mention DUPLICATA
+        await this.alignCenter(); await this.doubleSize(); await this.bold(true);
+        await this.text('DUPLICATA'); await this.newline();
+        await this.normalSize(); await this.bold(false); await this.alignLeft();
       }
       await this.bold(true);
-      await this.line(`N° ${ticket.ticketNumber}`, new Date(ticket.date || ticket.createdAt || '').toLocaleString('fr-FR'));
+      await this.line(`N° ${ticket.ticketNumber || ticket.ticket_number}`, new Date(ticket.date || ticket.createdAt || '').toLocaleString('fr-FR'));
       await this.bold(false);
-      if (!isGift) { await this.bold(true); await this.line(`Caissier: ${ticket.userName || '?'}`); await this.bold(false); }
-      if (ticket.customerName) { await this.bold(true); await this.line(`Client: ${ticket.customerName}`); await this.bold(false); }
+      if (!isGift) { await this.bold(true); await this.line(`Caissier: ${ticket.userName || ticket.user_name || '?'}`); await this.bold(false); }
+      // Ticket cadeau : ni nom de l'acheteur, ni points (il est remis a un tiers)
+      if (!isGift && ticket.customerName) { await this.bold(true); await this.line(`Client: ${ticket.customerName}`); await this.bold(false); }
 
       await this.separator('-');
 
@@ -533,8 +539,10 @@ class ThermalPrinter {
 
         // ── Totals ──
         await this.bold(true);
-        await this.line('Sous-total HT', `${(ticket.totalHT || 0).toFixed(2)}€`);
-        await this.line('TVA', `${(ticket.totalTVA || 0).toFixed(2)}€`);
+        await this.line('Sous-total HT', `${Number(ticket.totalHT ?? ticket.total_ht ?? 0).toFixed(2)}€`);
+        const _tva = tvaParTaux(ticket);
+        if (_tva.length) { for (const v of _tva) await this.line(`TVA ${libelleTaux(v.rate)}`, `${v.tva.toFixed(2)}€`); }
+        else await this.line('TVA', `${Number(ticket.totalTVA ?? ticket.total_tva ?? 0).toFixed(2)}€`);
         await this.bold(false);
 
         const gdTTC = globalDiscountTTC(ticket);
@@ -552,17 +560,16 @@ class ThermalPrinter {
         await this.separator('-');
 
         // ── Payment ──
-        const methodLabels = { cash: 'ESP', card: 'CB', giftcard: 'CAD', cheque: 'CHQ', avoir: 'AVOIR' };
         if (ticket.payments?.length) {
-          const payStr = ticket.payments.map(p => `${methodLabels[p.method] || p.method} ${p.amount.toFixed(2)}€`).join(' + ');
+          const payStr = ticket.payments.map(p => `${libellePaiementTicket(p.method)} ${Number(p.amount || 0).toFixed(2)}€`).join(' + ');
           await this.bold(true); await this.line('Paiement:', payStr); await this.bold(false);
         }
 
-        // Cash change
-        if (ticket.paymentMethod === 'cash' && ticket.cashGiven > 0) {
+        // Rendu monnaie (aussi en paiement mixte : calcule sur la seule part especes)
+        if (Number(ticket.changeGiven) > 0) {
           await this.bold(true);
-          await this.line('Recu:', `${ticket.cashGiven.toFixed(2)}€`);
-          await this.line('Rendu:', `${(ticket.cashGiven - (ticket.totalTTC || 0)).toFixed(2)}€`);
+          await this.line('Recu especes:', `${Number(ticket.cashGiven).toFixed(2)}€`);
+          await this.line('Rendu:', `${Number(ticket.changeGiven).toFixed(2)}€`);
           await this.bold(false);
         }
 
@@ -575,7 +582,7 @@ class ThermalPrinter {
         await this.text('EMPREINTE NF525');
         await this.newline();
         await this.fontNormal();
-        await this.text(ticket.fingerprint || '—');
+        await this.text(ticket.fingerprint || ticket.hash || '—');
         await this.newline();
         await this.bold(false);
 
@@ -633,18 +640,18 @@ class ThermalPrinter {
         await this.bold(false);
       }
 
-      if (ticket.saleNote) {
+      if (!isGift && (ticket.saleNote || ticket.sale_note)) {
         await this.newline();
         await this.bold(true);
-        await this.text(`Note: ${ticket.saleNote}`);
+        await this.text(`Note: ${ticket.saleNote || ticket.sale_note}`);
         await this.newline();
         await this.bold(false);
       }
 
-      if (ticket.customerName) {
+      if (!isGift && ticket.customerName) {
         await this.newline();
         await this.bold(true);
-        await this.text(`Fidelite: +${Math.round(ticket.totalTTC || 0)}pts`);
+        await this.text(`Fidelite: +${pointsFidelite(ticket)}pts`);
         await this.newline();
         await this.bold(false);
       }

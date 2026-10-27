@@ -3,7 +3,8 @@
 // Unified interface for all POS terminals
 // ═══════════════════════════════════════════════════════
 
-import { lineDiscountEuro, globalDiscountTTC, libelleCloture } from './lib/formatters.js';
+import { ean13SvgHtml, escapeHtml } from './utils.jsx';
+import { lineDiscountEuro, globalDiscountTTC, libelleCloture, tvaParTaux, libelleTaux, pointsFidelite, libellePaiementTicket } from './lib/formatters.js';
 
 const HARDWARE_PROFILES = {
   sunmi: {
@@ -230,6 +231,8 @@ class SunmiPrinterAdapter {
 
     // Gift card mode: no prices, special header
     const isGift = !!t._giftCard;
+    // NF525 : toute reimpression d'un ticket deja emis porte la mention DUPLICATA
+    if (t._duplicata && !isGift) { size(32); bold(true); text('DUPLICATA\n'); size(24); bold(false); }
 
     // Ticket info
     align(0); bold(true);
@@ -243,7 +246,8 @@ class SunmiPrinterAdapter {
     text(`N: ${t.ticketNumber || t.ticket_number || '?'}  ${dateStr}\n`);
     bold(false);
     if (!isGift) { bold(true); text(`Caissier: ${t.userName || t.user_name || '?'}\n`); bold(false); }
-    if (t.customerName || t.customer_name) { bold(true); text(`Client: ${t.customerName || t.customer_name}\n`); bold(false); }
+    // Ticket cadeau : ni nom de l'acheteur, ni points (il est remis a un tiers)
+    if (!isGift && (t.customerName || t.customer_name)) { bold(true); text(`Client: ${t.customerName || t.customer_name}\n`); bold(false); }
     cmds.push({ cmd: 'line', char: '-', len: 32 });
 
     // Items
@@ -273,7 +277,7 @@ class SunmiPrinterAdapter {
       if (isGift) {
         text(`  x${qty}\n`);
       } else {
-        bold(true); text(`  x${qty}  ${fmt(lineTTC)} EUR\n`); bold(false);
+        bold(true); text(qty > 1 ? `  ${qty} x ${fmt(lineTTC / qty)}  ${fmt(lineTTC)} EUR\n` : `  x${qty}  ${fmt(lineTTC)} EUR\n`); bold(false);
         const _d = lineDiscountEuro(item);
         if (_d > 0) { size(22); text(`  Remise: -${fmt(_d)} EUR\n`); size(24); }
       }
@@ -298,18 +302,23 @@ class SunmiPrinterAdapter {
       // Totals
       bold(true);
       text(`Total HT     ${fmt(t.totalHT || t.total_ht)} EUR\n`);
-      text(`TVA          ${fmt(t.totalTVA || t.total_tva)} EUR\n`);
+      const _tva = tvaParTaux(t);
+      if (_tva.length) { for (const v of _tva) text(`TVA ${libelleTaux(v.rate).padEnd(8)} ${fmt(v.tva)} EUR\n`); }
+      else text(`TVA          ${fmt(t.totalTVA || t.total_tva)} EUR\n`);
       size(32);
       text(`TOTAL TTC    ${fmt(t.totalTTC || t.total_ttc)} EUR\n`);
       size(24); bold(false);
 
       text('\n'); // marge entre les totaux et le paiement
       // Payment
-      const ml = { cash: 'ESP', card: 'CB', amex: 'AMEX', giftcard: 'CAD', cheque: 'CHQ', avoir: 'AVOIR' };
       const payments = t.payments || [];
       if (payments.length > 0) {
-        const payStr = payments.map(p => `${ml[p.method] || p.method || '?'} ${fmt(p.amount)} EUR`).join(' + ');
+        const payStr = payments.map(p => `${libellePaiementTicket(p.method)} ${fmt(p.amount)} EUR`).join(' + ');
         bold(true); text(`Paiement: ${payStr}\n`); bold(false);
+      }
+      if (Number(t.changeGiven) > 0) {
+        text(`Recu especes ${fmt(t.cashGiven)} EUR\n`);
+        bold(true); text(`Rendu        ${fmt(t.changeGiven)} EUR\n`); bold(false);
       }
       if (t.saleNote || t.sale_note) text(`Note: ${t.saleNote || t.sale_note}\n`);
       cmds.push({ cmd: 'line', char: '=', len: 32 });
@@ -344,8 +353,8 @@ class SunmiPrinterAdapter {
     align(1);
     if (s.footerMsg || co.footerMsg) { size(24); bold(true); text(`${s.footerMsg || co.footerMsg}\n`); bold(false); }
     if (s.ticketFreeText) { size(22); bold(true); const ftLines = s.ticketFreeText.split('\n'); for (const ln of ftLines) { text(ln + '\n'); } bold(false); }
-    if (t.customerName || t.customer_name) {
-      size(20); text(`Fidelite: +${Math.round(Number(t.totalTTC || t.total_ttc) || 0)}pts\n`);
+    if (!isGift && (t.customerName || t.customer_name)) {
+      size(20); text(`Fidelite: +${pointsFidelite(t)}pts\n`);
     }
     size(18); text(`${co.sw || 'Tech in Cash'} v${co.ver || '6.1.0'} - Conforme NF525\n`);
 
@@ -1346,10 +1355,8 @@ class BrowserPrintAdapter {
   }
 
   async printReceipt(ticket, settings, companyInfo) {
-    // Try to use existing data-print-receipt element
-    const el = document.querySelector('[data-print-receipt]');
-    if (el) return this._printViaIframe(el.innerHTML);
-    // Fallback: generate receipt HTML
+    // Toujours genere depuis les DONNEES du ticket : imprimer l'apercu a l'ecran sortait le ticket
+    // complet (prix compris) a la place du ticket cadeau, et sans la mention DUPLICATA.
     return this._printViaIframe(_generateReceiptHTML(ticket, settings, companyInfo));
   }
 
@@ -1575,9 +1582,13 @@ async function _textBasedPrint(adapter, type, data, settings, companyInfo, width
 
   if (type === 'receipt') {
     header();
-    lines.push(`N: ${data.ticketNumber}  ${new Date(data.date || data.createdAt || '').toLocaleString('fr-FR')}`);
-    lines.push(`Caissier: ${data.userName || '?'}`);
-    if (data.customerName) lines.push(`Client: ${data.customerName}`);
+    // Ticket cadeau : AUCUN prix ni total, ni acheteur, ni points (avant : ticket complet imprime)
+    const isGift = !!data._giftCard;
+    if (isGift) lines.push('TICKET CADEAU');
+    else if (data._duplicata) lines.push('DUPLICATA');
+    lines.push(`N: ${data.ticketNumber || data.ticket_number}  ${new Date(data.date || data.createdAt || '').toLocaleString('fr-FR')}`);
+    if (!isGift) lines.push(`Caissier: ${data.userName || data.user_name || '?'}`);
+    if (!isGift && (data.customerName || data.customer_name)) lines.push(`Client: ${data.customerName || data.customer_name}`);
     lines.push(dsep);
     for (const item of (data.items || [])) {
       const name = item.product?.name || item.product_name || '?';
@@ -1588,25 +1599,45 @@ async function _textBasedPrint(adapter, type, data, settings, companyInfo, width
       const qty = item.quantity || 1;
       const ttc = Number(item.lineTTC || item.line_ttc || (item.unit_price * qty)) || 0;
       const isCustom = item.isCustom || item.is_custom;
-      lines.push(pad(`${name} x${qty}`, `${ttc.toFixed(2)}E`));
+      lines.push(isGift ? `${name} x${qty}` : pad(`${name} x${qty}`, `${ttc.toFixed(2)}E`));
       if (!isCustom && (color || sz)) {
         let detail = `  ${color}/${sz}`;
-        if (sku) detail += ` Ref:${sku}`;
-        if (colorCode) detail += ` ${colorCode}`;
+        if (!isGift && sku) detail += ` Ref:${sku}`;
+        if (!isGift && colorCode) detail += ` ${colorCode}`;
         lines.push(detail);
       }
+      if (isGift) continue;
+      if (qty > 1) lines.push(`  ${qty} x ${(ttc / qty).toFixed(2)}E`);
       const _d = lineDiscountEuro(item);
       if (_d > 0) lines.push(pad('  Remise', `-${_d.toFixed(2)}E`));
     }
     lines.push(dsep);
-    const _gdT = globalDiscountTTC(data);
-    if (_gdT > 0) lines.push(pad('Remise', `-${_gdT.toFixed(2)}E`));
-    lines.push(pad('Total HT', `${(data.totalHT || 0).toFixed(2)}E`));
-    lines.push(pad('TVA', `${(data.totalTVA || 0).toFixed(2)}E`));
-    lines.push(pad('TOTAL TTC', `${(data.totalTTC || 0).toFixed(2)}E`));
-    if (data.saleNote || data.sale_note) lines.push(`Note: ${data.saleNote || data.sale_note}`);
-    lines.push(sep);
-    lines.push(`NF525: ${data.fingerprint || '-'}`);
+    if (isGift) {
+      lines.push(`Echange possible sous ${data._returnDays || 30} jours`);
+      lines.push('sur presentation de ce ticket');
+    } else {
+      for (const promo of (data.promosApplied || [])) lines.push(`* ${promo}`);
+      const _gdT = globalDiscountTTC(data);
+      if (_gdT > 0) lines.push(pad('Remise', `-${_gdT.toFixed(2)}E`));
+      lines.push(pad('Total HT', `${Number(data.totalHT ?? data.total_ht ?? 0).toFixed(2)}E`));
+      const _tva = tvaParTaux(data);
+      if (_tva.length) for (const v of _tva) lines.push(pad(`TVA ${libelleTaux(v.rate)}`, `${v.tva.toFixed(2)}E`));
+      else lines.push(pad('TVA', `${Number(data.totalTVA ?? data.total_tva ?? 0).toFixed(2)}E`));
+      lines.push(pad('TOTAL TTC', `${Number(data.totalTTC ?? data.total_ttc ?? 0).toFixed(2)}E`));
+      for (const p of (data.payments || [])) lines.push(pad(libellePaiementTicket(p.method), `${Number(p.amount || 0).toFixed(2)}E`));
+      if (Number(data.changeGiven) > 0) {
+        lines.push(pad('Recu especes', `${Number(data.cashGiven).toFixed(2)}E`));
+        lines.push(pad('Rendu', `${Number(data.changeGiven).toFixed(2)}E`));
+      }
+      if (data.saleNote || data.sale_note) lines.push(`Note: ${data.saleNote || data.sale_note}`);
+      lines.push(sep);
+      lines.push(`NF525: ${data.fingerprint || data.hash || '-'}`);
+      if (data.customerName || data.customer_name) lines.push(`Fidelite: +${pointsFidelite(data)}pts`);
+    }
+    lines.push('Garantie legale 2 ans');
+    if (data.barcode) lines.push(`Ticket: ${data.barcode}`);
+    if (s.footerMsg || co.footerMsg) lines.push(s.footerMsg || co.footerMsg);
+    if (s.ticketFreeText) lines.push(...String(s.ticketFreeText).split('\n'));
   } else if (type === 'avoir') {
     header();
     lines.push('AVOIR / NOTE DE CREDIT');
@@ -1822,27 +1853,62 @@ async function _textBasedPrint(adapter, type, data, settings, companyInfo, width
 function _generateReceiptHTML(ticket, settings, companyInfo) {
   const s = settings || {};
   const co = companyInfo || {};
-  let h = `<div class="center bold big">${s.name || co.name || 'Ma Boutique'}</div>`;
-  if (s.address) h += `<div class="center">${s.address}</div>`;
-  if (s.siret) h += `<div class="center small">SIRET: ${s.siret}</div>`;
+  const t = ticket || {};
+  const e = escapeHtml;
+  const f = (v) => (Number(v) || 0).toFixed(2);
+  const isGift = !!t._giftCard;
+  const client = t.customerName || t.customer_name;
+  let h = '';
+  if (s.receiptLogo) h += `<div class="center"><img src="${e(s.receiptLogo)}" style="max-height:40px;max-width:180px"></div>`;
+  h += `<div class="center bold big">${e(s.name || co.name || 'Ma Boutique')}</div>`;
+  if (s.address) h += `<div class="center">${e(s.address)}</div>`;
+  if (s.postalCode || s.city) h += `<div class="center">${e(s.postalCode || '')} ${e(s.city || '')}</div>`;
+  if (s.phone) h += `<div class="center">Tel: ${e(s.phone)}</div>`;
+  if (s.siret) h += `<div class="center small">SIRET: ${e(s.siret)}${s.tvaIntra ? ` - TVA: ${e(s.tvaIntra)}` : ''}</div>`;
   h += '<div class="sep"></div>';
-  h += `<div class="row"><span class="bold">N: ${ticket.ticketNumber}</span><span>${new Date(ticket.date || ticket.createdAt || '').toLocaleString('fr-FR')}</span></div>`;
-  h += `<div>Caissier: ${ticket.userName || '?'}</div>`;
+  if (isGift) h += '<div class="center bold big">TICKET CADEAU</div>';
+  else if (t._duplicata) h += '<div class="center bold big">DUPLICATA</div>';
+  h += `<div class="row"><span class="bold">N: ${e(t.ticketNumber || t.ticket_number)}</span><span>${new Date(t.date || t.createdAt || '').toLocaleString('fr-FR')}</span></div>`;
+  if (!isGift) h += `<div>Caissier: ${e(t.userName || t.user_name || '?')}${client ? ` - Client: ${e(client)}` : ''}</div>`;
   h += '<div class="sep"></div>';
-  for (const item of (ticket.items || [])) {
+  for (const item of (t.items || [])) {
     const name = item.product?.name || item.product_name || '?';
-    const ttc = Number(item.lineTTC || item.line_ttc || ((item.unit_price || 0) * (item.quantity || 1))) || 0;
-    h += `<div class="row"><span>${name} x${item.quantity || 1}</span><span>${ttc.toFixed(2)}EUR</span></div>`;
+    const isC = item.isCustom || item.is_custom;
+    const color = item.variant?.color || item.variant_color || '';
+    const sz = item.variant?.size || item.variant_size || '';
+    const qty = item.quantity || 1;
+    const ttc = Number(item.lineTTC || item.line_ttc || ((item.unit_price || 0) * qty)) || 0;
+    const nom = `${e(name)}${!isC && (color || sz) ? ` (${e(color)}/${e(sz)})` : ''} x${qty}`;
+    if (isGift) { h += `<div>${nom}</div>`; continue; }
+    h += `<div class="row"><span>${nom}</span><span>${f(ttc)}EUR</span></div>`;
+    if (qty > 1) h += `<div class="small">&nbsp;&nbsp;${qty} x ${f(ttc / qty)}EUR</div>`;
     const _d = lineDiscountEuro(item);
-    if (_d > 0) h += `<div class="row small"><span>&nbsp;&nbsp;Remise</span><span>-${_d.toFixed(2)}EUR</span></div>`;
+    if (_d > 0) h += `<div class="row small"><span>&nbsp;&nbsp;Remise</span><span>-${f(_d)}EUR</span></div>`;
   }
   h += '<div class="sep"></div>';
-  const _gdH = globalDiscountTTC(ticket);
-  if (_gdH > 0) h += `<div class="row"><span>Remise</span><span>-${_gdH.toFixed(2)}EUR</span></div>`;
-  h += `<div class="row bold big"><span>TOTAL TTC</span><span>${(ticket.totalTTC || 0).toFixed(2)}EUR</span></div>`;
-  if (ticket.saleNote || ticket.sale_note) h += `<div>Note: ${ticket.saleNote || ticket.sale_note}</div>`;
-  h += '<div class="sep"></div>';
-  h += `<div class="center small">NF525: ${ticket.fingerprint || '-'}</div>`;
+  if (isGift) {
+    h += `<div class="center small">Echange possible sous ${t._returnDays || 30} jours sur presentation de ce ticket</div>`;
+  } else {
+    for (const promo of (t.promosApplied || [])) h += `<div class="small">* ${e(promo)}</div>`;
+    const _gdH = globalDiscountTTC(t);
+    if (_gdH > 0) h += `<div class="row"><span>Remise</span><span>-${f(_gdH)}EUR</span></div>`;
+    h += `<div class="row"><span>Total HT</span><span>${f(t.totalHT ?? t.total_ht)}EUR</span></div>`;
+    const _tva = tvaParTaux(t);
+    if (_tva.length) for (const v of _tva) h += `<div class="row"><span>TVA ${libelleTaux(v.rate)}</span><span>${f(v.tva)}EUR</span></div>`;
+    else h += `<div class="row"><span>TVA</span><span>${f(t.totalTVA ?? t.total_tva)}EUR</span></div>`;
+    h += `<div class="row bold big"><span>TOTAL TTC</span><span>${f(t.totalTTC ?? t.total_ttc)}EUR</span></div>`;
+    h += '<div class="sep"></div>';
+    if ((t.payments || []).length) h += `<div class="bold">Paiement: ${t.payments.map(p => `${libellePaiementTicket(p.method)} ${f(p.amount)}EUR`).join(' + ')}</div>`;
+    if (Number(t.changeGiven) > 0) h += `<div class="row"><span>Recu especes</span><span>${f(t.cashGiven)}EUR</span></div><div class="row bold"><span>Rendu</span><span>${f(t.changeGiven)}EUR</span></div>`;
+    if (t.saleNote || t.sale_note) h += `<div>Note: ${e(t.saleNote || t.sale_note)}</div>`;
+    h += `<div class="center small bold" style="margin-top:4px">EMPREINTE NF525</div><div class="center bold">${e(t.fingerprint || t.hash || '-')}</div>`;
+  }
+  h += '<div class="center bold" style="margin-top:4px">Garantie legale 2 ans</div>';
+  if (t.barcode && String(t.barcode).length === 13) h += `<div class="center" style="margin-top:4px">${ean13SvgHtml(t.barcode, 160, 45)}</div>`;
+  if (s.footerMsg || co.footerMsg) h += `<div class="center bold" style="margin-top:4px">${e(s.footerMsg || co.footerMsg)}</div>`;
+  if (s.ticketFreeText) h += `<div class="center small" style="white-space:pre-line">${e(s.ticketFreeText)}</div>`;
+  if (!isGift && client) h += `<div class="center small">Fidelite: +${pointsFidelite(t)}pts</div>`;
+  h += `<div class="center small">${e(co.sw || 'Tech in Cash')} v${e(co.ver || '')} - Conforme NF525</div>`;
   return h;
 }
 

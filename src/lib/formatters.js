@@ -155,6 +155,48 @@ export const globalDiscountTTC = (ticket) => {
   return Math.round((Number(ticket.globalDiscount ?? ticket.global_discount) || 0) * 100) / 100;
 };
 
+// ── Ticket de vente : briques communes aux 5 canaux d'impression ──
+// Libelle de paiement imprime (ASCII, imprimantes thermiques) : avant, chaque canal avait sa
+// propre table et « contactless »/« amex » sortaient en code brut sur certains.
+const PAIEMENT_TICKET = { cash: 'ESP', card: 'CB', amex: 'AMEX', contactless: 'SANS CONTACT', giftcard: 'CARTE CADEAU', cheque: 'CHQ', avoir: 'AVOIR' };
+export const libellePaiementTicket = (m) => PAIEMENT_TICKET[m] || String(m || '?').toUpperCase();
+
+// Ventilation de la TVA par taux (mention obligatoire de la note). Les lignes sont nettes de leurs
+// remises ; remise panier et promos sont reparties au prorata. Le dernier centime d'arrondi est
+// porte par le taux le plus gros, pour que la somme egale TOUJOURS le HT / la TVA du ticket.
+export const tvaParTaux = (ticket) => {
+  if (!ticket) return [];
+  const groupes = new Map();
+  for (const i of ticket.items || []) {
+    if (!i) continue;
+    const r = Number(i.tax_rate ?? i.taxRate ?? (i.product && i.product.taxRate) ?? 0.20);
+    groupes.set(r, (groupes.get(r) || 0) + (Number(i.lineTTC ?? i.line_ttc) || 0));
+  }
+  const totalTTC = Number(ticket.totalTTC ?? ticket.total_ttc) || 0;
+  const totalHT = Number(ticket.totalHT ?? ticket.total_ht) || 0;
+  const totalTVA = Number(ticket.totalTVA ?? ticket.total_tva) || 0;
+  const somme = [...groupes.values()].reduce((s, v) => s + v, 0);
+  if (!groupes.size || somme <= 0) return [];
+  const k = totalTTC / somme;
+  const r2 = (v) => Math.round(v * 100) / 100;
+  const out = [...groupes.entries()].sort((a, b) => a[0] - b[0]).map(([rate, ttc]) => {
+    const t = ttc * k; const ht = r2(t / (1 + rate));
+    return { rate, ht, tva: r2(t - t / (1 + rate)), ttc: r2(t) };
+  });
+  const gros = out.reduce((m, x) => (x.ttc > m.ttc ? x : m), out[0]);
+  gros.ht = r2(gros.ht + totalHT - out.reduce((s, x) => s + x.ht, 0));
+  gros.tva = r2(gros.tva + totalTVA - out.reduce((s, x) => s + x.tva, 0));
+  return out;
+};
+export const libelleTaux = (rate) => {
+  const p = Math.round(Number(rate) * 10000) / 100;
+  return `${Number.isInteger(p) ? p : p.toFixed(1)}%`;
+};
+
+// Points de fidelite gagnes : le serveur credite FLOOR(total TTC) (create_sale) — le ticket
+// affichait Math.round, soit 1 point de trop une fois sur deux.
+export const pointsFidelite = (ticket) => Math.max(0, Math.floor(Number(ticket?.totalTTC ?? ticket?.total_ttc) || 0));
+
 // ── Agrégation des paiements par méthode (clôtures, stats) ──
 // contactless manquait : les paiements sans contact disparaissaient du bloc « Reglements »
 // du Resume mobile et du Z hors ligne (somme des reglements < CA affiche).

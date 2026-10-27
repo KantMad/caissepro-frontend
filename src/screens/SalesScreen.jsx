@@ -7,7 +7,7 @@ import { catIcon, EAN13Svg, ean13SvgHtml, norm } from "../utils.jsx";
 import { ProductIcon, colorHex } from "../ProductIcon.jsx";
 import { Modal, Btn, Input, Badge, Numpad } from "../ui.jsx";
 import { useApp } from "../context.jsx";
-import { getPaymentLabel, getAvoirRemaining } from "../lib/formatters.js";
+import { getPaymentLabel, getAvoirRemaining, lineDiscountEuro, globalDiscountTTC, tvaParTaux, libelleTaux, libellePaiementTicket, pointsFidelite } from "../lib/formatters.js";
 import { lineNetTTC, round2 } from "../lib/totals.js";
 import { dayKey } from "../lib/dates.js";
 import { useViewport } from "../useViewport.js";
@@ -125,13 +125,17 @@ function SalesScreen(){
       if(!gcExterne&&!gcCode.trim()){notify("Carte cadeau : scannez la carte ou cochez « Carte externe »","error");return;}
       if(!gcExterne&&gcSolde?.solde!=null&&g>gcSolde.solde+0.01){notify(`Solde de la carte insuffisant (${gcSolde.solde.toFixed(2)}€)`,"error");return;}
       payments.push(gcExterne?{method:"giftcard",amount:g,external:true}:{method:"giftcard",amount:g,giftCardCode:gcCode.trim()});}if(chq>0)payments.push({method:"cheque",amount:chq});if(avoirPayment>0)payments.push({method:"avoir",amount:avoirPayment});
-    if(!payments.length)return;setBusy(true);try{const t=await checkout(payments,selSeller);if(t){setLastTk({...t});setPayModal(false);setTkModal(true);setSelSeller(null);}}finally{setBusy(false);setCashGiven("");}};
-  const quickPay=async(method)=>{if(!cart.length||busy)return;setBusy(true);
+    if(!payments.length)return;setBusy(true);try{const t=await checkout(payments,selSeller);if(t){setLastTk({...t,...monnaie(cashGiven,ca)});setPayModal(false);setTkModal(true);setSelSeller(null);}}finally{setBusy(false);setCashGiven("");}};
+  // Rendu monnaie imprimé sur le ticket : montant remis par le client vs part payée en espèces
+  const monnaie=(donne,partEspeces)=>{const d=parseFloat(donne)||0;const r=Math.round((d-(partEspeces||0))*100)/100;
+    return d>0&&partEspeces>0&&r>0?{cashGiven:d,changeGiven:r}:{};};
+  const quickPay=async(method,donne)=>{if(!cart.length||busy)return;setBusy(true);
     // Ne pas envoyer de paiement à 0€ (ex: avoir couvrant tout le panier → tTTC=0)
     const payments=[{method,amount:totals.tTTC}].filter(p=>p.amount>0);
     if(avoirPayment>0&&method!=="avoir")payments.push({method:"avoir",amount:avoirPayment});
     else if(avoirPayment>0&&method==="avoir"&&!payments.length)payments.push({method:"avoir",amount:avoirPayment});
-    try{const t=await checkout(payments,selSeller);if(t){setLastTk({...t});setTkModal(true);setSelSeller(null);}}finally{setBusy(false);setCashGiven("");}};
+    const partEspeces=method==="cash"?totals.tTTC:0;
+    try{const t=await checkout(payments,selSeller);if(t){setLastTk({...t,...monnaie(donne,partEspeces)});setTkModal(true);setSelSeller(null);}}finally{setBusy(false);setCashGiven("");}};
   const change=cashGiven?Math.max(0,parseFloat(cashGiven)-totals.tTTC):0;
   const maxDisc=perm().maxDiscount;
   const custTier=selCust?getLoyaltyTier(selCust.points):null;
@@ -640,16 +644,19 @@ function SalesScreen(){
         <div style={{fontWeight:600}}>Caissier: {lastTk.userName}{lastTk.customerName?` — Client: ${lastTk.customerName}`:""}</div>
         <div style={{borderTop:"1px dashed #999",margin:"4px 0"}}/>
         {(lastTk.items||[]).map((i,k)=>{const sku=i.product?.sku||i.product_sku||"";const ean=i.variant?.ean||i.variant_ean||"";const colorCode=i.variant?.colorCode||i.variant_color_code||i.color_code||"";const isC=i.isCustom||i.is_custom;return(<div key={k}>
-          <div style={{display:"flex",justifyContent:"space-between",gap:8}}><span style={{flex:1,wordBreak:"break-word",lineHeight:1.3,fontWeight:600}}>{i.product?.name||i.product_name}{isC?"":`(${i.variant?.color||i.variant_color}/${i.variant?.size||i.variant_size})`} x{i.quantity}{i.discount>0?` -${i.discount}${i.discountType==="amount"?"€":"%"}`:""}</span><span style={{whiteSpace:"nowrap",fontWeight:800}}>{(i.lineTTC||i.line_ttc||((i.unit_price||0)*(i.quantity||1))||0).toFixed(2)}€</span></div>
+          <div style={{display:"flex",justifyContent:"space-between",gap:8}}><span style={{flex:1,wordBreak:"break-word",lineHeight:1.3,fontWeight:600}}>{i.product?.name||i.product_name}{isC?"":`(${i.variant?.color||i.variant_color}/${i.variant?.size||i.variant_size})`} x{i.quantity}{lineDiscountEuro(i)>0?` (-${lineDiscountEuro(i).toFixed(2)}€)`:""}</span><span style={{whiteSpace:"nowrap",fontWeight:800}}>{(i.lineTTC||i.line_ttc||((i.unit_price||0)*(i.quantity||1))||0).toFixed(2)}€</span></div>
           {!isC&&(sku||ean||colorCode)&&<div style={{fontSize:9,color:"#888",fontWeight:600}}>{sku?`Réf: ${sku}`:""}{sku&&colorCode?" — ":""}{colorCode||""}{(sku||colorCode)&&ean?" — ":""}{ean?`EAN: ${ean}`:""}</div>}
         </div>);})}
         <div style={{borderTop:"1px dashed #999",margin:"4px 0"}}/>
         {lastTk.promosApplied?.length>0&&lastTk.promosApplied.map((a,i)=><div key={i} style={{color:"#059669",fontSize:10,fontWeight:600}}>✓ {a}</div>)}
+        {globalDiscountTTC(lastTk)>0&&<div style={{display:"flex",justifyContent:"space-between",color:"#059669",fontWeight:600}}><span>Remise</span><span>-{globalDiscountTTC(lastTk).toFixed(2)}€</span></div>}
         <div style={{display:"flex",justifyContent:"space-between",fontWeight:600}}><span>Total HT</span><span>{(lastTk.totalHT||0).toFixed(2)}€</span></div>
-        <div style={{display:"flex",justifyContent:"space-between",fontWeight:600}}><span>TVA</span><span>{(lastTk.totalTVA||0).toFixed(2)}€</span></div>
+        {tvaParTaux(lastTk).length?tvaParTaux(lastTk).map(v=><div key={v.rate} style={{display:"flex",justifyContent:"space-between",fontWeight:600}}><span>TVA {libelleTaux(v.rate)}</span><span>{v.tva.toFixed(2)}€</span></div>)
+          :<div style={{display:"flex",justifyContent:"space-between",fontWeight:600}}><span>TVA</span><span>{(lastTk.totalTVA||0).toFixed(2)}€</span></div>}
         <div style={{display:"flex",justifyContent:"space-between",fontSize:14,fontWeight:800,marginTop:6}}><span>TOTAL TTC</span><span>{(lastTk.totalTTC||0).toFixed(2)}€</span></div>
         <div style={{borderTop:"1px dashed #999",margin:"10px 0"}}/>
-        <div style={{fontWeight:700}}>Paiement: {lastTk.payments?.map(p=>`${getPaymentLabel(p.method,"short")} ${(p.amount||0).toFixed(2)}€`).join(" + ")}</div>
+        <div style={{fontWeight:700}}>Paiement: {lastTk.payments?.map(p=>`${libellePaiementTicket(p.method)} ${(p.amount||0).toFixed(2)}€`).join(" + ")}</div>
+        {lastTk.changeGiven>0&&<div style={{display:"flex",justifyContent:"space-between",fontWeight:700}}><span>Reçu espèces {Number(lastTk.cashGiven).toFixed(2)}€</span><span>Rendu {Number(lastTk.changeGiven).toFixed(2)}€</span></div>}
         <div style={{textAlign:"center",background:C.fiscalLight,padding:6,borderRadius:6,margin:"4px 0"}}>
           <div style={{fontSize:9,color:C.fiscal,fontWeight:800}}>EMPREINTE NF525</div>
           <div style={{fontSize:12,fontWeight:800,color:C.fiscal,letterSpacing:2}}>{lastTk.fingerprint}</div></div>
@@ -660,7 +667,7 @@ function SalesScreen(){
         {settings.ticketFreeText&&<div style={{textAlign:"center",fontSize:11,fontWeight:600,color:C.text,marginTop:4,whiteSpace:"pre-line"}}>
           {settings.ticketFreeText}</div>}
         {lastTk.saleNote&&<div style={{textAlign:"center",fontSize:10,fontWeight:600,color:C.text,marginTop:4,fontStyle:"italic"}}>Note: {lastTk.saleNote}</div>}
-        {lastTk.customerName&&<div style={{textAlign:"center",fontSize:10,fontWeight:600,color:C.accent,marginTop:4}}>Fidélité: +{Math.round(lastTk.totalTTC||0)}pts</div>}
+        {lastTk.customerName&&<div style={{textAlign:"center",fontSize:10,fontWeight:600,color:C.accent,marginTop:4}}>Fidélité: +{pointsFidelite(lastTk)}pts</div>}
         <div style={{textAlign:"center",fontSize:7,color:C.textMuted,marginTop:4}}>{CO.sw} v{CO.ver} — Conforme NF525</div>
       </div>
       {/* Avoir remaining balance after sale */}
@@ -717,7 +724,7 @@ function SalesScreen(){
             <Btn key={v} variant="outline" onClick={()=>setNumpadValue(String(v))} style={{flex:1,fontSize:11,borderRadius:10}}>{v.toFixed(2)}€</Btn>))}
         </div>
       </div>
-      <Btn onClick={async()=>{setCashNumpadModal(false);setCashGiven(numpadValue);await quickPay("cash");}}
+      <Btn onClick={async()=>{setCashNumpadModal(false);await quickPay("cash",numpadValue);}}
         disabled={!numpadValue||parseFloat(numpadValue)<totals.tTTC}
         style={{width:"100%",height:50,fontSize:15,borderRadius:14,background:"#059669",boxShadow:`0 4px 16px ${C.primary}30`}}>
         <Banknote size={18}/> Encaisser {totals.tTTC.toFixed(2)}€</Btn>

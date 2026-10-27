@@ -6,7 +6,7 @@ import { CO, C } from "../constants.jsx";
 import { EAN13Svg, ean13SvgHtml } from "../utils.jsx";
 import { Modal, Btn, Input, Badge } from "../ui.jsx";
 import { useApp } from "../context.jsx";
-import { getPaymentLabel, getAvoirRemaining, isAvoirPartiallyUsed, lineDiscountEuro, globalDiscountTTC, ratioRemiseGlobale } from "../lib/formatters.js";
+import { getPaymentLabel, getAvoirRemaining, isAvoirPartiallyUsed, lineDiscountEuro, globalDiscountTTC, ratioRemiseGlobale, tvaParTaux, libelleTaux, libellePaiementTicket, pointsFidelite } from "../lib/formatters.js";
 import { dayKey } from "../lib/dates.js";
 
 function HistoryScreen(){
@@ -252,10 +252,11 @@ function HistoryScreen(){
         <div style={{borderTop:"1px dashed #999",margin:"4px 0"}}/>
         {tkDisc>0&&<div style={{display:"flex",justifyContent:"space-between",color:"#059669",fontWeight:600}}><span>Remise</span><span>-{tkDisc.toFixed(2)}€</span></div>}
         <div style={{display:"flex",justifyContent:"space-between",fontWeight:600}}><span>Total HT</span><span>{tkHT.toFixed(2)}€</span></div>
-        <div style={{display:"flex",justifyContent:"space-between",fontWeight:600}}><span>TVA</span><span>{tkTVA.toFixed(2)}€</span></div>
+        {tvaParTaux(tk).length?tvaParTaux(tk).map(v=><div key={v.rate} style={{display:"flex",justifyContent:"space-between",fontWeight:600}}><span>TVA {libelleTaux(v.rate)}</span><span>{v.tva.toFixed(2)}€</span></div>)
+          :<div style={{display:"flex",justifyContent:"space-between",fontWeight:600}}><span>TVA</span><span>{tkTVA.toFixed(2)}€</span></div>}
         <div style={{display:"flex",justifyContent:"space-between",fontSize:14,fontWeight:800,marginTop:6}}><span>TOTAL TTC</span><span>{tkTTC.toFixed(2)}€</span></div>
         <div style={{borderTop:"1px dashed #999",margin:"10px 0"}}/>
-        <div style={{fontWeight:700}}>Paiement: {tkPayments.map(pm=>`${getPaymentLabel(pm.method,"short")} ${(Number(pm.amount)||0).toFixed(2)}€`).join(" + ")||tkPayMethod}</div>
+        <div style={{fontWeight:700}}>Paiement: {tkPayments.map(pm=>`${libellePaiementTicket(pm.method)} ${(Number(pm.amount)||0).toFixed(2)}€`).join(" + ")||tkPayMethod}</div>
         {tkFp&&<div style={{textAlign:"center",background:C.fiscalLight,padding:6,borderRadius:6,margin:"6px 0"}}>
           <div style={{fontSize:9,color:C.fiscal,fontWeight:800}}>EMPREINTE NF525</div>
           <div style={{fontSize:12,fontWeight:800,color:C.fiscal,letterSpacing:2}}>{tkFp}</div></div>}
@@ -265,10 +266,12 @@ function HistoryScreen(){
           {settings.footerMsg||CO.footerMsg}</div>}
         {settings.ticketFreeText&&<div style={{textAlign:"center",fontSize:12,fontWeight:700,color:C.text,marginTop:4,whiteSpace:"pre-line"}}>
           {settings.ticketFreeText}</div>}
+        {(tk.saleNote||tk.sale_note)&&<div style={{textAlign:"center",fontSize:10,fontWeight:600,color:C.text,marginTop:4,fontStyle:"italic"}}>Note: {tk.saleNote||tk.sale_note}</div>}
+        {tkCust&&<div style={{textAlign:"center",fontSize:10,fontWeight:600,color:C.accent,marginTop:4}}>Fidélité: +{pointsFidelite(tk)}pts</div>}
         <div style={{textAlign:"center",fontSize:8,color:C.textMuted,fontWeight:600,marginTop:4}}>{CO.sw} v{CO.ver} — Conforme NF525</div>
       </div>
       <div style={{display:"flex",gap:8,marginTop:10,flexWrap:"wrap"}}>
-        <Btn variant="outline" onClick={()=>thermalPrint("receipt",tk)} style={{flex:1}}><Printer size={14}/> {printerConnected?"Ticket":"Réimprimer"}</Btn>
+        <Btn variant="outline" onClick={()=>thermalPrint("receipt",{...tk,_duplicata:true})} style={{flex:1}}><Printer size={14}/> {printerConnected?"Ticket":"Réimprimer"}</Btn>
         <Btn variant="outline" onClick={async()=>{
           const giftTk={...tk,_giftCard:true};
           const printed=await thermalPrint("receipt",giftTk);

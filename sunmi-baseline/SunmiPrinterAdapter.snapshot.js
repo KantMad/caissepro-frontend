@@ -144,6 +144,8 @@ class SunmiPrinterAdapter {
 
     // Gift card mode: no prices, special header
     const isGift = !!t._giftCard;
+    // NF525 : toute reimpression d'un ticket deja emis porte la mention DUPLICATA
+    if (t._duplicata && !isGift) { size(32); bold(true); text('DUPLICATA\n'); size(24); bold(false); }
 
     // Ticket info
     align(0); bold(true);
@@ -157,7 +159,8 @@ class SunmiPrinterAdapter {
     text(`N: ${t.ticketNumber || t.ticket_number || '?'}  ${dateStr}\n`);
     bold(false);
     if (!isGift) { bold(true); text(`Caissier: ${t.userName || t.user_name || '?'}\n`); bold(false); }
-    if (t.customerName || t.customer_name) { bold(true); text(`Client: ${t.customerName || t.customer_name}\n`); bold(false); }
+    // Ticket cadeau : ni nom de l'acheteur, ni points (il est remis a un tiers)
+    if (!isGift && (t.customerName || t.customer_name)) { bold(true); text(`Client: ${t.customerName || t.customer_name}\n`); bold(false); }
     cmds.push({ cmd: 'line', char: '-', len: 32 });
 
     // Items
@@ -187,7 +190,7 @@ class SunmiPrinterAdapter {
       if (isGift) {
         text(`  x${qty}\n`);
       } else {
-        bold(true); text(`  x${qty}  ${fmt(lineTTC)} EUR\n`); bold(false);
+        bold(true); text(qty > 1 ? `  ${qty} x ${fmt(lineTTC / qty)}  ${fmt(lineTTC)} EUR\n` : `  x${qty}  ${fmt(lineTTC)} EUR\n`); bold(false);
         const _d = lineDiscountEuro(item);
         if (_d > 0) { size(22); text(`  Remise: -${fmt(_d)} EUR\n`); size(24); }
       }
@@ -212,18 +215,23 @@ class SunmiPrinterAdapter {
       // Totals
       bold(true);
       text(`Total HT     ${fmt(t.totalHT || t.total_ht)} EUR\n`);
-      text(`TVA          ${fmt(t.totalTVA || t.total_tva)} EUR\n`);
+      const _tva = tvaParTaux(t);
+      if (_tva.length) { for (const v of _tva) text(`TVA ${libelleTaux(v.rate).padEnd(8)} ${fmt(v.tva)} EUR\n`); }
+      else text(`TVA          ${fmt(t.totalTVA || t.total_tva)} EUR\n`);
       size(32);
       text(`TOTAL TTC    ${fmt(t.totalTTC || t.total_ttc)} EUR\n`);
       size(24); bold(false);
 
       text('\n'); // marge entre les totaux et le paiement
       // Payment
-      const ml = { cash: 'ESP', card: 'CB', amex: 'AMEX', giftcard: 'CAD', cheque: 'CHQ', avoir: 'AVOIR' };
       const payments = t.payments || [];
       if (payments.length > 0) {
-        const payStr = payments.map(p => `${ml[p.method] || p.method || '?'} ${fmt(p.amount)} EUR`).join(' + ');
+        const payStr = payments.map(p => `${libellePaiementTicket(p.method)} ${fmt(p.amount)} EUR`).join(' + ');
         bold(true); text(`Paiement: ${payStr}\n`); bold(false);
+      }
+      if (Number(t.changeGiven) > 0) {
+        text(`Recu especes ${fmt(t.cashGiven)} EUR\n`);
+        bold(true); text(`Rendu        ${fmt(t.changeGiven)} EUR\n`); bold(false);
       }
       if (t.saleNote || t.sale_note) text(`Note: ${t.saleNote || t.sale_note}\n`);
       cmds.push({ cmd: 'line', char: '=', len: 32 });
@@ -258,8 +266,8 @@ class SunmiPrinterAdapter {
     align(1);
     if (s.footerMsg || co.footerMsg) { size(24); bold(true); text(`${s.footerMsg || co.footerMsg}\n`); bold(false); }
     if (s.ticketFreeText) { size(22); bold(true); const ftLines = s.ticketFreeText.split('\n'); for (const ln of ftLines) { text(ln + '\n'); } bold(false); }
-    if (t.customerName || t.customer_name) {
-      size(20); text(`Fidelite: +${Math.round(Number(t.totalTTC || t.total_ttc) || 0)}pts\n`);
+    if (!isGift && (t.customerName || t.customer_name)) {
+      size(20); text(`Fidelite: +${pointsFidelite(t)}pts\n`);
     }
     size(18); text(`${co.sw || 'Tech in Cash'} v${co.ver || '6.1.0'} - Conforme NF525\n`);
 

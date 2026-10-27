@@ -194,3 +194,21 @@ describe("aggregatePaymentsByMethod", () => {
     expect(r.cash).toBe(0);
   });
 });
+
+import { tvaParTaux, libelleTaux, pointsFidelite, libellePaiementTicket } from "./formatters.js";
+describe("tvaParTaux", () => {
+  it("ventile par taux et retombe exactement sur les totaux du ticket", () => {
+    const t = { totalHT: 91.4, totalTVA: 13.6, totalTTC: 105, items: [
+      { tax_rate: 0.2, line_ttc: 60 }, { tax_rate: 0.055, line_ttc: 55 } ] }; // remise panier 10€
+    const v = tvaParTaux(t);
+    expect(v.map(x => x.rate)).toEqual([0.055, 0.2]);
+    expect(Math.round(v.reduce((s, x) => s + x.ht, 0) * 100) / 100).toBe(91.4);
+    expect(Math.round(v.reduce((s, x) => s + x.tva, 0) * 100) / 100).toBe(13.6);
+  });
+  it("vide sans lignes", () => { expect(tvaParTaux({ items: [] })).toEqual([]); });
+  it("libelles", () => {
+    expect(libelleTaux(0.2)).toBe("20%"); expect(libelleTaux(0.055)).toBe("5.5%");
+    expect(pointsFidelite({ totalTTC: 49.9 })).toBe(49);
+    expect(libellePaiementTicket("contactless")).toBe("SANS CONTACT");
+  });
+});
