@@ -4,7 +4,7 @@
 // ═══════════════════════════════════════
 
 // ESC/POS Command Constants
-import { lineDiscountEuro, globalDiscountTTC } from './lib/formatters.js';
+import { lineDiscountEuro, globalDiscountTTC, libelleCloture } from './lib/formatters.js';
 
 const ESC = 0x1B;
 const GS = 0x1D;
@@ -821,6 +821,14 @@ class ThermalPrinter {
 
       await this.separator('=');
       await this.alignLeft();
+
+      const lib = libelleCloture(closure);
+      await this.bold(true);
+      await this.text(lib.titre);
+      await this.newline();
+      await this.bold(false);
+      if (lib.periode) { await this.text(`Periode: ${lib.periode}`); await this.newline(); }
+      if (lib.detail) { await this.text(lib.detail); await this.newline(); }
 
       await this.bold(true);
       await this.line(`N° ${closure.closureNumber || closure.zNumber || '?'}`);

@@ -45,7 +45,8 @@ async function api(path, options = {}) {
     // 403 = permission denied, not session expired — don't clear token
     const err = await res.json().catch(() => ({ error: res.statusText }));
     if (res.status === 403) throw new Error(err.error || `Permission refusée`);
-    throw new Error(err.error || `Erreur ${res.status}`);
+    // Le corps de la reponse reste accessible (ex. complementPossible sur une cloture refusee)
+    throw Object.assign(new Error(err.error || `Erreur ${res.status}`), { status: res.status, data: err });
   }
 
   // Handle file downloads (FEC, etc.)

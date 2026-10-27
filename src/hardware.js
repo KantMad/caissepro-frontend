@@ -3,7 +3,7 @@
 // Unified interface for all POS terminals
 // ═══════════════════════════════════════════════════════
 
-import { lineDiscountEuro, globalDiscountTTC } from './lib/formatters.js';
+import { lineDiscountEuro, globalDiscountTTC, libelleCloture } from './lib/formatters.js';
 
 const HARDWARE_PROFILES = {
   sunmi: {
@@ -448,6 +448,10 @@ class SunmiPrinterAdapter {
     size(26); text((s.name || co.name || 'Ma Boutique') + '\n');
     bold(false); size(24); align(0);
     cmds.push({ cmd: 'line', char: '=', len: 32 });
+    const lib = libelleCloture(c);
+    bold(true); text(`${lib.titre}\n`); bold(false);
+    if (lib.periode) text(`Periode: ${lib.periode}\n`);
+    if (lib.detail) text(`${lib.detail}\n`);
     bold(true); text(`Date: ${(() => { try { return new Date(c.date || c.closedAt || Date.now()).toLocaleString('fr-FR'); } catch (e) { return '?'; } })()}\n`);
     text(`Caissier: ${c.userName || c.user_name || '?'}\n`); bold(false);
     cmds.push({ cmd: 'line', char: '-', len: 32 });
@@ -1187,6 +1191,9 @@ class SunmiPrinterAdapter {
     try {
       await this._cap('printerInit', {});
       await this.printText('CLOTURE DE CAISSE\n');
+      const lib = libelleCloture(closure);
+      await this.printText(`${lib.titre}${lib.periode ? ' ' + lib.periode : ''}\n`);
+      if (lib.detail) await this.printText(`${lib.detail}\n`);
       await this.printText(`CA TTC: ${fmt(closure?.totalTTC || closure?.totalCA)} EUR\n`);
       await this._cap('lineWrap', { lines: 4 });
       return true;
@@ -1356,7 +1363,8 @@ class BrowserPrintAdapter {
   async printClosure(closure, settings, companyInfo) {
     const el = document.querySelector('[data-print-receipt]');
     if (el) return this._printViaIframe(el.innerHTML);
-    return this._printViaIframe(`<div class="center bold big">CLOTURE</div><div class="sep"></div><div class="bold">CA TTC: ${(closure.totalTTC||closure.totalCA||0).toFixed(2)} EUR</div>`);
+    const lib = libelleCloture(closure);
+    return this._printViaIframe(`<div class="center bold big">CLOTURE</div><div class="center bold">${lib.titre}${lib.periode ? ' - ' + lib.periode : ''}</div>${lib.detail ? `<div class="center">${lib.detail}</div>` : ''}<div class="sep"></div><div class="bold">CA TTC: ${(closure.totalTTC||closure.totalCA||0).toFixed(2)} EUR</div>`);
   }
 
   async printRetouche(bon, settings, companyInfo) {
@@ -1625,6 +1633,10 @@ async function _textBasedPrint(adapter, type, data, settings, companyInfo, width
   } else if (type === 'closure') {
     header();
     lines.push('CLOTURE DE CAISSE');
+    const lib = libelleCloture(data);
+    lines.push(lib.titre);
+    if (lib.periode) lines.push(`Periode: ${lib.periode}`);
+    if (lib.detail) lines.push(lib.detail);
     lines.push(`Date: ${new Date(data.date || data.createdAt || '').toLocaleString('fr-FR')}`);
     lines.push(dsep);
     lines.push(pad('CA TTC', `${(data.totalTTC || data.totalCA || 0).toFixed(2)}E`));

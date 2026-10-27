@@ -1039,8 +1039,9 @@ function AppProvider({children}){
   // Closures — via API
   // date (AAAA-MM-JJ, journee LOCALE) : journee a cloturer. Sans date, le serveur clot la plus
   // ancienne journee de vente non encore cloturee (cas de la fermeture le lendemain matin).
-  const createClosure=useCallback(async(type,aCash,aCard,date)=>{
-    try{const raw=await API.fiscal.closure({type,actualCash:aCash,actualCard:aCard,...(date?{date}:{})});
+  // opts.complement : Z mensuel/annuel COMPLEMENTAIRE (la periode a deja un Z fait trop tot).
+  const createClosure=useCallback(async(type,aCash,aCard,date,opts={})=>{
+    try{const raw=await API.fiscal.closure({type,actualCash:aCash,actualCard:aCard,...(date?{date}:{}),...(opts.complement?{complement:true}:{})});
       if(!raw||raw.error){throw new Error(raw?.error||"Réponse invalide du serveur");}
       // Normalisation snake_case → camelCase : sans ça le ticket de fermeture affiche 0 partout
       const cl=normClosure(raw);
@@ -1050,6 +1051,8 @@ function AppProvider({children}){
       // Le secours LOCAL n'est legitime qu'en cas de coupure reseau (fetch -> TypeError).
       // Un refus du serveur (journee deja cloturee, journee future...) ne doit JAMAIS produire
       // un Z local : ce serait un faux document fiscal.
+      // Periode deja cloturee TROP TOT : l'ecran propose le Z complementaire (pas d'erreur seche)
+      if(e?.data?.complementPossible)return{complementPossible:true,message:e.message,previousAt:e.data.previousAt,period:e.data.period};
       if(!(e instanceof TypeError)){notify("Clôture refusée : "+e.message,"error");return null;}
       console.warn("Closure API unreachable, local fallback:",e.message);
       const today=date||dayKey();

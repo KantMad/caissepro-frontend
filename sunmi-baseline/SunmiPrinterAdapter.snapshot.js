@@ -362,6 +362,10 @@ class SunmiPrinterAdapter {
     size(26); text((s.name || co.name || 'Ma Boutique') + '\n');
     bold(false); size(24); align(0);
     cmds.push({ cmd: 'line', char: '=', len: 32 });
+    const lib = libelleCloture(c);
+    bold(true); text(`${lib.titre}\n`); bold(false);
+    if (lib.periode) text(`Periode: ${lib.periode}\n`);
+    if (lib.detail) text(`${lib.detail}\n`);
     bold(true); text(`Date: ${(() => { try { return new Date(c.date || c.closedAt || Date.now()).toLocaleString('fr-FR'); } catch (e) { return '?'; } })()}\n`);
     text(`Caissier: ${c.userName || c.user_name || '?'}\n`); bold(false);
     cmds.push({ cmd: 'line', char: '-', len: 32 });
@@ -1101,6 +1105,9 @@ class SunmiPrinterAdapter {
     try {
       await this._cap('printerInit', {});
       await this.printText('CLOTURE DE CAISSE\n');
+      const lib = libelleCloture(closure);
+      await this.printText(`${lib.titre}${lib.periode ? ' ' + lib.periode : ''}\n`);
+      if (lib.detail) await this.printText(`${lib.detail}\n`);
       await this.printText(`CA TTC: ${fmt(closure?.totalTTC || closure?.totalCA)} EUR\n`);
       await this._cap('lineWrap', { lines: 4 });
       return true;

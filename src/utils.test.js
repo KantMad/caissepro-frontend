@@ -416,3 +416,20 @@ describe("Mise a jour du prix produit", () => {
     expect(bloc).toContain("API.products.update(productId,{price:newPrice})");
   });
 });
+
+import { libelleCloture } from "./lib/formatters.js";
+describe("libelleCloture (5 canaux d'impression + écran)", () => {
+  it("Z journalier / mensuel / annuel : type et période lisibles", () => {
+    expect(libelleCloture({ type: "daily", period: "2026-10-26" })).toEqual({ titre: "Z JOURNALIER", periode: "26/10/2026", detail: "" });
+    expect(libelleCloture({ closure_type: "monthly", period: "2026-10" }).periode).toBe("10/2026");
+    expect(libelleCloture({ type: "annual", period: "2026" }).titre).toBe("Z ANNUEL");
+  });
+  it("Z mensuel complémentaire : numéro et borne des ventes couvertes, en ASCII", () => {
+    const l = libelleCloture({ closure_type: "monthly", period: "2026-10", complement_index: 1,
+      covers_from: new Date(2026, 9, 8, 18, 37).toISOString() });
+    expect(l.titre).toBe("Z MENSUEL COMPLEMENTAIRE 1");
+    expect(l.detail).toBe("Ventes apres le 08/10/2026 18:37");
+    expect(/^[\x20-\x7E]*$/.test(l.titre + l.detail)).toBe(true);   // imprimantes thermiques
+    expect(l.detail.length).toBeLessThanOrEqual(32);                 // tient sur 58 mm
+  });
+});

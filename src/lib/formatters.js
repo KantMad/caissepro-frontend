@@ -72,6 +72,9 @@ export const normClosure = (c) => {
     discounts: c.discounts ?? null,
     cancellations: c.cancellations ?? null,
     returns: c.returns ?? null,
+    // Z complementaire (Z mensuel/annuel fait avant la fin de la periode)
+    complementIndex: Number(c.complementIndex ?? c.complement_index) || 0,
+    coversFrom: c.coversFrom ?? c.covers_from ?? null,
     itemCount: num(c.itemCount),
     avgItemsPerSale: num(c.avgItemsPerSale),
     avgBasketHT: num(c.avgBasketHT),
@@ -176,4 +179,28 @@ export const lignesNettes = (t) => {
   return items.map((i) => ({ ...i,
     nTTC: (parseFloat(i.lineTTC ?? i.line_ttc) || 0) * (1 - r),
     nHT: (parseFloat(i.lineHT ?? i.line_ht) || 0) * (1 - r) }));
+};
+
+// Libelle d'un Z pour TOUS les canaux d'impression et l'ecran : type, periode, et pour un
+// Z complementaire (Z mensuel/annuel fait trop tot, ex. octobre 2026) la borne des ventes
+// couvertes. ASCII uniquement (imprimantes thermiques).
+export const libelleCloture = (c) => {
+  const type = c?.type ?? c?.closure_type;
+  const n = Number(c?.complementIndex ?? c?.complement_index) || 0;
+  const per = String(c?.period || '');
+  const base = type === 'monthly' ? 'Z MENSUEL' : type === 'annual' ? 'Z ANNUEL' : 'Z JOURNALIER';
+  const titre = n > 0 ? `${base} COMPLEMENTAIRE ${n}` : base;
+  let periode = per;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(per)) periode = per.split('-').reverse().join('/');
+  else if (/^\d{4}-\d{2}$/.test(per)) periode = `${per.slice(5)}/${per.slice(0, 4)}`;
+  const depuis = c?.coversFrom ?? c?.covers_from;
+  let detail = '';
+  if (n > 0 && depuis) {
+    const d = new Date(depuis);
+    if (!isNaN(d)) {
+      const p2 = (x) => String(x).padStart(2, '0');
+      detail = `Ventes apres le ${p2(d.getDate())}/${p2(d.getMonth() + 1)}/${d.getFullYear()} ${p2(d.getHours())}:${p2(d.getMinutes())}`;
+    }
+  }
+  return { titre, periode, detail };
 };

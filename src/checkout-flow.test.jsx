@@ -17,6 +17,7 @@ vi.mock("./api.js", () => ({
   setToken: () => {}, getToken: () => null, clearToken: () => {}, getStoreId: () => null,
   sales: { checkout: vi.fn(), list: () => Promise.resolve([]) },
   products: { list: () => Promise.resolve([]) },
+  fiscal: { closure: vi.fn() },
 }));
 
 import * as API from "./api.js";
@@ -106,5 +107,25 @@ describe("Paiement — refus du serveur (ce n'est PAS une coupure réseau)", () 
     expect(ctx.cart).toHaveLength(1);       // panier conservé
     expect(ctx.tickets).toHaveLength(0);    // aucun faux ticket dans l'historique / le CA
     expect(ctx.pendingSync.filter(a => a.type === "offlineSale")).toHaveLength(0);
+  });
+});
+
+// Z mensuel d'octobre fait le 08/10/2026 : le serveur refuse un 2e Z mensuel mais signale
+// qu'un Z COMPLEMENTAIRE est possible. La caisse doit le proposer, pas afficher une erreur.
+describe("Clôture mensuelle — Z complémentaire", () => {
+  it("refus « complément possible » remonté à l'écran, puis demande avec complement:true", async () => {
+    API.fiscal.closure
+      .mockRejectedValueOnce(Object.assign(new Error("Le mois 2026-10 est déjà clôturé, mais par un Z fait avant la fin de la période"),
+        { status: 409, data: { complementPossible: true, previousAt: "2026-10-08T16:37:16Z", period: "2026-10" } }))
+      .mockResolvedValueOnce({ id: "zc", closure_type: "monthly", period: "2026-10", complement_index: 1,
+        covers_from: "2026-10-08T16:37:16Z", ticket_count: 40, total_ttc: "5200.00", grand_total: "1" });
+    mount();
+    let r1, r2;
+    await act(async () => { r1 = await ctx.createClosure("monthly", null, null); });
+    expect(r1).toMatchObject({ complementPossible: true, period: "2026-10" });
+    await act(async () => { r2 = await ctx.createClosure("monthly", null, null, null, { complement: true }); });
+    expect(API.fiscal.closure.mock.calls[1][0]).toMatchObject({ type: "monthly", complement: true });
+    expect(r2.complementIndex).toBe(1);
+    expect(ctx.closures[0].coversFrom).toBe("2026-10-08T16:37:16Z");
   });
 });

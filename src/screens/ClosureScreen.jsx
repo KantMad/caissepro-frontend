@@ -6,7 +6,7 @@ import { CO, C } from "../constants.jsx";
 import { Modal, Btn, Input, SC } from "../ui.jsx";
 import { useApp } from "../context.jsx";
 import { dayKey } from "../lib/dates.js";
-import { formatAmount } from "../lib/formatters.js";
+import { formatAmount, libelleCloture } from "../lib/formatters.js";
 
 function ClosureScreen(){
   const{tickets,cashReg,closures,createClosure,gt,closeReg,perm:p,avoirs,settings,printerConnected,thermalPrint,notify,trainingMode,mode,cashMovements,pendingSync}=useApp();
@@ -37,6 +37,17 @@ function ClosureScreen(){
   const enRetard=today!==aujourdhui;
   const ciblePending=enAttente.find(d=>d.day===today);
   const anciennes=enAttente.filter(d=>d.day!==today&&d.day<today);
+  // Z mensuel / annuel. Si la période a déjà un Z fait AVANT sa fin (ex. Z d'octobre fait le
+  // 08/10/2026), le serveur ne refait pas le mois : il propose un Z COMPLÉMENTAIRE qui couvre
+  // uniquement les ventes postérieures à ce Z. Le premier Z reste tel quel (immuable).
+  const clotureAvecComplement=async(type)=>{
+    let cl=await createClosure(type,null,null);
+    if(cl?.complementPossible){
+      const quand=cl.previousAt?new Date(cl.previousAt).toLocaleString("fr-FR"):"?";
+      if(!confirm(`${cl.message}\n\nUn Z ${type==="monthly"?"mensuel":"annuel"} a déjà été fait le ${quand}, AVANT la fin de la période : les ventes faites ensuite ne sont couvertes par aucun Z ${type==="monthly"?"mensuel":"annuel"}.\n\nFaire un Z COMPLÉMENTAIRE couvrant les ventes postérieures au ${quand} ?\n(Le premier Z reste inchangé. Opération définitive, NF525.)`))return;
+      cl=await createClosure(type,null,null,null,{complement:true});
+    }
+    if(cl&&!cl.complementPossible)setReportModal(cl);};
   const zTardif=async(d)=>{
     if(!confirm(`Z tardif du ${fmtJour(d.day)} : ${d.ticket_count} ticket(s), ${Number(d.total_ttc).toFixed(2)} € TTC.\n\nCette journée n'avait jamais été clôturée. Le Z est définitif (NF525) et sera daté d'aujourd'hui, sans comptage du tiroir. Continuer ?`))return;
     const cl=await createClosure("daily",null,null,d.day);chargerPending();if(cl)setReportModal(cl);};
@@ -164,17 +175,17 @@ function ClosureScreen(){
         <Btn variant="outline" onClick={async()=>{const d=new Date();const mp=new Date(d.getFullYear(),d.getMonth()-1,1);
           // Z mensuel = mois PRECEDENT, termine (le serveur le garantit). Irreversible (NF525) : confirmation.
           if(!confirm(`Clôture mensuelle de ${mp.toLocaleDateString("fr-FR",{month:"long",year:"numeric"})} ?\n\nOpération définitive (NF525). À faire une fois le mois terminé, après le dernier Z journalier.`))return;
-          const cl=await createClosure("monthly",null,null);if(cl)setReportModal(cl);}} style={{height:36,fontSize:11}}><Calendar size={14}/> Clôture mensuelle</Btn>
+          await clotureAvecComplement("monthly");}} style={{height:36,fontSize:11}}><Calendar size={14}/> Clôture mensuelle</Btn>
         <Btn variant="outline" onClick={async()=>{const an=new Date().getFullYear()-1;
           if(!confirm(`Clôture annuelle de l'exercice ${an} ?\n\nOpération définitive (NF525). À faire une fois l'année terminée et le Z mensuel de décembre effectué.`))return;
-          const cl=await createClosure("annual",null,null);if(cl)setReportModal(cl);}} style={{height:36,fontSize:11}}><Archive size={14}/> Clôture annuelle</Btn>
+          await clotureAvecComplement("annual");}} style={{height:36,fontSize:11}}><Archive size={14}/> Clôture annuelle</Btn>
       </div></div>
 
     {/* Closure history */}
     <div style={{fontSize:14,fontWeight:700,marginBottom:8}}>Historique des clôtures ({closures.length})</div>
     {closures.map(c=>(<div key={c.id} onClick={()=>setReportModal(c)} style={{display:"flex",alignItems:"center",gap:10,padding:8,borderRadius:8,background:C.surface,border:`1px solid ${C.border}`,marginBottom:4,cursor:"pointer"}}>
       <Archive size={12} color={C.fiscal}/>
-      <span style={{fontSize:11,fontWeight:700,flex:1}}>Z {c.type==="daily"?"Journalière":c.type==="monthly"?"Mensuelle":"Annuelle"} — {c.period} ({c.ticketCount} tickets)</span>
+      <span style={{fontSize:11,fontWeight:700,flex:1}}>Z {c.type==="daily"?"Journalière":c.type==="monthly"?"Mensuelle":"Annuelle"}{c.complementIndex>0?` complémentaire ${c.complementIndex}`:""} — {c.period} ({c.ticketCount} tickets)</span>
       <span style={{fontSize:10,color:C.textMuted}}>{new Date(c.date).toLocaleString("fr-FR")}</span>
       <span style={{fontSize:12,fontWeight:700,color:C.primary}}>{(c.totalTTC||0).toFixed(2)}€</span></div>))}
 
@@ -187,8 +198,10 @@ function ClosureScreen(){
           <div>{settings.address||CO.address}, {settings.postalCode||CO.postalCode} {settings.city||CO.city}</div>
           <div>SIRET: {settings.siret||CO.siret}</div></div>
         <div style={{borderTop:"2px solid #333",margin:"6px 0"}}/>
-        <div style={{display:"flex",justifyContent:"space-between"}}><span>Type</span><span style={{fontWeight:700}}>{reportModal.type==="daily"?"JOURNALIÈRE":reportModal.type==="monthly"?"MENSUELLE":"ANNUELLE"}</span></div>
-        <div style={{display:"flex",justifyContent:"space-between"}}><span>Période</span><span>{reportModal.period}</span></div>
+        {(()=>{const lib=libelleCloture(reportModal);return<>
+        <div style={{display:"flex",justifyContent:"space-between"}}><span>Type</span><span style={{fontWeight:700}}>{lib.titre}</span></div>
+        <div style={{display:"flex",justifyContent:"space-between"}}><span>Période</span><span>{lib.periode}</span></div>
+        {lib.detail&&<div style={{fontWeight:700}}>{lib.detail}</div>}</>;})()}
         <div style={{display:"flex",justifyContent:"space-between"}}><span>Date d'émission</span><span>{new Date(reportModal.date||reportModal.createdAt||"").toLocaleString("fr-FR")}</span></div>
         <div style={{display:"flex",justifyContent:"space-between"}}><span>Caissier</span><span>{reportModal.userName}</span></div>
         <div style={{borderTop:"1px dashed #999",margin:"6px 0"}}/>
