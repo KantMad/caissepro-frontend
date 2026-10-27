@@ -127,8 +127,9 @@ function ProductsScreen(){
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
           <Btn variant="success" onClick={async()=>{
             const newPrice=parseFloat(ep.price);const oldPrice=editModal.price;
-            await updateProduct(editModal.id,{name:ep.name,sku:ep.sku,costPrice:parseFloat(ep.costPrice)||0,
+            const okFiche=await updateProduct(editModal.id,{name:ep.name,sku:ep.sku,costPrice:parseFloat(ep.costPrice)||0,
               taxRate:parseFloat(ep.taxRate),category:ep.category,collection:ep.collection});
+            if(okFiche===false)return;   // refus serveur (message déjà affiché) : on garde la fiche ouverte
             // Le prix part separement : la route enregistre aussi l'historique et l'audit
             if(newPrice&&newPrice!==oldPrice){
               const ok=await updateProductPrice(editModal.id,newPrice);
@@ -193,7 +194,7 @@ function ProductsScreen(){
 
     {/* CSV Import Wizard */}
     <CSVImportWizard open={importWizardOpen} onClose={()=>setImportWizardOpen(false)} existingProducts={products}
-      onImportComplete={(apiProds,localProds,localUpdates)=>{
+      onImportComplete={(apiProds,localProds,localUpdates,res)=>{
         if(apiProds){setProducts(norm.products(apiProds));}
         else{
           setProducts(p=>{let updated=[...p];
@@ -204,7 +205,13 @@ function ProductsScreen(){
             return updated;
           });
         }
-        setImportWizardOpen(false);addAudit("IMPORT","Import CSV terminé");notify("Import CSV terminé","success");
+        // L'assistant reste ouvert sur son écran de résultat (créés / mis à jour / erreurs) ;
+        // avant, il était fermé aussitôt et un « Import CSV terminé » vert masquait les échecs.
+        const nbErr=res?.errors?.length||0;
+        addAudit("IMPORT",`Import CSV : ${res?.created||0} créé(s), ${res?.updated||0} mis à jour, ${nbErr} erreur(s)${res?.local?" (hors-ligne)":""}`);
+        if(res?.local)notify("Serveur injoignable : import enregistré sur cet appareil seulement","warn");
+        else if(nbErr)notify(`Import CSV terminé avec ${nbErr} erreur(s) — voir le détail`,"warn");
+        else notify("Import CSV terminé","success");
       }}/>
 
     {/* Photos produits */}

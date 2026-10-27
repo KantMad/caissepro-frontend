@@ -73,13 +73,14 @@ export function computeTotals(lines, opts = {}) {
   const sHT = round2(computed.reduce((s, l) => s + l.lineTTC / (1 + l.rate), 0));
   const sTTC = round2(computed.reduce((s, l) => s + l.lineTTC, 0));
 
-  // Remise globale : % d'abord, puis euros TTC sur le reste, puis promos (HT).
-  const afterPct = round2(sTTC * (1 - gPct / 100));
-  const netTTCBeforePromo = Math.max(0, round2(afterPct - gAmt));
-  let gdTTC = round2(sTTC - netTTCBeforePromo);
-  // Les promos sont calculées en HT : on les convertit au prorata du panier.
-  const ttcPerHT = sHT > 0 ? sTTC / sHT : 1;
-  gdTTC = Math.min(sTTC, round2(gdTTC + promoDisc * ttcPerHT));
+  // Ordre : PROMOS d'abord (remises produit), puis remise panier en %, puis en euros TTC, chacune
+  // sur le reste. Avant, promo et remise panier s'additionnaient sur le prix de depart
+  // (-50 % panier + code -50 % = article gratuit, au lieu de -75 %).
+  const ttcPerHT = sHT > 0 ? sTTC / sHT : 1;   // promos calculees en HT -> TTC au prorata du panier
+  const apresPromo = Math.max(0, round2(sTTC - promoDisc * ttcPerHT));
+  const afterPct = round2(apresPromo * (1 - gPct / 100));
+  const net = Math.max(0, round2(afterPct - gAmt));
+  const gdTTC = Math.min(sTTC, round2(sTTC - net));
   const discountRatio = sTTC > 0 ? gdTTC / sTTC : 0;
   const gd = round2(sHT * discountRatio);   // valeur HT enregistrée en base
 

@@ -331,6 +331,7 @@ function AppProvider({children}){
           else if(action.type==="createGiftCard")await API.giftcards.create(action.data);
           else if(action.type==="useGiftCard")await API.giftcards.use(action.data.code,action.data.amount);
           else if(action.type==="parkCart")await API.parked.save(action.data);
+          else if(action.type==="updatePrice")await API.products.update(action.data.productId,{price:action.data.price});
           else if(action.type==="priceChange")await API.pricehistory.create(action.data);
           else if(action.type==="createRetouche")await API.retouches.create(action.data);
           else if(action.type==="audit")await API.audit.create(action.data.action,action.data.detail,action.data.reference);
@@ -644,8 +645,11 @@ function AppProvider({children}){
   const removeParked=useCallback(async(id)=>{setParked(p=>p.filter(x=>x.id!==id));try{await API.parked.remove(id);}catch(e){console.warn("Suppression panier suspendu échouée:",e.message);}addAudit("PARK_DELETE","Panier en attente supprime");},[addAudit]);
 
   // ══ PROMO ENGINE ══
-  const activePromos=useMemo(()=>{const now=dayKey();
-    return promos.filter(p=>p.active&&(!p.startDate||p.startDate<=now)&&(!p.endDate||p.endDate>=now));},[promos]);
+  // Bornes en JOUR local « AAAA-MM-JJ » : start_day/end_day (serveur), sinon les 10 premiers
+  // caractères. Avant : startDate/endDate jamais renseignés -> les dates n'étaient pas contrôlées.
+  const activePromos=useMemo(()=>{const now=dayKey();const jour=(...v)=>{const x=v.find(y=>y);return x?String(x).slice(0,10):"";};
+    return promos.filter(p=>{const deb=jour(p.start_day,p.startDate,p.start_date);const fin=jour(p.end_day,p.endDate,p.end_date);
+      return p.active&&(!deb||deb<=now)&&(!fin||fin>=now);});},[promos]);
 
   const calcPromoDiscount=useCallback((cartItems)=>calcPromos(cartItems,activePromos,{pricingMode:settings.pricingMode,promoCode}),[activePromos,promoCode,settings.pricingMode]);
 
@@ -928,13 +932,18 @@ function AppProvider({children}){
     let ok=true;
     try{await API.products.update(productId,{price:newPrice});}
     catch(e){
+      // Refus du serveur (droits, produit d'un autre magasin...) : le prix NE change PAS, ni ici
+      // ni en caisse. Avant, il était appliqué localement et la caisse vendait à ce prix.
+      if(!(e instanceof TypeError)){notify("Prix non modifié : "+e.message,"error");return false;}
       ok=false;
-      addPendingSync({type:"priceChange",data:{productId,oldPrice:p.price,newPrice,reason:`Changement manuel par ${currentUser?.name||"?"}`}});
+      // Coupure réseau : le prix lui-même est renvoyé à la reconnexion (avant, seul l'historique
+      // était rejoué : le prix n'était jamais enregistré).
+      addPendingSync({type:"updatePrice",data:{productId,price:newPrice}});   // le serveur trace l'historique
       notify("Prix non enregistre (hors ligne) — il sera renvoye a la reconnexion","warn");
     }
     setPriceHistory(prev=>[{id:Date.now(),date:new Date().toISOString(),...entry},...prev]);
     setProducts(prev=>prev.map(x=>x.id===productId?{...x,price:newPrice}:x));
-    addAudit("PRICE_CHANGE",`${p.name}: ${p.price.toFixed(2)}EUR -> ${newPrice.toFixed(2)}EUR`);
+    // Journal d'audit PRICE_CHANGE écrit par le serveur (PUT /products) — pas de doublon local
     return ok;
   },[products,currentUser,addAudit,addPendingSync,notify]);
 
@@ -1633,7 +1642,8 @@ function AppProvider({children}){
     try{await API.products.update(productId,updates);
       const prods=await API.products.list();setProducts(norm.products(prods));
       addAudit("PRODUCT",`Modification: ${updates.name||""}`);
-    }catch(e){notify("Erreur: "+e.message,"error");}
+      return true;
+    }catch(e){notify("Produit non modifié : "+e.message,"error");return false;}
   },[addAudit]);
 
   const deleteProduct=useCallback(async(productId)=>{

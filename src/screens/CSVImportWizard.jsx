@@ -32,7 +32,12 @@ const CSV_SYNONYMS={
 };
 function csvAutoDetect(headers){const m={};const norm=s=>s.toLowerCase().replace(/[^a-z0-9]/g,"");
   headers.forEach(h=>{const nh=norm(h);for(const[f,syns]of Object.entries(CSV_SYNONYMS)){if(!m[f]&&syns.some(s=>norm(s)===nh)){m[f]=h;break;}}});return m;}
-function csvParseTax(v){const n=parseFloat(v);if(isNaN(n))return 0.20;return n>1?n/100:n;}
+// Nombre au format FR ou EN : « 29,90 », « 1 299,00 », « 1.299,00 », « 29.90 », « 29,90 € ».
+// parseFloat seul tronquait à la virgule (29,90 -> 29 ; TVA 5,5 -> 5 %), y compris sur le
+// fichier exporté par la caisse elle-même (décimales à la virgule).
+export function csvNum(v){let t=String(v??"").replace(/[\s\u00a0€%]/g,"");if(!t)return NaN;
+  if(t.includes(","))t=t.replace(/\./g,"").replace(",",".");return parseFloat(t);}
+function csvParseTax(v){const n=csvNum(v);if(isNaN(n))return 0.20;return n>1?n/100:n;}
 
 function CSVImportWizard({open,onClose,existingProducts,onImportComplete}){
   const[step,setStep]=useState(0);
@@ -89,7 +94,7 @@ function CSVImportWizard({open,onClose,existingProducts,onImportComplete}){
       const get=(f)=>row[mapping[f]]||"";
       const name=get("name");const sku=get("sku");const price=get("price");
       if(!name&&!sku)errors.push({row:idx+2,msg:"Nom ou référence manquant(e)"});
-      if(price&&isNaN(parseFloat(price)))errors.push({row:idx+2,msg:`Prix invalide: "${price}"`});
+      if(price&&isNaN(csvNum(price)))errors.push({row:idx+2,msg:`Prix invalide: "${price}"`});
       // Group by parent ref
       const ref=get(parentRefField)||`UNGROUPED-${idx}`;
       if(!grouped.has(ref))grouped.set(ref,{rows:[],indices:[]});
@@ -102,7 +107,7 @@ function CSVImportWizard({open,onClose,existingProducts,onImportComplete}){
       const product={
         id:`imp-${Date.now()}-${Math.random().toString(36).slice(2,8)}`,
         name:get("name")||ref,sku:get("sku")||ref,
-        price:parseFloat(get("price"))||0,costPrice:parseFloat(get("costPrice"))||0,
+        price:csvNum(get("price"))||0,costPrice:csvNum(get("costPrice"))||0,
         taxRate:csvParseTax(get("taxRate")),category:get("category")||"Divers",collection:get("collection")||"",
         variants:(()=>{
           // Fusionne les lignes de même (couleur, taille) : un fichier livraison répète
@@ -114,11 +119,14 @@ function CSVImportWizard({open,onClose,existingProducts,onImportComplete}){
             const color=gv("color")||"Défaut",size=gv("size")||"TU";
             const key=`${color.toLowerCase().trim()}|${size.toLowerCase().trim()}`;
             const stock=Math.max(0,parseInt(gv("stock"))||0);
+            // Stock FOURNI par le fichier ? (colonne mappée et cellule non vide). Sinon, en mise à
+            // jour « remplacer », le stock existant est conservé — avant il était remis à 0.
+            const stockFourni=!!mapping.stock&&String(gv("stock")).trim()!=="";
             const ex=vm.get(key);
-            if(ex){ex.stock+=stock;if(!ex.ean&&gv("ean"))ex.ean=gv("ean");}
+            if(ex){ex.stock+=stock;ex.stockFourni=ex.stockFourni||stockFourni;if(!ex.ean&&gv("ean"))ex.ean=gv("ean");}
             else vm.set(key,{id:`iv-${Date.now()}-${order}-${Math.random().toString(36).slice(2,6)}`,
               color,colorCode:gv("colorCode")||"",size,ean:gv("ean")||"",
-              stock,defective:0,stockAlert:Math.max(0,parseInt(gv("stockAlert"))||5),sortOrder:order++});});
+              stock,stockFourni,defective:0,stockAlert:Math.max(0,parseInt(gv("stockAlert"))||5),sortOrder:order++});});
           return[...vm.values()];
         })(),
         sourceRows:group.indices.map(i=>i+2),
@@ -152,7 +160,7 @@ function CSVImportWizard({open,onClose,existingProducts,onImportComplete}){
               const existingStock=match.stock||0;
               const csvStock=v.stock||0;
               // stockMode: "replace" → stock CSV écrase, "add" → stock CSV s'ajoute
-              const newStock=stockMode==="add"?existingStock+csvStock:csvStock;
+              const newStock=!v.stockFourni?existingStock:stockMode==="add"?existingStock+csvStock:csvStock;
               const diff=newStock-existingStock;
               updatedVariants.push({...v,existingId:match.id,existingEan:match.ean,
                 existingStock,csvStock,newStock,diff,stockMode});
@@ -182,11 +190,14 @@ function CSVImportWizard({open,onClose,existingProducts,onImportComplete}){
       setProductVariantOrder(u.existing.sku||u.existing.name,allVars);
     }
     const results={created:0,updated:0,skipped:processed.skipped.length,errors:[]};
+    // Seule une COUPURE RESEAU (TypeError) justifie l'import local de secours ; un refus du
+    // serveur (droits, SKU déjà utilisé, données invalides) ne doit rien créer localement.
+    let erreursReseau=0,erreursServeur=0;const noter=(nom,e)=>{if(e instanceof TypeError)erreursReseau++;else erreursServeur++;results.errors.push({name:nom,error:e.message});};
     // Create new products
     for(const p of processed.newProducts){
       try{await API.products.create({name:p.name,sku:p.sku,price:p.price,costPrice:p.costPrice,taxRate:p.taxRate,
         category:p.category,collection:p.collection,variants:p.variants.map((v,i)=>({color:v.color,colorCode:v.colorCode||"",size:v.size,ean:v.ean,stock:v.stock,defective:0,stockAlert:v.stockAlert,sort_order:i}))});
-        results.created++;}catch(e){results.errors.push({name:p.name,error:e.message});}
+        results.created++;}catch(e){noter(p.name,e);}
     }
     // Update existing products — 3 steps: product fields, variant stock, new variants
     for(const u of processed.updates){
@@ -201,7 +212,7 @@ function CSVImportWizard({open,onClose,existingProducts,onImportComplete}){
           category:fc.category||u.existing.category,collection:fc.collection||u.existing.collection
         });
         anySuccess=true;
-      }catch(e){console.warn(`CSV update: product fields failed for ${u.existing.name}:`,e.message);}
+      }catch(e){noter(`${u.existing.name} (prix / infos)`,e);}
 
       // Step 2: Update stock for existing variants via stock.adjust
       for(const uv of u.updatedVariants){
@@ -211,26 +222,27 @@ function CSVImportWizard({open,onClose,existingProducts,onImportComplete}){
               reason:uv.stockMode==="add"?"Import CSV - ajout au stock":"Import CSV - remplacement stock"});
             anySuccess=true;
           }
-        }catch(e){console.warn(`CSV update: stock adjust failed for variant ${uv.size}/${uv.color}:`,e.message);}
+        }catch(e){noter(`${u.existing.name} ${uv.color}/${uv.size} (stock)`,e);}
       }
 
       // Step 3: Add new variants
       for(const v of u.newVariants){
         try{const sortIdx=u.updatedVariants.length+u.newVariants.indexOf(v);
           await API.products.addVariant(u.existing.id,{color:v.color,colorCode:v.colorCode||"",size:v.size,ean:v.ean,stock:v.stock,defective:0,stockAlert:v.stockAlert,sort_order:sortIdx});
-          anySuccess=true;}catch(e){console.warn(`CSV update: addVariant failed for ${v.size}/${v.color}:`,e.message);}
+          anySuccess=true;}catch(e){noter(`${u.existing.name} ${v.color}/${v.size} (nouvelle déclinaison)`,e);}
       }
 
-      if(anySuccess)results.updated++;else results.errors.push({name:u.existing.name,error:"Échec de la mise à jour via l'API"});
+      if(anySuccess)results.updated++;
     }
     // Fallback: if API fails for all, do local import (both new + updates)
-    if(results.created===0&&results.updated===0&&(processed.newProducts.length>0||processed.updates.length>0)){
+    if(results.created===0&&results.updated===0&&erreursServeur===0&&erreursReseau>0&&(processed.newProducts.length>0||processed.updates.length>0)){
       const localUpdates=processed.updates.map(u=>({...u.existing,...u.fieldsChanged,
         variants:[...u.existing.variants.map(ev=>{const m=u.updatedVariants.find(uv=>uv.existingId===ev.id);return m?{...ev,stock:m.newStock,ean:m.ean||ev.ean}:ev;}),...u.newVariants]}));
-      onImportComplete(null,processed.newProducts,localUpdates);setImportResult(results);setImporting(false);setStep(4);return;
+      onImportComplete(null,processed.newProducts,localUpdates,{...results,local:true});setImportResult(results);setImporting(false);setStep(4);return;
     }
     // Refresh from API
-    try{const prods=await API.products.list();onImportComplete(prods,null);}catch(e){onImportComplete(null,processed.newProducts);}
+    // Catalogue rechargé depuis le serveur ; s'il est injoignable, on n'invente rien localement
+    try{const prods=await API.products.list();onImportComplete(prods,null,null,results);}catch(e){onImportComplete(null,null,null,results);}
     setImportResult(results);setImporting(false);setStep(4);
   };
 

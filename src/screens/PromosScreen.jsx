@@ -55,7 +55,8 @@ function PromosScreen(){
     if(!np.name||!np.value){notify("Nom et valeur requis","error");return;}
     const data={name:np.name,promoType:np.type,value:parseFloat(np.value),discountType:np.discountType,
       collection:np.type==="collection_discount"?np.targetValue:np.collection,
-      minQty:np.type==="qty_discount"?parseInt(np.minQty)||3:null,
+      // « À partir de N articles » : aussi pour les promos ciblées (catégorie, SKU, couleur, collection)
+      minQty:np.type==="qty_discount"?parseInt(np.minQty)||3:(parseInt(np.minQty)||null),
       code:np.type==="code"?np.code:null,
       active:true,startDate:np.startDate||null,endDate:np.endDate||null,
       targetType:TYPES.find(t=>t.id===np.type)?.targetType||"all",

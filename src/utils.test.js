@@ -458,3 +458,25 @@ describe("Avoirs : remboursement espèces/carte et remise globale", () => {
     expect(Math.round(ratioRemiseGlobale(t) * 100)).toBe(20);
   });
 });
+
+import { computeTotals } from "./lib/totals.js";
+describe("Ordre des remises : promos, puis remise panier %, puis €", () => {
+  it("code -50 % puis remise panier -50 % = -75 % (et non gratuit)", () => {
+    const lignes = [{ price: 100, quantity: 1, taxRate: 0.2 }];
+    const t = computeTotals(lignes, { pricingMode: "TTC", promoDisc: 100 / 1.2 * 0.5, gDiscPct: 50 });
+    expect(t.tTTC).toBe(25);
+  });
+});
+
+import { csvNum } from "./screens/CSVImportWizard.jsx";
+describe("Import CSV : nombres au format français", () => {
+  it("virgule décimale, espaces, euros, séparateur de milliers", () => {
+    expect(csvNum("29,90")).toBe(29.9);
+    expect(csvNum("1 299,00")).toBe(1299);
+    expect(csvNum("1.299,00")).toBe(1299);
+    expect(csvNum("29.90")).toBe(29.9);
+    expect(csvNum("29,90 €")).toBe(29.9);
+    expect(csvNum("5,5")).toBe(5.5);
+    expect(Number.isNaN(csvNum(""))).toBe(true);
+  });
+});

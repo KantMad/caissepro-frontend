@@ -24,9 +24,31 @@ describe("calcPromoDiscount", () => {
     expect(r.applied).toHaveLength(1);
   });
 
-  it("remise catégorie en montant €", () => {
+  it("remise catégorie en montant € : 5 € TTC (prix affichés) = 4,17 € HT", () => {
     const promos = [{ name: "X", targetType: "category", targetValue: "Jeans", value: 5, discountType: "amount" }];
-    expect(calcPromoDiscount([item()], promos, TTC).promoDisc).toBe(5);
+    expect(calcPromoDiscount([item()], promos, TTC).promoDisc).toBeCloseTo(5 / 1.2, 3);
+    expect(calcPromoDiscount([item()], promos, { pricingMode: "HT" }).promoDisc).toBe(5);
+  });
+
+  it("promo € appliquée UNE fois sur l'ensemble (et non par ligne)", () => {
+    const promos = [{ name: "X", targetType: "category", targetValue: "Jeans", value: 10, discountType: "amount" }];
+    const r = calcPromoDiscount([item(), item({ product: { ...item().product, sku: "S2" } }), item({ product: { ...item().product, sku: "S3" } })], promos, TTC);
+    expect(r.promoDisc * 1.2).toBeCloseTo(10, 2);   // -10 € TTC au total, pas -36 €
+  });
+
+  it("la remise € de ligne est prise en compte (base = prix réellement dû)", () => {
+    // 100 € TTC - 30 € de remise ligne = 70 € dus ; promo -50 % -> 35 € TTC de promo
+    const promos = [{ name: "X", targetType: "category", targetValue: "Jeans", value: 50, discountType: "percent" }];
+    const r = calcPromoDiscount([item({ discountAmount: 30 })], promos, TTC);
+    expect(r.promoDisc * 1.2).toBeCloseTo(35, 2);
+  });
+
+  it("deux promos % sur le même article : la meilleure, pas la somme", () => {
+    const promos = [{ name: "Cat", targetType: "category", targetValue: "Jeans", value: 20, discountType: "percent" },
+                    { name: "Col", targetType: "collection", targetValue: "s26", value: 30, discountType: "percent" }];
+    const r = calcPromoDiscount([item()], promos, TTC);
+    expect(r.promoDisc).toBeCloseTo(HT_DUN * 0.30, 3);
+    expect(r.applied).toHaveLength(1);
   });
 
   it("remise SKU ciblée", () => {
