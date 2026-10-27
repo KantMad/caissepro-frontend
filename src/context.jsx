@@ -15,6 +15,13 @@ import Papa from "papaparse";
 /* ══════════ CONTEXT ══════════ */
 const AppCtx = createContext(null);
 // Operations fiscales / monetaires : jamais abandonnees ni videes de la file de synchro.
+// Mode formation RETIRE de la caisse (27/10/2026) : a l'usage, les vendeurs s'y perdaient
+// (ventes reelles faites en formation, tickets FACTICE meles aux vrais). La formation se fait
+// desormais sur l'instance de demonstration isolee (demo.techincash.app). La mecanique est
+// conservee (anciens tickets FACTICE lisibles, Z/stats qui les excluent) mais ne peut plus
+// etre activee ; un appareil reste en formation est remis en production au chargement.
+export const TRAINING_AVAILABLE = false;
+export const DEMO_URL = "https://demo.techincash.app";
 export const SYNC_CRITIQUE = ["offlineSale","offlineAvoir","offlineClosure","consumeAvoir","createGiftCard","useGiftCard"];
 export const useApp = () => useContext(AppCtx);
 
@@ -437,10 +444,10 @@ function AppProvider({children}){
   const lireFormation=()=>{try{const t=JSON.parse(localStorage.getItem(TRAINING_KEY)||"null");
     return t&&t.active?t:null;}catch(e){return null;}};
   const[trainingMode,setTrainingModeRaw]=useState(()=>{const t=lireFormation();
-    return !!(t&&Date.now()<t.expiresAt);});
+    return TRAINING_AVAILABLE&&!!(t&&Date.now()<t.expiresAt);});
   const[trainingInfo,setTrainingInfo]=useState(()=>lireFormation());
   const setTrainingMode=useCallback((on)=>{
-    const actif=!!on;
+    const actif=TRAINING_AVAILABLE&&!!on;
     setTrainingModeRaw(actif);
     try{
       if(actif){const info={active:true,since:Date.now(),expiresAt:Date.now()+TRAINING_MAX_H*3600*1000,
@@ -454,7 +461,11 @@ function AppProvider({children}){
   useEffect(()=>{
     if(formationVerifiee.current||!currentUser)return;formationVerifiee.current=true;
     const t=lireFormation();if(!t)return;
-    if(Date.now()>=t.expiresAt){
+    if(!TRAINING_AVAILABLE){
+      setTrainingMode(false);
+      addJET("PARAM_CHANGE",`Mode formation retiré de la caisse — appareil remis en production (formation active depuis ${new Date(t.since).toLocaleString("fr-FR")})`);
+      notify("Le mode formation a été retiré : la caisse est en PRODUCTION, toutes les ventes sont réelles. Pour s'entraîner : demo.techincash.app","warn");
+    }else if(Date.now()>=t.expiresAt){
       setTrainingMode(false);
       addJET("PARAM_CHANGE",`Mode formation expiré automatiquement (actif depuis ${new Date(t.since).toLocaleString("fr-FR")}) — retour en production`);
       notify("Mode formation expiré : la caisse est revenue en PRODUCTION. Les prochaines ventes sont réelles.","warn");

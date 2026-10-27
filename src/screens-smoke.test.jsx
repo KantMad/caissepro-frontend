@@ -160,6 +160,13 @@ describe("Écrans — rendu sans plantage", () => {
     expect(container.textContent).toMatch(/porte sur cette journée/);
   });
 
+  it("Fiscal : l'onglet Formation renvoie vers la démo (plus de bouton mode formation)", () => {
+    const { getAllByText, container } = render(<AppProvider><FiscalScreen /></AppProvider>);
+    const t = getAllByText("Formation"); fireEvent.click(t[t.length - 1]);
+    expect(container.textContent).toMatch(/demo\.techincash\.app/);
+    expect(container.textContent).not.toMatch(/Mode production/);
+  });
+
   it("Vente : un Z de la veille fait ce matin ne déclare pas la caisse clôturée", async () => {
     const { findAllByText, container } = render(<AppProvider><SalesScreen /></AppProvider>);
     await findAllByText(/./);

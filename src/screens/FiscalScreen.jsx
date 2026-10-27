@@ -2,11 +2,11 @@ import React, { useState } from "react";
 import { Lock, Receipt, Shield, FileText, CheckCircle2, AlertTriangle, Archive, Database, Check, X } from "lucide-react";
 import { CO, C } from "../constants.jsx";
 import { Btn, Badge, SC, Input } from "../ui.jsx";
-import { useApp } from "../context.jsx";
+import { useApp, DEMO_URL } from "../context.jsx";
 
 function FiscalScreen(){
   const{gt,tSeq,lastHash,closures,exportArchive,exportFEC,perm:p,verifyChain,tvaSummary,currentStore,viewingStoreId,stores,
-    tickets,avoirs,jet,audit,trainingMode,setTrainingMode,settings,addJET,notify}=useApp();
+    tickets,avoirs,jet,audit,trainingMode,settings,addJET,notify}=useApp();
   const storeName=viewingStoreId==="all"?"Tous les magasins":viewingStoreId?stores.find(s=>s.id===viewingStoreId)?.name:currentStore?.name||"";
   const[chainResult,setChainResult]=useState(null);
   const[fiscalTab,setFiscalTab]=useState("status");
@@ -33,7 +33,7 @@ function FiscalScreen(){
     {id:"duplicata",label:"Traçabilité des duplicata",desc:"Chaque réimpression de ticket est enregistrée dans le JET et l'audit",
       ok:true},
     {id:"auth",label:"Contrôle d'accès par rôles",desc:"Authentification par PIN, rôles admin/caissier avec permissions différenciées",ok:true},
-    {id:"training",label:"Mode formation séparé",desc:"Les données de formation sont marquées FACTICE et séparées des données fiscales",ok:true},
+    {id:"training",label:"Formation hors caisse de production",desc:"Pas de mode formation sur la caisse réelle : entraînement sur l'instance de démonstration isolée",ok:true},
     {id:"void",label:"Annulations traçables",desc:"Annulation = avoir avec référence au ticket d'origine. Ligne supprimée = JET VOID_LINE",ok:true},
   ];
   const passCount=checks.filter(c=>c.ok).length;
@@ -158,23 +158,16 @@ function FiscalScreen(){
       <div style={{background:C.surface,borderRadius:14,padding:20,border:`1.5px solid ${C.border}`,marginBottom:14}}>
         <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:14}}>
           <AlertTriangle size={20} color={C.warn}/>
-          <div><h3 style={{fontSize:16,fontWeight:800,margin:0}}>Mode formation / test</h3>
-            <p style={{fontSize:11,color:C.textMuted,margin:"4px 0 0"}}>Art. 286 CGI — Les données de test doivent être clairement marquées FACTICE et séparées des données fiscales</p></div></div>
-        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:14,borderRadius:12,
-          background:trainingMode?C.warnLight:C.surfaceAlt,border:`2px solid ${trainingMode?C.warn:C.border}`}}>
-          <div><div style={{fontSize:13,fontWeight:700,color:trainingMode?"#92400E":C.text}}>{trainingMode?"Mode formation ACTIF":"Mode production"}</div>
-            <div style={{fontSize:11,color:C.textMuted,marginTop:2}}>{trainingMode?"Les tickets sont préfixés FACTICE et non comptabilisés dans le GT":"Toutes les ventes sont comptabilisées normalement"}</div></div>
-          <button onClick={()=>{setTrainingMode(!trainingMode);addJET(trainingMode?"PARAM_CHANGE":"PARAM_CHANGE",`Mode formation ${trainingMode?"désactivé":"activé"}`);notify(trainingMode?"Mode production rétabli":"Mode formation activé — tickets FACTICE",trainingMode?"success":"warn");}}
-            style={{width:52,height:28,borderRadius:14,border:"none",cursor:"pointer",background:trainingMode?C.warn:C.border,position:"relative",transition:"all 0.2s"}}>
-            <div style={{width:22,height:22,borderRadius:11,background:"#fff",position:"absolute",top:3,left:trainingMode?27:3,transition:"all 0.2s",boxShadow:"0 1px 3px rgba(0,0,0,0.15)"}}/></button></div>
-        <div style={{marginTop:14,padding:12,borderRadius:10,background:C.surfaceAlt,border:`1px solid ${C.border}`}}>
-          <div style={{fontSize:11,fontWeight:700,color:C.textMuted,marginBottom:6}}>RÈGLES NF525 MODE FORMATION</div>
-          <div style={{fontSize:11,color:C.textMuted,lineHeight:1.6}}>
-            1. Les tickets de formation sont préfixés "FACTICE-" dans leur numérotation<br/>
-            2. Ils ne sont PAS inclus dans le Grand Total (GT) fiscal<br/>
-            3. Les données sont clairement identifiées et séparées<br/>
-            4. L'activation/désactivation est tracée dans le JET<br/>
-            5. Aucune donnée de formation ne peut être confondue avec une vente réelle</div></div>
+          <div><h3 style={{fontSize:16,fontWeight:800,margin:0}}>Formation des vendeurs</h3>
+            <p style={{fontSize:11,color:C.textMuted,margin:"4px 0 0"}}>Le mode formation a été retiré de cette caisse : toutes les ventes faites ici sont réelles.</p></div></div>
+        <div style={{padding:14,borderRadius:12,background:C.surfaceAlt,border:`1px solid ${C.border}`,fontSize:12,lineHeight:1.6}}>
+          Pour s'entraîner, utilisez la <b>caisse de démonstration</b> : magasin fictif, catalogue fictif, aucune
+          donnée de votre boutique, rien n'est comptabilisé.<br/>
+          <a href={DEMO_URL} target="_blank" rel="noreferrer" style={{color:C.primary,fontWeight:700}}>{DEMO_URL.replace("https://","")}</a>
+          {" "}— identifiant « Démo », code communiqué par votre responsable.</div>
+        <div style={{marginTop:14,fontSize:11,color:C.textMuted,lineHeight:1.6}}>
+          Les anciens tickets de formation (préfixe FACTICE / FORMATION) restent consultables dans l'Historique.
+          Ils sont exclus du Grand Total, des Z, des statistiques et des exports.</div>
       </div>
     </>}
   </div>);

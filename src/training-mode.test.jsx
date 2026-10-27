@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 //
-// MODE FORMATION (NF525) — l'etat ne doit plus retomber en production sans prevenir.
+// MODE FORMATION — retire de la caisse de production (27/10/2026) : formation sur la demo.
+// Un appareil reste en formation doit revenir en production, de facon tracee.
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 // Stockage en memoire (l'environnement de test n'en fournit pas de fonctionnel)
@@ -50,51 +51,29 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
-describe("Mode formation", () => {
-  it("survit à un rechargement de page (et le trace au JET)", async () => {
+describe("Mode formation retiré de la caisse", () => {
+  it("un appareil resté en formation repasse en PRODUCTION au chargement, tracé au JET", async () => {
     localStorage.setItem(KEY, JSON.stringify({ active: true, since: Date.now() - 3600e3, expiresAt: Date.now() + 3600e3 }));
-    const { getByTestId } = mount();
-    expect(ctx.trainingMode).toBe(true);
-    expect(getByTestId("training-banner").textContent).toMatch(/MODE FORMATION/);
-    await waitFor(() => expect(jetTexts()).toMatch(/toujours actif après rechargement/));
-  });
-
-  it("expire seul : retour en production, tracé et signalé", async () => {
-    localStorage.setItem(KEY, JSON.stringify({ active: true, since: Date.now() - 9 * 3600e3, expiresAt: Date.now() - 3600e3 }));
     const { queryByTestId } = mount();
     expect(ctx.trainingMode).toBe(false);
     expect(queryByTestId("training-banner")).toBeNull();
-    await waitFor(() => expect(jetTexts()).toMatch(/expiré automatiquement/));
+    await waitFor(() => expect(jetTexts()).toMatch(/retiré de la caisse/));
     expect(localStorage.getItem(KEY)).toBeNull();
   });
 
-  it("activation : bandeau visible + échéance enregistrée", () => {
-    const { getByTestId } = mount();
-    act(() => ctx.setTrainingMode(true));
-    expect(getByTestId("training-banner").textContent).toMatch(/retour automatique en production/);
-    const info = JSON.parse(localStorage.getItem(KEY));
-    expect(info.active).toBe(true);
-    expect(info.expiresAt - info.since).toBe(8 * 3600e3);
-  });
-
-  it("désactivation : plus de bandeau, plus rien en stockage", () => {
+  it("ne peut plus être activé", () => {
     const { queryByTestId } = mount();
     act(() => ctx.setTrainingMode(true));
-    act(() => ctx.setTrainingMode(false));
+    expect(ctx.trainingMode).toBe(false);
     expect(queryByTestId("training-banner")).toBeNull();
     expect(localStorage.getItem(KEY)).toBeNull();
   });
 
-  it("la déconnexion coupe le mode formation et le trace — l'événement ATTEINT le serveur", async () => {
+  it("la déconnexion trace LOGOUT et l'événement ATTEINT le serveur", async () => {
     mount();
-    act(() => ctx.setTrainingMode(true));
     await act(async () => { await ctx.logout(); });
     // Avant le correctif, le jeton était effacé avant l'envoi : aucun appel serveur.
-    expect(jetTexts()).toMatch(/désactivé à la déconnexion/);
     expect(API.audit.createJet.mock.calls.some(c => c[0] === "LOGOUT")).toBe(true);
-    expect(localStorage.getItem(KEY)).toBeNull();
-    // le JET est calculé (empreinte) puis envoyé : asynchrone
-    await waitFor(() => expect(jetTexts()).toMatch(/désactivé à la déconnexion/));
   });
 
   it("par défaut (rien en mémoire) : production", () => {
