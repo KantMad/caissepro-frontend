@@ -9,7 +9,7 @@ import { computeTotals, lineNetTTC } from "./lib/totals.js";
 import { dayKey } from "./lib/dates.js";
 import { getLoyaltyTier as loyaltyTierOf } from "./lib/loyalty.js";
 import { calcPromoDiscount as calcPromos } from "./lib/promos.js";
-import { aggregatePaymentsByMethod, normClosure, computeCommission } from "./lib/formatters.js";
+import { aggregatePaymentsByMethod, normClosure, computeCommission, ratioRemiseGlobale } from "./lib/formatters.js";
 import Papa from "papaparse";
 
 /* ══════════ CONTEXT ══════════ */
@@ -652,7 +652,10 @@ function AppProvider({children}){
   // ══ AVOIR AS PAYMENT ══
   // selectedAvoir: { avoirNumber, totalTTC, remaining, applied } or null
   const[selectedAvoir,setSelectedAvoir]=useState(null);
-  const avoirPayment=selectedAvoir?.applied||0;
+  // Montant d'avoir DEMANDE ; le montant reellement utilise (avoirPayment) est plafonne au total
+  // du panier plus bas. Avant : un avoir de 100 EUR echange contre 60 EUR etait consomme en entier
+  // et enregistre comme paiement de 100 EUR (40 EUR perdus pour le client).
+  const avoirDemande=selectedAvoir?.applied||0;
 
   // Stock movements (déclaré avant checkout pour éviter use-before-declaration)
   const addStockMove=useCallback((type,product,variant,qty,ref)=>{
@@ -676,9 +679,12 @@ function AppProvider({children}){
     if(!cart.length)return{sHT:0,gd:0,gdTTC:0,promoDisc:0,applied:[],tHT:0,tTVA:0,tTTC:0};
     const{promoDisc,applied}=calcPromoDiscount(cart);
     const lines=cart.map(i=>({price:i.product.price,quantity:i.quantity,taxRate:i.product.taxRate,discount:i.discountPercent||i.discount||0,discountType:"percent",discountPercent:i.discountPercent||0,discountAmount:i.discountAmount||0}));
-    const t=computeTotals(lines,{pricingMode:settings.pricingMode,gDiscPct,gDiscAmt,promoDisc,avoirPayment});
-    return{...t,promoDisc,applied};
-  },[cart,gDiscPct,gDiscAmt,calcPromoDiscount,avoirPayment,settings.pricingMode]);
+    const avant=computeTotals(lines,{pricingMode:settings.pricingMode,gDiscPct,gDiscAmt,promoDisc,avoirPayment:0});
+    const avoirEffectif=Math.min(avoirDemande,Math.max(0,avant.tTTC));
+    const t=computeTotals(lines,{pricingMode:settings.pricingMode,gDiscPct,gDiscAmt,promoDisc,avoirPayment:avoirEffectif});
+    return{...t,promoDisc,applied,avoirEffectif};
+  },[cart,gDiscPct,gDiscAmt,calcPromoDiscount,avoirDemande,settings.pricingMode]);
+  const avoirPayment=Math.round((cartTotals.avoirEffectif||0)*100)/100;
 
   // ══ CHECKOUT — API ou fallback local ══
   // H3 fix: mutex to prevent race conditions in offline checkout
@@ -744,8 +750,8 @@ function AppProvider({children}){
 
     // ── Avoir: compute remaining but consume AFTER API success ──
     let avoirRemainingAfterSale=null;
-    if(selectedAvoir&&selectedAvoir.applied>0){
-      avoirRemainingAfterSale=Math.max(0,(selectedAvoir.remaining||0)-selectedAvoir.applied);
+    if(selectedAvoir&&avoirPayment>0){
+      avoirRemainingAfterSale=Math.max(0,Math.round(((selectedAvoir.remaining||0)-avoirPayment)*100)/100);
     }
 
     // Essai API d'abord
@@ -756,11 +762,11 @@ function AppProvider({children}){
         promosApplied:applied,sessionId:cashReg?.id||null,
         sellerName:sellerName||null,
         trainingMode:trainingMode||false,
-        avoirUsed:selectedAvoir?{avoirNumber:selectedAvoir.avoirNumber,amount:selectedAvoir.applied,remainingAfter:avoirRemainingAfterSale}:null
+        avoirUsed:selectedAvoir&&avoirPayment>0?{avoirNumber:selectedAvoir.avoirNumber,amount:avoirPayment,remainingAfter:avoirRemainingAfterSale}:null
       });
       // ── Vente CRÉÉE en backend — les appels suivants ne doivent PAS déclencher le fallback offline ──
       // Consume avoir (non-bloquant — échec ne doit pas invalider la vente)
-      try{if(selectedAvoir&&selectedAvoir.applied>0){await consumeAvoir(selectedAvoir.avoirNumber,selectedAvoir.applied);}}
+      try{if(selectedAvoir&&avoirPayment>0){await consumeAvoir(selectedAvoir.avoirNumber,avoirPayment);}}
       catch(avoirErr){console.warn("Avoir consume failed (sale OK):",avoirErr.message);}
       // Perf : décrément LOCAL du stock (le backend a déjà décrémenté). Évite de
       // recharger tout le catalogue (plusieurs Mo) à chaque vente → gros gain de vitesse.
@@ -779,7 +785,7 @@ function AppProvider({children}){
         totalHT:ticket.totalHT||parseFloat(ticket.total_ht)||tHT,totalTVA:ticket.totalTVA||parseFloat(ticket.total_tva)||tTVA,
         totalTTC:ticket.totalTTC||parseFloat(ticket.total_ttc)||tTTC,paymentMethod:ticket.paymentMethod||(payments.length===1?payments[0].method:"MIXTE"),
         customerName:selCust?`${selCust.firstName||selCust.first_name} ${selCust.lastName||selCust.last_name}`:null,
-        avoirUsed:selectedAvoir?{avoirNumber:selectedAvoir.avoirNumber,amount:selectedAvoir.applied,remainingAfter:avoirRemainingAfterSale}:null};
+        avoirUsed:selectedAvoir&&avoirPayment>0?{avoirNumber:selectedAvoir.avoirNumber,amount:avoirPayment,remainingAfter:avoirRemainingAfterSale}:null};
       setTickets(prev=>[fullTicket,...prev]);
       notify("Vente enregistrée","success");return fullTicket;
     }catch(e){
@@ -821,7 +827,7 @@ function AppProvider({children}){
         saleNote:saleNote||null,userName:currentUser?.name,sellerName:sellerName||currentUser?.name,
         storeName:currentStore?.name||null,storeId:currentStore?.id||null,
         customerId:selCust?.id,customerName:selCust?`${selCust.firstName} ${selCust.lastName}`:null,
-        avoirUsed:selectedAvoir?{avoirNumber:selectedAvoir.avoirNumber,amount:selectedAvoir.applied,remainingAfter:avoirRemainingAfterSale}:null,
+        avoirUsed:selectedAvoir&&avoirPayment>0?{avoirNumber:selectedAvoir.avoirNumber,amount:avoirPayment,remainingAfter:avoirRemainingAfterSale}:null,
         // NF525: marqueur mode formation
         ...(trainingMode?{trainingMode:true,ticketNumber:`FACTICE-${ticketNumber}`}:{})};
       setTSeq(seq);setLastHash(hash);
@@ -839,7 +845,7 @@ function AppProvider({children}){
         offlineTicketNumber:ticketNumber,offlineDate:date
       }});
       // Consume avoir locally + queue for sync (avoir not consumed yet in offline mode)
-      if(selectedAvoir&&selectedAvoir.applied>0){await consumeAvoir(selectedAvoir.avoirNumber,selectedAvoir.applied);}
+      if(selectedAvoir&&avoirPayment>0){await consumeAvoir(selectedAvoir.avoirNumber,avoirPayment);}
       notify("Vente enregistrée (hors-ligne) — synchro en attente","warn");return ticket;
     }
   },[cart,gDiscPct,gDiscAmt,currentUser,selCust,calcPromoDiscount,promoCode,saleNote,cashReg,tSeq,gt,lastHash,avoirPayment,selectedAvoir,consumeAvoir,addStockMove,notify,settings.pricingMode,addPendingSync,trainingMode,currentStore,hardwareManager]);
@@ -1448,13 +1454,14 @@ function AppProvider({children}){
   const[avoirSeq,setAvoirSeq]=useState(0);
   const returnLock=useRef(false); // FE-06: prevent double-click on processReturn
   const _processReturnRef=useRef(null);
-  const processReturn=useCallback(async(ticket,returnItems,reason,refundMethod,doRestock,defective=false)=>{
+  const processReturn=useCallback(async(ticket,returnItems,reason,refundMethod,doRestock,defective=false,opts={})=>{
     if(!returnItems.length)return null;
     if(returnLock.current){notify("Retour en cours, veuillez patienter...","warn");return null;}
     returnLock.current=true;
-    try{return await _processReturnRef.current(ticket,returnItems,reason,refundMethod,doRestock,defective);
+    try{return await _processReturnRef.current(ticket,returnItems,reason,refundMethod,doRestock,defective,opts);
     }finally{returnLock.current=false;}},[notify]);
-  const _processReturnInner=async(ticket,returnItems,reason,refundMethod,doRestock,defective=false)=>{
+  // opts.approved : retour au-dessus du plafond deja valide par le PIN d'un responsable (ecran Retour)
+  const _processReturnInner=async(ticket,returnItems,reason,refundMethod,doRestock,defective=false,opts={})=>{
     if(!returnItems.length)return null;
     const rp=settings.returnPolicy||{};
     if(rp.requireReason===true&&!reason?.trim()){notify("Motif de retour obligatoire","error");return null;}
@@ -1468,7 +1475,8 @@ function AppProvider({children}){
       let lTTC;
       if(origItem){
         // Depuis le ticket original: prix TTC unitaire = lineTTC / quantity
-        const origTTC=Number(origItem.lineTTC||origItem.line_ttc)||0;
+        // Prix PAYE : net de la remise globale du ticket (non reportee sur les lignes)
+        const origTTC=(Number(origItem.lineTTC||origItem.line_ttc)||0)*(1-ratioRemiseGlobale(ticket));
         const unitTTC=origTTC/(origItem.quantity||1);
         lTTC=Math.round(unitTTC*ri.qty*100)/100;
       }else{
@@ -1491,7 +1499,7 @@ function AppProvider({children}){
     totalTVA=Math.round(totalTVA*100)/100;
 
     if(totalTTC<=0){notify("Montant de retour invalide (0 EUR)","error");return null;}
-    if(rp.maxNoApproval&&totalTTC>rp.maxNoApproval&&currentUser?.role!=="admin"){
+    if(rp.maxNoApproval&&totalTTC>rp.maxNoApproval&&!["admin","manager"].includes(currentUser?.role)&&!opts.approved){
       notify(`Montant > ${rp.maxNoApproval}EUR -- approbation manager requise`,"error");return null;}
 
     // Envoi API (le backend gere doublons, stock, hash, sequence)
@@ -1526,9 +1534,9 @@ function AppProvider({children}){
         barcode:apiResult.barcode||""};
       if(apiResult.seq)setAvoirSeq(apiResult.seq);
     }catch(e){
-      // Erreur 409 = doublon ou depassement quantite détecté par le backend
-      if(e.message?.includes("déjà")||e.message?.includes("deja")||e.message?.includes("dépasse")||e.message?.includes("depasse")){
-        notify(e.message,"error");return null;}
+      // Refus du serveur (doublon, quantite/montant depasse, droits, vente d'un autre magasin...) :
+      // AUCUN avoir. Seule une coupure reseau (TypeError) justifie un avoir provisoire hors-ligne.
+      if(!(e instanceof TypeError)){notify("Retour refusé : "+e.message,"error");return null;}
       // Fallback offline
       console.error("Avoir API echoue, mode offline:",e.message,e);
       notify("Erreur backend avoir: "+e.message+" — sauvegarde locale","warn");
@@ -1650,7 +1658,8 @@ function AppProvider({children}){
     try{await API.customers.update(customerId,updates);
       setCustomers(prev=>prev.map(c=>c.id===customerId?{...c,...updates}:c));
       addAudit("CLIENT",`Client modifié: ${updates.firstName||""} ${updates.lastName||""}`);
-    }catch(e){notify("Erreur: "+e.message,"error");}
+      return true;
+    }catch(e){notify("Client non modifié : "+e.message,"error");return false;}
   },[addAudit]);
 
   const deleteCustomer=useCallback(async(customerId)=>{

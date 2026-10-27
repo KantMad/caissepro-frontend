@@ -51,7 +51,8 @@ function CustomersScreen(){
   const custAvg=custTickets.length?custTickets.reduce((s,t)=>s+(t.totalTTC||parseFloat(t.total_ttc)||0),0)/custTickets.length:0;
 
   const startEdit=()=>{setEditData({firstName:sel.firstName,lastName:sel.lastName,email:sel.email,phone:sel.phone,city:sel.city||""});setEditMode(true);};
-  const saveEdit=()=>{updateCustomer(sel.id,editData);setSel(s=>({...s,...editData}));setEditMode(false);};
+  // La fiche affichée ne change que si le serveur a bien enregistré (sinon : message d'erreur)
+  const saveEdit=async()=>{if(await updateCustomer(sel.id,editData)){setSel(s=>({...s,...editData}));setEditMode(false);}};
 
   return(<div style={{height:"100%",overflowY:"auto",padding:20,background:C.bg}}>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
@@ -101,7 +102,10 @@ function CustomersScreen(){
             <SC icon={Heart} label="Niveau" value={getLoyaltyTier(sel.points).name} color={C.fiscal}/>
             <SC icon={Receipt} label="Panier moy." value={`${custAvg.toFixed(1)}€`} color={C.info}/></div>
           <div style={{marginBottom:8}}><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>NOTES</label>
-            <textarea value={sel.notes||""} onChange={e=>{const v=e.target.value;setCustomers(p=>p.map(c=>c.id===sel.id?{...c,notes:v}:c));setSel(s=>({...s,notes:v}));}}
+            {/* Notes : enregistrées sur le serveur en quittant le champ (avant : perdues au rechargement) */}
+            <textarea value={sel.notes||""} onChange={e=>{const v=e.target.value;setSel(s=>({...s,notes:v}));}}
+              onBlur={async e=>{const v=e.target.value;const avant=customers.find(c=>c.id===sel.id)?.notes||"";if(v===avant)return;
+                if(await updateCustomer(sel.id,{notes:v}))notify("Notes enregistrées","success");}}
               style={{width:"100%",height:50,padding:8,borderRadius:8,border:`1.5px solid ${C.border}`,fontSize:11,fontFamily:"inherit",resize:"vertical"}}
               placeholder="Préférences, taille habituelle, remarques…"/></div>
           <div style={{fontSize:12,fontWeight:700,marginBottom:6}}>Paliers de fidélité</div>

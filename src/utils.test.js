@@ -444,3 +444,17 @@ describe("tauxMarque (prix d'achat HT)", () => {
     expect(tauxMarque({ price: 100, costPrice: 0 }, "TTC")).toBeNull();
   });
 });
+
+import { getAvoirRemaining, ratioRemiseGlobale } from "./lib/formatters.js";
+describe("Avoirs : remboursement espèces/carte et remise globale", () => {
+  it("un retour remboursé en espèces ou carte n'a aucun solde utilisable", () => {
+    expect(getAvoirRemaining({ refundMethod: "cash", remaining: 50 })).toBe(0);
+    expect(getAvoirRemaining({ refund_method: "card", total_ttc: 50 })).toBe(0);
+    expect(getAvoirRemaining({ refundMethod: "avoir", remaining: 50 })).toBe(50);
+  });
+  it("prorata de la remise globale (HT) pour le prix payé d'une ligne", () => {
+    // 2 x 100 € TTC (83,33 HT chacun), remise panier 33,33 € HT -> 20 %
+    const t = { global_discount: 33.33, items: [{ line_ht: 83.33 }, { line_ht: 83.33 }] };
+    expect(Math.round(ratioRemiseGlobale(t) * 100)).toBe(20);
+  });
+});

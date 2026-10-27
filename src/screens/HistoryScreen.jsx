@@ -6,7 +6,8 @@ import { CO, C } from "../constants.jsx";
 import { EAN13Svg, ean13SvgHtml } from "../utils.jsx";
 import { Modal, Btn, Input, Badge } from "../ui.jsx";
 import { useApp } from "../context.jsx";
-import { getPaymentLabel, getAvoirRemaining, isAvoirPartiallyUsed, lineDiscountEuro, globalDiscountTTC } from "../lib/formatters.js";
+import { getPaymentLabel, getAvoirRemaining, isAvoirPartiallyUsed, lineDiscountEuro, globalDiscountTTC, ratioRemiseGlobale } from "../lib/formatters.js";
+import { dayKey } from "../lib/dates.js";
 
 function HistoryScreen(){
   const{tickets,setTickets,avoirs,settings,processReturn,perm:p,printerConnected,thermalPrint,setSelectedAvoir,setMode,notify,customers,setCustomers,retoucheBons,updateRetoucheStatus,scanBarcode,setScanBarcode,trainingMode}=useApp();
@@ -28,7 +29,8 @@ function HistoryScreen(){
   const filteredTickets=useMemo(()=>tickets.filter(t=>{
     const q=search.toLowerCase();
     const matchSearch=!q||(t.ticketNumber||"").toLowerCase().includes(q)||(t.offlineTicketNumber||"").toLowerCase().includes(q)||(t.customerName||"").toLowerCase().includes(q)||(t.userName||t.user_name||"").toLowerCase().includes(q)||(t.barcode||"").includes(q);
-    const matchDate=!dateFilter||(t.date||t.createdAt||t.created_at||"").startsWith(dateFilter);
+    // Jour LOCAL : les horodatages serveur sont en UTC (vente de 00h30 = la veille sinon)
+    const matchDate=!dateFilter||dayKey(new Date(t.date||t.createdAt||t.created_at||0))===dateFilter;
     return matchSearch&&matchDate;
   }),[tickets,search,dateFilter]);
   const totalPages=Math.ceil(filteredTickets.length/PAGE_SIZE);
@@ -43,7 +45,8 @@ function HistoryScreen(){
       returnedMap[key]=(returnedMap[key]||0)+(ai.qty||ai.quantity||0);
     }));
     const items=(ticket.items||[]).map(i=>{const pid=i.product?.id||i.product_id;const vid=i.variant?.id||i.variant_id;
-      const unitTTC=Math.round(((Number(i.lineTTC||i.line_ttc)||((Number(i.unit_price)||0)*(i.quantity||1)))/(i.quantity||1))*100)/100;
+      // Prix PAYE (remise globale du ticket deduite), comme l'avoir qui sera emis
+      const unitTTC=Math.round(((Number(i.lineTTC||i.line_ttc)||((Number(i.unit_price)||0)*(i.quantity||1)))*(1-ratioRemiseGlobale(ticket))/(i.quantity||1))*100)/100;
       const origQty=i.quantity||1;
       const alreadyReturned=returnedMap[`${pid}-${vid}`]||0;
       const remainingQty=Math.max(0,origQty-alreadyReturned);
@@ -425,13 +428,19 @@ function HistoryScreen(){
             const ticketTTC=parseFloat(reassignModal.totalTTC||reassignModal.total_ttc)||0;
             const pts=Math.floor(ticketTTC);
             // Persist to backend (recalculates points/totalSpent)
-            if(reassignModal.id){try{await API.sales.reassignCustomer(reassignModal.id,custId);}catch(e){console.warn("Erreur serveur reassign:",e.message);notify("Erreur serveur: "+e.message+" — modification locale uniquement","warn");}}
+            // Le serveur fait foi (points, total dépensé) : en cas de refus, on ne change RIEN localement.
+            // Avant : avertissement puis faux succès « Client attribué » non enregistré.
+            if(!reassignModal.id){notify("Ticket pas encore enregistré sur le serveur : réattribution impossible pour l'instant","warn");return;}
+            let srv;try{srv=await API.sales.reassignCustomer(reassignModal.id,custId);}catch(e){notify("Client non attribué : "+e.message,"error");return;}
             // Update local ticket state
             setTickets(prev=>prev.map(t=>t.ticketNumber===reassignModal.ticketNumber?{...t,customerId:custId,customerName:custName}:t));
             // Update local customer stats (mirror backend logic)
+            // Valeurs RENVOYEES par le serveur (il deduit les retours deja faits sur le ticket)
+            const maj={};[srv?.oldCustomer,srv?.newCustomer].filter(Boolean).forEach(x=>{maj[x.id]=x;});
             setCustomers(prev=>prev.map(c=>{
-              if(c.id===oldCustId)return{...c,points:Math.max(0,(c.points||0)-pts),totalSpent:Math.max(0,(c.totalSpent||0)-ticketTTC)};
-              if(c.id===custId)return{...c,points:(c.points||0)+pts,totalSpent:(c.totalSpent||0)+ticketTTC};
+              if(maj[c.id])return{...c,points:maj[c.id].points,totalSpent:maj[c.id].totalSpent};
+              if(!srv&&c.id===oldCustId)return{...c,points:Math.max(0,(c.points||0)-pts),totalSpent:Math.max(0,(c.totalSpent||0)-ticketTTC)};
+              if(!srv&&c.id===custId)return{...c,points:(c.points||0)+pts,totalSpent:(c.totalSpent||0)+ticketTTC};
               return c;
             }));
             notify(`Client ${custName||"retiré"} attribué au ticket ${reassignModal.ticketNumber}`,"success");

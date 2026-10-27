@@ -132,3 +132,14 @@ describe("Clôture mensuelle — Z complémentaire", () => {
     expect(ctx.closures[0].coversFrom).toBe("2026-10-08T16:37:16Z");
   });
 });
+
+// Échange : avoir de 100 € contre un article de 60 € -> seuls 60 € sont utilisés (40 € restent)
+describe("Avoir en paiement — plafonné au panier", () => {
+  it("avoir 100 € sur un panier de 60 € : 60 € utilisés, reste à payer 0", () => {
+    mount();
+    act(() => { ctx.addToCart(prod({ price: 60 }), variant()); });
+    act(() => { ctx.setSelectedAvoir({ avoirNumber: "AV-2026-000009", totalTTC: 100, remaining: 100, applied: 100 }); });
+    expect(ctx.avoirPayment).toBe(60);
+    expect(ctx.cartTotals.tTTC).toBe(0);
+  });
+});

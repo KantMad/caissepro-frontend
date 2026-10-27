@@ -191,6 +191,13 @@ describe("Écrans — rendu sans plantage", () => {
     expect(container.textContent).not.toMatch(/Journée non clôturée : [a-z]+ 12 mai/);
   });
 
+  it("Tickets : l'onglet Retouches s'ouvre (filtre jour local, CA hors bons annulés)", () => {
+    const { getAllByText, container } = render(<AppProvider><HistoryScreen /></AppProvider>);
+    const b = getAllByText(/^Retouches \(/); fireEvent.click(b[b.length - 1]);
+    expect(errors.join("\n")).not.toMatch(/is not defined|Cannot read|is not a function/);
+    expect(container.textContent).toMatch(/CA retouches/);
+  });
+
   it("Stock : tous les onglets s'ouvrent", () => {
     // Le plantage « trPreview is not defined » n'apparaissait que sur l'onglet Tenues.
     const { getAllByText } = render(<AppProvider><StockScreen /></AppProvider>);

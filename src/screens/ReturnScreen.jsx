@@ -5,7 +5,7 @@ import { CO, C } from "../constants.jsx";
 import { verifyPin, EAN13Svg } from "../utils.jsx";
 import { Modal, Btn, Input, Badge } from "../ui.jsx";
 import { useApp } from "../context.jsx";
-import { getPaymentLabel, getAvoirRemaining, formatAmount } from "../lib/formatters.js";
+import { getPaymentLabel, getAvoirRemaining, formatAmount, ratioRemiseGlobale } from "../lib/formatters.js";
 
 function ReturnScreen(){
   const{tickets,products,processReturn,findByEAN,avoirs,settings,notify,printerConnected,thermalPrint,setSelectedAvoir,setMode:setAppMode,users,currentUser,addAudit,isAvoirExpired,setScanOverride,clearScanOverride}=useApp();
@@ -78,7 +78,7 @@ function ReturnScreen(){
       return[...prev,{key,productId:item.product?.id||item.productId,variantId:variant?.id||item.variantId,
         productName:item.product?.name||item.product_name,variantColor:variant?.color||item.variant_color,variantSize:variant?.size||item.variant_size,
         qty:1,maxQty:mode==="ticket"?effectiveMax:(maxQty||item.quantity),
-        unitPrice:mode==="ticket"?((Number(item.lineTTC||item.line_ttc)||0)/(item.quantity||1)||Number(item.unit_price)||0)
+        unitPrice:mode==="ticket"?((Number(item.lineTTC||item.line_ttc)||0)*(1-ratioRemiseGlobale(selectedTk))/(item.quantity||1)||Number(item.unit_price)||0)
           :(()=>{const pr=item.product||{};const pm=settings.pricingMode||"TTC";const base=pr.price||item.unit_price||0;
             return pm==="TTC"?base:base*(1+(pr.taxRate||0.20));})()}];});};
   const updateReturnQty=(key,qty)=>setReturnItems(prev=>prev.map(r=>r.key===key?{...r,qty:Math.min(Math.max(1,qty),r.maxQty)}:r));
@@ -109,7 +109,7 @@ function ReturnScreen(){
       unitPrice:r.unitPrice||0,
       taxRate:products.find(p=>p.id===r.productId)?.taxRate||0.20}));
     try{
-    const avoir=await processReturn(syntheticTicket,enrichedItems,reason,refundMethod,restock,defective);
+    const avoir=await processReturn(syntheticTicket,enrichedItems,reason,refundMethod,restock,defective,{approved:managerApproved});
     if(avoir){
       if(refundMethod==="exchange"){
         setSelectedAvoir({avoirNumber:avoir.avoirNumber,totalTTC:avoir.totalTTC||0,remaining:avoir.remaining||avoir.totalTTC||0,applied:avoir.totalTTC||0});

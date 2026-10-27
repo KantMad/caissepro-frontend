@@ -23,6 +23,8 @@ export const getPaymentLabel = (method, variant = "full") =>
 // Solde courant d'un avoir : `remaining` si fourni, sinon le total.
 export const getAvoirRemaining = (avoir) => {
   if (avoir == null) return 0;
+  // Retour rembourse en especes / carte : rien a depenser (sinon double remboursement)
+  if (["cash", "card"].includes(avoir.refundMethod ?? avoir.refund_method)) return 0;
   if (avoir.remaining != null) return Number(avoir.remaining) || 0;
   return Number(avoir.totalTTC ?? avoir.total_ttc ?? avoir.amount ?? 0) || 0;
 };
@@ -171,11 +173,16 @@ export const aggregatePaymentsByMethod = (tickets) => {
 // Lignes NETTES de la remise globale du panier : sales.global_discount (HT) n'est pas reporte
 // sur les lignes ; sans prorata, CA et marge par produit / collection depassent le CA encaisse.
 // Meme prorata que le FEC et les exports (au HT, TTC suivant le meme ratio).
-export const lignesNettes = (t) => {
+// Part de la remise globale du ticket (0..1) a retirer de chaque ligne
+export const ratioRemiseGlobale = (t) => {
   const items = t?.items || [];
   const brutHT = items.reduce((s, i) => s + (parseFloat(i.lineHT ?? i.line_ht) || 0), 0);
   const gd = parseFloat(t?.globalDiscount ?? t?.global_discount) || 0;
-  const r = gd > 0 && brutHT > 0 ? Math.min(gd / brutHT, 1) : 0;
+  return gd > 0 && brutHT > 0 ? Math.min(gd / brutHT, 1) : 0;
+};
+export const lignesNettes = (t) => {
+  const items = t?.items || [];
+  const r = ratioRemiseGlobale(t);
   return items.map((i) => ({ ...i,
     nTTC: (parseFloat(i.lineTTC ?? i.line_ttc) || 0) * (1 - r),
     nHT: (parseFloat(i.lineHT ?? i.line_ht) || 0) * (1 - r) }));
