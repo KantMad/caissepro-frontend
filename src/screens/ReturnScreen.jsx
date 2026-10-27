@@ -6,7 +6,7 @@ import { verifyPin, EAN13Svg, norm } from "../utils.jsx";
 import * as API from "../api.js";
 import { Modal, Btn, Input, Badge } from "../ui.jsx";
 import { useApp } from "../context.jsx";
-import { getPaymentLabel, getAvoirRemaining, formatAmount, ratioRemiseGlobale } from "../lib/formatters.js";
+import { getPaymentLabel, getAvoirRemaining, formatAmount, ratioRemiseGlobale, donneesAvoir } from "../lib/formatters.js";
 
 function ReturnScreen(){
   const{tickets,products,processReturn,findByEAN,avoirs,settings,notify,printerConnected,thermalPrint,setSelectedAvoir,setMode:setAppMode,users,currentUser,addAudit,isAvoirExpired,setScanOverride,clearScanOverride}=useApp();
@@ -369,6 +369,9 @@ function ReturnScreen(){
         <div style={{borderTop:`1px dashed ${C.danger}`,margin:"4px 0"}}/>
         <div style={{display:"flex",justifyContent:"space-between",fontWeight:700,color:C.danger}}><span>TOTAL AVOIR</span><span>-{avTTC.toFixed(2)}€</span></div>
         <div>Remboursement: {getPaymentLabel(avRefund,"refund")}</div>
+        {(()=>{const d=donneesAvoir(av);return(<>
+          {d.restant!=null&&<div style={{display:"flex",justifyContent:"space-between",fontWeight:700}}><span>SOLDE RESTANT</span><span>{d.restant.toFixed(2)}€</span></div>}
+          {!d.utilisable&&<div style={{fontSize:9}}>Déjà remboursé — non utilisable en paiement</div>}</>);})()}
         {avFp&&<div style={{textAlign:"center",background:C.dangerLight,padding:6,borderRadius:6,margin:"6px 0"}}>
           <div style={{fontSize:8,color:C.danger,fontWeight:700}}>EMPREINTE NF525</div>
           <div style={{fontSize:11,fontWeight:700,color:C.danger,letterSpacing:2}}>{avFp}</div></div>}

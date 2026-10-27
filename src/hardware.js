@@ -4,7 +4,7 @@
 // ═══════════════════════════════════════════════════════
 
 import { ean13SvgHtml, escapeHtml } from './utils.jsx';
-import { lineDiscountEuro, globalDiscountTTC, libelleCloture, tvaParTaux, libelleTaux, pointsFidelite, libellePaiementTicket } from './lib/formatters.js';
+import { lineDiscountEuro, globalDiscountTTC, libelleCloture, tvaParTaux, libelleTaux, pointsFidelite, libellePaiementTicket, donneesAvoir } from './lib/formatters.js';
 
 const HARDWARE_PROFILES = {
   sunmi: {
@@ -368,7 +368,7 @@ class SunmiPrinterAdapter {
   _buildAvoirBatch(avoir, settings, companyInfo) {
     const s = settings || {};
     const co = companyInfo || {};
-    const a = avoir || {};
+    const a = donneesAvoir(avoir);
     const fmt = (v) => { const n = Number(v); return isNaN(n) ? '0.00' : n.toFixed(2); };
     const cmds = [];
     const text = (txt) => cmds.push({ cmd: 'text', text: txt });
@@ -379,47 +379,42 @@ class SunmiPrinterAdapter {
     align(1); size(32); bold(true);
     text('AVOIR / NOTE DE CREDIT\n');
     size(26); text((s.name || co.name || 'Ma Boutique') + '\n');
-    bold(false); size(24); align(0);
+    bold(false); size(24);
+    if (s.siret) text(`SIRET: ${s.siret}\n`);
+    align(0);
     cmds.push({ cmd: 'line', char: '=', len: 32 });
-    bold(true); text(`N: ${a.avoirNumber || a.avoir_number || '?'}\n`); bold(false);
-    text(`Ticket original: ${a.originalTicket || a.original_ticket || '?'}\n`);
-    let dateStr = '';
-    try { dateStr = new Date(a.date || Date.now()).toLocaleString('fr-FR'); } catch (e) {}
-    text(`Date: ${dateStr}\n`);
-    bold(true); text(`Motif: ${a.reason || 'Non specifie'}\n`); bold(false);
+    bold(true); text(`N: ${a.numero}\n`); bold(false);
+    if (a.ticketOrigine) text(`Ticket original: ${a.ticketOrigine}\n`);
+    text(`Date: ${a.date}\n`);
+    if (a.caissier) text(`Caissier: ${a.caissier}\n`);
+    if (a.client) text(`Client: ${a.client}\n`);
+    bold(true); text(`Motif: ${a.motif}\n`); bold(false);
     cmds.push({ cmd: 'line', char: '-', len: 32 });
-    for (const item of (a.items || [])) {
-      if (!item) continue;
-      const name = item.product?.name || item.product_name || item.name || '?';
-      const sku = item.product?.sku || item.product_sku || item.sku || '';
-      const color = item.variant?.color || item.variant_color || item.color || '';
-      const colorCode = item.variant?.colorCode || item.variant_color_code || item.color_code || '';
-      const sz = item.variant?.size || item.variant_size || item.size || '';
-      const ean = item.variant?.ean || item.variant_ean || item.ean || '';
-      bold(true); text(`${name}\n`); bold(false);
-      if (color || sz) {
-        text(`  ${color}/${sz}`);
-        if (sku) text(` | Ref: ${sku}`);
-        if (colorCode) text(` | ${colorCode}`);
+    for (const it of a.items) {
+      bold(true); text(`${it.name}\n`); bold(false);
+      if (it.color || it.size) {
+        text(`  ${it.color}/${it.size}`);
+        if (it.sku) text(` | Ref: ${it.sku}`);
+        if (it.colorCode) text(` | ${it.colorCode}`);
         text('\n');
-        if (ean) { size(20); text(`  EAN: ${ean}\n`); size(24); }
+        if (it.ean) { size(20); text(`  EAN: ${it.ean}\n`); size(24); }
       }
-      bold(true); text(`  x${item.quantity || 1}  -${fmt(item.lineTTC || item.line_ttc)} EUR\n`); bold(false);
+      bold(true); text(`  x${it.qty}  -${fmt(it.ttc)} EUR\n`); bold(false);
     }
     cmds.push({ cmd: 'line', char: '-', len: 32 });
-    const refundLabels = { cash: 'Especes', card: 'Carte bancaire', avoir: 'Avoir client' };
     bold(true); size(32);
-    text(`TOTAL AVOIR  -${fmt(a.totalTTC || a.total_ttc)} EUR\n`);
+    text(`TOTAL AVOIR  -${fmt(a.total)} EUR\n`);
     size(24); bold(false);
-    const _avRem = a.remaining;
-    if (_avRem != null && Number(_avRem) < (Number(a.totalTTC || a.total_ttc) - 0.001)) {
+    if (a.restant != null) {
       cmds.push({ cmd: 'line', char: '-', len: 32 });
-      bold(true); size(28); text(`SOLDE RESTANT  ${fmt(_avRem)} EUR\n`); size(24); bold(false);
+      bold(true); size(28); text(`SOLDE RESTANT  ${fmt(a.restant)} EUR\n`); size(24); bold(false);
     }
-    bold(true); text(`Remboursement: ${refundLabels[a.refundMethod || a.refund_method] || a.refundMethod || a.refund_method || '?'}\n`); bold(false);
+    bold(true); text(`Remboursement: ${a.modeLabel}\n`); bold(false);
+    // Rembourse en especes / carte : le document ne vaut PAS bon d'achat
+    if (!a.utilisable) text('Deja rembourse - non utilisable en paiement\n');
     cmds.push({ cmd: 'line', char: '=', len: 32 });
     align(1); size(22); bold(true);
-    text(`EMPREINTE NF525\n${a.fingerprint || a.hash || '-'}\n`); bold(false);
+    text(`EMPREINTE NF525\n${a.fingerprint}\n`); bold(false);
 
     // Garantie
     size(20); bold(true); text('Garantie legale 2 ans\n'); bold(false);
@@ -1361,10 +1356,9 @@ class BrowserPrintAdapter {
   }
 
   async printAvoir(avoir, settings, companyInfo) {
-    const el = document.querySelector('[data-print-receipt]');
-    if (el) return this._printViaIframe(el.innerHTML);
-    const _rem = (avoir.remaining != null && Number(avoir.remaining) < (Number(avoir.totalTTC || 0) - 0.001)) ? `<div class="sep"></div><div class="center bold">SOLDE RESTANT: ${Number(avoir.remaining).toFixed(2)} EUR</div>` : '';
-    return this._printViaIframe(`<div class="center bold big">AVOIR</div><div class="center">${avoir.avoirNumber}</div><div class="sep"></div><div class="center bold big">${(avoir.totalTTC||0).toFixed(2)} EUR</div>${_rem}`);
+    // Genere depuis les DONNEES de l'avoir : l'apercu a l'ecran pouvait etre un autre document
+    // (ex. « Imprimer le solde restant » depuis la vente imprimait le ticket de vente).
+    return this._printViaIframe(_generateAvoirHTML(avoir, settings, companyInfo));
   }
 
   async printClosure(closure, settings, companyInfo) {
@@ -1640,27 +1634,29 @@ async function _textBasedPrint(adapter, type, data, settings, companyInfo, width
     if (s.ticketFreeText) lines.push(...String(s.ticketFreeText).split('\n'));
   } else if (type === 'avoir') {
     header();
+    const a = donneesAvoir(data);
     lines.push('AVOIR / NOTE DE CREDIT');
-    lines.push(`N: ${data.avoirNumber || data.avoir_number || '?'}`);
-    lines.push(`Date: ${new Date(data.date || data.createdAt || '').toLocaleString('fr-FR')}`);
-    if (data.reason) lines.push(`Motif: ${data.reason}`);
+    lines.push(`N: ${a.numero}`);
+    if (a.ticketOrigine) lines.push(`Ticket original: ${a.ticketOrigine}`);
+    lines.push(`Date: ${a.date}`);
+    if (a.caissier) lines.push(`Caissier: ${a.caissier}`);
+    if (a.client) lines.push(`Client: ${a.client}`);
+    lines.push(`Motif: ${a.motif}`);
     lines.push(dsep);
-    for (const item of (data.items || [])) {
-      const name = item.product?.name || item.product_name || item.name || '?';
-      const color = item.variant?.color || item.variant_color || item.color || '';
-      const sz = item.variant?.size || item.variant_size || item.size || '';
-      const sku = item.product?.sku || item.product_sku || item.sku || '';
-      const ttc = Number(item.lineTTC || item.line_ttc) || 0;
-      lines.push(pad(`${name} x${item.quantity || 1}`, `-${ttc.toFixed(2)}E`));
-      if (color || sz) { let d = `  ${color}/${sz}`; if (sku) d += ` Ref:${sku}`; lines.push(d); }
+    for (const it of a.items) {
+      lines.push(pad(`${it.name} x${it.qty}`, `-${it.ttc.toFixed(2)}E`));
+      if (it.color || it.size) { let d = `  ${it.color}/${it.size}`; if (it.sku) d += ` Ref:${it.sku}`; if (it.colorCode) d += ` ${it.colorCode}`; lines.push(d); }
     }
     lines.push(dsep);
-    lines.push(pad('TOTAL AVOIR', `-${(data.totalTTC || data.amount || 0).toFixed(2)}E`));
-    if (data.remaining != null && Number(data.remaining) < (Number(data.totalTTC || data.amount || 0) - 0.001)) {
-      lines.push(pad('SOLDE RESTANT', `${Number(data.remaining).toFixed(2)}E`));
-    }
+    lines.push(pad('TOTAL AVOIR', `-${a.total.toFixed(2)}E`));
+    if (a.restant != null) lines.push(pad('SOLDE RESTANT', `${a.restant.toFixed(2)}E`));
+    lines.push(`Remboursement: ${a.modeLabel}`);
+    if (!a.utilisable) lines.push('Deja rembourse - non utilisable en paiement');
     lines.push(sep);
-    if (data.fingerprint) lines.push(`NF525: ${data.fingerprint}`);
+    lines.push(`NF525: ${a.fingerprint}`);
+    lines.push('Garantie legale 2 ans');
+    if (a.barcode) lines.push(`Avoir: ${a.barcode}`);
+    if (s.footerMsg || co.footerMsg) lines.push(s.footerMsg || co.footerMsg);
   } else if (type === 'closure') {
     header();
     lines.push('CLOTURE DE CAISSE');
@@ -1908,6 +1904,39 @@ function _generateReceiptHTML(ticket, settings, companyInfo) {
   if (s.footerMsg || co.footerMsg) h += `<div class="center bold" style="margin-top:4px">${e(s.footerMsg || co.footerMsg)}</div>`;
   if (s.ticketFreeText) h += `<div class="center small" style="white-space:pre-line">${e(s.ticketFreeText)}</div>`;
   if (!isGift && client) h += `<div class="center small">Fidelite: +${pointsFidelite(t)}pts</div>`;
+  h += `<div class="center small">${e(co.sw || 'Tech in Cash')} v${e(co.ver || '')} - Conforme NF525</div>`;
+  return h;
+}
+
+function _generateAvoirHTML(avoir, settings, companyInfo) {
+  const s = settings || {};
+  const co = companyInfo || {};
+  const a = donneesAvoir(avoir);
+  const e = escapeHtml;
+  const f = (v) => (Number(v) || 0).toFixed(2);
+  let h = `<div class="center bold big">AVOIR / NOTE DE CREDIT</div><div class="center bold">${e(s.name || co.name || 'Ma Boutique')}</div>`;
+  if (s.siret) h += `<div class="center small">SIRET: ${e(s.siret)}</div>`;
+  h += '<div class="sep"></div>';
+  h += `<div class="bold">N: ${e(a.numero)}</div>`;
+  if (a.ticketOrigine) h += `<div>Ticket original: ${e(a.ticketOrigine)}</div>`;
+  h += `<div>Date: ${e(a.date)}</div>`;
+  if (a.caissier) h += `<div>Caissier: ${e(a.caissier)}</div>`;
+  if (a.client) h += `<div>Client: ${e(a.client)}</div>`;
+  h += `<div class="bold">Motif: ${e(a.motif)}</div><div class="sep"></div>`;
+  for (const it of a.items) {
+    h += `<div class="row"><span>${e(it.name)}${it.color || it.size ? ` (${e(it.color)}/${e(it.size)})` : ''} x${it.qty}</span><span>-${f(it.ttc)}EUR</span></div>`;
+    if (it.sku || it.ean) h += `<div class="small">&nbsp;&nbsp;${it.sku ? `Ref: ${e(it.sku)}` : ''}${it.sku && it.ean ? ' - ' : ''}${it.ean ? `EAN: ${e(it.ean)}` : ''}</div>`;
+  }
+  h += '<div class="sep"></div>';
+  h += `<div class="row bold big"><span>TOTAL AVOIR</span><span>-${f(a.total)}EUR</span></div>`;
+  if (a.restant != null) h += `<div class="row bold"><span>SOLDE RESTANT</span><span>${f(a.restant)}EUR</span></div>`;
+  h += `<div class="bold">Remboursement: ${e(a.modeLabel)}</div>`;
+  if (!a.utilisable) h += '<div class="small">Deja rembourse - non utilisable en paiement</div>';
+  h += `<div class="center small bold" style="margin-top:4px">EMPREINTE NF525</div><div class="center bold">${e(a.fingerprint)}</div>`;
+  h += '<div class="center bold" style="margin-top:4px">Garantie legale 2 ans</div>';
+  if (a.barcode && String(a.barcode).length === 13) h += `<div class="center" style="margin-top:4px">${ean13SvgHtml(a.barcode, 160, 45)}</div>`;
+  if (s.footerMsg || co.footerMsg) h += `<div class="center bold" style="margin-top:4px">${e(s.footerMsg || co.footerMsg)}</div>`;
+  if (s.ticketFreeText) h += `<div class="center small" style="white-space:pre-line">${e(s.ticketFreeText)}</div>`;
   h += `<div class="center small">${e(co.sw || 'Tech in Cash')} v${e(co.ver || '')} - Conforme NF525</div>`;
   return h;
 }

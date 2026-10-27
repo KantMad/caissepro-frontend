@@ -6,7 +6,7 @@ import { CO, C } from "../constants.jsx";
 import { EAN13Svg, ean13SvgHtml, norm } from "../utils.jsx";
 import { Modal, Btn, Input, Badge } from "../ui.jsx";
 import { useApp } from "../context.jsx";
-import { getPaymentLabel, getAvoirRemaining, isAvoirPartiallyUsed, lineDiscountEuro, globalDiscountTTC, ratioRemiseGlobale, tvaParTaux, libelleTaux, libellePaiementTicket, pointsFidelite } from "../lib/formatters.js";
+import { getPaymentLabel, getAvoirRemaining, isAvoirPartiallyUsed, lineDiscountEuro, globalDiscountTTC, ratioRemiseGlobale, tvaParTaux, libelleTaux, libellePaiementTicket, pointsFidelite, donneesAvoir } from "../lib/formatters.js";
 import { dayKey } from "../lib/dates.js";
 
 function HistoryScreen(){
@@ -400,6 +400,9 @@ function HistoryScreen(){
         <div style={{display:"flex",justifyContent:"space-between",fontWeight:800,fontSize:14,color:C.danger}}><span>TOTAL AVOIR</span><span>-{avTTC.toFixed(2)}€</span></div>
         {avPartial&&<div style={{display:"flex",justifyContent:"space-between",fontWeight:800,fontSize:14,color:C.fiscal,marginTop:3,background:`${C.fiscal}12`,borderRadius:6,padding:"4px 6px"}}><span>{avRem<=0.001?"AVOIR ÉPUISÉ":"SOLDE RESTANT"}</span><span>{avRem.toFixed(2)}€</span></div>}
         <div style={{fontWeight:700}}>Remboursement: {getPaymentLabel(avRefund,"refund")}</div>
+        {(()=>{const d=donneesAvoir(av);return(<>
+          {d.restant!=null&&<div style={{display:"flex",justifyContent:"space-between",fontWeight:700}}><span>SOLDE RESTANT</span><span>{d.restant.toFixed(2)}€</span></div>}
+          {!d.utilisable&&<div style={{fontSize:9}}>Déjà remboursé — non utilisable en paiement</div>}</>);})()}
         {avFp&&<div style={{textAlign:"center",background:C.dangerLight,padding:6,borderRadius:6,margin:"6px 0"}}>
           <div style={{fontSize:9,color:C.danger,fontWeight:800}}>EMPREINTE NF525</div>
           <div style={{fontSize:12,fontWeight:800,color:C.danger,letterSpacing:2}}>{avFp}</div></div>}

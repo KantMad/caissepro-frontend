@@ -155,6 +155,11 @@ describe("Avoir en paiement — débit atomique côté serveur", () => {
     await act(async () => { await ctx.checkout([{ method: "avoir", amount: 60 }], "V"); });
     const vente = ctx.pendingSync.find(x => x.type === "offlineSale");
     expect(vente.data.avoirUsed).toEqual({ avoirNumber: "AV-2026-000009", amount: 60 });
+    // Le ticket local porte le total de la VENTE (60 €), pas le reste à payer après avoir (0 €)
+    const tk = ctx.tickets[0];
+    expect(tk.totalTTC).toBeCloseTo(60, 2);
+    expect(tk.grandTotal).toBeCloseTo(60, 2);
+    expect(vente.data.totalTTC).toBeCloseTo(60, 2);
     expect(ctx.pendingSync.some(x => x.type === "consumeAvoir")).toBe(false);
   });
 });

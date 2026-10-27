@@ -68,3 +68,31 @@ describe("ticket ESC/POS", () => {
     expect(g).toMatch(/TICKET CADEAU/); expect(g).not.toMatch(/€|Dupont|Fidelite/);
   });
 });
+
+// Avoir recharge du serveur (snake_case) : memes informations sur chaque canal
+const avSrv = { avoir_number: "AV-2026-000042", original_ticket: "2026-000123", created_at: "2026-10-20T15:00:00Z",
+  user_name: "Fred", customer_name: "Mme Dupont", reason: "Taille", total_ttc: "60.00", remaining: 25,
+  refund_method: "avoir", barcode: "2010000000420", hash: "HASHAV",
+  items: [{ product_name: "Veste", variant_color: "Noir", variant_size: "M", quantity: 1, line_ttc: "60.00" }] };
+describe("ticket d'avoir — 4 canaux identiques", () => {
+  const sunmi = (a) => new SunmiPrinterAdapter()._buildAvoirBatch(a, { name: "MCS" }, {}).filter(c => c.cmd === "text").map(c => c.text).join("");
+  const pax = async (a) => { let o = ""; const p = new PAXPrinterAdapter(); p.printText = async (x) => { o = x; }; await p.printAvoir(a, { name: "MCS" }, {}); return o; };
+  const nav = async (a) => { let h = ""; const b = new BrowserPrintAdapter(); b._printViaIframe = (x) => { h = x; }; await b.printAvoir(a, { name: "MCS" }, {}); return h; };
+  const esc = async (a) => { const p = new ThermalPrinter(); let o = ""; p.connected = true; p.send = async () => {}; p.barcode = async () => {};
+    p.text = async (x) => { o += x; }; p.newline = async () => { o += "\n"; }; p.line = async (l, r = "") => { o += `${l} ${r}\n`; };
+    await p.printAvoir(a, { name: "MCS" }, {}); return o; };
+  it("avoir serveur : numero, ticket d'origine, caissier, client, solde, date lisible", async () => {
+    for (const out of [sunmi(avSrv), await pax(avSrv), await nav(avSrv), await esc(avSrv)]) {
+      expect(out).toMatch(/AV-2026-000042/); expect(out).toMatch(/2026-000123/);
+      expect(out).toMatch(/Fred/); expect(out).toMatch(/Dupont/);
+      expect(out).toMatch(/SOLDE RESTANT/); expect(out).toMatch(/25\.00/);
+      expect(out).not.toMatch(/Invalid Date|undefined|NaN/);
+    }
+  });
+  it("rembourse en especes : mention non utilisable, pas de solde", async () => {
+    const cash = { ...avSrv, refund_method: "cash", remaining: 0 };
+    for (const out of [sunmi(cash), await pax(cash), await nav(cash), await esc(cash)]) {
+      expect(out).toMatch(/non utilisable/); expect(out).not.toMatch(/SOLDE RESTANT/); expect(out).toMatch(/Especes/);
+    }
+  });
+});

@@ -129,8 +129,12 @@ function AppProvider({children}){
   const[priceHistory,setPriceHistory]=useState(()=>{try{const s=localStorage.getItem("caissepro_pricehistory");return s?norm.priceHistories(JSON.parse(s)):[];}catch(e){return[];}});
   useEffect(()=>{try{localStorage.setItem("caissepro_pricehistory",JSON.stringify(priceHistory.slice(0,500)));}catch(e){}},[priceHistory]);
   const[favorites,setFavoritesRaw]=useState(()=>{try{const s=localStorage.getItem("caissepro_favorites");return s?JSON.parse(s):[];}catch(e){return[];}});
+  // Mise à jour LOCALE seulement (cache de lecture). L'enregistrement serveur est fait par
+  // toggleFavorite — avant, il partait depuis l'updater d'état (rejoué par React) et même au
+  // simple chargement de la liste, erreurs avalées.
   const setFavorites=useCallback((v)=>{setFavoritesRaw(prev=>{const next=typeof v==="function"?v(prev):v;try{localStorage.setItem("caissepro_favorites",JSON.stringify(next));}catch(e){}
-    API.favorites.save(next).catch(()=>{});return next;});},[]);
+    return next;});},[]);
+  const favoritesRef=useRef(favorites);favoritesRef.current=favorites;
   const[notifications,setNotifications]=useState([]);
   const[printerConnected,setPrinterConnected]=useState(false);
   const[printerType,setPrinterType]=useState(null);
@@ -900,6 +904,9 @@ function AppProvider({children}){
       // Fallback local
       console.warn("Checkout API échoué, mode local:",e.message);
       const seq=tSeq+1;const date=new Date().toISOString();
+      // Total de la VENTE (avant avoir) — tTTC est le reste à payer : l'avoir est un moyen de
+      // paiement, pas une remise. Avant : total, GT, empreinte et points minorés de l'avoir.
+      const venteTTC=Math.round((tHT+tTVA)*100)/100;
       const ticketNumber=`TK-${new Date().getFullYear()}-${String(seq).padStart(6,"0")}`;
       const paymentMethod=payments.length===1?payments[0].method:"MIXTE";
       // Marge HT = CA net HT (remise globale comprise) - cout d'achat HT (le cout n'est pas remise)
@@ -913,16 +920,16 @@ function AppProvider({children}){
           return cv?{...v,stock:v.stock-cv.quantity}:v;})};}));
       // Fidélité
       // FE-12: use Math.round for consistency between add (checkout) and deduct (return)
-      if(selCust){setCustomers(prev=>prev.map(c=>c.id===selCust.id?{...c,points:(c.points||0)+Math.round(tTTC),totalSpent:(c.totalSpent||0)+tTTC}:c));}
+      if(selCust){setCustomers(prev=>prev.map(c=>c.id===selCust.id?{...c,points:(c.points||0)+Math.floor(venteTTC),totalSpent:(c.totalSpent||0)+venteTTC}:c));}
       // NF525: SHA-256 hash chain conforme — inclut ID caisse, type entrée, N° séquence
       const caisseId=currentStore?.id||cashReg?.id||"CAISSE-01";
-      const hashInput=`${lastHash}|${seq}|VENTE|${caisseId}|${ticketNumber}|${date}|${tTTC.toFixed(2)}|${(gt+tTTC).toFixed(2)}`;
+      const hashInput=`${lastHash}|${seq}|VENTE|${caisseId}|${ticketNumber}|${date}|${venteTTC.toFixed(2)}|${(gt+venteTTC).toFixed(2)}`;
       const hash=await sha256(hashInput);
       const fingerprint=hash.slice(0,16).toUpperCase();
       const offlineBarcode=generateEAN13("200",Date.now()%1000000000);
       const ticket={ticketNumber,seq,date,items,payments,paymentMethod,barcode:offlineBarcode,
-        totalHT:tHT,totalTVA:tTVA,totalTTC:tTTC,globalDiscount:gd,margin,
-        hash,fingerprint,grandTotal:gt+tTTC,promosApplied:applied,
+        totalHT:tHT,totalTVA:tTVA,totalTTC:venteTTC,globalDiscount:gd,margin,
+        hash,fingerprint,grandTotal:gt+venteTTC,promosApplied:applied,
         saleNote:saleNote||null,userName:currentUser?.name,sellerName:sellerName||currentUser?.name,
         storeName:currentStore?.name||null,storeId:currentStore?.id||null,
         customerId:selCust?.id,customerName:selCust?`${selCust.firstName} ${selCust.lastName}`:null,
@@ -931,7 +938,7 @@ function AppProvider({children}){
         ...(trainingMode?{trainingMode:true,ticketNumber:`FACTICE-${ticketNumber}`}:{})};
       setTSeq(seq);setLastHash(hash);
       // NF525: ne PAS incrémenter le GT en mode formation
-      if(!trainingMode)setGt(g=>g+tTTC);
+      if(!trainingMode)setGt(g=>g+venteTTC);
       setTickets(prev=>[ticket,...prev]);
       setCart([]);setGDiscPct(0);setGDiscAmt(0);setSelCust(null);setPromoCode("");setSelectedAvoir(null);setSaleNote("");
       // FE-10: per-article stock movements instead of 1 global entry
@@ -940,7 +947,7 @@ function AppProvider({children}){
       addPendingSync({type:"offlineSale",data:{
         items:items.map(({product,variant,...rest})=>rest),payments,customerId:(selCust?.local?null:selCust?.id)||null,
         globalDiscount:gd,saleNote:saleNote||null,promosApplied:applied,sessionId:cashReg?.id||null,
-        totalTTC:Math.round((tHT+tTVA)*100)/100,clientSaleId,
+        totalTTC:venteTTC,clientSaleId,
         sellerName:sellerName||currentUser?.name||null,   // même vendeur que le ticket imprimé hors-ligne
         // l'avoir sera debite par le serveur a la synchronisation, dans la meme transaction
         avoirUsed:selectedAvoir&&avoirPayment>0?{avoirNumber:selectedAvoir.avoirNumber,amount:avoirPayment}:null,
@@ -1046,7 +1053,15 @@ function AppProvider({children}){
     return suggestions;},[products]);
 
   // ══ P2: Toggle favorite ══
-  const toggleFavorite=useCallback((productId)=>{setFavorites(p=>p.includes(productId)?p.filter(x=>x!==productId):[...p,productId]);},[]);
+  const toggleFavorite=useCallback(async(productId)=>{
+    const avant=favoritesRef.current;
+    const next=avant.includes(productId)?avant.filter(x=>x!==productId):[...avant,productId];
+    setFavorites(next);
+    try{await API.favorites.save(next);}
+    catch(e){
+      if(e instanceof TypeError){notify("Hors ligne : favori enregistré sur cette caisse seulement","warn");return;}
+      setFavorites(avant);notify("Favori non enregistré : "+e.message,"error");}
+  },[setFavorites,notify]);
 
   // ══ P2: TVA summary — utilise les montants pré-calculés si disponibles ══
   const tvaSummary=useMemo(()=>{const byRate={};
@@ -1449,6 +1464,7 @@ function AppProvider({children}){
     // Navigateur : ticket généré depuis les DONNÉES (cadeau sans prix, mention duplicata),
     // pas l'aperçu à l'écran qui est toujours le ticket complet.
     if(type==="receipt"){await new BrowserPrintAdapter().printReceipt(data,settings,CO);return true;}
+    if(type==="avoir"){await new BrowserPrintAdapter().printAvoir(data,settings,CO);return true;}
     if(type==="register-open"||type==="register-close"){
       // Generate HTML and print via popup — same approach as receipt tickets
       const d=data||{};const co=settings||{};

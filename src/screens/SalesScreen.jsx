@@ -680,12 +680,13 @@ function SalesScreen(){
             // Même avoir (immuable) : on récupère son code-barres + empreinte NF525 d'origine
             const full=avoirs.find(a=>a.avoirNumber===av.avoirNumber)||{};
             try{
-              await thermalPrint("avoir",{
-                avoirNumber:av.avoirNumber,totalTTC:av.remainingAfter,totalHT:av.remainingAfter,totalTVA:0,
+              // L'avoir d'ORIGINE (total, articles, empreinte) avec son nouveau solde — avant, un faux
+              // avoir dont le « total » était le solde, sans articles, daté d'aujourd'hui.
+              await thermalPrint("avoir",{...full,
+                avoirNumber:av.avoirNumber,totalTTC:full.totalTTC??full.total_ttc??av.remainingAfter,
                 remaining:av.remainingAfter,barcode:full.barcode||av.barcode||"",
-                fingerprint:full.fingerprint||full.hash||"",hash:full.hash||"",
-                refundMethod:"avoir",reason:"Solde restant sur avoir",originalTicket:lastTk.ticketNumber,
-                date:new Date().toISOString(),userName:lastTk.userName,customerName:lastTk.customerName,items:[]});
+                fingerprint:full.fingerprint||full.hash||"",refundMethod:full.refundMethod||full.refund_method||"avoir",
+                reason:full.reason||"Solde restant sur avoir",items:full.items||[]});
             }catch(e){notify(e.message||"Erreur d'impression","danger");}
           }} variant="outline" style={{marginTop:8,borderColor:C.fiscal,color:C.fiscal,borderRadius:10,fontSize:12}}>
             <Printer size={14}/> Imprimer le solde restant</Btn>

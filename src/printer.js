@@ -4,7 +4,7 @@
 // ═══════════════════════════════════════
 
 // ESC/POS Command Constants
-import { lineDiscountEuro, globalDiscountTTC, libelleCloture, tvaParTaux, libelleTaux, pointsFidelite, libellePaiementTicket } from './lib/formatters.js';
+import { lineDiscountEuro, globalDiscountTTC, libelleCloture, tvaParTaux, libelleTaux, pointsFidelite, libellePaiementTicket, donneesAvoir } from './lib/formatters.js';
 
 const ESC = 0x1B;
 const GS = 0x1D;
@@ -699,35 +699,30 @@ class ThermalPrinter {
 
       await this.separator('=');
       await this.alignLeft();
+      const a = donneesAvoir(avoir);
 
       await this.bold(true);
-      await this.line(`N° ${avoir.avoirNumber}`);
+      await this.line(`N° ${a.numero}`);
       await this.bold(false);
-      await this.bold(true); await this.line(`Ticket original: ${avoir.originalTicket}`); await this.bold(false);
-      await this.bold(true); await this.line(`Date: ${new Date(avoir.date).toLocaleString('fr-FR')}`); await this.bold(false);
-      if (avoir.userName) { await this.bold(true); await this.line(`Caissier: ${avoir.userName}`); await this.bold(false); }
-      if (avoir.customerName) { await this.bold(true); await this.line(`Client: ${avoir.customerName}`); await this.bold(false); }
-      await this.bold(true); await this.line(`Motif: ${avoir.reason || 'Non specifie'}`); await this.bold(false);
+      if (a.ticketOrigine) { await this.bold(true); await this.line(`Ticket original: ${a.ticketOrigine}`); await this.bold(false); }
+      await this.bold(true); await this.line(`Date: ${a.date}`); await this.bold(false);
+      if (a.caissier) { await this.bold(true); await this.line(`Caissier: ${a.caissier}`); await this.bold(false); }
+      if (a.client) { await this.bold(true); await this.line(`Client: ${a.client}`); await this.bold(false); }
+      await this.bold(true); await this.line(`Motif: ${a.motif}`); await this.bold(false);
 
       await this.separator('-');
 
       // Items
-      for (const item of (avoir.items || [])) {
-        const name = item.product?.name || item.product_name || item.name || '?';
-        const sku = item.product?.sku || item.product_sku || item.sku || '';
-        const color = item.variant?.color || item.variant_color || item.color || '';
-        const colorCode = item.variant?.colorCode || item.variant_color_code || item.color_code || '';
-        const sz = item.variant?.size || item.variant_size || item.size || '';
-        const ean = item.variant?.ean || item.variant_ean || item.ean || '';
-        await this.bold(true); await this.text(name); await this.newline(); await this.bold(false);
-        if (color || sz) {
-          let detail = `  ${color}/${sz}`;
-          if (sku) detail += ` | Ref: ${sku}`;
-          if (colorCode) detail += ` | ${colorCode}`;
+      for (const it of a.items) {
+        await this.bold(true); await this.text(it.name); await this.newline(); await this.bold(false);
+        if (it.color || it.size) {
+          let detail = `  ${it.color}/${it.size}`;
+          if (it.sku) detail += ` | Ref: ${it.sku}`;
+          if (it.colorCode) detail += ` | ${it.colorCode}`;
           await this.bold(true); await this.text(detail); await this.newline(); await this.bold(false);
-          if (ean) { await this.fontSmall(); await this.text(`  EAN: ${ean}`); await this.newline(); await this.fontNormal(); }
+          if (it.ean) { await this.fontSmall(); await this.text(`  EAN: ${it.ean}`); await this.newline(); await this.fontNormal(); }
         }
-        await this.bold(true); await this.line(`  x${item.quantity || 1}`, `-${(item.lineTTC || item.line_ttc || 0).toFixed(2)}€`); await this.bold(false);
+        await this.bold(true); await this.line(`  x${it.qty}`, `-${it.ttc.toFixed(2)}€`); await this.bold(false);
       }
 
       await this.separator('-');
@@ -735,15 +730,15 @@ class ThermalPrinter {
       // Total
       await this.bold(true);
       await this.doubleSize();
-      const refundLabels = { cash: 'Especes', card: 'Carte bancaire', avoir: 'Avoir client' };
-      await this.line('TOTAL AVOIR', `-${(avoir.totalTTC || 0).toFixed(2)}€`);
+      await this.line('TOTAL AVOIR', `-${a.total.toFixed(2)}€`);
       await this.normalSize();
       await this.bold(false);
-      if (avoir.remaining != null && Number(avoir.remaining) < (Number(avoir.totalTTC || 0) - 0.001)) {
+      if (a.restant != null) {
         await this.separator('-');
-        await this.bold(true); await this.line('SOLDE RESTANT', `${Number(avoir.remaining).toFixed(2)}€`); await this.bold(false);
+        await this.bold(true); await this.line('SOLDE RESTANT', `${a.restant.toFixed(2)}€`); await this.bold(false);
       }
-      await this.bold(true); await this.line('Remboursement:', refundLabels[avoir.refundMethod] || avoir.refundMethod); await this.bold(false);
+      await this.bold(true); await this.line('Remboursement:', a.modeLabel); await this.bold(false);
+      if (!a.utilisable) { await this.text('Deja rembourse - non utilisable en paiement'); await this.newline(); }
 
       await this.separator('=');
 
@@ -752,7 +747,7 @@ class ThermalPrinter {
       await this.bold(true);
       await this.text('EMPREINTE NF525');
       await this.newline();
-      await this.text(avoir.fingerprint || '—');
+      await this.text(avoir.fingerprint || avoir.hash || '—');
       await this.newline();
       await this.bold(false);
 
@@ -763,7 +758,7 @@ class ThermalPrinter {
       await this.bold(false);
 
       // EAN-13 barcode
-      if (avoir.barcode) {
+      if (avoir.barcode && String(avoir.barcode).length === 13) {
         await this.newline();
         await this.alignCenter();
         await this.barcode(avoir.barcode);

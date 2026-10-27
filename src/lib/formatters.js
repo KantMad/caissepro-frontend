@@ -197,6 +197,44 @@ export const libelleTaux = (rate) => {
 // affichait Math.round, soit 1 point de trop une fois sur deux.
 export const pointsFidelite = (ticket) => Math.max(0, Math.floor(Number(ticket?.totalTTC ?? ticket?.total_ttc) || 0));
 
+// Ticket d'AVOIR : donnees normalisees pour les 5 canaux (avoir tout juste emis = camelCase,
+// avoir recharge du serveur = snake_case). Avant, chaque canal lisait ses propres champs :
+// date « Invalid Date » en reimpression ESC/POS, caissier/client absents sur Sunmi, etc.
+export const donneesAvoir = (a) => {
+  const x = a || {};
+  const mode = x.refundMethod ?? x.refund_method ?? 'avoir';
+  const total = Number(x.totalTTC ?? x.total_ttc ?? x.amount ?? 0) || 0;
+  const utilisable = !['cash', 'card'].includes(mode);
+  const rem = x.remaining != null ? Number(x.remaining) : null;
+  let date = '';
+  try { const d = new Date(x.date || x.createdAt || x.created_at || Date.now()); date = isNaN(d) ? '' : d.toLocaleString('fr-FR'); } catch (e) { /* date illisible */ }
+  return {
+    numero: x.avoirNumber || x.avoir_number || '?',
+    ticketOrigine: x.originalTicket || x.original_ticket || '',
+    date,
+    caissier: x.userName || x.user_name || '',
+    client: x.customerName || x.customer_name || '',
+    motif: x.reason || 'Non specifie',
+    items: (x.items || []).filter(Boolean).map((i) => ({
+      name: i.product?.name || i.product_name || i.productName || i.name || '?',
+      color: i.variant?.color || i.variant_color || i.variantColor || i.color || '',
+      size: i.variant?.size || i.variant_size || i.variantSize || i.size || '',
+      sku: i.product?.sku || i.product_sku || i.sku || '',
+      colorCode: i.variant?.colorCode || i.variant_color_code || i.color_code || '',
+      ean: i.variant?.ean || i.variant_ean || i.ean || '',
+      qty: Number(i.quantity ?? i.qty ?? 1) || 1,
+      ttc: Number(i.lineTTC ?? i.line_ttc ?? 0) || 0,
+    })),
+    total,
+    // Solde restant : seulement pour un avoir utilisable deja entame
+    restant: utilisable && rem != null && rem < total - 0.001 ? Math.max(0, rem) : null,
+    utilisable,
+    modeLabel: String(PAYMENT_LABELS.refund[mode] || mode).normalize('NFD').replace(/[\u0300-\u036f]/g, ''), // ASCII : imprimantes thermiques
+    fingerprint: x.fingerprint || x.hash || '-',
+    barcode: x.barcode || '',
+  };
+};
+
 // ── Agrégation des paiements par méthode (clôtures, stats) ──
 // contactless manquait : les paiements sans contact disparaissaient du bloc « Reglements »
 // du Resume mobile et du Z hors ligne (somme des reglements < CA affiche).
