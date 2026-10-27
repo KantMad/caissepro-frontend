@@ -70,7 +70,7 @@ vi.mock("./api.js", () => {
     products: ns({ list: liste([PRODUIT]), exportCSV: () => "http://x" }),
     customers: ns({ list: liste([CLIENT]) }),
     returns: ns({ list: liste([AVOIR]), counter: liste({ seq: 1 }) }),
-    fiscal: ns({ closures: liste([Z_HIER, CLOTURE]), counter: liste({ grand_total: "8990.25", seq: 45 }),
+    fiscal: ns({ closures: liste([Z_HIER, CLOTURE]), tvaSummary: liste([{ rate: "20%", ventesHT: 100, ventesTVA: 20, avoirsHT: 10, avoirsTVA: 2, baseHT: 90, tva: 18 }]), counter: liste({ grand_total: "8990.25", seq: 45 }),
       // Veille non cloturee (cas Fred) + une tres ancienne journee oubliee (cas du 12 mai).
       pendingClosures: liste((() => { const k = (n) => { const d = new Date(); d.setDate(d.getDate() - n);
           return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
@@ -159,6 +159,13 @@ describe("Écrans — rendu sans plantage", () => {
     await findByText(/Journée non clôturée/);
     expect(container.textContent).toMatch(/555\.60/);
     expect(container.textContent).toMatch(/porte sur cette journée/);
+  });
+
+  it("Fiscal : l'onglet TVA charge la période depuis le serveur", async () => {
+    const { getAllByText, findByText } = render(<AppProvider><FiscalScreen /></AppProvider>);
+    const t = getAllByText("TVA"); fireEvent.click(t[t.length - 1]);
+    expect(await findByText(/20%/)).toBeTruthy();
+    expect(errors.join("\n")).not.toMatch(/is not defined|Cannot read|is not a function/);
   });
 
   it("Fiscal : l'onglet Formation renvoie vers la démo (plus de bouton mode formation)", () => {

@@ -1634,7 +1634,7 @@ function AppProvider({children}){
     if(ticket.customerId){const pts=Math.round(totalTTC);
       setCustomers(prev=>prev.map(c=>c.id===ticket.customerId?{...c,points:Math.max(0,c.points-pts),totalSpent:Math.max(0,c.totalSpent-totalTTC)}:c));}
     addAudit("AVOIR",`${avoir.avoirNumber} -- Ref: ${ticket.ticketNumber} -- ${totalTTC.toFixed(2)}EUR -- ${refundMethod}`,avoir.avoirNumber);
-    addJET("AVOIR",`Avoir ${avoir.avoirNumber} emis pour ${totalTTC.toFixed(2)}EUR`);
+    // JET « AVOIR » écrit par le serveur dans la transaction de l'avoir (hors-ligne : à la synchro)
     notify(`Avoir ${avoir.avoirNumber} -- ${totalTTC.toFixed(2)}EUR`,"success");
     return avoir;
   };

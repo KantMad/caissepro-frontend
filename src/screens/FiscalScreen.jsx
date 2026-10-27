@@ -1,16 +1,25 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import * as API from "../api.js";
 import { Lock, Receipt, Shield, FileText, CheckCircle2, AlertTriangle, Archive, Database, Check, X } from "lucide-react";
 import { CO, C } from "../constants.jsx";
 import { Btn, Badge, SC, Input } from "../ui.jsx";
 import { useApp, DEMO_URL } from "../context.jsx";
-import { dayKey } from "../lib/dates.js";
+import { dayKey, rangeToInstants } from "../lib/dates.js";
 
 function FiscalScreen(){
-  const{gt,tSeq,lastHash,closures,exportArchive,exportFEC,perm:p,verifyChain,tvaSummary,currentStore,viewingStoreId,stores,
+  const{gt,tSeq,lastHash,closures,exportArchive,exportFEC,perm:p,verifyChain,currentStore,viewingStoreId,stores,
     tickets,avoirs,jet,audit,trainingMode,settings,addJET,notify}=useApp();
   const storeName=viewingStoreId==="all"?"Tous les magasins":viewingStoreId?stores.find(s=>s.id===viewingStoreId)?.name:currentStore?.name||"";
   const[chainResult,setChainResult]=useState(null);
   const[fiscalTab,setFiscalTab]=useState("status");
+  // Onglet TVA : calcul SERVEUR sur le mois choisi (avant : tickets en mémoire seulement, sans
+  // période, sans avoirs, ventes de formation comprises)
+  const[tvaMois,setTvaMois]=useState(()=>dayKey().slice(0,7));const[tvaSrv,setTvaSrv]=useState(null);const[tvaErreur,setTvaErreur]=useState("");
+  useEffect(()=>{if(fiscalTab!=="tva")return;let annule=false;const[y,m]=tvaMois.split("-").map(Number);
+    const fin=dayKey(new Date(y,m,0));setTvaErreur("");
+    API.fiscal.tvaSummary(rangeToInstants(`${tvaMois}-01`,fin)).then(r=>{if(!annule)setTvaSrv(Array.isArray(r)?r:[]);})
+      .catch(e=>{if(!annule){setTvaSrv([]);setTvaErreur("TVA indisponible : "+e.message);}});
+    return()=>{annule=true;};},[fiscalTab,tvaMois]);
   // Exercice exporté : par défaut l'année civile en cours (1er janvier → aujourd'hui)
   const yStart=`${new Date().getFullYear()}-01-01`,today=dayKey();
   const[fecFrom,setFecFrom]=useState(yStart);const[fecTo,setFecTo]=useState(today);
@@ -141,17 +150,24 @@ function FiscalScreen(){
 
     {fiscalTab==="tva"&&<>
       <div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`}}>
-        <h3 style={{fontSize:14,fontWeight:700,marginBottom:10}}>Déclaration TVA assistée</h3>
+        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10,flexWrap:"wrap"}}>
+          <h3 style={{fontSize:14,fontWeight:700,margin:0,flex:1}}>Déclaration TVA assistée</h3>
+          <Input type="month" value={tvaMois} onChange={e=>setTvaMois(e.target.value)} style={{width:160,height:32,fontSize:12}}/></div>
+        <div style={{fontSize:10,color:C.textMuted,marginBottom:8}}>Toutes les ventes du mois (serveur), remise globale répartie par taux, avoirs déduits, formation exclue.</div>
+        {tvaErreur&&<div style={{fontSize:11,color:C.danger,marginBottom:8}}>{tvaErreur}</div>}
         <table className="rtable" style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
           <thead><tr style={{borderBottom:`2px solid ${C.border}`}}>
-            {["Taux","Base HT","TVA collectée"].map(h=>(<th key={h} style={{padding:8,textAlign:"left",fontSize:10,fontWeight:700,color:C.textMuted}}>{h}</th>))}</tr></thead>
-          <tbody>{tvaSummary.map(t=>(<tr key={t.rate} style={{borderBottom:`1px solid ${C.border}`}}>
+            {["Taux","Ventes HT","TVA ventes","Avoirs HT","TVA avoirs","Base HT nette","TVA due"].map(h=>(<th key={h} style={{padding:8,textAlign:"left",fontSize:10,fontWeight:700,color:C.textMuted}}>{h}</th>))}</tr></thead>
+          <tbody>{(tvaSrv||[]).map(t=>(<tr key={t.rate} style={{borderBottom:`1px solid ${C.border}`}}>
             <td data-label="Taux" style={{padding:8,fontWeight:600}}>{t.rate}</td>
-            <td data-label="Base HT" style={{padding:8}}>{t.baseHT.toFixed(2)}€</td>
-            <td data-label="TVA collectée" style={{padding:8,fontWeight:700,color:C.primary}}>{t.tva.toFixed(2)}€</td></tr>))}
+            <td data-label="Ventes HT" style={{padding:8}}>{t.ventesHT.toFixed(2)}€</td>
+            <td data-label="TVA ventes" style={{padding:8}}>{t.ventesTVA.toFixed(2)}€</td>
+            <td data-label="Avoirs HT" style={{padding:8,color:C.danger}}>-{t.avoirsHT.toFixed(2)}€</td>
+            <td data-label="TVA avoirs" style={{padding:8,color:C.danger}}>-{t.avoirsTVA.toFixed(2)}€</td>
+            <td data-label="Base HT nette" style={{padding:8}}>{t.baseHT.toFixed(2)}€</td>
+            <td data-label="TVA due" style={{padding:8,fontWeight:700,color:C.primary}}>{t.tva.toFixed(2)}€</td></tr>))}
           <tr style={{fontWeight:700}}><td data-label="Taux" style={{padding:8}}>TOTAL</td>
-            <td data-label="Base HT" style={{padding:8}}>{tvaSummary.reduce((s,t)=>s+t.baseHT,0).toFixed(2)}€</td>
-            <td data-label="TVA collectée" style={{padding:8,color:C.primary}}>{tvaSummary.reduce((s,t)=>s+t.tva,0).toFixed(2)}€</td></tr></tbody></table>
+            {["ventesHT","ventesTVA","avoirsHT","avoirsTVA","baseHT","tva"].map(k=>(<td key={k} style={{padding:8,color:k==="tva"?C.primary:undefined}}>{((tvaSrv||[]).reduce((s,t)=>s+t[k],0)).toFixed(2)}€</td>))}</tr></tbody></table>
       </div>
     </>}
 
