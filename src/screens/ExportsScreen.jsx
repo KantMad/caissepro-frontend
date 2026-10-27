@@ -316,7 +316,7 @@ function ExportsScreen(){
   const doExport=()=>downloadServerExport("xlsx");
 
   // --- Invoice generation ---
-  const generateInvoice=(ticket,client)=>{
+  const generateInvoice=async(ticket,client)=>{
     const storeName=settings.name||CO.name;
     const storeAddr=settings.address||CO.address;
     const storePC=settings.postalCode||CO.postalCode;
@@ -326,14 +326,23 @@ function ExportsScreen(){
     const storePhone=settings.phone||CO.phone;
     const storeLegal=settings.legalForm||CO.legalForm||"";
     const storeCapital=settings.capital||CO.capital||"";
-    const invoiceNum=`FA-${new Date().getFullYear()}-${String(Date.now()).slice(-6)}`;
-    const invoiceDate=new Date().toLocaleDateString("fr-FR",{day:"2-digit",month:"long",year:"numeric"});
-
     const clientName=client?`${client.firstName||""} ${client.lastName||""}`.trim():(ticket.customerName||"Client comptoir");
     const clientEmail=client?.email||"";
     const clientPhone=client?.phone||"";
     const clientCity=client?.city||"";
     const clientAddr=client?.address||"";
+
+    // Numéro et date attribués par le SERVEUR (continus, conservés, une facture par ticket).
+    // Avant : FA-<année>-<6 derniers chiffres de l'horloge>, ni continu ni enregistré.
+    if(!ticket.id){notify("Ticket pas encore enregistré sur le serveur : facture impossible pour l'instant","error");return;}
+    // Fenêtre ouverte AU CLIC (avant l'appel réseau), sinon le navigateur la bloque
+    const w=window.open("","_blank","width=860,height=1000");
+    let inv;
+    try{inv=await API.invoices.create({saleId:ticket.id,customerId:client?.id||ticket.customerId||null,clientName,
+      clientAddress:[clientAddr,clientCity].filter(Boolean).join(", "),clientEmail,notes:invoiceNotes||null,dueDate:invoiceDue||null});}
+    catch(e){if(w)w.close();notify("Facture non émise : "+e.message,"error");return;}
+    const invoiceNum=inv.invoice_number;
+    const invoiceDate=new Date(inv.created_at).toLocaleDateString("fr-FR",{day:"2-digit",month:"long",year:"numeric"});
 
     const items=(ticket.items||[]).map(i=>{
       const name=i.product?.name||i.product_name||"Article";
@@ -436,11 +445,10 @@ ${invoiceNotes?`<div class="notes"><div class="label">Remarques</div>${invoiceNo
 ${storeLegal?`${storeLegal}${storeCapital?` au capital de ${storeCapital}`:""}`:""}<br>
 Facture générée par ${CO.sw} v${CO.ver}</div></body></html>`;
 
-    const w=window.open("","_blank","width=860,height=1000");
-    w.document.write(html);w.document.close();
-    addAudit("FACTURE",`Facture ${invoiceNum} pour ${clientName} — ${netTTC.toFixed(2)}€`);
-    addJET("FACTURE",`Génération facture ${invoiceNum}`);
-    notify(`Facture ${invoiceNum} générée`,"success");
+    if(w){w.document.write(html);w.document.close();}else notify("Fenêtre d'impression bloquée : autorisez les fenêtres pour ce site","warn");
+    // Journal d'audit écrit par le serveur à l'émission ; JET pour l'impression
+    addJET("FACTURE",`${inv.reprint?"Réimpression":"Émission"} facture ${invoiceNum}`);
+    notify(inv.reprint?`Facture ${invoiceNum} déjà émise pour ce ticket : réimpression (même numéro)`:`Facture ${invoiceNum} émise`,"success");
     setInvoiceModal(false);setInvoiceTicket(null);setInvoiceClient(null);setInvoiceNotes("");
   };
 

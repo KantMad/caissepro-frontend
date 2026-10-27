@@ -303,6 +303,12 @@ export const cashMovements = {
 };
 
 // ══ Exports Excel (générés par le backend, download direct WebView-compatible) ══
+// Factures client : numero continu attribue et conserve par le serveur
+export const invoices = {
+  create: (data) => api('/api/invoices', { method: 'POST', body: JSON.stringify(data) }),
+  list: () => api('/api/invoices'),
+};
+
 export const exports = {
   // Exports générés par le backend (pas de troncature : toute la période, pas les 200
   // dernières ventes chargées en mémoire). format: 'xlsx' (défaut) ou 'csv' (Excel FR).
