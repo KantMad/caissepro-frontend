@@ -678,7 +678,7 @@ function AppProvider({children}){
       // de quoi reconstruire la ligne a l'identique (articles divers / retouches compris)
       taxRate:i.product?.taxRate,isCustom:!!i.isCustom,sku:i.product?.sku||"",category:i.product?.category||"",costPrice:i.product?.costPrice||0,ean:i.variant?.ean||""})),
       // Le client et la remise panier etaient perdus au rechargement (pas envoyes / mauvais nom de champ)
-      customerId:selCust?.id||null,globalDiscountPct:gDiscPct||0,globalDiscountAmount:gDiscAmt||0};
+      customerId:(selCust?.local?null:selCust?.id)||null,globalDiscountPct:gDiscPct||0,globalDiscountAmount:gDiscAmt||0};
     let newParked;
     try{const saved=await API.parked.save(parkedData);newParked={id:saved.id,date:saved.created_at||new Date().toISOString(),items:[...cart],customer:selCust,gDiscPct,gDiscAmt};}
     catch(e){
@@ -832,7 +832,7 @@ function AppProvider({children}){
     // Essai API d'abord
     try{
       const ticket=await API.sales.checkout({
-        items:items.map(({product,variant,...rest})=>rest),payments,customerId:selCust?.id||null,
+        items:items.map(({product,variant,...rest})=>rest),payments,customerId:(selCust?.local?null:selCust?.id)||null,
         globalDiscount:gd,saleNote:saleNote||null,
         // TTC de la caisse (avant avoir) : le serveur l'adopte s'il ne diffère que d'un arrondi
         totalTTC:Math.round((tHT+tTVA)*100)/100,
@@ -930,7 +930,7 @@ function AppProvider({children}){
       cart.forEach(i=>{if(!i.isCustom)addStockMove("VENTE",{name:i.product.name,sku:i.product.sku||"—"},{color:i.variant?.color||"—",size:i.variant?.size||"—"},-i.quantity,ticket.ticketNumber);});
       // Queue offline sale for sync when back online
       addPendingSync({type:"offlineSale",data:{
-        items:items.map(({product,variant,...rest})=>rest),payments,customerId:selCust?.id||null,
+        items:items.map(({product,variant,...rest})=>rest),payments,customerId:(selCust?.local?null:selCust?.id)||null,
         globalDiscount:gd,saleNote:saleNote||null,promosApplied:applied,sessionId:cashReg?.id||null,
         totalTTC:Math.round((tHT+tTVA)*100)/100,clientSaleId,
         sellerName:sellerName||currentUser?.name||null,   // même vendeur que le ticket imprimé hors-ligne
@@ -1468,6 +1468,9 @@ function AppProvider({children}){
   const addCustomer=useCallback(async(c)=>{
     try{const nc=await API.customers.create(c);const mapped=norm.customer(nc);setCustomers(p=>[...p,mapped]);notify("Client créé","success");return mapped;}
     catch(e){
+      // Refus du serveur (champ invalide, doublon…) : pas de fiche locale — elle bloquait ensuite
+      // la vente (identifiant « c-… » refusé par le serveur).
+      if(!(e instanceof TypeError)){notify("Client non créé : "+e.message,"error");return null;}
       // Plus de faux « Client créé » : le client local etait perdu au rechargement et
       // jamais renvoye au serveur. On le dit, et on garde la fiche pour la vente en cours.
       const nc={id:`c-${Date.now()}`,firstName:c.firstName||"",lastName:c.lastName||"",email:c.email||"",phone:c.phone||"",
@@ -1890,15 +1893,17 @@ function AppProvider({children}){
   useEffect(()=>{
     try{
       const promoResult=calcPromoDiscount(cart);
-      const rawTotal=cart.reduce((s,i)=>s+i.product.price*i.quantity,0);
-      const totalAfterPromo=Math.max(0,rawTotal-promoResult.promoDisc).toFixed(2)+"EUR";
+      // Montant RÉELLEMENT dû (remises de ligne, promos, remise panier, avoir) = même total que
+      // l'encaissement et le ticket. Avant : prix bruts moins les promos seulement.
+      const totalAfterPromo=(cart.length?(cartTotals.tTTC||0):0).toFixed(2)+"EUR";
       const data={
         storeName:settings.name||CO.name,
         customer:selCust?{name:`${selCust.firstName||""} ${selCust.lastName||selCust.name||""}`.trim(),loyalty:getLoyaltyTier(selCust.points||0)?.name||""}:null,
         promos:activePromos.map(p=>p.name).filter(Boolean),
         appliedPromos:promoResult.applied,
         items:cart.map(i=>({name:i.product.name+(i.variant?` (${i.variant.color}/${i.variant.size})`:""),qty:i.quantity,
-          price:(i.product.price*i.quantity).toFixed(2)+"EUR"})),
+          price:lineNetTTC({price:i.product.price,quantity:i.quantity,taxRate:i.product.taxRate,discount:i.discountPercent||i.discount||0,discountType:"percent",
+            discountPercent:i.discountPercent||0,discountAmount:i.discountAmount||0},settings.pricingMode||"TTC").toFixed(2)+"EUR"})),
         total:cart.length>0?totalAfterPromo:"0.00EUR",
         _ts:Date.now()
       };
@@ -1919,7 +1924,7 @@ function AppProvider({children}){
         try{API.customerDisplay.push(data);}catch(e){console.warn("Push écran client échoué:",e.message);}
       }
     }catch(e){console.warn("Sync écran client échoué:",e.message);}
-  },[cart,settings.name,selCust,activePromos,calcPromoDiscount,getLoyaltyTier,effectiveStoreId,isOnline]);
+  },[cart,cartTotals,settings.name,settings.pricingMode,selCust,activePromos,calcPromoDiscount,getLoyaltyTier,effectiveStoreId,isOnline]);
 
   // ══ PRODUCT PHOTOS — lookup helper ══
   // Extract color key from variant EAN: "QMCHML_C001-752-S" → "752"
