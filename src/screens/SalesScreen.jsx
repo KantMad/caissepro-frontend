@@ -31,7 +31,7 @@ function SalesScreen(){
   const[cashNumpadModal,setCashNumpadModal]=useState(false);const[numpadValue,setNumpadValue]=useState("");
   const[custModal,setCustModal]=useState(false);const[parkedModal,setParkedModal]=useState(false);
   const[payMethodModal,setPayMethodModal]=useState(false);const[avoirSelectModal,setAvoirSelectModal]=useState(false);
-  const[retoucheModal,setRetoucheModal]=useState(false);const[retForm,setRetForm]=useState({client:"",phone:"",date:new Date().toISOString().split("T")[0],notes:"",items:[{desc:"",price:""}]});
+  const[retoucheModal,setRetoucheModal]=useState(false);const[retForm,setRetForm]=useState({client:"",phone:"",date:dayKey(),notes:"",items:[{desc:"",price:""}]});
   const[newCustModal,setNewCustModal]=useState(false);const[ncF,setNcF]=useState("");const[ncL,setNcL]=useState("");const[ncE,setNcE]=useState("");const[ncP,setNcP]=useState("");
   const[syncConfirm,setSyncConfirm]=useState(false);const[avoirSearch,setAvoirSearch]=useState("");
   const[clock,setClock]=useState(new Date());useEffect(()=>{const t=setInterval(()=>setClock(new Date()),30000);return()=>clearInterval(t);},[]);
@@ -832,7 +832,7 @@ function SalesScreen(){
               (bon.notes?`<div><strong>Notes:</strong> ${bon.notes}</div><hr>`:"")+
               `<div class="center" style="font-size:10px;">Vendeur: ${bon.seller}<br>${new Date().toLocaleString("fr-FR")}<br>${settings.name||"Tech in Cash"} — ${settings.siret||""}</div>`+
               `</body></html>`);w.document.close();setTimeout(()=>{w.print();},300);}}
-          setRetoucheModal(false);setRetForm({client:"",phone:"",date:new Date().toISOString().split("T")[0],notes:"",items:[{desc:"",price:""}]});
+          setRetoucheModal(false);setRetForm({client:"",phone:"",date:dayKey(),notes:"",items:[{desc:"",price:""}]});
           notify(`Bon de retouche #${sc} (${bonNum}) cree et ajoute au panier`);
           addAudit("RETOUCHE",`Bon ${bonNum} #${sc} — ${bon.client} — ${retTotal.toFixed(2)}EUR`);
         }} disabled={!retForm.items.some(i=>i.desc&&i.price)||!retForm.client}

@@ -4,13 +4,14 @@ import { CO, C } from "../constants.jsx";
 import { Modal, Btn, Input } from "../ui.jsx";
 import { useApp } from "../context.jsx";
 import * as API from "../api.js";
+import { dayKey } from "../lib/dates.js";
 
 function ExportsScreen(){
   const{tickets,avoirs,customers,settings,notify,addAudit,addJET,perm}=useApp();
   if(!perm().canExport)return<div style={{padding:40,textAlign:"center",color:"#94a3b8",fontSize:16,fontWeight:600}}>Accès réservé aux administrateurs</div>;
   const[tab,setTab]=useState("sales");
-  const[dateFrom,setDateFrom]=useState(()=>{const d=new Date();d.setMonth(d.getMonth()-1);return d.toISOString().split("T")[0];});
-  const[dateTo,setDateTo]=useState(()=>new Date().toISOString().split("T")[0]);
+  const[dateFrom,setDateFrom]=useState(()=>{const d=new Date();d.setMonth(d.getMonth()-1);return dayKey(d);});
+  const[dateTo,setDateTo]=useState(()=>dayKey());
   const[searchQ,setSearchQ]=useState("");
   const[minAmount,setMinAmount]=useState("");
   const[maxAmount,setMaxAmount]=useState("");
@@ -133,7 +134,7 @@ function ExportsScreen(){
   const[invoiceClientSearch,setInvoiceClientSearch]=useState("");
   const[invoiceTicketSearch,setInvoiceTicketSearch]=useState("");
   const[invoiceNotes,setInvoiceNotes]=useState("");
-  const[invoiceDue,setInvoiceDue]=useState(()=>{const d=new Date();d.setDate(d.getDate()+30);return d.toISOString().split("T")[0];});
+  const[invoiceDue,setInvoiceDue]=useState(()=>{const d=new Date();d.setDate(d.getDate()+30);return dayKey(d);});
 
   // --- Filtered data ---
   const filterByDate=(items,dateField="date")=>items.filter(i=>{

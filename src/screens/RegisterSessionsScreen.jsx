@@ -4,12 +4,13 @@ import * as API from "../api.js";
 import { C } from "../constants.jsx";
 import { Btn, Input, Badge } from "../ui.jsx";
 import { useApp } from "../context.jsx";
+import { dayKey } from "../lib/dates.js";
 
 export default function RegisterSessionsScreen() {
   const { notify, thermalPrint, settings, currentStore } = useApp();
   const firstOfMonth = new Date(); firstOfMonth.setDate(1);
-  const [from, setFrom] = useState(firstOfMonth.toISOString().slice(0, 10));
-  const [to, setTo] = useState(new Date().toISOString().slice(0, 10));
+  const [from, setFrom] = useState(dayKey(firstOfMonth));
+  const [to, setTo] = useState(dayKey());
   const [status, setStatus] = useState("");
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(false);

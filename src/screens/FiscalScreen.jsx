@@ -3,6 +3,7 @@ import { Lock, Receipt, Shield, FileText, CheckCircle2, AlertTriangle, Archive, 
 import { CO, C } from "../constants.jsx";
 import { Btn, Badge, SC, Input } from "../ui.jsx";
 import { useApp, DEMO_URL } from "../context.jsx";
+import { dayKey } from "../lib/dates.js";
 
 function FiscalScreen(){
   const{gt,tSeq,lastHash,closures,exportArchive,exportFEC,perm:p,verifyChain,tvaSummary,currentStore,viewingStoreId,stores,
@@ -11,7 +12,7 @@ function FiscalScreen(){
   const[chainResult,setChainResult]=useState(null);
   const[fiscalTab,setFiscalTab]=useState("status");
   // Exercice exporté : par défaut l'année civile en cours (1er janvier → aujourd'hui)
-  const yStart=`${new Date().getFullYear()}-01-01`,today=new Date().toISOString().split("T")[0];
+  const yStart=`${new Date().getFullYear()}-01-01`,today=dayKey();
   const[fecFrom,setFecFrom]=useState(yStart);const[fecTo,setFecTo]=useState(today);
   const[fecReglements,setFecReglements]=useState(false);
   const[archivePeriod,setArchivePeriod]=useState("J");

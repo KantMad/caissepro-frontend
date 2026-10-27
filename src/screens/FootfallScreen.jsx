@@ -2,13 +2,14 @@ import React, { useState } from "react";
 import { C } from "../constants.jsx";
 import { Btn, Input } from "../ui.jsx";
 import { useApp } from "../context.jsx";
+import { dayKey } from "../lib/dates.js";
 
 function FootfallScreen(){
   const{footfall,addFootfall,tickets,notify}=useApp();
-  const[manualCount,setManualCount]=useState("");const[manualDate,setManualDate]=useState(new Date().toISOString().split("T")[0]);
+  const[manualCount,setManualCount]=useState("");const[manualDate,setManualDate]=useState(dayKey());
   const[counterUrl,setCounterUrl]=useState(()=>{try{return localStorage.getItem("caissepro_counter_url")||"";}catch(e){return"";}});
 
-  const todayStr=new Date().toISOString().split("T")[0];
+  const todayStr=dayKey();
   const todayFootfall=footfall.find(f=>f.date===todayStr)?.count||0;
   const todayTickets=tickets.filter(t=>(t.date||t.createdAt||t.created_at||"").startsWith(todayStr)).length;
   const conversionRate=todayFootfall>0?(todayTickets/todayFootfall*100):0;

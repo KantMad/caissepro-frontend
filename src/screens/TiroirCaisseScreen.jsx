@@ -5,6 +5,7 @@ import { EAN13Svg } from "../utils.jsx";
 import { Modal, Btn, Input, Badge, SC } from "../ui.jsx";
 import { useApp } from "../context.jsx";
 import { formatDenominations } from "../lib/formatters.js";
+import { dayKey } from "../lib/dates.js";
 
 export default function TiroirCaisseScreen() {
   const { cashMovements, addCashMovement, reloadCashMovements, thermalPrint, settings, currentUser, currentStore, cashReg, notify } = useApp();
@@ -19,8 +20,8 @@ export default function TiroirCaisseScreen() {
   const [denom, setDenom] = useState({});
   const denomTotal = Math.round(Object.entries(denom).reduce((s, [v, n]) => s + parseFloat(v) * (parseInt(n) || 0), 0) * 100) / 100;
 
-  const today = new Date().toISOString().split("T")[0];
-  const todays = useMemo(() => (cashMovements || []).filter(m => (m.created_at || m.date || "").startsWith(today)), [cashMovements, today]);
+  const today = dayKey();
+  const todays = useMemo(() => (cashMovements || []).filter(m => dayKey(new Date(m.created_at || m.date || 0)) === today), [cashMovements, today]);
   const totalIn = todays.filter(m => m.direction === "in").reduce((s, m) => s + (parseFloat(m.amount) || 0), 0);
   const totalOut = todays.filter(m => m.direction === "out").reduce((s, m) => s + (parseFloat(m.amount) || 0), 0);
   const fond = parseFloat(cashReg?.openingAmount || 0);

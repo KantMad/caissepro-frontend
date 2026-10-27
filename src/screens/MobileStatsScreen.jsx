@@ -1,14 +1,17 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
+import * as API from "../api.js";
+import { norm } from "../utils.jsx";
 import { TrendingUp, ShoppingBag, Package, CreditCard, Users as UsersIcon } from "lucide-react";
 import { useApp } from "../context.jsx";
 import { C } from "../constants.jsx";
 import { dayKey, rangeToInstants } from "../lib/dates.js";
-import { formatAmount, getPaymentLabel, getDateField, aggregatePaymentsByMethod, salesIndex, ticketPieces } from "../lib/formatters.js";
+import { formatAmount, getPaymentLabel, getDateField, aggregatePaymentsByMethod, salesIndex, ticketPieces, lignesNettes } from "../lib/formatters.js";
 
 // ════════════════════════════════════════════════════════════
 //  Résumé — vue stats simplifiée, pensée téléphone (gros chiffres).
-//  Réutilise les tickets du contexte (mêmes totaux que Statistiques),
-//  filtrés par période. Exclut le mode formation.
+//  Tickets de la période chargés depuis le SERVEUR (comme Statistiques) : sur le mois,
+//  les 200 tickets en mémoire ne suffisaient pas. Repli sur la mémoire hors connexion.
+//  Exclut le mode formation.
 // ════════════════════════════════════════════════════════════
 const ttcOf = (t) => t.totalTTC || parseFloat(t.total_ttc) || 0;
 const isTraining = (t) => t.trainingMode || String(t.ticketNumber || t.ticket_number || "").match(/^(FACTICE|FORMATION)/);
@@ -17,13 +20,27 @@ const dayStr = (d) => dayKey(d);   // journée LOCALE (et non UTC)
 export default function MobileStatsScreen() {
   const { tickets, currentStore } = useApp();
   const [period, setPeriod] = useState("today");
+  const bornes = useMemo(() => {
+    const now = new Date(); const today = dayStr(now);
+    const d7 = new Date(now); d7.setDate(d7.getDate() - 6);
+    const from = period === "today" ? today : period === "7d" ? dayStr(d7) : `${today.slice(0, 7)}-01`;
+    return { from, to: today };
+  }, [period]);
+  const [srv, setSrv] = useState(null);
+  useEffect(() => {
+    let annule = false; setSrv(null);
+    API.sales.period(rangeToInstants(bornes.from, bornes.to))
+      .then((r) => { if (!annule) setSrv(norm.sales(r?.sales || [])); })
+      .catch(() => {});
+    return () => { annule = true; };
+  }, [bornes.from, bornes.to]);
 
   const fT = useMemo(() => {
     const now = new Date();
     const today = dayStr(now);
     const d7 = new Date(now); d7.setDate(d7.getDate() - 6); const from7 = dayStr(d7);
     const ym = today.slice(0, 7);
-    return (tickets || []).filter((t) => {
+    return (srv || tickets || []).filter((t) => {
       if (isTraining(t)) return false;
       const ds = dayKey(new Date(getDateField(t)));
       if (!ds) return false;
@@ -31,7 +48,7 @@ export default function MobileStatsScreen() {
       if (period === "7d") return ds >= from7;
       return ds.slice(0, 7) === ym; // mois
     });
-  }, [tickets, period]);
+  }, [srv, tickets, period]);
 
   const ca = useMemo(() => fT.reduce((s, t) => s + ttcOf(t), 0), [fT]);
   const nb = fT.length;
@@ -45,11 +62,11 @@ export default function MobileStatsScreen() {
 
   const topProd = useMemo(() => {
     const m = {};
-    fT.forEach((t) => (t.items || []).forEach((i) => {
+    fT.forEach((t) => lignesNettes(t).forEach((i) => {
       const n = i.product?.name || i.product_name || "?";
       if (!m[n]) m[n] = { name: n, qty: 0, rev: 0 };
       m[n].qty += parseInt(i.quantity) || 0;
-      m[n].rev += (i.lineTTC || i.line_ttc || 0);
+      m[n].rev += i.nTTC;
     }));
     return Object.values(m).sort((a, b) => b.rev - a.rev).slice(0, 5);
   }, [fT]);

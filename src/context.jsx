@@ -632,7 +632,7 @@ function AppProvider({children}){
   const removeParked=useCallback(async(id)=>{setParked(p=>p.filter(x=>x.id!==id));try{await API.parked.remove(id);}catch(e){console.warn("Suppression panier suspendu échouée:",e.message);}addAudit("PARK_DELETE","Panier en attente supprime");},[addAudit]);
 
   // ══ PROMO ENGINE ══
-  const activePromos=useMemo(()=>{const now=new Date().toISOString().split("T")[0];
+  const activePromos=useMemo(()=>{const now=dayKey();
     return promos.filter(p=>p.active&&(!p.startDate||p.startDate<=now)&&(!p.endDate||p.endDate>=now));},[promos]);
 
   const calcPromoDiscount=useCallback((cartItems)=>calcPromos(cartItems,activePromos,{pricingMode:settings.pricingMode,promoCode}),[activePromos,promoCode,settings.pricingMode]);
@@ -883,7 +883,7 @@ function AppProvider({children}){
     const rows=[];products.forEach(p=>(p.variants||[]).forEach(v=>{
       rows.push({name:p.name,sku:p.sku,price:p.price,costPrice:p.costPrice,taxRate:p.taxRate,
         category:p.category,collection:p.collection,color:v.color,size:v.size,ean:v.ean,stock:v.stock});}));
-    exportCSVReport(rows,`catalogue-${new Date().toISOString().split("T")[0]}.csv`);
+    exportCSVReport(rows,`catalogue-${dayKey()}.csv`);
   },[products,exportCSVReport]);
 
   // ══ P2: Update product price with history ══
@@ -1567,7 +1567,7 @@ function AppProvider({children}){
   const[footfall,setFootfall]=useState(()=>{try{const s=localStorage.getItem("caissepro_footfall");return s?JSON.parse(s):[];}catch(e){return[];}});
   useEffect(()=>{try{localStorage.setItem("caissepro_footfall",JSON.stringify(footfall));}catch(e){}},[footfall]);
   const addFootfall=useCallback((count,date)=>{
-    const d=date||new Date().toISOString().split("T")[0];
+    const d=date||dayKey();
     setFootfall(prev=>{const existing=prev.find(f=>f.date===d);
       if(existing)return prev.map(f=>f.date===d?{...f,count}:f);
       return[...prev,{date:d,count}].sort((a,b)=>b.date.localeCompare(a.date));});

@@ -4,6 +4,7 @@ import * as API from "../api.js";
 import { C } from "../constants.jsx";
 import { Btn, Badge } from "../ui.jsx";
 import { useApp } from "../context.jsx";
+import { dayKey } from "../lib/dates.js";
 
 function AuditScreen(){
   const{audit:localAudit,jet:localJet,exportCSVReport,isOnline,currentStore,viewingStoreId,stores,effectiveStoreId,perm}=useApp();
@@ -37,7 +38,7 @@ function AuditScreen(){
       <select value={filterUser} onChange={e=>setFilterUser(e.target.value)} style={{padding:6,borderRadius:8,border:`1.5px solid ${C.border}`,fontSize:11,fontFamily:"inherit",marginLeft:"auto"}}>
         <option value="">Tous les utilisateurs</option>{users.map(u=>(<option key={u} value={u}>{u}</option>))}</select>
       <Btn variant="outline" onClick={()=>{const data=filtered.map(e=>({date:e.date,action:e.action||e.type,detail:e.detail,ref:e.ref||"",user:e.user}));
-        exportCSVReport(data,`${tab}-${new Date().toISOString().split("T")[0]}.csv`);}} style={{height:32,fontSize:10}}><Download size={12}/> Export</Btn></div>
+        exportCSVReport(data,`${tab}-${dayKey()}.csv`);}} style={{height:32,fontSize:10}}><Download size={12}/> Export</Btn></div>
     {!filtered.length&&<div style={{textAlign:"center",padding:30,color:C.textLight}}>Aucune entrée</div>}
     {tab==="audit"&&pageData.map(e=>(<div key={e.id} style={{display:"flex",alignItems:"start",gap:8,padding:6,borderBottom:`1px solid ${C.border}`}}>
       <div style={{width:6,height:6,borderRadius:3,marginTop:5,background:ac[e.action]||C.textMuted,flexShrink:0}}/>

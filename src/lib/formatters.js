@@ -164,3 +164,16 @@ export const aggregatePaymentsByMethod = (tickets) => {
   }
   return out;
 };
+
+// Lignes NETTES de la remise globale du panier : sales.global_discount (HT) n'est pas reporte
+// sur les lignes ; sans prorata, CA et marge par produit / collection depassent le CA encaisse.
+// Meme prorata que le FEC et les exports (au HT, TTC suivant le meme ratio).
+export const lignesNettes = (t) => {
+  const items = t?.items || [];
+  const brutHT = items.reduce((s, i) => s + (parseFloat(i.lineHT ?? i.line_ht) || 0), 0);
+  const gd = parseFloat(t?.globalDiscount ?? t?.global_discount) || 0;
+  const r = gd > 0 && brutHT > 0 ? Math.min(gd / brutHT, 1) : 0;
+  return items.map((i) => ({ ...i,
+    nTTC: (parseFloat(i.lineTTC ?? i.line_ttc) || 0) * (1 - r),
+    nHT: (parseFloat(i.lineHT ?? i.line_ht) || 0) * (1 - r) }));
+};

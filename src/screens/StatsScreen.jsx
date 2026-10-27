@@ -5,7 +5,7 @@ import * as API from "../api.js";
 import { C } from "../constants.jsx";
 import { Btn, Input, Badge, SC } from "../ui.jsx";
 import { useApp } from "../context.jsx";
-import { getPaymentLabel, ticketPieces, salesIndex, formatAmount } from "../lib/formatters.js";
+import { getPaymentLabel, ticketPieces, salesIndex, formatAmount, lignesNettes } from "../lib/formatters.js";
 import { dayKey, rangeToInstants, previousRange } from "../lib/dates.js";
 import { norm } from "../utils.jsx";
 
@@ -83,14 +83,6 @@ function StatsScreen(){
     return<Badge color={p>=0?"#059669":C.danger}>{p>=0?"+":""}{p.toFixed(1)}%</Badge>;};
   // Lookup maps: product_id→{sku,name}, variant_id→{colorCode}
   const prodMap=useMemo(()=>{const m={};products.forEach(p=>{m[p.id]={sku:p.sku,name:p.name};(p.variants||[]).forEach(v=>{m[`v_${v.id}`]={colorCode:v.colorCode||"",color:v.color,size:v.size};});});return m;},[products]);
-  // Lignes NETTES de la remise globale du panier : sales.global_discount (HT) n'est pas
-  // reporté sur les lignes ; sans prorata, CA et marge par produit / collection dépassaient
-  // le CA réellement encaissé. Même prorata que le FEC et les exports.
-  const lignesNettes=(t)=>{const items=t.items||[];
-    const brutHT=items.reduce((s,i)=>s+(parseFloat(i.lineHT??i.line_ht)||0),0);
-    const gd=parseFloat(t.globalDiscount??t.global_discount)||0;
-    const r=gd>0&&brutHT>0?Math.min(gd/brutHT,1):0;
-    return items.map(i=>({...i,nTTC:(parseFloat(i.lineTTC??i.line_ttc)||0)*(1-r),nHT:(parseFloat(i.lineHT??i.line_ht)||0)*(1-r)}));};
   const coutLigne=(i)=>(parseFloat(i.product?.costPrice??i.cost_price)||0)*(i.quantity||0);
   const enrichItem=(i)=>{
     const pid=i.product_id||i.product?.id;const vid=i.variant_id||i.variant?.id;
