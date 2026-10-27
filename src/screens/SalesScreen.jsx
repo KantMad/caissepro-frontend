@@ -53,7 +53,7 @@ function SalesScreen(){
     if(e.key==="F3"){e.preventDefault();if(cart.length&&!busy)quickPay("cash");}
     if(e.key==="F4"){e.preventDefault();if(cart.length)openPay();}
     if(e.key==="F5"){e.preventDefault();parkCart();}
-    if(e.key==="F8"){e.preventDefault();if(cart.length)setConfirmVoid(true);}
+    if(e.key==="F8"){e.preventDefault();if(cart.length){if(!perm().canVoid){notify("Annulation de panier réservée au gérant","error");return;}setConfirmVoid(true);}}
     if(e.key==="?"&&e.shiftKey){e.preventDefault();setShowShortcuts(s=>!s);}
   };window.addEventListener("keydown",handler);return()=>window.removeEventListener("keydown",handler);
   },[cart,busy,parkCart]);
@@ -402,7 +402,7 @@ function SalesScreen(){
           {busy?<span className="spin-loader"/>:<><Wallet size={16}/> Règlement — {totals.tTTC.toFixed(2)}€</>}</Btn>}
         <div style={{display:"flex",gap:4}}>
           <Btn variant="outline" onClick={()=>setRetoucheModal(true)} style={{flex:1,height:26,fontSize:9,borderRadius:8,gap:3}}><Edit size={10}/> Retouche</Btn>
-          <Btn variant="outline" onClick={()=>cart.length?setConfirmClear(true):null} style={{flex:1,borderColor:`${C.danger}20`,color:C.danger,height:26,fontSize:9,borderRadius:8}}><RotateCcw size={9}/> Vider</Btn>
+          <Btn variant="outline" onClick={()=>{if(!cart.length)return;if(!perm().canVoid){notify("Vider le panier : réservé au gérant (ou supprimez les lignes une à une)","error");return;}setConfirmClear(true);}} style={{flex:1,borderColor:`${C.danger}20`,color:C.danger,height:26,fontSize:9,borderRadius:8}}><RotateCcw size={9}/> Vider</Btn>
         </div>
       </div>
     </div>
@@ -585,7 +585,7 @@ function SalesScreen(){
         <Pause size={14} color={C.textMuted}/><div style={{flex:1}}><div style={{fontSize:12,fontWeight:600}}>{p.items.length} art.{p.customer?` — ${p.customer.firstName}`:""}</div>
           <div style={{fontSize:10,color:C.textMuted}}>{new Date(p.date).toLocaleTimeString("fr-FR")}</div></div>
         <Btn onClick={()=>{restoreCart(p.id);setParkedModal(false);}} style={{padding:"4px 10px",fontSize:11}}><Play size={12}/> Reprendre</Btn>
-        <Btn variant="ghost" onClick={()=>{removeParked(p.id);notify("Panier supprime","info");}} style={{padding:"4px 8px",color:C.danger}}><Trash2 size={12}/></Btn></div>))}</Modal>
+        <Btn variant="ghost" onClick={()=>{if(!perm().canVoid){notify("Suppression d'un panier en attente réservée au gérant","error");return;}removeParked(p.id);notify("Panier supprime","info");}} style={{padding:"4px 8px",color:C.danger}}><Trash2 size={12}/></Btn></div>))}</Modal>
 
     {/* Void confirmation */}
     <Modal open={confirmVoid} onClose={()=>{setConfirmVoid(false);setVoidReason("");}} title="Annuler le panier">

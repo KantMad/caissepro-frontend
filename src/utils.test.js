@@ -480,3 +480,15 @@ describe("Import CSV : nombres au format français", () => {
     expect(Number.isNaN(csvNum(""))).toBe(true);
   });
 });
+
+import { ligneDepuisAttente } from "./context.jsx";
+describe("Panier en attente relu du serveur", () => {
+  it("reconstruit une ligne complète (prix d'attente, remises, TVA) et une ligne « divers »", () => {
+    const catalogue = [{ id: "p1", name: "Jean", price: 99, taxRate: 0.2, variants: [{ id: "v1", color: "Bleu", size: "38", ean: "123" }] }];
+    const l = ligneDepuisAttente({ productId: "p1", variantId: "v1", productName: "Jean", quantity: 2, price: 89, discountPercent: 10, discountAmount: 5, taxRate: 0.2 }, catalogue);
+    expect(l.product.id).toBe("p1"); expect(l.product.price).toBe(89); expect(l.variant.size).toBe("38");
+    expect(l.quantity).toBe(2); expect(l.discountPercent).toBe(10); expect(l.discountAmount).toBe(5);
+    const d = ligneDepuisAttente({ productName: "Retouche: ourlet", quantity: 1, price: 15, taxRate: 0.2, isCustom: true }, catalogue);
+    expect(d.isCustom).toBe(true); expect(d.product.name).toBe("Retouche: ourlet"); expect(d.product.price).toBe(15);
+  });
+});

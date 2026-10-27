@@ -22,6 +22,20 @@ const AppCtx = createContext(null);
 // etre activee ; un appareil reste en formation est remis en production au chargement.
 export const TRAINING_AVAILABLE = false;
 export const DEMO_URL = "https://demo.techincash.app";
+// Ligne de panier reconstruite depuis un panier relu du serveur (forme « à plat ») : avant,
+// les lignes étaient reprises telles quelles -> écran planté ou total à 0 après un rechargement.
+// Prix = celui du moment de la mise en attente ; fiche produit actuelle si elle existe.
+export function ligneDepuisAttente(it,products=[]){
+  if(it&&it.product)return it;   // déjà au format panier (panier mis en attente dans cette session)
+  const prod=products.find(p=>p.id===it.productId);const vari=prod?.variants?.find(v=>v.id===it.variantId);
+  const price=parseFloat(it.price)||0;
+  return{product:{...(prod||{}),id:it.productId||`custom-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,6)}`,
+      name:it.productName||prod?.name||"Article",price,taxRate:it.taxRate??prod?.taxRate??0.20,sku:it.sku||prod?.sku||"DIVERS",
+      category:it.category||prod?.category||"Divers",costPrice:it.costPrice??prod?.costPrice??0},
+    variant:vari||{id:it.variantId||`cv-${Math.random().toString(36).slice(2,8)}`,color:it.variantColor||"—",size:it.variantSize||"—",ean:it.ean||""},
+    quantity:parseInt(it.quantity)||1,discount:parseFloat(it.discountPercent??it.discount)||0,discountPercent:parseFloat(it.discountPercent)||0,
+    discountAmount:parseFloat(it.discountAmount)||0,isCustom:!!it.isCustom||(!it.productId)};}
+
 export const SYNC_CRITIQUE = ["offlineSale","offlineAvoir","offlineClosure","consumeAvoir","createGiftCard","useGiftCard"];
 export const useApp = () => useContext(AppCtx);
 
@@ -520,10 +534,11 @@ function AppProvider({children}){
         setUsers(prev=>{const localOnly=prev.filter(lu=>!apiUsers.find(au=>au.name===lu.name));return[...merged,...localOnly];});}
       // Charger gift cards, paniers suspendus, favoris et footfall depuis le backend
       try{const gcs=await API.giftcards.list();if(gcs&&Array.isArray(gcs))setGiftCards(gcs.map(g=>({id:g.id,code:g.code,initialAmount:parseFloat(g.initial_amount||0),balance:parseFloat(g.remaining||0),createdDate:g.created_at,customerName:g.customer_name||"",barcode:g.barcode||null,transactions:g.transactions||[]})));}catch(e){console.warn("Chargement cartes cadeaux échoué:",e.message);}
-      try{const pks=await API.parked.list();if(pks&&Array.isArray(pks))setParked(pks.map(p=>({id:p.id,date:p.created_at,items:p.items||[],
+      // les paniers mis en attente HORS-LIGNE (pas encore envoyés) sont conservés à côté de la liste serveur
+      try{const pks=await API.parked.list();if(pks&&Array.isArray(pks))setParked(prev=>[...prev.filter(x=>x.local),...pks.map(p=>({id:p.id,date:p.created_at,items:p.items||[],
         // le client et la remise panier sont relus du serveur (avant : remis a zero)
         customer:null,customerId:p.customer_id||null,customerName:p.customer_name||null,
-        gDiscPct:parseFloat(p.global_discount_pct)||0,gDiscAmt:parseFloat(p.global_discount_amount)||0,name:p.name})));}catch(e){console.warn("Chargement paniers suspendus échoué:",e.message);}
+        gDiscPct:parseFloat(p.global_discount_pct)||0,gDiscAmt:parseFloat(p.global_discount_amount)||0,name:p.name}))]);}catch(e){console.warn("Chargement paniers suspendus échoué:",e.message);}
       // LOW-4: Load favorites and footfall from API
       try{const favs=await API.favorites.list();if(Array.isArray(favs))setFavorites(favs);}catch(e){console.warn("Chargement favoris échoué:",e.message);}
       try{const ff=await API.footfall.list();if(Array.isArray(ff))setFootfall(ff);}catch(e){console.warn("Chargement footfall échoué:",e.message);}
@@ -621,37 +636,64 @@ function AppProvider({children}){
   const customSeq=useRef(0);
   const addCustomItem=(name,price,taxRate)=>{const k=`${Date.now().toString(36)}-${++customSeq.current}`;
     setCart(p=>[...p,{product:{id:`custom-${k}`,name,sku:"DIVERS",price,costPrice:0,taxRate,category:"Divers"},variant:{id:`cv-${k}`,color:"—",size:"—",ean:""},quantity:1,discount:0,isCustom:true}]);};
-  const removeFromCart=(pid,vid,reason)=>{addAudit("VOID_LINE",`Suppression: ${pid}${reason?` — Motif: ${reason}`:""}`,pid);addJET("VOID_LINE",`Suppression ligne produit ${pid}${reason?` — ${reason}`:""}`);setCart(p=>p.filter(c=>!(c.product.id===pid&&(c.variant?.id===vid||!vid))));};
+  // Trace NF525 d'une ligne retirée : article, déclinaison, quantité et montant (avant : l'id seul)
+  const decrireLigne=(c,q)=>`${c.product?.name||"?"} ${c.variant?.color||""}/${c.variant?.size||""} ×${q??c.quantity} — ${((c.product?.price||0)*(q??c.quantity)).toFixed(2)}€`;
+  const removeFromCart=(pid,vid,reason)=>{const ligne=cart.find(c=>c.product.id===pid&&(c.variant?.id===vid||(!vid&&!c.variant?.id)));
+    const txt=`Suppression ligne : ${ligne?decrireLigne(ligne):pid}${reason?` — Motif: ${reason}`:""}`;
+    addAudit("VOID_LINE",txt,pid);addJET("VOID_LINE",txt);
+    // ligne exacte uniquement (avant : sans variante, toutes les lignes du produit partaient)
+    setCart(p=>p.filter(c=>!(c.product.id===pid&&(c.variant?.id===vid||(!vid&&!c.variant?.id)))));};
   const voidSale=(reason)=>{if(cart.length){addAudit("VOID_SALE",`Annulation panier: ${cart.length} articles — Motif: ${reason||"Non spécifié"}`);addJET("VOID_SALE",`Annulation panier ${cart.length} art. — ${reason||"Non spécifié"}`);setCart([]);setGDiscPct(0);setGDiscAmt(0);setSelCust(null);setSelectedAvoir(null);setPromoCode("");setSaleNote("");}};
-  const updateQty=(pid,vid,q)=>{if(q<1)return removeFromCart(pid,vid);setCart(p=>p.map(c=>c.product.id===pid&&c.variant?.id===vid?{...c,quantity:q}:c));};
+  const updateQty=(pid,vid,q)=>{if(q<1)return removeFromCart(pid,vid);
+    // Baisse de quantité = retrait partiel : tracé comme une suppression de ligne (NF525)
+    const ligne=cart.find(c=>c.product.id===pid&&c.variant?.id===vid);
+    if(ligne&&q<ligne.quantity){const txt=`Quantité réduite ${ligne.quantity} → ${q} : ${decrireLigne(ligne,ligne.quantity-q)}`;addAudit("VOID_LINE",txt,pid);addJET("VOID_LINE",txt);}
+    setCart(p=>p.map(c=>c.product.id===pid&&c.variant?.id===vid?{...c,quantity:q}:c));};
   // Remise de ligne cumulable : pct (%) puis amt (euros TTC sur la ligne entiere)
   const updateItemDisc=(pid,vid,pct,amt)=>setCart(p=>p.map(c=>c.product.id===pid&&c.variant?.id===vid
     ?{...c,discountPercent:Number(pct)||0,discountAmount:Number(amt)||0,
       // champs historiques maintenus pour les paniers suspendus et les anciens tickets
       discount:Number(pct)||0,discountType:"percent"}
     :c));
-  const clearCart=()=>{setCart([]);setGDiscPct(0);setGDiscAmt(0);setSelCust(null);setPromoCode("");setSelectedAvoir(null);setSaleNote("");};
+  // « Vider » = annulation du panier : tracée comme VOID_SALE (avant : aucune trace)
+  const clearCart=(reason)=>{if(cart.length){const txt=`Panier vidé : ${cart.length} ligne(s) — ${cart.map(c=>decrireLigne(c)).join(" ; ")}${reason?` — Motif: ${reason}`:""}`;
+      addAudit("VOID_SALE",txt);addJET("VOID_SALE",txt);}
+    setCart([]);setGDiscPct(0);setGDiscAmt(0);setSelCust(null);setPromoCode("");setSelectedAvoir(null);setSaleNote("");};
   const setCartGD=(pct,amt)=>{setGDiscPct(Number(pct)||0);setGDiscAmt(Number(amt)||0);};
 
   // Park — backend-first avec cache localStorage
   const parkCart=useCallback(async()=>{if(!cart.length)return;
-    const parkedData={name:`Panier ${new Date().toLocaleString("fr-FR")}`,items:cart.map(i=>({productId:i.product?.id,variantId:i.variant?.id,productName:i.product?.name,variantColor:i.variant?.color,variantSize:i.variant?.size,quantity:i.quantity,price:i.product?.price,discount:i.discountPercent||i.discount||0,discountType:"percent",discountPercent:i.discountPercent||0,discountAmount:i.discountAmount||0})),
+    const parkedData={name:`Panier ${new Date().toLocaleString("fr-FR")}`,items:cart.map(i=>({productId:i.product?.id,variantId:i.variant?.id,productName:i.product?.name,variantColor:i.variant?.color,variantSize:i.variant?.size,quantity:i.quantity,price:i.product?.price,discount:i.discountPercent||i.discount||0,discountType:"percent",discountPercent:i.discountPercent||0,discountAmount:i.discountAmount||0,
+      // de quoi reconstruire la ligne a l'identique (articles divers / retouches compris)
+      taxRate:i.product?.taxRate,isCustom:!!i.isCustom,sku:i.product?.sku||"",category:i.product?.category||"",costPrice:i.product?.costPrice||0,ean:i.variant?.ean||""})),
       // Le client et la remise panier etaient perdus au rechargement (pas envoyes / mauvais nom de champ)
       customerId:selCust?.id||null,globalDiscountPct:gDiscPct||0,globalDiscountAmount:gDiscAmt||0};
     let newParked;
     try{const saved=await API.parked.save(parkedData);newParked={id:saved.id,date:saved.created_at||new Date().toISOString(),items:[...cart],customer:selCust,gDiscPct,gDiscAmt};}
-    catch(e){newParked={id:Date.now(),date:new Date().toISOString(),items:[...cart],customer:selCust,gDiscPct,gDiscAmt};addPendingSync({type:"parkCart",data:parkedData});}
+    catch(e){
+      // Refus du serveur : le panier reste en caisse (rien n'est mis en attente en silence)
+      if(!(e instanceof TypeError)){notify("Mise en attente refusée : "+e.message,"error");return;}
+      newParked={id:Date.now(),local:true,date:new Date().toISOString(),items:[...cart],customer:selCust,gDiscPct,gDiscAmt};addPendingSync({type:"parkCart",data:parkedData});}
     setParked(p=>[...p,newParked]);setCart([]);setGDiscPct(0);setGDiscAmt(0);setSelCust(null);addAudit("PARK","Panier mis en attente");
-  },[cart,selCust,gDiscPct,gDiscAmt,addAudit,addPendingSync]);
-  const restoreCart=useCallback(async(id)=>{const pk=parked.find(p=>p.id===id);if(!pk)return;if(cart.length)await parkCart();
-    setCart(pk.items);setGDiscPct(pk.gDiscPct??(pk.gDiscType==="percentage"?pk.gDisc:0)??0);
+  },[cart,selCust,gDiscPct,gDiscAmt,addAudit,addPendingSync,notify]);
+  const restoreCart=useCallback(async(id)=>{const pk=parked.find(p=>p.id===id);if(!pk)return;
+    // Réservation auprès du SERVEUR d'abord (suppression atomique) : si une autre caisse l'a déjà
+    // repris, on ne le charge pas (avant : erreur ignorée -> même panier vendu sur deux caisses).
+    if(!pk.local){try{await API.parked.remove(id);}
+      catch(e){if(!(e instanceof TypeError)){setParked(p=>p.filter(x=>x.id!==id));notify("Ce panier a déjà été repris sur une autre caisse (ou supprimé)","warn");return;}}}
+    if(cart.length)await parkCart();
+    setCart((pk.items||[]).map(it=>ligneDepuisAttente(it,products)));setGDiscPct(pk.gDiscPct??(pk.gDiscType==="percentage"?pk.gDisc:0)??0);
     setGDiscAmt(pk.gDiscAmt??(pk.gDiscType==="amount"?pk.gDisc:0)??0);
     // Client : la fiche complete (points, niveau...) est retrouvee par son id
     setSelCust(pk.customer||(pk.customerId?customers.find(c=>c.id===pk.customerId)||null:null));
     setParked(p=>p.filter(x=>x.id!==id));
-    try{await API.parked.remove(id);}catch(e){/* Le panier etait peut-etre local seulement */}
-    addAudit("RESTORE","Panier restaure");},[parked,cart,parkCart,addAudit,customers]);
-  const removeParked=useCallback(async(id)=>{setParked(p=>p.filter(x=>x.id!==id));try{await API.parked.remove(id);}catch(e){console.warn("Suppression panier suspendu échouée:",e.message);}addAudit("PARK_DELETE","Panier en attente supprime");},[addAudit]);
+    addAudit("RESTORE","Panier restaure");},[parked,cart,parkCart,addAudit,customers,products,notify]);
+  // Supprimer un panier en attente = l'abandonner : contenu tracé (audit + JET VOID_SALE)
+  const removeParked=useCallback(async(id)=>{const pk=parked.find(x=>x.id===id);
+    if(!pk?.local){try{await API.parked.remove(id);}catch(e){if(!(e instanceof TypeError)){notify("Suppression refusée : "+e.message,"error");return;}}}
+    setParked(p=>p.filter(x=>x.id!==id));
+    const txt=`Panier en attente supprimé : ${(pk?.items||[]).length} ligne(s) — ${(pk?.items||[]).map(it=>`${it.product?.name||it.productName||"?"} ×${it.quantity}`).join(" ; ")}`;
+    addAudit("PARK_DELETE",txt);addJET("VOID_SALE",txt);},[addAudit,addJET,parked,notify]);
 
   // ══ PROMO ENGINE ══
   // Bornes en JOUR local « AAAA-MM-JJ » : start_day/end_day (serveur), sinon les 10 premiers
