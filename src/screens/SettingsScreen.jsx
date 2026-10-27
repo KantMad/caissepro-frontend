@@ -1062,7 +1062,7 @@ function SettingsScreen(){
           background:tab===t.id?C.primary:"transparent",color:tab===t.id?"#fff":C.text,fontSize:11,fontWeight:600,cursor:"pointer"}}>{t.l}</button>))}</div>
 
     {tab==="general"&&<div style={{maxWidth:500}}>
-      {[{l:"Nom boutique",k:"name"},{l:"Adresse",k:"address"},{l:"Code postal",k:"postalCode"},{l:"Ville",k:"city"},{l:"SIRET",k:"siret"},{l:"N° TVA Intra",k:"tvaIntra"},{l:"Téléphone",k:"phone"},{l:"Message ticket",k:"footerMsg"}].map(f=>(
+      {[{l:"Nom boutique",k:"name"},{l:"Adresse",k:"address"},{l:"Code postal",k:"postalCode"},{l:"Ville",k:"city"},{l:"SIRET",k:"siret"},{l:"N° TVA Intra",k:"tvaIntra"},{l:"Téléphone",k:"phone"},{l:"Forme juridique (factures)",k:"legalForm"},{l:"Capital social (factures)",k:"capital"},{l:"Message ticket",k:"footerMsg"}].map(f=>(
         <div key={f.k} style={{marginBottom:10}}><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>{f.l}</label>
           <Input value={settings[f.k]||""} onChange={e=>setSettings(s=>({...s,[f.k]:e.target.value}))}/></div>))}
       {/* Borne basse des stats, FEC, exports et journees a cloturer (ventes d'essai d'avant).
@@ -1151,7 +1151,9 @@ function SettingsScreen(){
           <strong>Important :</strong> Ce réglage s'applique à tous vos produits. Si vous changez de TTC à HT (ou inversement),
           vérifiez que vos prix sont bien cohérents. Les prix existants ne sont pas recalculés automatiquement —
           seul le calcul de la TVA sur les tickets change.</div></div>
-    </div>}
+    <Btn onClick={()=>{saveSettingsNotify(settings,"Mode de prix");addAudit("CONFIG",`Mode de prix : ${settings.pricingMode||"TTC"}`);}} style={{width:"100%",height:40,marginTop:12,background:C.primary}}><Save size={14}/> Enregistrer le mode de prix</Btn>
+      {/* Avant : aucun bouton, le mode n'allait qu'en mémoire locale -> deux caisses pouvaient calculer HT/TVA différemment */}
+</div>}
 
     {tab==="commission"&&(()=>{
       const setNum=(field,key,val)=>setSettings(s=>({...s,[field]:{...s[field],[key]:val===""?undefined:parseFloat(val)}}));

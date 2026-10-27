@@ -348,7 +348,9 @@ function DashOverview(){
 
 /* ══════════ TVA MANAGEMENT ══════════ */
 function TVAScreen(){
-  const{tvaRates,setTvaRates,addAudit,notify}=useApp();
+  const{tvaRates,setTvaRates:setTvaRatesLocal,addAudit,notify,settings,saveSettingsNotify}=useApp();
+  // Taux enregistrés côté serveur (réglages du magasin) — avant : état React seul, perdus au rechargement
+  const setTvaRates=(f)=>{const next=typeof f==="function"?f(tvaRates):f;setTvaRatesLocal(next);saveSettingsNotify({...settings,tvaRates:next},"Taux de TVA");};
   const[newLabel,setNewLabel]=useState("");const[newRate,setNewRate]=useState("");
   const[editId,setEditId]=useState(null);const[editLabel,setEditLabel]=useState("");const[editRate,setEditRate]=useState("");
   const addRate=()=>{if(!newLabel||!newRate)return;const r=parseFloat(newRate);if(isNaN(r))return;

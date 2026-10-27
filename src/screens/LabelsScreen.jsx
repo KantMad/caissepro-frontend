@@ -47,7 +47,7 @@ function LabelsScreen() {
       const hit = prev.find(l => l.key === key);
       if (hit) return prev.map(l => l.key === key ? { ...l, qty: l.qty + qty } : l);
       return [...prev, { key, productName: p.name, sku: p.sku, color: v.color,
-        colorCode: v.colorCode || v.color_code, size: v.size, ean: v.ean, price: p.price, qty }];
+        colorCode: v.colorCode || v.color_code, size: v.size, ean: v.ean, price: p.price, taxRate: p.taxRate, qty }];
     });
   };
 
@@ -61,7 +61,7 @@ function LabelsScreen() {
       if (!hit) {
         // l'API renvoie le produit A PLAT avec les champs de la variante (variant_id, color, size…)
         const r = await API.products.findByEAN(c).catch(() => null);
-        if (r?.ean) hit = { product: { name: r.name, sku: r.sku, price: Number(r.price) },
+        if (r?.ean) hit = { product: { name: r.name, sku: r.sku, price: Number(r.price), taxRate: Number(r.tax_rate) || 0.20 },
           variant: { id: r.variant_id, color: r.color, colorCode: r.color_code, size: r.size, ean: r.ean, stock: r.stock } };
       }
       if (hit) { addLine(hit.product, hit.variant); notify(`${hit.product.name} ajouté`, "success"); }
@@ -220,7 +220,7 @@ function LabelsScreen() {
               {opts.colorSize && <div style={{ fontSize: 9, color: "#333" }}>{lines[0].color} / {lines[0].size}</div>}
               {opts.sku && <div style={{ fontSize: 9, fontFamily: "monospace", color: "#555" }}>{lines[0].sku}</div>}
               <EAN13Svg code={lines[0].ean} width={140} height={40} />
-              {opts.price && <div style={{ fontSize: 12, fontWeight: 800 }}>{Number(lines[0].price).toFixed(2)}€</div>}
+              {opts.price && <div style={{ fontSize: 12, fontWeight: 800 }}>{(settings?.pricingMode === "HT" ? Number(lines[0].price) * (1 + (Number(lines[0].taxRate) || 0.20)) : Number(lines[0].price)).toFixed(2)}€</div>}
             </div></div>}
 
           <Btn onClick={doPrint} disabled={!total} style={{ width: "100%", height: 44, background: C.primary, gap: 8 }}>

@@ -320,6 +320,8 @@ export function buildLabelsHtml(lignes, opts = {}) {
   const { w, h, l: fmtLabel } = labelSize(opts);
   const rouleau = (opts.mode || "roll") === "roll";
   const pm = opts.pricingMode === "HT" ? "HT" : "TTC";
+  // Prix affiché en rayon = TTC (prix payé par le consommateur), même si la boutique saisit en HT
+  const prixEtiquette = (l) => pm === "HT" ? Number(l.price) * (1 + (Number(l.taxRate) || 0.20)) : Number(l.price);
   const cards = [];
   let ignorees = 0;
   for (const l of lignes) {
@@ -333,7 +335,7 @@ export function buildLabelsHtml(lignes, opts = {}) {
       ${opts.sku && l.sku ? `<div class="sku">${escapeHtml(l.sku)}</div>` : ""}
       <svg viewBox="0 0 100 30" preserveAspectRatio="none" style="width:${bcW}mm;height:${bcH}mm">${rects}</svg>
       <div class="ean">${escapeHtml(l.ean)}</div>
-      ${opts.price && l.price != null ? `<div class="prix">${Number(l.price).toFixed(2)}€ ${pm}</div>` : ""}
+      ${opts.price && l.price != null ? `<div class="prix">${prixEtiquette(l).toFixed(2)}€</div>` : ""}
     </div>`;
     for (let i = 0; i < Math.max(1, l.qty || 1); i++) cards.push(card);
   }

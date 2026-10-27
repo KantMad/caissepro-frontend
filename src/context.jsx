@@ -204,6 +204,8 @@ function AppProvider({children}){
     }catch(e){console.warn("Chargement mouvements caisse échoué:",e.message);return[];}
   },[]);
   const[tvaRates,setTvaRates]=useState([...DEFAULT_TVA_RATES]);
+  // Taux de TVA du magasin enregistrés côté serveur (settings.tvaRates)
+  useEffect(()=>{if(Array.isArray(settings?.tvaRates)&&settings.tvaRates.length)setTvaRates(settings.tvaRates);},[settings?.tvaRates]);// eslint-disable-line react-hooks/exhaustive-deps
   useEffect(()=>{TVA_RATES=tvaRates;},[tvaRates]);
 
   const notify=useCallback((msg,type="info")=>{const id=Date.now();
@@ -873,12 +875,14 @@ function AppProvider({children}){
   _doCheckoutRef.current=_doCheckout;
 
   // Stock receipt - via API
-  const receiveStock=useCallback(async(productId,variantId,qty,supplier)=>{
+  // Renvoie true/false (l'import CSV comptait chaque ligne comme réussie). opts.lot : pas de
+  // rechargement du catalogue à chaque ligne. Audit écrit par le serveur (pas de doublon).
+  const receiveStock=useCallback(async(productId,variantId,qty,supplier,opts={})=>{
     try{await API.stock.receive({productId,variantId,quantity:qty,supplier});
-      const prods=await API.products.list();
-      setProducts(norm.products(prods));
-      addAudit("RECEPTION",`+${qty} — ${supplier}`);}catch(e){notify("Erreur: "+e.message,"error");}
-  },[addAudit]);
+      if(opts.lot)setProducts(prev=>prev.map(x=>x.id===productId?{...x,variants:x.variants.map(vr=>vr.id===variantId?{...vr,stock:(vr.stock||0)+qty}:vr)}:x));
+      else{const prods=await API.products.list();setProducts(norm.products(prods));}
+      return true;}catch(e){if(!opts.lot)notify("Réception refusée : "+e.message,"error");return false;}
+  },[]);
 
   // Stock batch receipt - via API
   const receiveBatchStock=useCallback(async(items,supplier)=>{

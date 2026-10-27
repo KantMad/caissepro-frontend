@@ -10,7 +10,7 @@ import { tauxMarque } from "../lib/formatters.js";
 import { sortSizes } from "./_shared.js";
 
 function StockScreen(){
-  const{products,setProducts,stockAlerts,stockMoves,receiveStock,receiveBatchStock,stockAging,reorderSuggestions,adjustStock,notify,findByEAN,users,addStockMove,addAudit,settings,perm,defectiveStock,loadDefectiveStock,receiveDefectiveStock,adjustDefectiveStock,setScanOverride,clearScanOverride,mode,thermalPrint,printReceiptOnly,currentStore,currentUser,stores}=useApp();
+  const{products,setProducts,stockAlerts,stockMoves,receiveStock,receiveBatchStock,stockAging,reorderSuggestions,adjustStock,notify,findByEAN,users,addStockMove,addAudit,settings,perm,defectiveStock,loadDefectiveStock,receiveDefectiveStock,adjustDefectiveStock,setScanOverride,clearScanOverride,mode,thermalPrint,printReceiptOnly,currentStore,currentUser,stores,refreshProducts}=useApp();
   // Valorisation du stock au PRIX D'ACHAT (cost_price de l'import) — DASHBOARD uniquement
   // Prix d'achat : saisi HT (confirmé le 27/10/2026), utilisé tel quel.
   const coutHT=(p)=>parseFloat(p.costPrice)||0;
@@ -21,6 +21,16 @@ function StockScreen(){
   const isDashboard=mode!=="cashier";
   if(!perm().canCreateProduct)return<div style={{padding:40,textAlign:"center",color:"#94a3b8",fontSize:16,fontWeight:600}}>Accès réservé aux administrateurs</div>;
   const[sel,setSel]=useState(products[0]?.id||"");const[tab,setTab]=useState("matrix");
+  // Mouvements : rechargés depuis le SERVEUR à l'ouverture de l'onglet, et normalisés (les lignes
+  // serveur ont d'autres noms de champs : l'onglet affichait « Invalid Date » et des colonnes vides).
+  const[mvServeur,setMvServeur]=useState(null);
+  useEffect(()=>{if(tab!=="moves")return;let annule=false;
+    API.stock.movements({limit:200}).then(r=>{if(!annule&&Array.isArray(r))setMvServeur(r);}).catch(()=>{});
+    return()=>{annule=true;};},[tab]);
+  const mouvementsAffiches=useMemo(()=>(mvServeur||stockMoves||[]).map((m,i)=>({id:m.id||i,
+    date:m.created_at||m.date,type:m.movement_type||m.type,productName:m.product_name||m.productName||"",
+    variantColor:m.color||m.variant_color||m.variantColor||"",variantSize:m.size||m.variant_size||m.variantSize||"",
+    qty:Number(m.quantity??m.qty)||0,ref:m.reference||m.ref||"",user:m.user_name||m.user||""})),[mvServeur,stockMoves]);
   // Vieillissement : date de dernière vente prise sur TOUTES les ventes (serveur), et non
   // dans les 200 derniers tickets en mémoire (tout le reste paraissait « jamais vendu »).
   const[derniereVente,setDerniereVente]=useState(null);
@@ -234,7 +244,7 @@ function StockScreen(){
         <thead><tr style={{borderBottom:`2px solid ${C.border}`}}>
           {["Date","Type","Produit","Variante","Qté","Réf","User"].map(h=>(
             <th key={h} style={{padding:6,textAlign:"left",fontSize:9,fontWeight:700,color:C.textMuted}}>{h}</th>))}</tr></thead>
-        <tbody>{stockMoves.slice(0,50).map(m=>(<tr key={m.id} style={{borderBottom:`1px solid ${C.border}`}}>
+        <tbody>{mouvementsAffiches.slice(0,100).map(m=>(<tr key={m.id} style={{borderBottom:`1px solid ${C.border}`}}>
           <td data-label="Date" style={{padding:6,fontSize:10}}>{new Date(m.date).toLocaleString("fr-FR",{day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit"})}</td>
           <td data-label="Type" style={{padding:6}}><Badge color={m.qty>0?"#059669":C.danger}>{m.type}</Badge></td>
           <td data-label="Produit" style={{padding:6,fontWeight:600}}>{m.productName}</td>
@@ -544,16 +554,16 @@ function StockScreen(){
             if(!toProcess.length){notify("Aucune ligne a traiter","warn");return;}
             setCsvStImporting(true);
             let ok=0,err=0;
+            // Compte réel des lignes acceptées par le serveur (avant : toute ligne comptait « traitée »)
             for(const r of toProcess){
               try{
-                if(csvStMode==="add"){
-                  await receiveStock(r.match.product.id,r.match.variant.id,r.qty,r.supplier||"Import CSV");
-                }else{
-                  await adjustStock(r.match.product.id,r.match.variant.id,r.qty,r.supplier?`Import CSV (${r.supplier})`:"Import CSV - remplacement stock");
-                }
-                ok++;
-              }catch(e){err++;console.warn("Stock import error:",e.message);}
+                const reussi=csvStMode==="add"
+                  ?await receiveStock(r.match.product.id,r.match.variant.id,r.qty,r.supplier||"Import CSV",{lot:true})
+                  :await adjustStock(r.match.product.id,r.match.variant.id,r.qty,r.supplier?`Import CSV (${r.supplier})`:"Import CSV - remplacement stock",{lot:true});
+                if(reussi)ok++;else err++;
+              }catch(e){err++;}
             }
+            refreshProducts();
             setCsvStImporting(false);
             setCsvStResult({ok,err,total:toProcess.length});
             addAudit("STOCK",`Import CSV stock (${csvStMode}) — ${ok}/${toProcess.length} lignes traitees`);
