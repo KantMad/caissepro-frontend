@@ -35,9 +35,18 @@ echo "  Dossier : $SCRIPT_DIR"
 echo "  Branche : $BRANCH"
 
 # Récupère la dernière version (le serveur doit toujours refléter le repo)
-git fetch origin
-BEFORE="$(git rev-parse HEAD)"
-git reset --hard "origin/$BRANCH"
+# Si deploy.sh lui-meme change, il se relance : bash lit le script au fil de l'eau, la nouvelle
+# version ne servait sinon qu'au deploiement suivant.
+if [ "${1:-}" = "--apres-maj" ]; then
+  BEFORE="$2"
+else
+  git fetch origin
+  BEFORE="$(git rev-parse HEAD)"
+  git reset --hard "origin/$BRANCH"
+  if ! git diff --quiet "$BEFORE" HEAD -- deploy.sh; then
+    exec bash "$SCRIPT_DIR/deploy.sh" --apres-maj "$BEFORE"
+  fi
+fi
 AFTER="$(git rev-parse HEAD)"
 
 if [ "$BEFORE" = "$AFTER" ]; then
