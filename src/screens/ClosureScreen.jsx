@@ -9,7 +9,7 @@ import { dayKey } from "../lib/dates.js";
 import { formatAmount, libelleCloture } from "../lib/formatters.js";
 
 function ClosureScreen(){
-  const{tickets,cashReg,closures,createClosure,gt,closeReg,perm:p,avoirs,settings,printerConnected,thermalPrint,notify,trainingMode,mode,cashMovements,pendingSync}=useApp();
+  const{tickets,cashReg,closures,createClosure,gt,closeReg,perm:p,avoirs,settings,printerConnected,thermalPrint,notify,trainingMode,mode,cashMovements,pendingSync,retrySync,isOnline}=useApp();
   const[aCash,setACash]=useState("");const[aCard,setACard]=useState("");
   const[reportModal,setReportModal]=useState(null);
   const[denomMode,setDenomMode]=useState(false);
@@ -83,6 +83,22 @@ function ClosureScreen(){
       <div style={{fontSize:12,color:"#92400E",lineHeight:1.5}}>
         {ciblePending?.ticket_count} ticket(s) — {Number(ciblePending?.total_ttc||0).toFixed(2)} € TTC. La clôture ci‑dessous
         porte sur <b>cette journée</b>, pas sur aujourd'hui. Comptez le tiroir tel qu'il était à la fermeture.</div></div>}
+    {/* Ventes hors-ligne pas encore reçues par le serveur : elles BLOQUENT le Z (il les oublierait).
+        Avant : un simple message au clic, sans la cause ni moyen de relancer (MCS, 27/10/2026). */}
+    {(()=>{const enFile=(pendingSync||[]).filter(a=>a.type==="offlineSale");if(!enFile.length)return null;
+      return(<div data-testid="ventes-en-attente" style={{background:"#FEF2F2",border:`1.5px solid ${C.danger}55`,borderRadius:12,padding:14,marginBottom:14}}>
+        <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap",marginBottom:8}}>
+          <div style={{flex:1,minWidth:220}}>
+            <div style={{fontSize:13,fontWeight:800,color:C.danger}}>{enFile.length} vente(s) hors-ligne pas encore envoyée(s) au serveur</div>
+            <div style={{fontSize:11,color:C.textMuted}}>Le Z est bloqué tant qu'elles ne sont pas enregistrées. {isOnline?"Nouvel essai automatique toutes les 45 s.":"Pas de connexion internet pour l'instant."}</div></div>
+          <Btn variant="outline" onClick={()=>{retrySync();notify("Nouvel essai d'envoi en cours…","info");}} disabled={!isOnline} style={{minHeight:34,fontSize:12}}>Réessayer l'envoi</Btn></div>
+        {enFile.map((a,k)=>{const d=a.data||{};return(<div key={d.clientSaleId||k} style={{display:"flex",gap:10,alignItems:"baseline",padding:"6px 0",borderTop:`1px solid ${C.danger}22`,fontSize:12,flexWrap:"wrap"}}>
+          <span style={{fontWeight:700}}>{d.offlineTicketNumber||"Vente hors-ligne"}</span>
+          <span>{d.offlineDate?new Date(d.offlineDate).toLocaleString("fr-FR"):""}</span>
+          <span style={{fontWeight:700}}>{Number(d.totalTTC||0).toFixed(2)} €</span>
+          <span style={{color:C.textMuted}}>{a.retries?`${a.retries} essai(s)`:"pas encore essayée"}</span>
+          {a.lastError&&<span style={{color:C.danger,flexBasis:"100%"}}>Réponse du serveur : {a.lastError}</span>}</div>);})}
+      </div>);})()}
     {/* Z mensuel du mois terminé encore à faire (ou à compléter) : signalé par le serveur, mêmes
         règles que le contrôle d'instance (mise en service, Z fait trop tôt). */}
     {pending?.monthly&&<div data-testid="z-mensuel-attente" style={{background:C.fiscalLight||"#FFF7ED",border:`1px solid ${C.fiscal}`,borderRadius:12,padding:14,marginBottom:14,display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>

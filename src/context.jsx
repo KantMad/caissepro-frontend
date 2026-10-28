@@ -341,6 +341,12 @@ function AppProvider({children}){
   // Une seule synchronisation à la fois (avant : un 2e passage pouvait démarrer sur la même file
   // et renvoyer la même vente — doublon fiscal).
   const syncEnCours=useRef(false);
+  // Relance PÉRIODIQUE : l'effet ne se redéclenchait que si le NOMBRE d'éléments changeait ; une
+  // vente dont l'envoi avait échoué une fois restait bloquée jusqu'au rechargement — et le Z était
+  // refusé (« vente(s) hors-ligne pas encore envoyée(s) », MCS, 27/10/2026).
+  const[syncTick,setSyncTick]=useState(0);
+  const retrySync=useCallback(()=>setSyncTick(t=>t+1),[]);
+  useEffect(()=>{if(!pendingSync.length)return;const t=setInterval(()=>setSyncTick(x=>x+1),45000);return()=>clearInterval(t);},[pendingSync.length]);
   useEffect(()=>{if(!isOnline||!pendingSync.length||!API.getToken())return;
     // Debounce — ne pas retenter en boucle
     const timer=setTimeout(async()=>{if(syncEnCours.current)return;syncEnCours.current=true;
@@ -394,7 +400,7 @@ function AppProvider({children}){
       }finally{syncEnCours.current=false;}
     },2000);// 2s debounce
     return()=>clearTimeout(timer);
-  },[isOnline,pendingSync.length]);// eslint-disable-line react-hooks/exhaustive-deps
+  },[isOnline,pendingSync.length,syncTick]);// eslint-disable-line react-hooks/exhaustive-deps
 
   // NF525: JET — Journal des Événements Techniques conforme
   // Champs requis: ID, ID_SOC, ID_CAISSE, NUMERO_JET, CODE_JET, DESCRIPTIF, CODE_UTIL, TYPE_JET, DATETIME, INFO, SIGNATURE
@@ -2060,7 +2066,7 @@ function AppProvider({children}){
     hwId,hwProfile,switchHardware,hardwareProfiles:hardwareManager.profiles,
     paymentId,paymentConfig,switchPayment,updatePaymentConfig,chargePayment,refundPayment,
     paymentProfiles:hardwareManager.paymentProfiles,
-    users,setUsers,tvaRates,setTvaRates,addPendingSync,pendingSync,clearPendingSync,
+    users,setUsers,tvaRates,setTvaRates,addPendingSync,pendingSync,clearPendingSync,retrySync,
     trainingMode,setTrainingMode,trainingInfo,
     cartTotals,allCategories,
     scanBarcode,setScanBarcode,
