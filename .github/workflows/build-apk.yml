@@ -25,6 +25,10 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # Aucun APK publie si un test echoue (avant le 28/10/2026, l'APK partait meme CI rouge).
+      - name: Tests (bloquent la publication)
+        run: npm run test
+
       - name: Build web app
         run: npm run build
 
