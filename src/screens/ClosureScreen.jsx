@@ -110,7 +110,7 @@ function ClosureScreen(){
       <SC icon={Banknote} label="Espèces" value={`${cash.toFixed(2)}€`} color={C.primary}/>
       <SC icon={CreditCard} label="Carte" value={`${card.toFixed(2)}€`} color={C.info}/>
       {mode!=="cashier"&&<SC icon={TrendingUp} label="Marge" value={`${formatAmount(totalMargin)}€`} color="#059669"/>}
-      <SC icon={RotateCcw} label="Retours" value={`-${totalReturns.toFixed(2)}€`} color={C.danger}/></div>
+      <SC icon={RotateCcw} label="Retours" value={totalReturns>0.004?`-${totalReturns.toFixed(2)}€`:"0.00€"} color={C.danger}/></div>
 
     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>
       <div style={{background:C.fiscalLight,borderRadius:10,padding:10,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
@@ -124,31 +124,31 @@ function ClosureScreen(){
       <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14}}>
         <span style={{fontSize:14,fontWeight:700}}>Comptage espèces</span>
         <div style={{display:"flex",gap:6,marginLeft:"auto"}}>
-          <button onClick={()=>setDenomMode(false)} style={{padding:"6px 14px",borderRadius:8,border:`1.5px solid ${!denomMode?C.accent:C.border}`,background:!denomMode?C.accentLight:"transparent",
-            cursor:"pointer",fontSize:11,fontWeight:600,color:!denomMode?C.accent:C.textMuted}}>Montant rapide</button>
-          <button onClick={()=>{setDenomMode(true);const o={};[...bills,...coins].forEach(d=>o[d]=0);setDenomCounts(o);}} style={{padding:"6px 14px",borderRadius:8,border:`1.5px solid ${denomMode?C.accent:C.border}`,background:denomMode?C.accentLight:"transparent",
-            cursor:"pointer",fontSize:11,fontWeight:600,color:denomMode?C.accent:C.textMuted}}>Compter les coupures</button></div></div>
+          <button onClick={()=>setDenomMode(false)} style={{padding:"0 16px",minHeight:36,borderRadius:8,border:`1.5px solid ${!denomMode?C.accent:C.border}`,background:!denomMode?C.accentLight:"transparent",
+            cursor:"pointer",fontSize:13,fontWeight:600,color:!denomMode?C.accent:C.textMuted}}>Montant rapide</button>
+          <button onClick={()=>{setDenomMode(true);const o={};[...bills,...coins].forEach(d=>o[d]=0);setDenomCounts(o);}} style={{padding:"0 16px",minHeight:36,borderRadius:8,border:`1.5px solid ${denomMode?C.accent:C.border}`,background:denomMode?C.accentLight:"transparent",
+            cursor:"pointer",fontSize:13,fontWeight:600,color:denomMode?C.accent:C.textMuted}}>Compter les coupures</button></div></div>
 
       {denomMode?<>
         <div style={{marginBottom:10}}>
           <div style={{fontSize:11,fontWeight:700,color:C.textMuted,marginBottom:6}}>BILLETS</div>
           <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:6}}>
             {bills.map(d=>(<div key={d} style={{display:"flex",alignItems:"center",gap:4,padding:"6px 8px",borderRadius:10,border:`1.5px solid ${denomCounts[d]>0?C.accent:C.border}`,background:denomCounts[d]>0?C.accentLight+"60":"transparent"}}>
-              <span style={{fontSize:10,fontWeight:700,color:C.accent,minWidth:36}}>{d}€</span>
-              <span style={{fontSize:9,color:C.textMuted}}>×</span>
-              <input type="number" min="0" value={denomCounts[d]||""} onChange={e=>setDenom(d,e.target.value)}
-                style={{width:40,padding:"3px 4px",borderRadius:6,border:`1px solid ${C.border}`,fontSize:12,fontWeight:700,textAlign:"center",fontFamily:"inherit"}}/>
-              <span style={{fontSize:9,color:C.textMuted,marginLeft:"auto"}}>{formatAmount(d*(denomCounts[d]||0))}€</span>
+              <span style={{fontSize:13,fontWeight:800,color:C.accent,minWidth:40}}>{d}€</span>
+              <span style={{fontSize:12,color:C.textMuted}}>×</span>
+              <input type="number" min="0" inputMode="numeric" value={denomCounts[d]||""} onChange={e=>setDenom(d,e.target.value)}
+                style={{width:54,height:34,padding:"3px 4px",borderRadius:8,border:`1px solid ${C.border}`,fontSize:15,fontWeight:700,textAlign:"center",fontFamily:"inherit"}}/>
+              <span style={{fontSize:11,color:C.textMuted,marginLeft:"auto"}}>{formatAmount(d*(denomCounts[d]||0))}€</span>
             </div>))}</div></div>
         <div style={{marginBottom:10}}>
           <div style={{fontSize:11,fontWeight:700,color:C.textMuted,marginBottom:6}}>PIÈCES</div>
           <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:6}}>
             {coins.map(d=>(<div key={d} style={{display:"flex",alignItems:"center",gap:4,padding:"6px 8px",borderRadius:10,border:`1.5px solid ${denomCounts[d]>0?C.info:C.border}`,background:denomCounts[d]>0?`${C.info}10`:"transparent"}}>
-              <span style={{fontSize:10,fontWeight:700,color:C.info,minWidth:36}}>{d>=1?d+"€":(d*100).toFixed(0)+"c"}</span>
-              <span style={{fontSize:9,color:C.textMuted}}>×</span>
-              <input type="number" min="0" value={denomCounts[d]||""} onChange={e=>setDenom(d,e.target.value)}
-                style={{width:40,padding:"3px 4px",borderRadius:6,border:`1px solid ${C.border}`,fontSize:12,fontWeight:700,textAlign:"center",fontFamily:"inherit"}}/>
-              <span style={{fontSize:9,color:C.textMuted,marginLeft:"auto"}}>{(d*(denomCounts[d]||0)).toFixed(2)}€</span>
+              <span style={{fontSize:13,fontWeight:800,color:C.info,minWidth:40}}>{d>=1?d+"€":(d*100).toFixed(0)+"c"}</span>
+              <span style={{fontSize:12,color:C.textMuted}}>×</span>
+              <input type="number" min="0" inputMode="numeric" value={denomCounts[d]||""} onChange={e=>setDenom(d,e.target.value)}
+                style={{width:54,height:34,padding:"3px 4px",borderRadius:8,border:`1px solid ${C.border}`,fontSize:15,fontWeight:700,textAlign:"center",fontFamily:"inherit"}}/>
+              <span style={{fontSize:11,color:C.textMuted,marginLeft:"auto"}}>{(d*(denomCounts[d]||0)).toFixed(2)}€</span>
             </div>))}</div></div>
         <div style={{background:C.accentLight,borderRadius:14,padding:14,marginBottom:10,display:"flex",justifyContent:"space-between",alignItems:"center",border:`1px solid ${C.accent}22`}}>
           <span style={{fontSize:14,fontWeight:700,color:C.accent}}>Total coupures</span>

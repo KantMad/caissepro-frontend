@@ -33,23 +33,23 @@ function AuditScreen(){
       {storeName&&<Badge color={C.primary}>{storeName}</Badge>}
       <div style={{display:"flex",gap:4,marginLeft:8}}>
         {[{id:"audit",l:"Audit"},{id:"jet",l:"JET (NF525)"}].map(t=>(
-          <button key={t.id} onClick={()=>{setTab(t.id);setPage(0);}} style={{padding:"5px 12px",borderRadius:8,border:`1.5px solid ${tab===t.id?C.fiscal:C.border}`,
-            background:tab===t.id?C.fiscalLight:"transparent",cursor:"pointer",fontSize:11,fontWeight:600,color:tab===t.id?C.fiscal:C.textMuted}}>{t.l}</button>))}</div>
+          <button key={t.id} onClick={()=>{setTab(t.id);setPage(0);}} style={{padding:"0 14px",minHeight:34,borderRadius:8,border:`1.5px solid ${tab===t.id?C.fiscal:C.border}`,
+            background:tab===t.id?C.fiscalLight:"transparent",cursor:"pointer",fontSize:12,fontWeight:600,color:tab===t.id?C.fiscal:C.textMuted}}>{t.l}</button>))}</div>
       <select value={filterUser} onChange={e=>setFilterUser(e.target.value)} style={{padding:6,borderRadius:8,border:`1.5px solid ${C.border}`,fontSize:11,fontFamily:"inherit",marginLeft:"auto"}}>
         <option value="">Tous les utilisateurs</option>{users.map(u=>(<option key={u} value={u}>{u}</option>))}</select>
       <Btn variant="outline" onClick={()=>{const data=filtered.map(e=>({date:e.date,action:e.action||e.type,detail:e.detail,ref:e.ref||"",user:e.user}));
         exportCSVReport(data,`${tab}-${dayKey()}.csv`);}} style={{height:32,fontSize:10}}><Download size={12}/> Export</Btn></div>
     {!filtered.length&&<div style={{textAlign:"center",padding:30,color:C.textLight}}>Aucune entrée</div>}
-    {tab==="audit"&&pageData.map(e=>(<div key={e.id} style={{display:"flex",alignItems:"start",gap:8,padding:6,borderBottom:`1px solid ${C.border}`}}>
+    {tab==="audit"&&pageData.map(e=>(<div key={e.id} style={{display:"flex",alignItems:"start",gap:8,padding:"8px 6px",borderBottom:`1px solid ${C.border}`}}>
       <div style={{width:6,height:6,borderRadius:3,marginTop:5,background:ac[e.action]||C.textMuted,flexShrink:0}}/>
-      <div style={{flex:1}}><Badge color={ac[e.action]||C.textMuted}>{e.action}</Badge> <span style={{fontSize:10,color:C.textMuted}}>{e.user}</span>
-        <div style={{fontSize:10,marginTop:1}}>{e.detail}</div></div>
-      <span style={{fontSize:8,color:C.textLight,whiteSpace:"nowrap"}}>{new Date(e.date).toLocaleString("fr-FR")}</span></div>))}
-    {tab==="jet"&&pageData.map(e=>(<div key={e.id} style={{display:"flex",alignItems:"start",gap:8,padding:6,borderBottom:`1px solid ${C.border}`}}>
+      <div style={{flex:1}}><Badge color={ac[e.action]||C.textMuted}>{e.action}</Badge> <span style={{fontSize:12,color:C.textMuted}}>{e.user}</span>
+        <div style={{fontSize:12,marginTop:2}}>{e.detail}</div></div>
+      <span style={{fontSize:11,color:C.textLight,whiteSpace:"nowrap"}}>{new Date(e.date).toLocaleString("fr-FR")}</span></div>))}
+    {tab==="jet"&&pageData.map(e=>(<div key={e.id} style={{display:"flex",alignItems:"start",gap:8,padding:"8px 6px",borderBottom:`1px solid ${C.border}`}}>
       <div style={{width:6,height:6,borderRadius:3,marginTop:5,background:jc[e.type]||C.textMuted,flexShrink:0}}/>
-      <div style={{flex:1}}><Badge color={jc[e.type]||C.fiscal}>{e.type}</Badge> <span style={{fontSize:10,color:C.textMuted}}>{e.user}</span>
-        <div style={{fontSize:10,marginTop:1}}>{e.detail}</div></div>
-      <span style={{fontSize:8,color:C.textLight,whiteSpace:"nowrap"}}>{new Date(e.date).toLocaleString("fr-FR")}</span></div>))}
+      <div style={{flex:1}}><Badge color={jc[e.type]||C.fiscal}>{e.type}</Badge> <span style={{fontSize:12,color:C.textMuted}}>{e.user}</span>
+        <div style={{fontSize:12,marginTop:2}}>{e.detail}</div></div>
+      <span style={{fontSize:11,color:C.textLight,whiteSpace:"nowrap"}}>{new Date(e.date).toLocaleString("fr-FR")}</span></div>))}
     {totalPages>1&&<div style={{display:"flex",gap:6,justifyContent:"center",marginTop:12}}>
       <Btn variant="outline" disabled={page===0} onClick={()=>setPage(p=>p-1)} style={{height:28,fontSize:10}}>← Précédent</Btn>
       <span style={{fontSize:11,color:C.textMuted,alignSelf:"center"}}>{page+1} / {totalPages}</span>

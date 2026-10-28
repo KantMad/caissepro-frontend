@@ -150,8 +150,8 @@ function StockScreen(){
     </div>}
     <div style={{display:"flex",gap:6,marginBottom:12}}>
       {[{id:"matrix",l:"Matrice"},{id:"reception",l:"Réception"},{id:"alerts",l:"Alertes"},{id:"moves",l:"Mouvements"},{id:"inventory",l:"Inventaire"},{id:"adjust",l:"Ajustement"},{id:"defective",l:"Défectueux"},{id:"tenues",l:"Tenues"},{id:"transfers",l:"Transferts"},{id:"aging",l:"Vieillissement"}].map(t=>(
-        <button key={t.id} onClick={()=>setTab(t.id)} style={{padding:"5px 12px",borderRadius:8,border:`1.5px solid ${tab===t.id?C.primary:C.border}`,
-          background:tab===t.id?C.primary:"transparent",color:tab===t.id?"#fff":C.text,fontSize:11,fontWeight:600,cursor:"pointer"}}>{t.l}</button>))}</div>
+        <button key={t.id} onClick={()=>setTab(t.id)} style={{padding:"0 14px",minHeight:34,borderRadius:8,border:`1.5px solid ${tab===t.id?C.primary:C.border}`,
+          background:tab===t.id?C.primary:"transparent",color:tab===t.id?"#fff":C.text,fontSize:12,fontWeight:600,cursor:"pointer"}}>{t.l}</button>))}</div>
 
     {tab==="matrix"&&<><Input value={stSearchMatrix} onChange={e=>{setStSearchMatrix(e.target.value);}} placeholder="Rechercher produit (nom, SKU, EAN)..." style={{marginBottom:6,height:32,fontSize:11,padding:"4px 10px"}}
         onKeyDown={e=>{if(e.key==="Enter"){const r=resolveEAN(stSearchMatrix.trim());if(r){setSel(r.productId);setStSearchMatrix("");notify(`${r.product.name} — ${r.variant.color}/${r.variant.size}`,"info");}}}}/>

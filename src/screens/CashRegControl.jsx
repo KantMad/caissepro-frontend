@@ -20,10 +20,10 @@ function CashRegControl({onSkip,onDone}){
             <p style={{color:C.textMuted,fontSize:12,margin:0}}>Bienvenue {currentUser?.name} — {new Date().toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long"})}</p></div></div></div>
 
       <div style={{display:"flex",gap:6,justifyContent:"center",marginBottom:14}}>
-        <button onClick={()=>setDenomMode(false)} style={{padding:"6px 14px",borderRadius:8,border:`1.5px solid ${!denomMode?C.accent:C.border}`,background:!denomMode?C.accentLight:"transparent",
-          cursor:"pointer",fontSize:11,fontWeight:600,color:!denomMode?C.accent:C.textMuted}}>Montant rapide</button>
-        <button onClick={()=>setDenomMode(true)} style={{padding:"6px 14px",borderRadius:8,border:`1.5px solid ${denomMode?C.accent:C.border}`,background:denomMode?C.accentLight:"transparent",
-          cursor:"pointer",fontSize:11,fontWeight:600,color:denomMode?C.accent:C.textMuted}}>Compter les coupures</button></div>
+        <button onClick={()=>setDenomMode(false)} style={{padding:"0 16px",minHeight:36,borderRadius:8,border:`1.5px solid ${!denomMode?C.accent:C.border}`,background:!denomMode?C.accentLight:"transparent",
+          cursor:"pointer",fontSize:13,fontWeight:600,color:!denomMode?C.accent:C.textMuted}}>Montant rapide</button>
+        <button onClick={()=>setDenomMode(true)} style={{padding:"0 16px",minHeight:36,borderRadius:8,border:`1.5px solid ${denomMode?C.accent:C.border}`,background:denomMode?C.accentLight:"transparent",
+          cursor:"pointer",fontSize:13,fontWeight:600,color:denomMode?C.accent:C.textMuted}}>Compter les coupures</button></div>
 
       {!denomMode?<>
         <label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:4,textTransform:"uppercase",letterSpacing:"0.5px"}}>Fond de caisse (€)</label>
@@ -36,19 +36,19 @@ function CashRegControl({onSkip,onDone}){
           <div style={{fontSize:11,fontWeight:700,color:C.textMuted,marginBottom:6}}>BILLETS</div>
           <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:6}}>
             {bills.map(b=>(<div key={b.v} style={{display:"flex",alignItems:"center",gap:4,padding:"6px 8px",borderRadius:10,border:`1.5px solid ${denom[b.v]>0?C.accent:C.border}`,background:denom[b.v]>0?C.accentLight+"60":"transparent"}}>
-              <span style={{fontSize:10,fontWeight:700,color:C.accent,minWidth:36}}>{b.l}</span>
-              <span style={{fontSize:9,color:C.textMuted}}>×</span>
+              <span style={{fontSize:13,fontWeight:800,color:C.accent,minWidth:40}}>{b.l}</span>
+              <span style={{fontSize:12,color:C.textMuted}}>×</span>
               <input type="number" min="0" value={denom[b.v]||""} onChange={e=>{const n=parseInt(e.target.value)||0;setDenom(d=>({...d,[b.v]:n}));}}
-                style={{width:40,padding:"3px 4px",borderRadius:6,border:`1px solid ${C.border}`,fontSize:12,fontWeight:700,textAlign:"center",fontFamily:"inherit"}}/>
+                inputMode="numeric" style={{width:54,height:34,padding:"3px 4px",borderRadius:8,border:`1px solid ${C.border}`,fontSize:15,fontWeight:700,textAlign:"center",fontFamily:"inherit"}}/>
             </div>))}</div></div>
         <div style={{marginBottom:10}}>
           <div style={{fontSize:11,fontWeight:700,color:C.textMuted,marginBottom:6}}>PIÈCES</div>
           <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:6}}>
             {coins.map(c=>(<div key={c.v} style={{display:"flex",alignItems:"center",gap:4,padding:"6px 8px",borderRadius:10,border:`1.5px solid ${denom[c.v]>0?C.info:C.border}`,background:denom[c.v]>0?`${C.info}10`:"transparent"}}>
-              <span style={{fontSize:10,fontWeight:700,color:C.info,minWidth:36}}>{c.l}</span>
-              <span style={{fontSize:9,color:C.textMuted}}>×</span>
+              <span style={{fontSize:13,fontWeight:800,color:C.info,minWidth:40}}>{c.l}</span>
+              <span style={{fontSize:12,color:C.textMuted}}>×</span>
               <input type="number" min="0" value={denom[c.v]||""} onChange={e=>{const n=parseInt(e.target.value)||0;setDenom(d=>({...d,[c.v]:n}));}}
-                style={{width:40,padding:"3px 4px",borderRadius:6,border:`1px solid ${C.border}`,fontSize:12,fontWeight:700,textAlign:"center",fontFamily:"inherit"}}/>
+                inputMode="numeric" style={{width:54,height:34,padding:"3px 4px",borderRadius:8,border:`1px solid ${C.border}`,fontSize:15,fontWeight:700,textAlign:"center",fontFamily:"inherit"}}/>
             </div>))}</div></div>
         <div style={{background:C.accentLight,borderRadius:14,padding:14,marginBottom:14,display:"flex",justifyContent:"space-between",alignItems:"center",border:`1px solid ${C.accent}22`}}>
           <span style={{fontSize:14,fontWeight:700,color:C.accent}}>Total fond de caisse</span>
