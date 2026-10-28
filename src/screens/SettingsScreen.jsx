@@ -7,6 +7,13 @@ import { DEFAULT_CAT_ICONS, getVariantOrderMap, saveVariantOrderMap, DEFAULT_SIZ
 import { Btn, Input, Badge } from "../ui.jsx";
 import { useApp } from "../context.jsx";
 import hardwareManager from "../hardware.js";
+// Copie dans le presse-papiers. navigator.clipboard est ABSENT hors HTTPS et refuse dans certaines
+// WebView Android : on retombe sur l'ancienne methode (zone de texte + copier) au lieu de planter.
+const copier=async(texte)=>{
+  try{if(navigator.clipboard?.writeText){await navigator.clipboard.writeText(texte);return true;}}catch(e){/* methode de secours */}
+  try{const t=document.createElement("textarea");t.value=texte;t.style.position="fixed";t.style.opacity="0";document.body.appendChild(t);t.select();
+    const ok=document.execCommand&&document.execCommand("copy");t.remove();return !!ok;}catch(e){return false;}
+};
 
 function SizeSettingsTab({notify}){
   const[newSizeInput,setNewSizeInput]=useState("");
@@ -972,8 +979,7 @@ function DebugPanel(){
       <Btn onClick={clearLogs} style={{height:36,background:"#334155",fontSize:11}}>Effacer logs</Btn>
       <Btn onClick={()=>{
         const text=logs.map(l=>`[${l.ts}] ${l.msg}`).join("\n");
-        if(navigator.clipboard)navigator.clipboard.writeText(text).then(()=>addLog("Logs copies!","success"));
-        else addLog("Clipboard non disponible","error");
+        copier(text).then(ok=>addLog(ok?"Logs copies!":"Clipboard non disponible",ok?"success":"error"));
       }} style={{height:36,background:"#334155",fontSize:11}}>Copier logs</Btn>
     </div>
   </div>);
@@ -1485,9 +1491,9 @@ function SettingsScreen(){
       </div>
 
       {/* TPE Configuration fields */}
-      {paymentProfiles[paymentId]?.requiresConfig&&<div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`,marginBottom:14}}>
-        <h4 style={{fontSize:13,fontWeight:700,marginBottom:10}}>Configuration {paymentProfiles[paymentId]?.name}</h4>
-        {(paymentProfiles[paymentId]?.configFields||[]).map(f=>(
+      {paymentProfiles?.[paymentId]?.requiresConfig&&<div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`,marginBottom:14}}>
+        <h4 style={{fontSize:13,fontWeight:700,marginBottom:10}}>Configuration {paymentProfiles?.[paymentId]?.name}</h4>
+        {(paymentProfiles?.[paymentId]?.configFields||[]).map(f=>(
           <div key={f.key} style={{marginBottom:10}}>
             <label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>{f.label}</label>
             {f.type==="select"?
@@ -1648,27 +1654,27 @@ function SettingsScreen(){
         <div style={{background:C.bg,borderRadius:10,padding:12,marginBottom:8}}>
           <div style={{fontSize:10,fontWeight:600,color:C.textMuted,marginBottom:2}}>URL FRONTEND</div>
           <div style={{fontSize:12,fontWeight:700,fontFamily:"monospace",wordBreak:"break-all",cursor:"pointer",color:C.primary}}
-            onClick={()=>{navigator.clipboard.writeText(window.location.origin).then(()=>notify("Copie !","info"));}}>{window.location.origin} <span style={{fontSize:9,color:C.textMuted}}>(cliquer pour copier)</span></div></div>
+            onClick={()=>{copier(window.location.origin).then(ok=>notify(ok?"Copie !":"Copie impossible : notez-le à la main",ok?"info":"warn"));}}>{window.location.origin} <span style={{fontSize:9,color:C.textMuted}}>(cliquer pour copier)</span></div></div>
         <div style={{background:C.bg,borderRadius:10,padding:12,marginBottom:8}}>
           <div style={{fontSize:10,fontWeight:600,color:C.textMuted,marginBottom:2}}>URL API BACKEND</div>
           <div style={{fontSize:12,fontWeight:700,fontFamily:"monospace",wordBreak:"break-all",cursor:"pointer",color:C.primary}}
-            onClick={()=>{const u=(import.meta.env.VITE_API_URL||"https://api.techincash.app");navigator.clipboard.writeText(u).then(()=>notify("Copie !","info"));}}>{import.meta.env.VITE_API_URL||"https://api.techincash.app"} <span style={{fontSize:9,color:C.textMuted}}>(cliquer pour copier)</span></div></div>
+            onClick={()=>{const u=(import.meta.env.VITE_API_URL||"https://api.techincash.app");copier(u).then(()=>notify("Copie !","info"));}}>{import.meta.env.VITE_API_URL||"https://api.techincash.app"} <span style={{fontSize:9,color:C.textMuted}}>(cliquer pour copier)</span></div></div>
         <div style={{background:C.bg,borderRadius:10,padding:12,marginBottom:8}}>
           <div style={{fontSize:10,fontWeight:600,color:C.textMuted,marginBottom:2}}>ID MAGASIN</div>
           <div style={{fontSize:12,fontWeight:700,fontFamily:"monospace",wordBreak:"break-all",cursor:"pointer",color:C.primary}}
-            onClick={()=>{navigator.clipboard.writeText(effectiveStoreId||"").then(()=>notify("Copie !","info"));}}>{effectiveStoreId||"Non configure"} <span style={{fontSize:9,color:C.textMuted}}>(cliquer pour copier)</span></div></div>
+            onClick={()=>{copier(effectiveStoreId||"").then(ok=>notify(ok?"Copie !":"Copie impossible : notez-le à la main",ok?"info":"warn"));}}>{effectiveStoreId||"Non configure"} <span style={{fontSize:9,color:C.textMuted}}>(cliquer pour copier)</span></div></div>
         <div style={{background:C.bg,borderRadius:10,padding:12,marginBottom:8}}>
           <div style={{fontSize:10,fontWeight:600,color:C.textMuted,marginBottom:2}}>TOKEN ECRAN (securite)</div>
           <div style={{display:"flex",alignItems:"center",gap:8}}>
             <div id="displayTokenValue" style={{fontSize:12,fontWeight:700,fontFamily:"monospace",wordBreak:"break-all",cursor:"pointer",color:C.primary,flex:1}}
-              onClick={()=>{const el=document.getElementById("displayTokenValue");if(el&&el.textContent&&el.textContent!=="Cliquez Generer")navigator.clipboard.writeText(el.textContent.replace(/ \(cliquer.*$/,"")).then(()=>notify("Token copie !","info"));}}>
+              onClick={()=>{const el=document.getElementById("displayTokenValue");if(el&&el.textContent&&el.textContent!=="Cliquez Generer")copier(el.textContent.replace(/ \(cliquer.*$/,"")).then(ok=>notify(ok?"Token copie !":"Copie impossible : notez-le à la main",ok?"info":"warn"));}}>
               {effectiveStoreId?"Cliquez Generer":"Selectionnez un magasin d'abord"}</div>
             <Btn size="sm" style={{background:C.primary,fontSize:11,whiteSpace:"nowrap"}} onClick={async()=>{
               if(!effectiveStoreId){notify("Selectionnez un magasin d'abord","warn");return;}
               try{const r=await API.customerDisplay.getToken(effectiveStoreId);
                 const el=document.getElementById("displayTokenValue");
                 if(el)el.textContent=r.token;
-                navigator.clipboard.writeText(r.token).then(()=>notify("Token genere et copie !","success"));
+                copier(r.token).then(ok=>notify(ok?"Token genere et copie !":"Token genere (copie impossible : notez-le)",ok?"success":"warn"));
               }catch(e){notify("Erreur: "+e.message,"error");}
             }}>Generer</Btn></div></div>
         <div style={{fontSize:10,color:C.textMuted,marginTop:8,lineHeight:1.5}}>

@@ -48,6 +48,7 @@ export const filterByToday = (items) => {
 // ── Clôtures : normalisation snake_case (backend) → camelCase ──
 // Le backend renvoie ticket_count/total_ttc/... ; les écrans et l'impression
 // attendent du camelCase. Sans ça, le ticket de fermeture affiche 0 partout.
+const numOuNull = (v) => (v == null || v === "" || isNaN(Number(v)) ? null : Number(v));
 export const normClosure = (c) => {
   if (!c) return c;
   const num = (...vals) => { for (const v of vals) if (v != null) return Number(v) || 0; return 0; };
@@ -61,8 +62,10 @@ export const normClosure = (c) => {
     totalMargin: num(c.totalMargin, c.total_margin),
     grandTotal: num(c.grandTotal, c.grand_total),
     expectedCash: num(c.expectedCash, c.expected_cash),
-    actualCash: c.actualCash ?? c.actual_cash ?? null,
-    actualCard: c.actualCard ?? c.actual_card ?? null,
+    // NUMERIC PostgreSQL = chaine ("1198.50") : en nombre, sinon le rapport Z plantait
+    // (« actualCash.toFixed is not a function », MCS, 28/10/2026). Non compte = null.
+    actualCash: numOuNull(c.actualCash ?? c.actual_cash),
+    actualCard: numOuNull(c.actualCard ?? c.actual_card),
     cashIn: num(c.cashIn, c.cash_in),
     cashOut: num(c.cashOut, c.cash_out),
     byPayment: c.byPayment ?? {},

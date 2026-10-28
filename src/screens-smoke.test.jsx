@@ -9,6 +9,7 @@ import React from "react";
 
 vi.mock("./printer.js", () => ({ default: { connect: vi.fn(), isConnected: () => false, disconnect: vi.fn(), on: () => () => {} } }));
 vi.mock("./hardware.js", () => ({
+  BrowserPrintAdapter: class { print() { return Promise.resolve(true); } },
   default: { init: () => "browser", currentProfile: { id: "browser" }, setHardware: vi.fn(), getActiveAdapter: () => null, detect: vi.fn(), on: () => () => {}, charge: vi.fn() },
 }));
 // Simulacre d'API avec des donnees REALISTES, au format exact du serveur :
@@ -46,9 +47,18 @@ vi.mock("./api.js", () => {
                { id: "v2", color: "Écru", color_code: "", size: "40", ean: null, stock: 0, stock_alert: 3 }] };
   const CLIENT = { id: "c1", first_name: "Inès", last_name: "Démo", email: "ines@example.com",
     phone: "0600000003", city: "Bordeaux", points: 310, total_spent: "806.09", notes: null };
-  const CLOTURE = { id: "z1", closure_number: "Z-2026-000012", total_ht: "7491.88", total_tva: "1498.37",
-    total_ttc: "8990.25", total_sales: 45, cash_expected: "1200.00", cash_counted: "1198.50",
-    created_at: "2026-10-19T19:00:00.000Z", user_name: "Admin", grand_total: "8990.25", fingerprint: "ZZZ123" };
+  // Colonnes REELLES de la table closures (RETURNING *) : NUMERIC en chaines
+  const CLOTURE = { id: "z1", closure_type: "daily", period: "2026-10-19", ticket_count: 45,
+    total_ht: "7491.88", total_tva: "1498.37", total_ttc: "8990.25", total_margin: "3100.00",
+    grand_total: "8990.25", expected_cash: "1200.00", actual_cash: "1198.50", actual_card: "5230.40",
+    cash_diff: "-1.50", fingerprint: "ZZZ123", hash: "f".repeat(64), store_id: STORE, user_id: "u1",
+    complement_index: 0, covers_from: null, created_at: "2026-10-19T19:00:00.000Z", user_name: "Admin" };
+  // Reponse de POST /api/fiscal/closure : la ligne + les details calcules
+  const Z_CREE = { ...CLOTURE, id: "z9", period: "2026-10-27", cashIn: 0, cashOut: 0, openingFloat: 200,
+    byPayment: { cash: 420.5, card: 1456.6 }, byPaymentCount: { cash: 3, card: 4 },
+    tvaByRate: [{ rate: 0.2, ht: 1564.25, tva: 312.85, ttc: 1877.1 }], bySeller: { Sophie: 1877.1 },
+    byCategory: [{ category: "Jeans", qty: 3, ttc: 600 }], discounts: { count: 1, amount: 10 },
+    cancellations: { count: 0, amount: 0 }, returns: { count: 0, amount: 0 } };
   // Z de la VEILLE fait ce matin (fermeture le lendemain / Z tardif) : cree aujourd'hui, periode = hier.
   const hier = (() => { const d = new Date(); d.setDate(d.getDate() - 1);
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; })();
@@ -70,7 +80,7 @@ vi.mock("./api.js", () => {
     products: ns({ list: liste([PRODUIT]), exportCSV: () => "http://x" }),
     customers: ns({ list: liste([CLIENT]) }),
     returns: ns({ list: liste([AVOIR]), counter: liste({ seq: 1 }) }),
-    fiscal: ns({ closures: liste([Z_HIER, CLOTURE]), tvaSummary: liste([{ rate: "20%", ventesHT: 100, ventesTVA: 20, avoirsHT: 10, avoirsTVA: 2, baseHT: 90, tva: 18 }]), counter: liste({ grand_total: "8990.25", seq: 45 }),
+    fiscal: ns({ closures: liste([Z_HIER, CLOTURE]), closure: liste(Z_CREE), tvaSummary: liste([{ rate: "20%", ventesHT: 100, ventesTVA: 20, avoirsHT: 10, avoirsTVA: 2, baseHT: 90, tva: 18 }]), counter: liste({ grand_total: "8990.25", seq: 45 }),
       // Veille non cloturee (cas Fred) + une tres ancienne journee oubliee (cas du 12 mai).
       pendingClosures: liste((() => { const k = (n) => { const d = new Date(); d.setDate(d.getDate() - n);
           return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
@@ -256,3 +266,74 @@ describe("Écrans — rendu sans plantage", () => {
     expect(container.textContent).toMatch(/\d+\.\d{2}€/);   // montants au centime
   });
 });
+
+// ── EXPLORATEUR : chaque élément cliquable de chaque écran mène quelque part ──
+// Pour chaque écran, on clique UN PAR UN sur tout ce qui réagit au clic (boutons, lignes de
+// liste, onglets…), écran remonté à neuf entre deux clics, confirmations acceptées, API simulée
+// au format du serveur. Un clic qui fait planter l'écran (« Erreur détectée ») échoue ici.
+// Cas d'origine : Z validé, puis « w.actualCash.toFixed is not a function » (MCS, 28/10/2026).
+const propsReact = (el) => { const k = Object.keys(el).find(c => c.startsWith("__reactProps$")); return k ? el[k] : null; };
+const NE_PAS_CLIQUER = /Recharger la page|Déconnexion|Se déconnecter/i;
+const cliquables = (root) => [...root.querySelectorAll("*")].filter(el => {
+  const p = propsReact(el);
+  return p && typeof p.onClick === "function" && !el.disabled && !NE_PAS_CLIQUER.test(el.textContent || "");
+});
+const PLANTAGE = /is not defined|Cannot read|is not a function|is not iterable|Invalid time value|Maximum update depth/;
+const attendre = (ms) => new Promise(r => setTimeout(r, ms));
+
+describe("Écrans — chaque clic mène quelque part (explorateur)", () => {
+  const ECRANS = [
+    ["Vente", SalesScreen], ["Statistiques", StatsScreen], ["Stock", StockScreen], ["Tickets", HistoryScreen],
+    ["Retour", ReturnScreen], ["Clôture", ClosureScreen], ["Clients", CustomersScreen], ["Fiscal", FiscalScreen],
+    ["Journal d'audit", AuditScreen], ["Produits", ProductsScreen], ["Étiquettes", LabelsScreen],
+    ["Retours & avoirs", ReturnsHistoryScreen], ["Paramètres", SettingsScreen], ["Cartes cadeaux", GiftCardScreen],
+    ["Promotions", PromosScreen], ["Entrées", FootfallScreen], ["Exports", ExportsScreen],
+    ["Tiroir-caisse (caisse)", TiroirCaisseScreen], ["Tiroir-caisse (dashboard)", CashMovementsScreen],
+    ["Ouv./Ferm. caisse", RegisterSessionsScreen],
+    ["Ouverture de caisse", () => <CashRegControl onSkip={() => {}} onDone={() => {}} />],   // props passées par nav.jsx
+    ["Utilisateurs", UsersScreen], ["Vue d'ensemble", DashOverview], ["Taux de TVA", TVAScreen],
+  ];
+  for (const [nom, Ecran] of ECRANS) {
+    it(`${nom} : aucun clic ne fait planter l'écran`, async () => {
+      vi.spyOn(window, "confirm").mockReturnValue(true);
+      vi.spyOn(window, "alert").mockImplementation(() => {});
+      vi.spyOn(window, "prompt").mockReturnValue("");
+      vi.spyOn(window, "open").mockReturnValue(null);
+      const pageErr = []; const h = (e) => { pageErr.push(String(e.error?.message || e.message)); e.preventDefault(); };
+      window.addEventListener("error", h);
+      const pannes = [];
+      try {
+        // Parcours sur 2 niveaux : chaque clic de l'écran, puis chaque NOUVEL élément cliquable qu'il
+        // fait apparaître (boutons d'un onglet, d'une fenêtre…). Écran remonté à neuf à chaque essai.
+        const signature = (el) => `${el.tagName}|${(el.textContent || el.getAttribute("title") || "").trim().slice(0, 60)}`;
+        const essayer = async (chemin) => {
+          cleanup(); const { container } = render(<AppProvider><Ecran /></AppProvider>); await attendre(30);
+          let libelle = "";
+          for (const i of chemin) {
+            const el = cliquables(container)[i];
+            if (!el) return null;
+            libelle += `${libelle ? " › " : ""}« ${(el.textContent || el.getAttribute("title") || el.tagName).trim().slice(0, 30)} »`;
+            errors.length = 0; pageErr.length = 0;
+            fireEvent.click(el); await attendre(30);
+            const casse = /Erreur détectée/.test(container.textContent) ? "écran « Erreur détectée »"
+              : [...errors, ...pageErr].find(m => PLANTAGE.test(m));
+            if (casse) { pannes.push(`clic ${libelle} : ${String(casse).slice(0, 160)}`); return null; }
+          }
+          return cliquables(container).map(signature);
+        };
+        const base = await essayer([]);
+        let budget = 150;
+        for (let i = 0; i < base.length && budget > 0; i++, budget--) {
+          const apres = await essayer([i]);
+          if (!apres) continue;
+          for (let j = 0; j < apres.length && budget > 0; j++) {
+            if (base.includes(apres[j])) continue;   // déjà testé au 1er niveau
+            budget--; await essayer([i, j]);
+          }
+        }
+      } finally { window.removeEventListener("error", h); }
+      expect(pannes, nom).toEqual([]);
+    }, 120000);
+  }
+});
+

@@ -97,7 +97,7 @@ describe("normClosure", () => {
     expect(c.totalTTC).toBe(120.6);
     expect(c.totalHT).toBe(100.5);
     expect(c.expectedCash).toBe(60);
-    expect(c.actualCash).toBe("58");
+    expect(c.actualCash).toBe(58);   // nombre : le rapport Z appelait .toFixed() dessus
     expect(c.cashIn).toBe(10);
     expect(c.cashOut).toBe(5);
     expect(c.byPayment.cash).toBe(60);

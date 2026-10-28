@@ -264,7 +264,7 @@ function ClosureScreen(){
         {reportModal.openingFloat!=null&&Number(reportModal.cashIn)>0&&<div style={{display:"flex",justifyContent:"space-between"}}><span>+ Apports</span><span>{Number(reportModal.cashIn).toFixed(2)}€</span></div>}
         {reportModal.openingFloat!=null&&Number(reportModal.cashOut)>0&&<div style={{display:"flex",justifyContent:"space-between"}}><span>− Prélèvements</span><span>{Number(reportModal.cashOut).toFixed(2)}€</span></div>}
         {reportModal.expectedCash!=null&&<div style={{display:"flex",justifyContent:"space-between",fontWeight:700}}><span>= Espèces attendues</span><span>{reportModal.expectedCash.toFixed(2)}€</span></div>}
-        {reportModal.actualCash!=null&&<div style={{display:"flex",justifyContent:"space-between"}}><span>Espèces comptées</span><span>{reportModal.actualCash.toFixed(2)}€</span></div>}
+        {reportModal.actualCash!=null&&<div style={{display:"flex",justifyContent:"space-between"}}><span>Espèces comptées</span><span>{Number(reportModal.actualCash).toFixed(2)}€</span></div>}
         {reportModal.actualCash!=null&&reportModal.expectedCash!=null&&<div style={{display:"flex",justifyContent:"space-between",color:Math.abs(reportModal.actualCash-reportModal.expectedCash)<0.01?"#059669":C.danger,fontWeight:700}}>
           <span>Écart espèces</span><span>{(reportModal.actualCash-reportModal.expectedCash)>=0?"+":""}{(reportModal.actualCash-reportModal.expectedCash).toFixed(2)}€</span></div>}
         {reportModal.actualCard!=null&&<><div style={{display:"flex",justifyContent:"space-between"}}><span>CB attendues</span><span>{(reportModal.byPayment?.card||0).toFixed(2)}€</span></div>

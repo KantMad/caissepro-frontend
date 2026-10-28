@@ -217,7 +217,7 @@ function ExportsScreen(){
       if(sel.totalHT)row["Total HT"]=(t.totalHT||parseFloat(t.total_ht)||0).toFixed(2);
       if(sel.totalTVA)row["TVA"]=(t.totalTVA||parseFloat(t.total_tva)||0).toFixed(2);
       if(sel.totalTTC)row["Total TTC"]=(t.totalTTC||parseFloat(t.total_ttc)||0).toFixed(2);
-      if(sel.paymentMethod)row["Paiement"]=(t.payments||[]).map(p=>`${payLabels[p.method]||p.method}: ${p.amount.toFixed(2)}€`).join(", ");
+      if(sel.paymentMethod)row["Paiement"]=(t.payments||[]).map(p=>`${payLabels[p.method]||p.method}: ${(Number(p.amount)||0).toFixed(2)}€`).join(", ");
       if(sel.globalDiscount)row["Remise globale"]=(t.globalDiscount||0).toFixed(2);
       if(sel.margin)row["Marge"]=(parseFloat(t.margin)||0).toFixed(2);
       if(sel.saleNote)row["Note"]=t.saleNote||"";
@@ -371,7 +371,7 @@ function ExportsScreen(){
       tvaBreakdown[r].base+=i.lineHT*(1-ratio);tvaBreakdown[r].tva+=i.lineTVA*(1-ratio);});
 
     const payLabels={cash:"Espèces",card:"Carte bancaire",amex:"American Express",contactless:"Sans-contact",giftcard:"Carte cadeau",cheque:"Chèque",avoir:"Avoir"};
-    const paymentInfo=(ticket.payments||[]).map(p=>`${payLabels[p.method]||p.method}: ${p.amount.toFixed(2)} EUR`).join(" / ");
+    const paymentInfo=(ticket.payments||[]).map(p=>`${payLabels[p.method]||p.method}: ${(Number(p.amount)||0).toFixed(2)} EUR`).join(" / ");
 
     // Generate printable HTML
     const html=`<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><title>Facture ${invoiceNum}</title>
