@@ -191,9 +191,10 @@ function SalesScreen(){
 
     {/* NF525: Post-closure warning */}
     {todayClosed&&!trainingMode&&<div style={{position:"absolute",top:offlineMode||!isOnline?36:trainingMode?60:0,left:"var(--nav-w,72px)",right:0,zIndex:98,
-      background:"#FEE2E2",padding:"5px 12px",display:"flex",alignItems:"center",gap:6,fontSize:11,fontWeight:700,color:"#991B1B",
-      borderBottom:"2px solid #DC2626"}}>
-      <AlertTriangle size={12}/> CAISSE CLOTUREE — Les nouvelles ventes seront refusées par le serveur</div>}
+      background:"#FEF3C7",padding:"5px 12px",display:"flex",alignItems:"center",gap:6,fontSize:11,fontWeight:700,color:"#92400E",
+      borderBottom:"2px solid #D97706"}}>
+      {/* Depuis le 28/10/2026 le serveur accepte les ventes apres le Z du jour (avant : refus jusqu'a minuit) */}
+      <AlertTriangle size={12}/> Z du jour déjà fait — les ventes suivantes seront à clôturer par un Z complémentaire (écran Clôture)</div>}
 
     {/* Products */}
     <div style={{flex:1,padding:"var(--pad,16px)",display:"flex",flexDirection:"column",overflow:"hidden"}}>

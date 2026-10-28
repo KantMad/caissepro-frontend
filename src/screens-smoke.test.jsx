@@ -198,7 +198,7 @@ describe("Écrans — rendu sans plantage", () => {
     const { findAllByText, container } = render(<AppProvider><SalesScreen /></AppProvider>);
     await findAllByText(/./);
     await new Promise(r => setTimeout(r, 50));   // chargement des clotures
-    expect(container.textContent).not.toMatch(/CAISSE CLOTUREE/);
+    expect(container.textContent).not.toMatch(/Z du jour déjà fait/);
   });
 
   it("Clôture : une très ancienne journée oubliée ne prend pas le Z du jour (cas 12 mai)", async () => {
@@ -207,6 +207,26 @@ describe("Écrans — rendu sans plantage", () => {
     expect(container.textContent).toMatch(/13 ticket\(s\), 1240\.00/);   // listée à part, en Z tardif
     expect(container.textContent).toMatch(/Z tardif/);
     expect(container.textContent).not.toMatch(/Journée non clôturée : [a-z]+ 12 mai/);
+  });
+
+  it("Clôture : Z du jour déjà fait puis ventes -> bouton Z complémentaire, sans comptage (cas 28/10/2026)", async () => {
+    const API = await import("./api.js");
+    const jour = new Date(); const k = `${jour.getFullYear()}-${String(jour.getMonth() + 1).padStart(2, "0")}-${String(jour.getDate()).padStart(2, "0")}`;
+    const avant = { closures: API.fiscal.closures, pendingClosures: API.fiscal.pendingClosures, closure: API.fiscal.closure };
+    const zDuJour = { id: "zj", closure_type: "daily", period: k, ticket_count: 5, total_ht: "100.00", total_tva: "20.00",
+      total_ttc: "120.00", grand_total: "9000.00", complement_index: 0, created_at: new Date().toISOString(), fingerprint: "ZJ" };
+    API.fiscal.closures = () => Promise.resolve([zDuJour]);
+    API.fiscal.pendingClosures = () => Promise.resolve({ today: k, timezone: "Europe/Paris", days: [{ day: k, ticket_count: 2, total_ttc: "80.00" }] });
+    const appel = vi.fn(() => Promise.resolve({ ...zDuJour, id: "zc", complement_index: 1, ticket_count: 2, total_ttc: "80.00" }));
+    API.fiscal.closure = appel;
+    const conf = vi.spyOn(window, "confirm").mockReturnValue(true);
+    try {
+      const { findByText } = render(<AppProvider><ClosureScreen /></AppProvider>);
+      fireEvent.click(await findByText(/Z complémentaire \(2 vente\(s\) après le Z\)/));
+      await waitFor(() => expect(appel).toHaveBeenCalled());
+      expect(conf.mock.calls[0][0]).toMatch(/Z COMPLÉMENTAIRE/);
+      expect(appel.mock.calls[0][0]).toMatchObject({ type: "daily", date: k, actualCash: null, actualCard: null });
+    } finally { Object.assign(API.fiscal, avant); conf.mockRestore(); }
   });
 
   it("Tickets : l'onglet Retouches s'ouvre (filtre jour local, CA hors bons annulés)", () => {

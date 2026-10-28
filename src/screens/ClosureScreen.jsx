@@ -36,6 +36,7 @@ function ClosureScreen(){
   const today=derniere&&ecartJours(derniere.day)<=4?derniere.day:aujourdhui;
   const enRetard=today!==aujourdhui;
   const ciblePending=enAttente.find(d=>d.day===today);
+  const zDuJourFait=closures.some(c=>c.type==="daily"&&String(c.period||"").slice(0,10)===today);
   const anciennes=enAttente.filter(d=>d.day!==today&&d.day<today);
   // Z mensuel / annuel. Si la période a déjà un Z fait AVANT sa fin (ex. Z d'octobre fait le
   // 08/10/2026), le serveur ne refait pas le mois : il propose un Z COMPLÉMENTAIRE qui couvre
@@ -189,16 +190,28 @@ function ClosureScreen(){
         // Ventes hors-ligne pas encore reçues par le serveur : le Z les oublierait.
         const ventesEnFile=(pendingSync||[]).filter(a=>a.type==="offlineSale").length;
         if(ventesEnFile){notify(`${ventesEnFile} vente(s) hors-ligne pas encore envoyée(s) au serveur : attendez la synchronisation (connexion internet) avant de clôturer.`,"error");return;}
-        // Journée visée déjà clôturée ? (par PÉRIODE, jamais par date de création du Z)
-        if(closures.some(c=>c.type==="daily"&&String(c.period||"").slice(0,10)===today)){
-          notify(`La journée du ${today.split("-").reverse().join("/")} est déjà clôturée`,"error");return;}
-        // Also verify server-side to prevent multi-tab/device duplicates
-        try{const serverClosures=await API.fiscal.closures();
-          if(serverClosures?.some(c=>c.closure_type==="daily"&&(c.period||c.created_at||"").startsWith(todayStr))){
-            notify("Une clôture Z existe déjà sur le serveur pour aujourd'hui","error");return;}
-        }catch(e){/* offline — local check is our best guard */}
+        // Journée visée déjà clôturée ? (par PÉRIODE, jamais par date de création du Z ; serveur
+        // interrogé aussi : autre appareil). Avant, la vérification serveur utilisait une variable
+        // inexistante (todayStr) : l'erreur était avalée et la vérification ne faisait rien.
+        let dejaClos=closures.some(c=>c.type==="daily"&&String(c.period||"").slice(0,10)===today);
+        try{const sc=await API.fiscal.closures();
+          if(sc?.some(c=>(c.closure_type||c.type)==="daily"&&String(c.period||"").slice(0,10)===today))dejaClos=true;
+        }catch(e){/* hors-ligne : la vérification locale suffit */}
+        // Ventes faites APRÈS le Z du jour (ex. Z fait par erreur à 15 h, 28/10/2026) : Z
+        // COMPLÉMENTAIRE, qui ne couvre que ces ventes. Le premier Z reste intact (NF525).
+        const complement=dejaClos&&ciblePending;
+        if(dejaClos&&!complement){notify(`La journée du ${today.split("-").reverse().join("/")} est déjà clôturée`,"error");return;}
+        const jourTxt=fmtJour(today);
+        const heure=new Date().getHours();
+        if(complement){
+          if(!confirm(`Z COMPLÉMENTAIRE du ${jourTxt}\n\nLe Z de cette journée a déjà été fait. ${ciblePending.ticket_count} vente(s) (${Number(ciblePending.total_ttc).toFixed(2)} € TTC) ont été faites après : ce Z complémentaire les couvre. Le premier Z reste tel quel.\n\nOpération définitive (NF525). Continuer ?`))return;
+          const cl=await createClosure("daily",null,null,today);chargerPending();
+          if(cl){closeReg(aCash?parseFloat(aCash):null,aCard?parseFloat(aCard):null,{ticketCount:cl.ticketCount,totalHT:cl.totalHT,totalTVA:cl.totalTVA,totalTTC:cl.totalTTC,byPayment:cl.byPayment,grandTotal:cl.grandTotal});setReportModal(cl);}
+          else notify("Erreur lors de la clôture","danger");
+          return;}
+        if(!confirm(`Clôturer DÉFINITIVEMENT la journée du ${jourTxt} ?\n\n${pt.length} ticket(s). Le Z ne peut être ni annulé ni modifié (NF525).${!enRetard&&heure<18?`\n\n⚠ Il est ${new Date().toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"})} : la journée n'est sans doute pas finie. Les ventes faites après le Z devront être couvertes par un Z complémentaire ce soir.`:""}`))return;
         const cl=await createClosure("daily",aCash?parseFloat(aCash):null,aCard?parseFloat(aCard):null,today);chargerPending();if(cl){closeReg(aCash?parseFloat(aCash):null,aCard?parseFloat(aCard):null,{ticketCount:cl.ticketCount,totalHT:cl.totalHT,totalTVA:cl.totalTVA,totalTTC:cl.totalTTC,byPayment:cl.byPayment,byPaymentCount:cl.byPaymentCount,tvaByRate:cl.tvaByRate,bySeller:cl.bySeller,byCategory:cl.byCategory,discounts:cl.discounts,cancellations:cl.cancellations,returns:cl.returns,itemCount:cl.itemCount,avgItemsPerSale:cl.avgItemsPerSale,avgBasketHT:cl.avgBasketHT,avgBasketTTC:cl.avgBasketTTC,expectedCash:cl.expectedCash,cashIn:cl.cashIn,cashOut:cl.cashOut,returnCount:cl.returns?.count??todayAvoirs.length,totalReturns:cl.returns?.totalTTC??totalReturns,netRevenue:(cl.totalTTC||0)-(cl.returns?.totalTTC??totalReturns),grandTotal:cl.grandTotal});setReportModal(cl);}else{notify("Erreur lors de la clôture","danger");}}}
-        style={{width:"100%",height:44,marginBottom:8}}><Lock size={16}/> Clôture journalière (Z)</Btn>
+        style={{width:"100%",height:44,marginBottom:8}}><Lock size={16}/> {zDuJourFait&&ciblePending?`Z complémentaire (${ciblePending.ticket_count} vente(s) après le Z)`:"Clôture journalière (Z)"}</Btn>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
         <Btn variant="outline" onClick={async()=>{const d=new Date();const mp=new Date(d.getFullYear(),d.getMonth()-1,1);
           // Z mensuel = mois PRECEDENT, termine (le serveur le garantit). Irreversible (NF525) : confirmation.
