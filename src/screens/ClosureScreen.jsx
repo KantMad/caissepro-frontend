@@ -83,6 +83,15 @@ function ClosureScreen(){
       <div style={{fontSize:12,color:"#92400E",lineHeight:1.5}}>
         {ciblePending?.ticket_count} ticket(s) — {Number(ciblePending?.total_ttc||0).toFixed(2)} € TTC. La clôture ci‑dessous
         porte sur <b>cette journée</b>, pas sur aujourd'hui. Comptez le tiroir tel qu'il était à la fermeture.</div></div>}
+    {/* Z mensuel du mois terminé encore à faire (ou à compléter) : signalé par le serveur, mêmes
+        règles que le contrôle d'instance (mise en service, Z fait trop tôt). */}
+    {pending?.monthly&&<div data-testid="z-mensuel-attente" style={{background:C.fiscalLight||"#FFF7ED",border:`1px solid ${C.fiscal}`,borderRadius:12,padding:14,marginBottom:14,display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+      <div style={{flex:1,minWidth:200}}>
+        <div style={{fontSize:13,fontWeight:800}}>{pending.monthly.complement?"Z mensuel complémentaire à faire":"Z mensuel à faire"} — {new Date(`${pending.monthly.periode}-15T12:00:00`).toLocaleDateString("fr-FR",{month:"long",year:"numeric"})}</div>
+        <div style={{fontSize:11,color:C.textMuted}}>{pending.monthly.ventes} vente(s) {pending.monthly.complement?"postérieures au Z mensuel déjà fait":"non couvertes par un Z mensuel"}</div>
+      </div>
+      <Btn onClick={async()=>{if(!confirm(`Clôture mensuelle de ${pending.monthly.periode} ?\n\nOpération définitive (NF525).`))return;await clotureAvecComplement("monthly");chargerPending();}} style={{height:36,fontSize:11}}><Calendar size={14}/> Faire le Z mensuel</Btn>
+    </div>}
     {anciennes.length>0&&<div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:12,padding:14,marginBottom:14}}>
       <div style={{fontSize:13,fontWeight:800,marginBottom:4}}>Anciennes journées jamais clôturées ({anciennes.length})</div>
       <div style={{fontSize:11,color:C.textMuted,marginBottom:8,lineHeight:1.5}}>

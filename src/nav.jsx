@@ -185,6 +185,29 @@ export function ServerHealthBanner(){
   </div>);
 }
 
+// Rappel des CLÔTURES en retard (gérant/admin) : journées passées sans Z et Z mensuel du mois
+// terminé. Avant, seul le contrôle d'instance lancé sur le serveur le disait (MCS, octobre 2026 :
+// 4 journées et le Z de septembre restés en attente).
+export function ClotureRappelBanner(){
+  const{perm,currentStore,closures}=useApp();
+  const[att,setAtt]=useState(null);
+  const peut=!!perm?.().canCloseZ;
+  useEffect(()=>{if(!peut||!currentStore?.id)return;let ok=true;
+    Promise.resolve().then(()=>API.fiscal.pendingClosures()).then(r=>{if(ok)setAtt(r);}).catch(()=>{});
+    return()=>{ok=false;};},[peut,currentStore?.id,closures?.length]);
+  if(!att)return null;
+  const passees=(att.days||[]).filter(d=>d.day<att.today);
+  const m=att.monthly;
+  if(!passees.length&&!m)return null;
+  const jour=(d)=>new Date(`${d}T12:00:00`).toLocaleDateString("fr-FR",{day:"2-digit",month:"2-digit"});
+  const parties=[];
+  if(passees.length)parties.push(`${passees.length} journée(s) sans Z (${passees.slice(0,4).map(d=>jour(d.day)).join(", ")}${passees.length>4?"…":""})`);
+  if(m)parties.push(`Z mensuel ${m.complement?"complémentaire ":""}de ${new Date(`${m.periode}-15T12:00:00`).toLocaleDateString("fr-FR",{month:"long"})}`);
+  return(<div role="status" data-testid="cloture-rappel" style={{background:"#FEF3C7",color:"#78350F",fontWeight:700,fontSize:12,padding:"6px 14px",textAlign:"center",flexShrink:0,borderBottom:"1px solid #FCD34D"}}>
+    À clôturer : {parties.join(" · ")} — écran Clôture (mode caisse)
+  </div>);
+}
+
 function CashierInterface(){
   const{cashReg}=useApp();
   const vp=useViewport();
@@ -196,7 +219,7 @@ function CashierInterface(){
     giftcards:GiftCardScreen,promos:PromosScreen,cashdrawer:TiroirCaisseScreen,closure:ClosureScreen,footfall:FootfallScreen,audit:AuditScreen,fiscal:FiscalScreen,settings:SettingsScreen,help:HelpCashierScreen};
   const Sc=S[sc]||SalesScreen;
   return(<div style={{display:"flex",flexDirection:"column",height:"100vh",fontFamily:"'DM Sans',system-ui,sans-serif"}}>
-    <TrainingBanner/>
+    <TrainingBanner/><ClotureRappelBanner/>
     <div style={{display:"flex",flex:1,minHeight:0}}><CashierNav active={sc} onNav={setSc}/>
       <div style={{flex:1,overflow:"hidden",paddingBottom:vp.isMobile?"var(--bottomnav-h,60px)":0}}><ErrorBoundary><Suspense fallback={<ChargementEcran/>}><Sc/></Suspense></ErrorBoundary></div></div></div>);
 }
@@ -607,11 +630,11 @@ function DashboardInterface(){
         <img src={logo} alt="" style={{width:28,height:28,objectFit:"contain"}}/>
         <div style={{color:"#fff",fontSize:16,fontWeight:700,letterSpacing:"-0.3px"}}>{titles[sc]||"Tech in Cash"}</div>
       </div>
-      <TrainingBanner/><ServerHealthBanner/>
+      <TrainingBanner/><ServerHealthBanner/><ClotureRappelBanner/>
       <DashboardNav active={sc} onNav={setSc} vp={vp} mobileOpen={drawerOpen} onCloseMobile={()=>setDrawerOpen(false)}/>
       <div style={{flex:1,overflow:"hidden"}}><ErrorBoundary><Suspense fallback={<ChargementEcran/>}><Sc/></Suspense></ErrorBoundary></div></div>);
   }
-  return(<div style={{display:"flex",flexDirection:"column",height:"100vh",fontFamily:"'DM Sans',system-ui,sans-serif"}}><TrainingBanner/><ServerHealthBanner/>
+  return(<div style={{display:"flex",flexDirection:"column",height:"100vh",fontFamily:"'DM Sans',system-ui,sans-serif"}}><TrainingBanner/><ServerHealthBanner/><ClotureRappelBanner/>
     <div style={{display:"flex",flex:1,minHeight:0}}><DashboardNav active={sc} onNav={setSc} vp={vp}/><div style={{flex:1,overflow:"hidden"}}><ErrorBoundary><Suspense fallback={<ChargementEcran/>}><Sc/></Suspense></ErrorBoundary></div></div></div>);
 }
 
