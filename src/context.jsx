@@ -1748,8 +1748,12 @@ function AppProvider({children}){
       // Fallback offline
       console.error("Avoir API echoue, mode offline:",e.message,e);
       notify("Erreur backend avoir: "+e.message+" — sauvegarde locale","warn");
-      const seq=avoirSeq+1;const avoirNumber=`AV-${new Date().getFullYear()}-${String(seq).padStart(6,"0")}`;
-      const date=new Date().toISOString();
+      // Numero PROVISOIRE distinct des vrais numeros AV-... : avant, AV-2026-<compteur local + 1>
+      // pouvait etre le numero que le serveur donnait a l'avoir d'un AUTRE client. Le serveur relie
+      // ce papier a l'avoir enregistre (migration 043) : il reste utilisable apres la synchronisation.
+      const seq=avoirSeq+1;const _d=new Date();const _2=n=>String(n).padStart(2,"0");
+      const avoirNumber=`AVH-${_d.getFullYear()}${_2(_d.getMonth()+1)}${_2(_d.getDate())}-${_2(_d.getHours())}${_2(_d.getMinutes())}${_2(_d.getSeconds())}${Math.random().toString(36).slice(2,4).toUpperCase()}`;
+      const date=_d.toISOString();
       const caisseId=currentStore?.id||cashReg?.id||"CAISSE-01";
       const lastAvoirHash=avoirs.length>0?(avoirs[0].hash||""):lastHash;
       const hash=await sha256(`${lastAvoirHash}|${seq}|AVOIR|${caisseId}|${avoirNumber}|${date}|${totalTTC.toFixed(2)}|${ticket.ticketNumber}`);
@@ -1766,7 +1770,7 @@ function AppProvider({children}){
         customerId:ticket.customerId,customerName:ticket.customerName,
         hash,fingerprint:hash.slice(0,16).toUpperCase(),barcode:""};
       setAvoirSeq(seq);
-      addPendingSync({type:"offlineAvoir",data:{...apiPayload,saleId:ticket.ticketNumber||ticket.id}});
+      addPendingSync({type:"offlineAvoir",data:{...apiPayload,saleId:ticket.ticketNumber||ticket.id,offlineAvoirNumber:avoirNumber,offlineDate:date}});
       // Restock local en attendant la synchro backend
       if(apiPayload.restock!==false){
         setProducts(prev=>prev.map(p=>{
