@@ -11,6 +11,23 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
+# Retour a la version precedente : bash deploy.sh --retour
+# ECHANGE dist et dist-prev, ne supprime jamais rien (une 2e fois = retour a la version recente).
+# Avant (28/10/2026) : « rm -rf dist && mv dist-prev dist » a supprime la caisse en ligne alors
+# que dist-prev n'existait pas encore -> caisse.techincash.app en 404.
+if [ "${1:-}" = "--retour" ]; then
+  if [ ! -f dist-prev/index.html ]; then
+    echo "✗ Aucune version precedente (dist-prev) : rien n'a ete touche. La caisse en ligne est inchangee."
+    exit 1
+  fi
+  rm -rf dist-swap
+  [ -d dist ] && mv dist dist-swap
+  mv dist-prev dist
+  [ -d dist-swap ] && mv dist-swap dist-prev
+  echo "✓ Version precedente remise en ligne (la version retiree est gardee dans dist-prev)."
+  exit 0
+fi
+
 BRANCH="$(git rev-parse --abbrev-ref HEAD)"
 
 echo "▶ Déploiement frontend CaissePro"
@@ -60,4 +77,4 @@ mv dist-next dist
 
 echo "✓ Frontend déployé — https://caisse.techincash.app"
 echo "  nginx sert dist/ directement, aucun restart nécessaire."
-echo "  Retour a la version precedente si besoin : rm -rf dist && mv dist-prev dist"
+echo "  Retour a la version precedente si besoin : bash deploy.sh --retour"
