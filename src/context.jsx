@@ -613,7 +613,7 @@ function AppProvider({children}){
         // Pas de magasins assignés — charger les données sans filtre (rétrocompatibilité)
         await loadStoreData();
       }
-      setOfflineMode(false);setFiscalWarning(false);addJET("LOGIN",n);notify("Connecté au serveur","success");return{ok:true,stores:userStores};
+      setOfflineMode(false);setFiscalWarning(false);/* JET LOGIN écrit par le serveur (routes/auth.js) : plus de doublon */notify("Connecté au serveur","success");return{ok:true,stores:userStores};
     }catch(e){
       console.warn("API indisponible, tentative login hors-ligne:",e.message);
       // SEC-04: Offline login uses ONLY cached credentials from last successful online session (no hardcoded passwords)
@@ -1256,7 +1256,7 @@ function AppProvider({children}){
     if(opts.reglements)params.reglements="1";
     await API.fiscal.fec(params);
     const per=opts.from&&opts.to?`${opts.from} → ${opts.to}`:"tout l'historique";
-    addJET("EXPORT",`Export FEC ${per}`);addAudit("FEC",`Export fichier FEC ${per}`);
+    /* JET EXPORT écrit par le serveur (fiscal.js) */addAudit("FEC",`Export fichier FEC ${per}`);
   }catch(e){notify("Erreur: "+e.message,"error");}},[notify,addJET,addAudit]);
 
   // Archive fiscale NF525 : 10 CSV + manifeste d'integrite, generes par le SERVEUR sur la
@@ -1270,7 +1270,7 @@ function AppProvider({children}){
       const data=await API.fiscal.archiveNF525(params);
       const n=data?.files?.length||0;
       const per=opts.from&&opts.to?`${opts.from} → ${opts.to}`:"tout l'historique";
-      addJET("ARCHIVE",`Export archive fiscale NF525 (${per})`);
+      // JET ARCHIVE écrit par le serveur (fiscal.js) : plus de doublon
       addAudit("EXPORT",`Archive fiscale NF525 ${per} — ${n} fichiers`);
       notify(`Archive NF525 générée (${n} fichiers)`,"success");
     }catch(e){notify("Erreur archive: "+e.message,"error");}
