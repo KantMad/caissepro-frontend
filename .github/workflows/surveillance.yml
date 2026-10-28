@@ -1,0 +1,69 @@
+name: Surveillance prod
+
+# Toutes les 15 min (GitHub peut decaler de quelques minutes) : API, caisse, demo, certificats.
+# En cas d'echec, GitHub envoie un e-mail au compte qui a modifie ce fichier en dernier.
+# Ne touche a rien sur le serveur : lecture seule (requetes HTTPS publiques), aucun secret.
+# Ici (depot PUBLIC) et non dans caissepro-api (prive) : minutes GitHub Actions gratuites sur un
+# depot public ; toutes les 15 min sur le depot prive auraient epuise le quota mensuel (et coupe
+# CI et APK).
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+
+jobs:
+  verifier:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Controles
+        run: |
+          ECHECS=""
+          ko() { echo "::error::$1"; ECHECS="$ECHECS\n- $1"; }
+
+          # API : repond, base joignable, migrations appliquees (l'API demarre MEME si elles echouent)
+          for API in https://api.techincash.app https://demo.techincash.app; do
+            S=$(curl -s --max-time 15 --retry 2 --retry-delay 10 "$API/api/health" || true)
+            echo "$API -> $S"
+            case "$S" in
+              *'"status":"ok"'*'"migrations":"a jour"'*) ;;
+              *) ko "$API/api/health anormal : ${S:-aucune reponse}" ;;
+            esac
+          done
+
+          # Sauvegarde nocturne de la prod (age fourni par /api/health). Controle UNE fois par jour
+          # (passage de 8 h UTC) ou a la demande : sinon une panne enverrait un e-mail toutes les 15 min.
+          if [ "$(date -u +%H)" = "08" ] || [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            AGE=$(curl -s --max-time 15 https://api.techincash.app/api/health | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{const j=JSON.parse(s);console.log("sauvegardeH" in j?String(j.sauvegardeH):"absent")}catch(e){console.log("illisible")}})')
+            echo "Derniere sauvegarde prod : il y a $AGE h"
+            case "$AGE" in
+              absent) echo "(API pas encore a jour : controle ignore)" ;;
+              null|illisible) ko "Prod : AUCUNE sauvegarde trouvee sur le serveur" ;;
+              *) awk -v a="$AGE" 'BEGIN{exit !(a <= 30)}' || ko "Prod : derniere sauvegarde vieille de $AGE h (sauvegarde nocturne en panne ?)" ;;
+            esac
+          fi
+
+          # Caisse : la page ET son script principal (un dist incomplet donne une page blanche)
+          for SITE in https://caisse.techincash.app https://demo.techincash.app; do
+            PAGE=$(curl -s --max-time 15 --retry 2 --retry-delay 10 "$SITE/" || true)
+            JS=$(printf '%s' "$PAGE" | grep -o '/assets/index-[A-Za-z0-9_-]*\.js' | head -1)
+            if [ -z "$JS" ]; then ko "$SITE : page sans script principal (caisse en 404 ou page blanche ?)"; continue; fi
+            C=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 "$SITE$JS")
+            echo "$SITE$JS -> $C"
+            [ "$C" = "200" ] || ko "$SITE$JS repond $C"
+          done
+
+          # Certificats HTTPS : alerte 14 jours avant expiration (renouvellement certbot en panne ?)
+          for H in caisse.techincash.app api.techincash.app demo.techincash.app; do
+            FIN=$(echo | openssl s_client -connect "$H:443" -servername "$H" 2>/dev/null | openssl x509 -noout -enddate | cut -d= -f2)
+            if [ -z "$FIN" ]; then ko "$H : certificat illisible"; continue; fi
+            JOURS=$(( ( $(date -d "$FIN" +%s) - $(date +%s) ) / 86400 ))
+            echo "$H : certificat valable encore $JOURS jours"
+            [ "$JOURS" -ge 14 ] || ko "$H : certificat expire dans $JOURS jours"
+          done
+
+          if [ -n "$ECHECS" ]; then
+            printf "PROBLEMES :$ECHECS\n"
+            exit 1
+          fi
+          echo "Tout est OK."
