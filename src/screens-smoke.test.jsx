@@ -320,7 +320,7 @@ describe("Écrans — chaque clic mène quelque part (explorateur)", () => {
         // fait apparaître (boutons d'un onglet, d'une fenêtre…). Écran remonté à neuf à chaque essai.
         const signature = (el) => `${el.tagName}|${(el.textContent || el.getAttribute("title") || "").trim().slice(0, 60)}`;
         const essayer = async (chemin) => {
-          cleanup(); const { container } = render(<AppProvider><Ecran /></AppProvider>); await attendre(30);
+          cleanup(); const { container } = render(<AppProvider><Ecran /></AppProvider>); await attendre(8);
           let libelle = "";
           for (const i of chemin) {
             const el = cliquables(container)[i];
@@ -328,7 +328,7 @@ describe("Écrans — chaque clic mène quelque part (explorateur)", () => {
             libelle += `${libelle ? " › " : ""}« ${(el.textContent || el.getAttribute("title") || el.tagName).trim().slice(0, 30)} »`;
             errors.length = 0; pageErr.length = 0;
             if (avecSaisie) { remplir(container); await attendre(5); }
-            fireEvent.click(cliquables(container)[i] || el); await attendre(30);
+            fireEvent.click(cliquables(container)[i] || el); await attendre(8);
             const casse = /Erreur détectée/.test(container.textContent) ? "écran « Erreur détectée »"
               : [...errors, ...pageErr].find(m => PLANTAGE.test(m));
             if (casse) { pannes.push(`clic ${libelle} : ${String(casse).slice(0, 160)}`); return null; }
