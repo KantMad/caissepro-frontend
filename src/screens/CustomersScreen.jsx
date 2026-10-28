@@ -88,7 +88,7 @@ function CustomersScreen(){
             </div>}
             <div style={{display:"flex",gap:4}}>
               {!editMode?<>
-                <Btn variant="outline" onClick={startEdit} style={{fontSize:10,padding:"4px 10px"}}><Edit size={11}/> Modifier</Btn>
+                <Btn variant="outline" onClick={startEdit} style={{fontSize:12,padding:"0 12px",minHeight:30}}><Edit size={13}/> Modifier</Btn>
                 <Btn variant="outline" onClick={()=>exportCustomerRGPD(sel.id)} style={{fontSize:10,padding:"4px 10px"}}><Download size={11}/> RGPD</Btn>
                 <Btn variant="ghost" onClick={()=>setConfirmDel(true)} style={{color:C.danger,padding:"4px 8px"}}><Trash2 size={11}/></Btn>
               </>:<>

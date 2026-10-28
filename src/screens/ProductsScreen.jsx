@@ -54,7 +54,7 @@ function ProductsScreen(){
       <table className="rtable" style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
         <thead><tr style={{background:C.surfaceAlt}}>
           {["Produit","SKU","Collection",`Prix ${pm}`,"Coût","Marge","TVA","Stock","Var.","Actions"].map(h=>(
-            <th key={h} style={{padding:"8px 10px",textAlign:"left",fontWeight:700,color:C.textMuted,fontSize:9,borderBottom:`2px solid ${C.border}`}}>{h}</th>))}</tr></thead>
+            <th key={h} style={{padding:"8px 10px",textAlign:"left",fontWeight:700,color:C.textMuted,fontSize:11,borderBottom:`2px solid ${C.border}`}}>{h}</th>))}</tr></thead>
         <tbody>{filtered.map(q=>{const ts=q.variants.reduce((s,v)=>s+v.stock,0);const mg=tauxMarque(q,pm)??0;
           return(<tr key={q.id} style={{borderBottom:`1px solid ${C.border}`,cursor:"pointer"}} onClick={()=>openEdit(q)}>
             <td data-label="Produit" style={{padding:"6px 10px",fontWeight:600}}>{q.name}</td>
@@ -67,10 +67,10 @@ function ProductsScreen(){
             <td data-label="Stock" style={{padding:"6px 10px",fontWeight:700,color:ts<=5?C.danger:C.text}}>{ts}</td>
             <td data-label="Variantes" style={{padding:"6px 10px"}}>{q.variants.length}</td>
             <td data-label="Actions" style={{padding:"6px 10px"}} onClick={e=>e.stopPropagation()}>
-              <div style={{display:"flex",gap:4}}>
-                <button onClick={()=>openEdit(q)} style={{background:"none",border:"none",cursor:"pointer",color:C.primary,fontSize:10,fontWeight:600}}>Modifier</button>
-                <button onClick={()=>duplicateProduct(q.id)} style={{background:"none",border:"none",cursor:"pointer",color:C.info,fontSize:10,fontWeight:600}}>Dupliquer</button>
-                <button onClick={()=>setConfirmDel(q)} style={{background:"none",border:"none",cursor:"pointer",color:C.danger,fontSize:10,fontWeight:600}}>Suppr.</button>
+              <div style={{display:"flex",gap:8}}>
+                <button onClick={()=>openEdit(q)} style={{background:"transparent",border:`1px solid ${C.primary}40`,borderRadius:8,padding:"0 10px",minHeight:28,cursor:"pointer",color:C.primary,fontSize:12,fontWeight:600}}>Modifier</button>
+                <button onClick={()=>duplicateProduct(q.id)} style={{background:"transparent",border:`1px solid ${C.info}40`,borderRadius:8,padding:"0 10px",minHeight:28,cursor:"pointer",color:C.info,fontSize:12,fontWeight:600}}>Dupliquer</button>
+                <button onClick={()=>setConfirmDel(q)} style={{background:"transparent",border:`1px solid ${C.danger}40`,borderRadius:8,padding:"0 10px",minHeight:28,cursor:"pointer",color:C.danger,fontSize:12,fontWeight:600}}>Supprimer</button>
               </div></td></tr>);})}</tbody></table></div>
 
     {/* Edit product modal */}

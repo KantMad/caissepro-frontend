@@ -1057,9 +1057,9 @@ function SettingsScreen(){
   return(<div style={{height:"100%",overflowY:"auto",padding:"var(--pad,16px)",background:C.bg}}>
     <h2 style={{fontSize:20,fontWeight:800,marginBottom:10}}>Paramètres</h2>
     <div style={{display:"flex",gap:6,marginBottom:14,flexWrap:"wrap"}}>
-      {[{id:"general",l:"Général"},{id:"retouche",l:"✂️ Retouches"},{id:"pricing",l:"💰 Prix HT/TTC"},{id:"commission",l:"Commission"},{id:"printer",l:"Imprimante"},{id:"tpe",l:"Terminal paiement"},{id:"receipt",l:"Ticket"},{id:"screen2",l:"📺 Écran 2"},{id:"caticons",l:"🏷️ Catégories"},{id:"return",l:"Retours"},{id:"sizes",l:"📏 Ordre tailles"},{id:"clock",l:"Pointages"},{id:"prices",l:"Historique prix"},{id:"backup",l:"Backup"},{id:"debug",l:"DEBUG"}].map(t=>(
-        <button key={t.id} onClick={()=>setTab(t.id)} style={{padding:"5px 12px",borderRadius:8,border:`1.5px solid ${tab===t.id?C.primary:C.border}`,
-          background:tab===t.id?C.primary:"transparent",color:tab===t.id?"#fff":C.text,fontSize:11,fontWeight:600,cursor:"pointer"}}>{t.l}</button>))}</div>
+      {[{id:"general",l:"Général"},{id:"retouche",l:"✂️ Retouches"},{id:"pricing",l:"💰 Prix HT/TTC"},{id:"commission",l:"Commission"},{id:"printer",l:"Imprimante"},{id:"tpe",l:"Terminal paiement"},{id:"receipt",l:"Ticket"},{id:"screen2",l:"📺 Écran 2"},{id:"caticons",l:"🏷️ Catégories"},{id:"return",l:"Retours"},{id:"sizes",l:"📏 Ordre tailles"},{id:"clock",l:"Pointages"},{id:"prices",l:"Historique prix"},{id:"backup",l:"Backup"},{id:"debug",l:"Diagnostic"}].map(t=>(
+        <button key={t.id} onClick={()=>setTab(t.id)} style={{padding:"0 14px",minHeight:32,borderRadius:8,border:`1.5px solid ${tab===t.id?C.primary:C.border}`,
+          background:tab===t.id?C.primary:"transparent",color:tab===t.id?"#fff":C.text,fontSize:12,fontWeight:600,cursor:"pointer"}}>{t.l}</button>))}</div>
 
     {tab==="general"&&<div style={{maxWidth:500}}>
       {[{l:"Nom boutique",k:"name"},{l:"Adresse",k:"address"},{l:"Code postal",k:"postalCode"},{l:"Ville",k:"city"},{l:"SIRET",k:"siret"},{l:"N° TVA Intra",k:"tvaIntra"},{l:"Téléphone",k:"phone"},{l:"Forme juridique (factures)",k:"legalForm"},{l:"Capital social (factures)",k:"capital"},{l:"Message ticket",k:"footerMsg"}].map(f=>(

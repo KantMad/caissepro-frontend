@@ -281,8 +281,8 @@ function UsersScreen(){
           <div style={{fontSize:10,color:C.textMuted}}>{libelleRole(u.role)} — PIN: ****</div></div>
         <Badge color={u.role==="admin"?C.accent:u.role==="manager"?C.info:C.primary}>{libelleRole(u.role)}</Badge>
         {u.pendingSync&&<Badge color={C.warn}>⏳ Synchro en attente</Badge>}
-        <Btn variant="outline" onClick={()=>openEdit(u)} style={{fontSize:10,padding:"4px 10px"}}><Settings size={11}/> Modifier</Btn>
-        <Btn variant="ghost" onClick={()=>setConfirmDel(u)} style={{color:C.danger,padding:"4px 8px"}}><Trash2 size={11}/></Btn>
+        <Btn variant="outline" onClick={()=>openEdit(u)} style={{fontSize:12,padding:"0 12px",minHeight:30}}><Settings size={13}/> Modifier</Btn>
+        <Btn variant="ghost" onClick={()=>setConfirmDel(u)} aria-label="Désactiver l'utilisateur" style={{color:C.danger,padding:"0 10px",minHeight:30}}><Trash2 size={14}/></Btn>
       </div>))}</div>
     <Modal open={newModal||!!editUser} onClose={()=>{setNewModal(false);setEditUser(null);}} title={editUser?"Modifier l'utilisateur":"Nouvel utilisateur"}>
       <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:12}}>
@@ -449,8 +449,8 @@ function TVAScreen(){
                   <span style={{fontSize:13,fontWeight:600}}>{t.label}</span>
                   <span style={{fontSize:11,color:C.textMuted,marginLeft:8}}>({(t.rate*100).toFixed(2)}%)</span></div>
                 <Badge color={C.primary}>{(t.rate*100).toFixed(t.rate*100%1===0?0:1)}%</Badge>
-                <button onClick={()=>{setEditId(t.id);setEditLabel(t.label);setEditRate(String(t.rate*100));}} style={{background:"none",border:"none",cursor:"pointer",color:C.primary,fontSize:10,fontWeight:600}}>Modifier</button>
-                <button onClick={()=>removeRate(t.id)} style={{background:"none",border:"none",cursor:"pointer",color:C.danger,fontSize:10,fontWeight:600}}><Trash2 size={12}/></button>
+                <button onClick={()=>{setEditId(t.id);setEditLabel(t.label);setEditRate(String(t.rate*100));}} style={{background:"transparent",border:`1px solid ${C.primary}40`,borderRadius:8,padding:"0 10px",minHeight:28,cursor:"pointer",color:C.primary,fontSize:12,fontWeight:600}}>Modifier</button>
+                <button onClick={()=>removeRate(t.id)} aria-label="Supprimer le taux" style={{background:"transparent",border:`1px solid ${C.danger}40`,borderRadius:8,width:30,height:28,display:"inline-flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:C.danger}}><Trash2 size={14}/></button>
               </>}
             </div>))}</div></div>
 
@@ -577,8 +577,8 @@ function StoresManagementScreen(){
         <div style={{padding:"0 18px 14px"}}>
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
             <div style={{fontSize:11,fontWeight:600,color:C.textMuted}}><Users size={11} style={{marginRight:4,verticalAlign:"middle"}}/>Utilisateurs ({(storeUsers[s.id]||[]).length})</div>
-            <button onClick={()=>{setAssignModal(s.id);setAssignUserId("");setAssignRole("cashier");}} style={{fontSize:10,color:"#059669",background:"rgba(5,150,105,0.08)",padding:"3px 8px",borderRadius:6,border:"none",cursor:"pointer",fontWeight:600,fontFamily:"inherit"}}>
-              <Plus size={10} style={{marginRight:2,verticalAlign:"middle"}}/>Ajouter</button></div>
+            <button onClick={()=>{setAssignModal(s.id);setAssignUserId("");setAssignRole("cashier");}} style={{fontSize:12,color:"#059669",background:"rgba(5,150,105,0.08)",padding:"0 12px",minHeight:30,borderRadius:8,border:"none",cursor:"pointer",fontWeight:600,fontFamily:"inherit"}}>
+              <Plus size={13} style={{marginRight:3,verticalAlign:"middle"}}/>Ajouter</button></div>
           {(storeUsers[s.id]||[]).length===0?<div style={{fontSize:11,color:C.textMuted,padding:"6px 0",fontStyle:"italic"}}>Aucun utilisateur assigné</div>:
           <div style={{display:"flex",flexDirection:"column",gap:4}}>
             {(storeUsers[s.id]||[]).map(u=>(<div key={u.id} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 10px",borderRadius:8,background:C.surfaceAlt}}>
@@ -586,7 +586,7 @@ function StoresManagementScreen(){
               <span style={{flex:1,fontSize:12,fontWeight:500}}>{u.name}</span>
               <Badge color={u.store_role==="admin"?C.primary:C.info}>{u.store_role||u.global_role}</Badge>
               {u.is_primary&&<Badge color="#059669">Principal</Badge>}
-              <button onClick={()=>removeUserFromStore(s.id,u.id)} title="Retirer" style={{background:"none",border:"none",cursor:"pointer",color:C.danger,padding:2}}><Trash2 size={11}/></button>
+              <button onClick={()=>removeUserFromStore(s.id,u.id)} title="Retirer du magasin" aria-label="Retirer du magasin" style={{background:"transparent",border:`1px solid ${C.danger}30`,borderRadius:8,width:30,height:28,display:"inline-flex",alignItems:"center",justifyContent:"center",cursor:"pointer",color:C.danger}}><Trash2 size={14}/></button>
             </div>))}</div>}</div>
       </div>))}</div>
 
