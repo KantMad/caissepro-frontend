@@ -7,3 +7,5 @@ dist/
 .env.*
 android/.idea/
 .vitest-result.json
+dist-next/
+dist-prev/

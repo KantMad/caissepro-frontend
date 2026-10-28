@@ -9,7 +9,8 @@ import React from "react";
 
 vi.mock("./printer.js", () => ({ default: { connect: vi.fn(), isConnected: () => false, disconnect: vi.fn(), on: () => () => {} } }));
 vi.mock("./hardware.js", () => ({
-  BrowserPrintAdapter: class { print() { return Promise.resolve(true); } },
+  // impression navigateur : toute methode (printReceipt, printAvoir…) reussit
+  BrowserPrintAdapter: class { constructor() { return new Proxy(this, { get: (t, k) => (k === "then" ? undefined : () => Promise.resolve(true)) }); } },
   default: { init: () => "browser", currentProfile: { id: "browser" }, setHardware: vi.fn(), getActiveAdapter: () => null, detect: vi.fn(), on: () => () => {}, charge: vi.fn() },
 }));
 // Simulacre d'API avec des donnees REALISTES, au format exact du serveur :
@@ -293,8 +294,20 @@ describe("Écrans — chaque clic mène quelque part (explorateur)", () => {
     ["Ouverture de caisse", () => <CashRegControl onSkip={() => {}} onDone={() => {}} />],   // props passées par nav.jsx
     ["Utilisateurs", UsersScreen], ["Vue d'ensemble", DashOverview], ["Taux de TVA", TVAScreen],
   ];
-  for (const [nom, Ecran] of ECRANS) {
-    it(`${nom} : aucun clic ne fait planter l'écran`, async () => {
+  // Champs remplis comme un caissier (montant, texte, date…) : c'est en VALIDANT un formulaire
+  // rempli que le rapport Z plantait, pas sur un formulaire vide.
+  const remplir = (root) => {
+    const jour = new Date().toISOString().slice(0, 10);
+    for (const el of root.querySelectorAll("input, textarea, select")) {
+      if (el.disabled || el.readOnly || ["checkbox", "radio", "file", "hidden"].includes(el.type)) continue;
+      const v = el.tagName === "SELECT" ? (el.options[1] || el.options[0])?.value
+        : el.type === "number" ? "12.5" : el.type === "date" ? jour : el.type === "email" ? "client@exemple.fr"
+        : el.type === "tel" ? "0612345678" : el.type === "password" ? "1234" : /search|recherch|cherch/i.test(el.placeholder || el.type) ? "" : "Essai 12";
+      if (v != null && el.value !== v) fireEvent.change(el, { target: { value: v } });
+    }
+  };
+  for (const [nom, Ecran] of ECRANS) for (const avecSaisie of [false, true]) {
+    it(`${nom} : aucun clic ne fait planter l'écran${avecSaisie ? " (champs remplis)" : ""}`, async () => {
       vi.spyOn(window, "confirm").mockReturnValue(true);
       vi.spyOn(window, "alert").mockImplementation(() => {});
       vi.spyOn(window, "prompt").mockReturnValue("");
@@ -314,7 +327,8 @@ describe("Écrans — chaque clic mène quelque part (explorateur)", () => {
             if (!el) return null;
             libelle += `${libelle ? " › " : ""}« ${(el.textContent || el.getAttribute("title") || el.tagName).trim().slice(0, 30)} »`;
             errors.length = 0; pageErr.length = 0;
-            fireEvent.click(el); await attendre(30);
+            if (avecSaisie) { remplir(container); await attendre(5); }
+            fireEvent.click(cliquables(container)[i] || el); await attendre(30);
             const casse = /Erreur détectée/.test(container.textContent) ? "écran « Erreur détectée »"
               : [...errors, ...pageErr].find(m => PLANTAGE.test(m));
             if (casse) { pannes.push(`clic ${libelle} : ${String(casse).slice(0, 160)}`); return null; }
