@@ -577,13 +577,12 @@ function AppProvider({children}){
     setStoreId(storeId==="all"?null:storeId);
     // Reload ALL data for the new store context
     try{
-      const[prods,apiSales,setts,closData,apiCounter,stockAl]=await Promise.all([
+      const[prods,apiSales,setts,closData,apiCounter]=await Promise.all([
         API.products.list(),
         API.sales.list({limit:200}).catch(()=>null),
         API.settings.get().catch(()=>null),
         API.fiscal.closures().catch(()=>null),
         API.fiscal.counter().catch(()=>null),
-        API.stock.alerts().catch(()=>null),
       ]);
       if(prods)setProducts(norm.products(prods));
       if(apiSales&&Array.isArray(apiSales))setTickets(norm.sales(apiSales).sort((a,b)=>new Date(b.date||0)-new Date(a.date||0)).slice(0,500));
@@ -592,7 +591,8 @@ function AppProvider({children}){
       else setClosures([]);
       if(apiCounter&&!Array.isArray(apiCounter)){const seq=apiCounter.ticket_seq??apiCounter.seq??0;setTSeq(seq);if(apiCounter.last_hash||apiCounter.lastHash)setLastHash(apiCounter.last_hash||apiCounter.lastHash);if(apiCounter.grand_total!=null||apiCounter.grandTotal!=null)setGt(parseFloat(apiCounter.grand_total??apiCounter.grandTotal));}
       else{setTSeq(0);setLastHash("0".repeat(64));setGt(0);}
-      if(stockAl)setStockAlerts(stockAl);else setStockAlerts([]);
+      // Alertes de stock : calculees depuis les produits (useMemo stockAlerts). Avant, un appel a
+      // setStockAlerts (inexistant) faisait echouer la fin du changement de magasin en silence.
     }catch(e){console.warn("Erreur chargement magasin:",e.message);}
     const storeName=storeId==="all"?"Tous les magasins":stores.find(s=>s.id===storeId)?.name||"";
     notify(`Vue: ${storeName}`,"info");

@@ -113,9 +113,9 @@ export async function downloadAndInstall(downloadUrl) {
         return true;
       }
     } catch (e) {}
-    // Final fallback: system browser
+    // Final fallback: system browser. Avant, « new Intent(...) » (classe Java, inexistante en JS)
+    // levait une erreur avalee : cette ligne n'etait jamais atteinte.
     try {
-      const intent = new Intent('android.intent.action.VIEW');
       window.location.href = downloadUrl;
     } catch (e) {}
     return false;
