@@ -42,6 +42,11 @@ export const useApp = () => useContext(AppCtx);
 // TVA_RATES mutable — keep module-level ref so context can update it
 let TVA_RATES = [...DEFAULT_TVA_RATES];
 
+// Caches de LECTURE, rechargés depuis le serveur : sacrifiables si le stockage est plein, du
+// moins utile au plus utile. Jamais la file hors-ligne (caissepro_pendingSync) ni la session.
+const CACHES_LIBERABLES=["caissepro_pricehistory","caissepro_stockmoves","caissepro_audit","caissepro_jet",
+  "caissepro_footfall","caissepro_clock","caissepro_retouches","caissepro_tenues","caissepro_cashmoves","caissepro_tickets"];
+
 function AppProvider({children}){
   const[currentUser,setCurrentUserRaw]=useState(()=>{try{const s=sessionStorage.getItem("caissepro_user");return s?JSON.parse(s):null;}catch(e){return null;}});
   const setCurrentUser=useCallback((u)=>{setCurrentUserRaw(u);try{if(u)sessionStorage.setItem("caissepro_user",JSON.stringify(u));else sessionStorage.removeItem("caissepro_user");}catch(e){}},[]);
@@ -162,10 +167,19 @@ function AppProvider({children}){
   const setUsers=useCallback((v)=>{setUsersRaw(prev=>{const next=typeof v==="function"?v(prev):v;try{localStorage.setItem("caissepro_users",JSON.stringify(next));}catch(e){}return next;});},[]);
   // ══ Pending sync queue — retry offline user/settings changes when back online ══
   const[pendingSync,setPendingSync]=useState(()=>{try{const s=localStorage.getItem("caissepro_pendingSync");return s?JSON.parse(s):[];}catch(e){return[];}});
-  useEffect(()=>{try{localStorage.setItem("caissepro_pendingSync",JSON.stringify(pendingSync));}catch(e){}},[pendingSync]);
-  const addPendingSync=useCallback((action)=>{setPendingSync(p=>[...p,{...action,ts:Date.now()}]);},[]);
   // notify est declare plus bas dans le provider : les retouches y accedent par cette reference
   const notifyTot=useRef(()=>{});
+  // File hors-ligne = ventes/avoirs pas encore sur le serveur : sa sauvegarde ne doit JAMAIS
+  // echouer en silence (stockage plein -> un rechargement perdait les ventes). Si le stockage est
+  // plein, on libere les CACHES de lecture (rechargeables depuis le serveur) puis on reessaie.
+  useEffect(()=>{
+    const val=JSON.stringify(pendingSync);
+    try{localStorage.setItem("caissepro_pendingSync",val);return;}catch(e){/* stockage plein ? */}
+    for(const k of CACHES_LIBERABLES){try{localStorage.removeItem(k);}catch(e){/* ignore */}
+      try{localStorage.setItem("caissepro_pendingSync",val);console.warn("Stockage plein : cache",k,"vide pour garder la file hors-ligne");return;}catch(e){/* suivant */}}
+    if(pendingSync.length)notifyTot.current(`⚠ ${pendingSync.length} opération(s) hors-ligne NON sauvegardée(s) sur l'appareil (stockage plein) : ne rechargez pas la page avant le retour de la connexion.`,"error");
+  },[pendingSync]);
+  const addPendingSync=useCallback((action)=>{setPendingSync(p=>[...p,{...action,ts:Date.now()}]);},[]);
   const addRetoucheBon=useCallback(async(bon)=>{
     try{
       const saved=await API.retouches.create({client:bon.client||"",phone:bon.phone||"",seller:bon.seller||"",items:(bon.items||[]).filter(i=>i.desc).map(i=>({desc:i.desc||i.description||"",price:parseFloat(i.price)||0})),dateRetrait:bon.dateRetrait||null,notes:bon.notes||"",total:parseFloat(bon.total)||0});
