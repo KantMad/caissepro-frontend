@@ -27,7 +27,7 @@ function CashRegControl({onSkip,onDone}){
 
       {!denomMode?<>
         <label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:4,textTransform:"uppercase",letterSpacing:"0.5px"}}>Fond de caisse (€)</label>
-        <Input type="number" step="0.01" value={a} onChange={e=>setA(e.target.value)} placeholder="100.00" style={{marginBottom:8,height:48,fontSize:16,fontWeight:700,textAlign:"center"}}/>
+        <Input type="number" step="0.01" value={a} onChange={e=>setA(e.target.value)} placeholder="Montant compté" style={{marginBottom:8,height:48,fontSize:16,fontWeight:700,textAlign:"center"}}/>
         <div style={{display:"flex",gap:6,marginBottom:16,justifyContent:"center"}}>
           {quickAmounts.map(v=>(<button key={v} onClick={()=>setA(String(v))} style={{padding:"6px 12px",borderRadius:8,border:`1.5px solid ${a===String(v)?C.accent:C.border}`,background:a===String(v)?C.accentLight:"transparent",
             cursor:"pointer",fontSize:11,fontWeight:600,color:a===String(v)?C.accent:C.textMuted,transition:"all 0.12s"}}>{v}€</button>))}</div>
@@ -57,7 +57,10 @@ function CashRegControl({onSkip,onDone}){
 
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
         <Btn variant="outline" onClick={onSkip} style={{height:48,borderRadius:12}}><XCircle size={14}/> Passer</Btn>
-        <Btn onClick={async()=>{const amt=denomMode?denomTotal:parseFloat(a);if(amt){await openReg(amt,denomMode?denom:null);onDone();}}} disabled={denomMode?denomTotal===0:!a}
+        <Btn onClick={async()=>{const amt=denomMode?denomTotal:parseFloat(a);
+          // 0 € est un fond de caisse valable (tiroir vide) ; avant, refusé sans message
+          if(Number.isFinite(amt)&&amt>=0&&(denomMode||a!=="")){await openReg(amt,denomMode?denom:null);onDone();}}}
+          disabled={denomMode?false:(a===""||!(parseFloat(a)>=0))}
           style={{height:48,borderRadius:12,background:C.accent,boxShadow:(denomMode?denomTotal>0:a)?`0 4px 16px ${C.accent}33`:"none"}}><Wallet size={14}/> Ouvrir la caisse</Btn>
       </div></div></div>);
 }

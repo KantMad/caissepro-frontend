@@ -8,7 +8,7 @@ import { ProductIcon, colorHex } from "../ProductIcon.jsx";
 import { Modal, Btn, Input, Badge, Numpad } from "../ui.jsx";
 import { useApp } from "../context.jsx";
 import { getPaymentLabel, getAvoirRemaining, lineDiscountEuro, globalDiscountTTC, tvaParTaux, libelleTaux, libellePaiementTicket, pointsFidelite } from "../lib/formatters.js";
-import { lineNetTTC, round2 } from "../lib/totals.js";
+import { lineNetTTC, round2, montantsEspeces } from "../lib/totals.js";
 import { dayKey } from "../lib/dates.js";
 import { useViewport } from "../useViewport.js";
 import hardwareManager from "../hardware.js";
@@ -67,9 +67,12 @@ function SalesScreen(){
   // repli hors-ligne et aux Favoris (petite liste).
   const SRV_LIMIT=80;
   const[srv,setSrv]=useState([]);
+  // Recherche serveur en cours : sans cet état, la grille affichait « Aucun produit trouvé » pendant
+  // le chargement du matin (le caissier croyait le catalogue vide).
+  const[srvEnCours,setSrvEnCours]=useState(true);
   useEffect(()=>{
     if(cat==="Favoris")return; // Favoris géré via le contexte
-    let cancel=false;
+    let cancel=false;setSrvEnCours(true);
     const t=setTimeout(async()=>{
       try{
         const params={limit:SRV_LIMIT};
@@ -78,6 +81,7 @@ function SalesScreen(){
         const rows=await API.products.list(params);
         if(!cancel)setSrv(norm.products(rows||[]));
       }catch(e){if(!cancel)setSrv([]);}
+      finally{if(!cancel)setSrvEnCours(false);}
     },220);
     return()=>{cancel=true;clearTimeout(t);};
   },[search,cat]);
@@ -229,8 +233,13 @@ function SalesScreen(){
         {gridSource.length===0&&<div style={{textAlign:"center",padding:"50px 20px",color:C.textLight}}>
           <div style={{width:56,height:56,borderRadius:16,background:C.surfaceAlt,display:"inline-flex",alignItems:"center",justifyContent:"center",marginBottom:12}}>
             <Package size={26} style={{opacity:0.4}}/></div>
-          <div style={{fontSize:14,fontWeight:700,marginBottom:4,color:C.text}}>Aucun produit trouvé</div>
-          <div style={{fontSize:12}}>Essayez un autre terme de recherche</div></div>}
+          {srvEnCours&&cat!=="Favoris"&&navigator.onLine!==false
+            ?<div style={{fontSize:14,fontWeight:700,color:C.text}}>Chargement du catalogue…</div>
+            :search.trim()||(cat!=="Tous"&&cat!=="Favoris")
+              ?<><div style={{fontSize:14,fontWeight:700,marginBottom:4,color:C.text}}>Aucun produit trouvé</div>
+                <div style={{fontSize:12}}>Essayez un autre terme de recherche ou une autre catégorie</div></>
+              :<><div style={{fontSize:14,fontWeight:700,marginBottom:4,color:C.text}}>{cat==="Favoris"?"Aucun favori":"Aucun article dans ce magasin"}</div>
+                <div style={{fontSize:12}}>{cat==="Favoris"?"Touchez l'étoile d'un article pour l'ajouter ici":"Ajoutez des articles depuis le tableau de bord (Produits) ou scannez un code-barres"}</div></>}</div>}
         {gridSource.length>=SRV_LIMIT&&<div style={{fontSize:11,color:C.textMuted,padding:"2px 2px 8px"}}>Premiers {SRV_LIMIT} résultats — affinez la recherche ou scannez le code-barres.</div>}
         <div style={{display:"grid",gridTemplateColumns:"repeat(var(--prod-cols,4),1fr)",gap:"var(--gap,10px)"}}>
         {gridSource.map(p=>{const ts=(p.variants||[]).reduce((s,v)=>s+v.stock,0);const ha=(p.variants||[]).some(v=>v.stock<=(v.stockAlert||5));
@@ -331,7 +340,7 @@ function SalesScreen(){
           const cc=CAT_COLORS[i.product.category]||C.primary;
           const lastP=selCust&&!i.isCustom?getLastPriceForCustomer(selCust.id,i.product.id):null;
           return(
-          <div key={`${i.product.id}-${i.variant?.id}`} style={{padding:"var(--cart-item-pad,10px)",borderRadius:"var(--radius-sm,10px)",border:`1px solid ${C.border}`,marginBottom:5,
+          <div key={`${i.product.id}-${i.variant?.id}`} style={{padding:"var(--cart-item-pad,10px)",borderRadius:"var(--radius-sm,10px)",border:`1px solid ${C.border}`,marginBottom:6,
             background:C.surface,transition:"all 0.15s",boxShadow:`0 1px 3px ${C.shadow}`}}
             onMouseEnter={e=>e.currentTarget.style.boxShadow=`0 3px 10px ${C.shadowMd}`}
             onMouseLeave={e=>e.currentTarget.style.boxShadow=`0 1px 3px ${C.shadow}`}>
@@ -340,36 +349,36 @@ function SalesScreen(){
                 return photos.length>0
                   ?<div style={{width:36,height:36,borderRadius:8,overflow:"hidden",flexShrink:0,border:`1px solid ${C.border}`}}>
                     <img src={photos[0].url} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}} loading="lazy"/></div>
-                  :<div style={{width:30,height:30,borderRadius:8,background:`${cc}10`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                  :<div style={{width:34,height:34,borderRadius:8,background:`${cc}10`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
                     {i.isCustom?<span style={{fontSize:14}}>📝</span>:<ProductIcon name={i.product.name} category={i.product.category} color={i.variant?.color} fallbackColor={cc} size={24}/>}</div>;
               })()}
               <div style={{flex:1,minWidth:0}}>
-                <div style={{fontSize:11,fontWeight:700,lineHeight:1.2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{i.product.name}{i.isCustom?" (divers)":""}</div>
-                {!i.isCustom&&<><div style={{display:"flex",gap:2,marginTop:2,flexWrap:"wrap"}}>
-                  <span style={{fontSize:8,color:cc,fontWeight:600,background:`${cc}10`,padding:"1px 4px",borderRadius:3}}>{i.variant?.color}</span>
-                  {i.variant?.colorCode&&<span style={{fontSize:7,color:C.accent,fontWeight:600,background:C.accentLight,padding:"1px 3px",borderRadius:3,fontFamily:"monospace"}}>{i.variant.colorCode}</span>}
-                  <span style={{fontSize:8,color:C.info,fontWeight:600,background:`${C.info}10`,padding:"1px 4px",borderRadius:3}}>{i.variant?.size}</span>
-                  {lastP&&<span style={{fontSize:7,color:C.textMuted,background:C.surfaceAlt,padding:"1px 3px",borderRadius:3}}>Préc. {lastP.toFixed(2)}€</span>}</div>
-                <div style={{display:"flex",gap:3,marginTop:1}}>
-                  {i.product.sku&&<span style={{fontSize:7,fontFamily:"monospace",color:C.textMuted}}>Réf: {i.product.sku}</span>}
-                  {i.variant?.ean&&<span style={{fontSize:7,fontFamily:"monospace",color:C.textLight}}>EAN: {i.variant.ean}</span>}
+                <div style={{fontSize:14,fontWeight:700,lineHeight:1.25,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{i.product.name}{i.isCustom?" (divers)":""}</div>
+                {!i.isCustom&&<><div style={{display:"flex",gap:4,marginTop:3,flexWrap:"wrap"}}>
+                  <span style={{fontSize:12,color:cc,fontWeight:700,background:`${cc}10`,padding:"1px 6px",borderRadius:4}}>{i.variant?.color}</span>
+                  {i.variant?.colorCode&&<span style={{fontSize:11,color:C.accent,fontWeight:600,background:C.accentLight,padding:"1px 5px",borderRadius:4,fontFamily:"monospace"}}>{i.variant.colorCode}</span>}
+                  <span style={{fontSize:12,color:C.info,fontWeight:700,background:`${C.info}10`,padding:"1px 6px",borderRadius:4}}>{i.variant?.size}</span>
+                  {lastP&&<span style={{fontSize:11,color:C.textMuted,background:C.surfaceAlt,padding:"1px 5px",borderRadius:4}}>Préc. {lastP.toFixed(2)}€</span>}</div>
+                <div style={{display:"flex",gap:6,marginTop:2,flexWrap:"wrap"}}>
+                  {i.product.sku&&<span style={{fontSize:10,fontFamily:"monospace",color:C.textMuted}}>Réf: {i.product.sku}</span>}
+                  {i.variant?.ean&&<span style={{fontSize:10,fontFamily:"monospace",color:C.textLight}}>EAN: {i.variant.ean}</span>}
                 </div></>}</div>
-              <button onClick={()=>removeFromCart(i.product.id,i.variant?.id)} style={{background:C.dangerLight,border:"none",cursor:"pointer",borderRadius:6,width:24,height:24,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"all 0.15s"}}
+              <button onClick={()=>removeFromCart(i.product.id,i.variant?.id)} style={{background:C.dangerLight,border:"none",cursor:"pointer",borderRadius:8,width:36,height:36,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"all 0.15s"}} aria-label="Retirer l'article"
                 onMouseEnter={e=>e.currentTarget.style.background=C.danger} onMouseLeave={e=>e.currentTarget.style.background=C.dangerLight}>
-                <Trash2 size={10} color={C.danger} style={{transition:"color 0.15s"}}/></button></div>
+                <Trash2 size={16} color={C.danger} style={{transition:"color 0.15s"}}/></button></div>
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-              <div style={{display:"flex",alignItems:"center",gap:1,background:C.surfaceAlt,borderRadius:16,padding:2}}>
-                <button onClick={()=>updateQty(i.product.id,i.variant?.id,i.quantity-1)} style={{width:24,height:24,borderRadius:12,border:"none",background:C.surface,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:`0 1px 2px ${C.shadow}`,transition:"all 0.1s"}}><Minus size={10}/></button>
-                <span style={{width:24,textAlign:"center",fontSize:12,fontWeight:700}}>{i.quantity}</span>
-                <button onClick={()=>updateQty(i.product.id,i.variant?.id,i.quantity+1)} style={{width:24,height:24,borderRadius:12,border:"none",background:C.surface,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:`0 1px 2px ${C.shadow}`,transition:"all 0.1s"}}><Plus size={10}/></button></div>
+              <div style={{display:"flex",alignItems:"center",gap:2,background:C.surfaceAlt,borderRadius:20,padding:2}}>
+                <button onClick={()=>updateQty(i.product.id,i.variant?.id,i.quantity-1)} style={{width:36,height:36,borderRadius:18,border:"none",background:C.surface,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:`0 1px 2px ${C.shadow}`,transition:"all 0.1s"}} aria-label="Diminuer la quantité"><Minus size={16}/></button>
+                <span style={{minWidth:28,textAlign:"center",fontSize:15,fontWeight:800}}>{i.quantity}</span>
+                <button onClick={()=>updateQty(i.product.id,i.variant?.id,i.quantity+1)} style={{width:36,height:36,borderRadius:18,border:"none",background:C.surface,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:`0 1px 2px ${C.shadow}`,transition:"all 0.1s"}} aria-label="Augmenter la quantité"><Plus size={16}/></button></div>
               <button onClick={()=>{setDm({pid:i.product.id,vid:i.variant?.id,item:i});
                 setDPct(String(i.discountPercent??(i.discountType==="amount"?0:i.discount)??""));
-                setDEur(String(i.discountAmount??(i.discountType==="amount"?(i.discount||0)*i.quantity:0)??""));}} style={{padding:"2px 6px",borderRadius:6,border:`1px solid ${d>0?cc:C.border}`,background:d>0?`${cc}08`:"transparent",cursor:"pointer",fontSize:8,fontWeight:600,color:d>0?cc:C.textMuted,transition:"all 0.15s"}}>
+                setDEur(String(i.discountAmount??(i.discountType==="amount"?(i.discount||0)*i.quantity:0)??""));}} style={{padding:"0 12px",minHeight:32,borderRadius:8,border:`1px solid ${d>0?cc:C.border}`,background:d>0?`${cc}08`:"transparent",cursor:"pointer",fontSize:12,fontWeight:700,color:d>0?cc:C.textMuted,transition:"all 0.15s"}}>
                 {d>0?[(i.discountPercent??(i.discountType==="amount"?0:i.discount))>0?`-${i.discountPercent??i.discount}%`:null,
                       (i.discountAmount??(i.discountType==="amount"?(i.discount||0)*i.quantity:0))>0?`-${Number(i.discountAmount??((i.discount||0)*i.quantity)).toFixed(2)}€`:null]
                       .filter(Boolean).join(" ")||"Remise":"Remise"}</button>
-              <div style={{textAlign:"right"}}>{i.discount>0&&<div style={{fontSize:7,color:C.textLight,textDecoration:"line-through"}}>{t.toFixed(2)}€</div>}
-                <div style={{fontSize:13,fontWeight:800,color:cc,letterSpacing:"-0.3px"}}>{(t-d).toFixed(2)}€</div></div></div></div>);})}</div>
+              <div style={{textAlign:"right"}}>{i.discount>0&&<div style={{fontSize:11,color:C.textLight,textDecoration:"line-through"}}>{t.toFixed(2)}€</div>}
+                <div style={{fontSize:16,fontWeight:800,color:cc,letterSpacing:"-0.3px"}}>{(t-d).toFixed(2)}€</div></div></div></div>);})}</div>
 
       {/* Totals & Payment */}
       <div style={{padding:"0 var(--pad-sm,12px) var(--pad-sm,12px)",borderTop:`1px solid ${C.border}`}}>
@@ -396,7 +405,7 @@ function SalesScreen(){
 
         <div style={{display:"flex",gap:4,marginBottom:5}}>
           <Btn variant="outline" onClick={()=>{setGm(true);setGPct(gDiscPct?String(gDiscPct):"");setGEur(gDiscAmt?String(gDiscAmt):"");}}
-            style={{flex:1,height:28,fontSize:9,padding:"0 6px",borderRadius:8,borderColor:(gDiscPct||gDiscAmt)?C.accent:undefined,color:(gDiscPct||gDiscAmt)?C.accent:undefined}}><Percent size={10}/>
+            style={{flex:1,height:36,fontSize:12,padding:"0 8px",borderRadius:8,borderColor:(gDiscPct||gDiscAmt)?C.accent:undefined,color:(gDiscPct||gDiscAmt)?C.accent:undefined}}><Percent size={14}/>
             {gDiscPct||gDiscAmt?`Remise ${[gDiscPct?`-${gDiscPct}%`:null,gDiscAmt?`-${Number(gDiscAmt).toFixed(2)}€`:null].filter(Boolean).join(" ")}`:"Remise globale"}</Btn>
           </div>
 
@@ -406,8 +415,8 @@ function SalesScreen(){
         :<Btn onClick={()=>setPayMethodModal(true)} disabled={!cart.length||busy} style={{width:"100%",height:"var(--btn-h,52px)",borderRadius:"var(--radius,14px)",background:C.primary,fontSize:"var(--btn-font,14px)",gap:6,boxShadow:`0 4px 16px ${C.primary}30`,marginBottom:5,letterSpacing:"-0.3px"}}>
           {busy?<span className="spin-loader"/>:<><Wallet size={16}/> Règlement — {totals.tTTC.toFixed(2)}€</>}</Btn>}
         <div style={{display:"flex",gap:4}}>
-          <Btn variant="outline" onClick={()=>setRetoucheModal(true)} style={{flex:1,height:26,fontSize:9,borderRadius:8,gap:3}}><Edit size={10}/> Retouche</Btn>
-          <Btn variant="outline" onClick={()=>{if(!cart.length)return;if(!perm().canVoid){notify("Vider le panier : réservé au gérant (ou supprimez les lignes une à une)","error");return;}setConfirmClear(true);}} style={{flex:1,borderColor:`${C.danger}20`,color:C.danger,height:26,fontSize:9,borderRadius:8}}><RotateCcw size={9}/> Vider</Btn>
+          <Btn variant="outline" onClick={()=>setRetoucheModal(true)} style={{flex:1,height:36,fontSize:12,borderRadius:8,gap:4}}><Edit size={14}/> Retouche</Btn>
+          <Btn variant="outline" onClick={()=>{if(!cart.length)return;if(!perm().canVoid){notify("Vider le panier : réservé au gérant (ou supprimez les lignes une à une)","error");return;}setConfirmClear(true);}} style={{flex:1,borderColor:`${C.danger}20`,color:C.danger,height:36,fontSize:12,borderRadius:8}}><RotateCcw size={9}/> Vider</Btn>
         </div>
       </div>
     </div>
@@ -692,7 +701,9 @@ function SalesScreen(){
             <Printer size={14}/> Imprimer le solde restant</Btn>
         </div>
       )}
-      <div style={{display:"flex",gap:8,marginTop:14}}>
+      {/* Actions d'après-vente collées en BAS de la fenêtre : sous le long aperçu du ticket, elles
+          sortaient de l'écran (768 px) et il fallait défiler pour imprimer ou passer au client suivant. */}
+      <div style={{display:"flex",gap:8,marginTop:14,position:"sticky",bottom:-1,background:C.surface,paddingTop:10,paddingBottom:4,boxShadow:`0 -8px 12px -8px ${C.shadow}`,zIndex:2}}>
         <Btn variant="outline" onClick={()=>emailTicket(lastTk)} style={{flex:1,borderRadius:12}}><Mail size={14}/> Email</Btn>
         <Btn variant="outline" onClick={()=>thermalPrint("receipt",lastTk)} style={{flex:1,borderRadius:12}}><Printer size={14}/> {printerConnected?"Ticket":"Imprimer"}</Btn>
         <Btn variant="outline" onClick={async()=>{
@@ -714,6 +725,10 @@ function SalesScreen(){
 
     {/* CASH NUMPAD MODAL */}
     <Modal open={cashNumpadModal} onClose={()=>setCashNumpadModal(false)} title="Paiement Espèces" sub={`Total: ${totals.tTTC.toFixed(2)}€`}>
+      <div style={{display:"flex",alignItems:"baseline",justifyContent:"space-between",background:C.primaryLight,borderRadius:12,padding:"10px 14px",marginBottom:12}}>
+        <span style={{fontSize:13,fontWeight:700,color:C.primaryDark}}>À payer</span>
+        <span data-testid="a-payer" style={{fontSize:30,fontWeight:900,color:C.primary,letterSpacing:"-0.5px"}}>{totals.tTTC.toFixed(2)} €</span></div>
+      
       <div style={{marginBottom:12}}>
         <Numpad value={numpadValue} onChange={setNumpadValue} label="Montant donné par le client"/>
         {parseFloat(numpadValue)>0&&<div style={{background:C.primaryLight,borderRadius:12,padding:14,marginTop:10,
@@ -721,7 +736,7 @@ function SalesScreen(){
           <span style={{fontSize:14,fontWeight:700,color:C.primaryDark}}>Rendu monnaie</span>
           <span style={{fontSize:26,fontWeight:900,color:C.primary,letterSpacing:"-0.5px"}}>{Math.max(0,parseFloat(numpadValue)-totals.tTTC).toFixed(2)}€</span></div>}
         <div style={{display:"flex",gap:6,marginTop:10}}>
-          {[totals.tTTC,Math.ceil(totals.tTTC),Math.ceil(totals.tTTC/5)*5,Math.ceil(totals.tTTC/10)*10,50,100].filter((v,i,a)=>v>0&&a.indexOf(v)===i).slice(0,4).map(v=>(
+          {montantsEspeces(totals.tTTC).map(v=>(
             <Btn key={v} variant="outline" onClick={()=>setNumpadValue(String(v))} style={{flex:1,fontSize:11,borderRadius:10}}>{v.toFixed(2)}€</Btn>))}
         </div>
       </div>
@@ -733,6 +748,10 @@ function SalesScreen(){
 
     {/* PAYMENT METHOD MODAL */}
     <Modal open={payMethodModal} onClose={()=>setPayMethodModal(false)} title="Règlement" sub={`Total: ${totals.tTTC.toFixed(2)}€`}>
+      <div style={{display:"flex",alignItems:"baseline",justifyContent:"space-between",background:C.primaryLight,borderRadius:12,padding:"10px 14px",marginBottom:12}}>
+        <span style={{fontSize:13,fontWeight:700,color:C.primaryDark}}>À payer</span>
+        <span data-testid="a-payer" style={{fontSize:30,fontWeight:900,color:C.primary,letterSpacing:"-0.5px"}}>{totals.tTTC.toFixed(2)} €</span></div>
+      
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:10}}>
         <button onClick={async()=>{setPayMethodModal(false);await quickPay("card");}} style={{padding:16,borderRadius:14,border:`2px solid ${C.info}25`,background:`${C.info}06`,cursor:"pointer",textAlign:"center",transition:"all 0.15s"}}
           onMouseEnter={e=>e.currentTarget.style.borderColor=C.info} onMouseLeave={e=>e.currentTarget.style.borderColor=`${C.info}25`}>

@@ -163,3 +163,15 @@ describe("remises cumulables", () => {
     expect(t.gdTTC).toBe(50);
   });
 });
+
+import { montantsEspeces } from "./totals.js";
+describe("montantsEspeces", () => {
+  it("jamais en dessous du total, sans doublon", () => {
+    expect(montantsEspeces(148.9)).toEqual([148.9, 149, 150, 200]);
+    expect(montantsEspeces(20)).toEqual([20, 50, 100, 200]);
+    expect(montantsEspeces(7.5)).toEqual([7.5, 8, 10, 20]);
+    expect(montantsEspeces(59.9)).toEqual([59.9, 60, 100, 200]);
+    expect(montantsEspeces(0)).toEqual([]);
+    for (const t of [0.01, 3.33, 59.9, 99.99, 249, 1234.56]) for (const v of montantsEspeces(t)) expect(v).toBeGreaterThanOrEqual(t);
+  });
+});

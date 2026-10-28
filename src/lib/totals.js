@@ -100,3 +100,19 @@ export function computeTotals(lines, opts = {}) {
 
   return { sHT, gd, gdTTC, tHT, tTVA, tTTC };
 }
+
+// Montants proposés au paiement en espèces : le compte juste, puis les arrondis supérieurs
+// aux pièces/billets usuels. JAMAIS en dessous du total (avant : « 50,00 € » proposé pour un
+// panier de 148,90 € -> bouton Encaisser bloqué).
+export function montantsEspeces(total, max = 4) {
+  const t = Math.round((Number(total) || 0) * 100) / 100;
+  if (t <= 0) return [];
+  const sup = (pas) => Math.round(Math.ceil(t / pas - 1e-9) * pas * 100) / 100;
+  const out = [];
+  // compte juste, arrondis a 1 / 5 / 10 EUR, puis billets seuls qui couvrent le total
+  for (const v of [t, sup(1), sup(5), sup(10), 5, 10, 20, 50, 100, 200, 500]) {
+    if (v >= t && !out.includes(v)) out.push(v);
+    if (out.length >= max) break;
+  }
+  return out;
+}
