@@ -76,4 +76,6 @@ export default defineConfig({
       },
     },
   },
+  // Tests (vitest) : stockage remis a zero avant chaque test.
+  test: { setupFiles: ['./src/test-setup.js'] },
 });
