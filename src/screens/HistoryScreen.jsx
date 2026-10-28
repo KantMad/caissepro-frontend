@@ -85,17 +85,17 @@ function HistoryScreen(){
       <Input type="date" value={dateFilter} onChange={e=>setDateFilter(e.target.value)} style={{width:140,height:32,fontSize:11,padding:"4px 10px"}}/>
       </div>
     {tab==="tickets"&&(<>{pagedTickets.length?pagedTickets.map((t,idx)=>(
-      <div key={t.ticketNumber||t.id||idx} style={{display:"flex",alignItems:"center",gap:10,padding:10,borderRadius:12,background:C.surface,border:`1.5px solid ${C.border}`,marginBottom:5,transition:"all 0.12s"}}
+      <div key={t.ticketNumber||t.id||idx} style={{display:"flex",alignItems:"center",gap:10,padding:12,borderRadius:12,background:C.surface,border:`1.5px solid ${C.border}`,marginBottom:5,transition:"all 0.12s"}}
         onMouseEnter={e=>e.currentTarget.style.borderColor=C.primary+"44"} onMouseLeave={e=>e.currentTarget.style.borderColor=C.border}>
         <Receipt size={14} color={C.textMuted}/>
         <div style={{flex:1,cursor:"pointer"}} onClick={()=>setReprintTk({...t})}>
-          <div style={{fontSize:11,fontWeight:700}}>N° {t.ticketNumber} <Badge color={C.info}>{t.paymentMethod}</Badge>
+          <div style={{fontSize:13,fontWeight:700}}>N° {t.ticketNumber} <Badge color={C.info}>{getPaymentLabel(t.paymentMethod||t.payment_method,"full")}</Badge>
           {t.customerName&&<Badge color={C.accent}>{t.customerName}</Badge>}
           {t.offlineAt&&<Badge color={C.warn}>HORS-LIGNE</Badge>}</div>
-          <div style={{fontSize:9,color:C.textMuted}}>{new Date(t.date||t.createdAt||t.created_at).toLocaleString("fr-FR")} — {t.userName||t.user_name||"?"} — {(t.items||[]).length} art.</div>
-          {t.offlineAt&&<div style={{fontSize:9,color:"#92400E"}}>Vendu hors-ligne le {new Date(t.offlineAt).toLocaleString("fr-FR")}{t.offlineTicketNumber?` — ticket papier ${t.offlineTicketNumber}`:""} · enregistré à la synchronisation</div>}</div>
-        <div style={{textAlign:"right",marginRight:8}}><div style={{fontSize:13,fontWeight:700,color:C.primary}}>{(t.totalTTC||parseFloat(t.total_ttc)||0).toFixed(2)}€</div>
-          <div style={{fontSize:7,color:C.fiscal,fontFamily:"monospace"}}>{t.fingerprint}</div></div>
+          <div style={{fontSize:11,color:C.textMuted,marginTop:2}}>{new Date(t.date||t.createdAt||t.created_at).toLocaleString("fr-FR")} — {t.userName||t.user_name||"?"} — {(t.items||[]).length} art.</div>
+          {t.offlineAt&&<div style={{fontSize:11,color:"#92400E"}}>Vendu hors-ligne le {new Date(t.offlineAt).toLocaleString("fr-FR")}{t.offlineTicketNumber?` — ticket papier ${t.offlineTicketNumber}`:""} · enregistré à la synchronisation</div>}</div>
+        <div style={{textAlign:"right",marginRight:8}}><div style={{fontSize:15,fontWeight:800,color:C.primary}}>{(t.totalTTC||parseFloat(t.total_ttc)||0).toFixed(2)}€</div>
+          <div style={{fontSize:9,color:C.fiscal,fontFamily:"monospace"}}>{t.fingerprint}</div></div>
         {p().canVoid&&<Btn variant="outline" onClick={()=>openReturn(t)} style={{fontSize:10,padding:"4px 10px",borderColor:C.danger+"44",color:C.danger}}>
           <RotateCcw size={11}/> Retour</Btn>}
       </div>
@@ -114,16 +114,16 @@ function HistoryScreen(){
         background:C.surface,border:`1.5px solid ${epuise?C.border:C.danger}33`,marginBottom:5,cursor:"pointer",opacity:epuise?0.7:1}}>
         <RotateCcw size={14} color={epuise?C.textLight:C.danger}/>
         <div style={{flex:1}}>
-          <div style={{fontSize:11,fontWeight:700,color:C.danger}}>{a.avoirNumber} <Badge color={C.textMuted}>Réf: {a.originalTicket}</Badge>
+          <div style={{fontSize:13,fontWeight:700,color:C.danger}}>{a.avoirNumber} <Badge color={C.textMuted}>Réf: {a.originalTicket}</Badge>
             {partial&&!epuise&&<Badge color={C.fiscal}>Partiel</Badge>}{epuise&&<Badge color={C.textLight}>Épuisé</Badge>}
             {a.customerName&&<Badge color={C.accent}>{a.customerName}</Badge>}</div>
-          <div style={{fontSize:9,color:C.textMuted}}>{new Date(a.date).toLocaleString("fr-FR")} — {a.userName} — {a.reason||"Sans motif"}</div></div>
+          <div style={{fontSize:11,color:C.textMuted,marginTop:2}}>{new Date(a.date||a.createdAt||a.created_at).toLocaleString("fr-FR")} — {a.userName} — {a.reason||"Sans motif"}</div></div>
         <div style={{textAlign:"right"}}>
           {partial?<>
-            <div style={{fontSize:9,color:C.textMuted,textDecoration:"line-through"}}>-{total.toFixed(2)}€</div>
+            <div style={{fontSize:11,color:C.textMuted,textDecoration:"line-through"}}>-{total.toFixed(2)}€</div>
             <div style={{fontSize:14,fontWeight:800,color:epuise?C.textLight:C.fiscal}}>{epuise?"Épuisé":`Solde ${rem.toFixed(2)}€`}</div>
-          </>:<div style={{fontSize:13,fontWeight:700,color:C.danger}}>-{total.toFixed(2)}€</div>}
-          <div style={{fontSize:7,color:C.fiscal,fontFamily:"monospace"}}>{a.fingerprint}</div></div>
+          </>:<div style={{fontSize:15,fontWeight:800,color:C.danger}}>-{total.toFixed(2)}€</div>}
+          <div style={{fontSize:9,color:C.fiscal,fontFamily:"monospace"}}>{a.fingerprint}</div></div>
       </div>);
     }):<div style={{textAlign:"center",padding:30,color:C.textLight}}>Aucun avoir</div>)}
 
@@ -179,7 +179,7 @@ function HistoryScreen(){
           <div key={b.id||b.num||idx} style={{display:"flex",alignItems:"center",gap:10,padding:10,borderRadius:10,background:C.surface,border:`1.5px solid ${statusColor[st]||C.border}33`,marginBottom:5}}>
             <div style={{minWidth:56,textAlign:"center"}}>
               <div style={{minWidth:56,height:44,borderRadius:8,background:C.primary,color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,fontWeight:900,letterSpacing:3}}>{sc}</div>
-              <div style={{fontSize:7,fontWeight:600,color:C.textMuted,marginTop:2}}>{(b.num||"").replace("RET-","R-")}</div>
+              <div style={{fontSize:9,fontWeight:600,color:C.textMuted,marginTop:2}}>{(b.num||"").replace("RET-","R-")}</div>
             </div>
             <div style={{flex:1}}>
               <div style={{fontSize:11,fontWeight:700,display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>

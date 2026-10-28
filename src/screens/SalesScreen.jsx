@@ -220,15 +220,15 @@ function SalesScreen(){
         <Zap size={13} color={C.warn}/><span style={{fontWeight:600,color:"#92720E"}}>Promos actives:</span>{activePromos.map(p=><Badge key={p.id} color={C.warn}>{p.name}</Badge>)}</div>}
       <div style={{display:"flex",gap:4,marginBottom:"var(--gap,10px)",overflowX:"auto",flexShrink:0,paddingBottom:2}}>
         {categories.map(c=>{const cc=CAT_COLORS[c]||C.primary;const ic=c!=="Tous"?catIcon(c,settings.categoryIcons):"";return(
-          <button key={c} onClick={()=>setCat(c)} style={{padding:"5px 12px",borderRadius:18,border:"none",
+          <button key={c} onClick={()=>setCat(c)} style={{padding:"0 14px",minHeight:36,borderRadius:18,border:"none",
             background:cat===c?(c==="Tous"?C.primary:cc):"transparent",
-            color:cat===c?"#fff":C.textMuted,fontSize:10,fontWeight:cat===c?700:500,cursor:"pointer",whiteSpace:"nowrap",
+            color:cat===c?"#fff":C.textMuted,fontSize:13,fontWeight:cat===c?700:500,cursor:"pointer",whiteSpace:"nowrap",
             transition:"all 0.15s",boxShadow:cat===c?`0 2px 8px ${cc}30`:"none"}}>{ic?`${ic} `:""}{c}</button>);})}
-        <button onClick={()=>setCat("Favoris")} style={{padding:"5px 12px",borderRadius:18,border:"none",
+        <button onClick={()=>setCat("Favoris")} style={{padding:"0 14px",minHeight:36,borderRadius:18,border:"none",
           background:cat==="Favoris"?C.accent:"transparent",color:cat==="Favoris"?"#fff":C.textMuted,
-          fontSize:10,fontWeight:cat==="Favoris"?700:500,cursor:"pointer",whiteSpace:"nowrap",marginLeft:4,transition:"all 0.15s",
+          fontSize:13,fontWeight:cat==="Favoris"?700:500,cursor:"pointer",whiteSpace:"nowrap",marginLeft:4,transition:"all 0.15s",
           boxShadow:cat==="Favoris"?`0 2px 8px ${C.accent}30`:"none"}}>
-          <Star size={10} style={{verticalAlign:"middle"}}/> Favoris</button></div>
+          <Star size={13} style={{verticalAlign:"middle"}}/> Favoris</button></div>
       <div style={{flex:1,overflowY:"auto",paddingRight:4,paddingBottom:vp.isMobile&&cart.length>0?84:4}}>
         {gridSource.length===0&&<div style={{textAlign:"center",padding:"50px 20px",color:C.textLight}}>
           <div style={{width:56,height:56,borderRadius:16,background:C.surfaceAlt,display:"inline-flex",alignItems:"center",justifyContent:"center",marginBottom:12}}>
@@ -259,14 +259,14 @@ function SalesScreen(){
               <Badge color={C.danger}>{ts<0?`Stock ${ts}`:"Rupture"}</Badge></div>}
             {ha&&ts>0&&<div style={{position:"absolute",top:6,left:6}}><div style={{width:8,height:8,borderRadius:4,background:C.warn,boxShadow:`0 0 0 2px ${C.surface}`}}/></div>}
             {p.collection&&<span style={{position:"absolute",top:6,right:6,fontSize:8,background:"rgba(255,255,255,0.9)",color:cc,padding:"2px 6px",borderRadius:8,fontWeight:700,backdropFilter:"blur(4px)",boxShadow:`0 1px 4px ${C.shadow}`}}>{p.collection}</span>}
-            <button onClick={e=>{e.stopPropagation();toggleFavorite(p.id);}} style={{position:"absolute",bottom:6,right:6,background:"rgba(255,255,255,0.9)",border:"none",cursor:"pointer",padding:4,borderRadius:8,boxShadow:`0 1px 4px ${C.shadow}`,transition:"all 0.15s"}}>
+            <button onClick={e=>{e.stopPropagation();toggleFavorite(p.id);}} aria-label="Favori" style={{position:"absolute",bottom:6,right:6,background:"rgba(255,255,255,0.9)",border:"none",cursor:"pointer",padding:8,borderRadius:10,boxShadow:`0 1px 4px ${C.shadow}`,transition:"all 0.15s"}}>
               <Star size={13} color={favorites.includes(p.id)?C.accent:C.textLight} fill={favorites.includes(p.id)?C.accent:"none"}/></button></div>
           <div style={{padding:"var(--pad-sm,10px) var(--pad-sm,10px) var(--pad-sm,10px)"}}>
             <div style={{fontSize:12,fontWeight:700,marginBottom:2,lineHeight:1.3,letterSpacing:"-0.2px"}}>{p.name}</div>
-            {p.sku&&<div style={{fontSize:9,fontFamily:"'Courier New',monospace",color:C.textMuted,marginBottom:3,letterSpacing:"0.3px"}}>{p.sku}</div>}
+            {p.sku&&<div style={{fontSize:11,fontFamily:"'Courier New',monospace",color:C.textMuted,marginBottom:3,letterSpacing:"0.3px"}}>{p.sku}</div>}
             <div style={{display:"flex",alignItems:"center",gap:4,marginBottom:6}}>
-              <span style={{fontSize:9,color:cc,fontWeight:600,background:`${cc}10`,padding:"1px 5px",borderRadius:4}}>{p.category}</span>
-              <span style={{fontSize:9,color:C.textLight}}>{p.variants.length} var.</span></div>
+              <span style={{fontSize:11,color:cc,fontWeight:600,background:`${cc}10`,padding:"1px 6px",borderRadius:4}}>{p.category}</span>
+              <span style={{fontSize:11,color:C.textLight}}>{p.variants.length} var.</span></div>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
               <span style={{fontSize:16,fontWeight:800,color:cc,letterSpacing:"-0.5px"}}>{p.price.toFixed(2)}€</span>
               <span style={{fontSize:10,fontWeight:600,color:ts>5?C.primary:ts>0?C.warn:C.danger,background:ts>5?C.primaryLight:ts>0?C.warnLight:C.dangerLight,padding:"2px 7px",borderRadius:6}}>{ts}</span></div>
@@ -305,27 +305,27 @@ function SalesScreen(){
 
         {/* Seller selection + Attente */}
         <div style={{display:"flex",gap:4,marginBottom:5}}>
-          <select value={selSeller||""} onChange={e=>setSelSeller(e.target.value||null)} style={{flex:1,height:28,fontSize:10,padding:"3px 6px",borderRadius:8,border:`1px solid ${C.border}`,fontFamily:"inherit",background:C.surface,color:selSeller?C.text:C.textMuted}}>
+          <select value={selSeller||""} onChange={e=>setSelSeller(e.target.value||null)} style={{flex:1,height:34,fontSize:12,padding:"3px 8px",borderRadius:8,border:`1px solid ${C.border}`,fontFamily:"inherit",background:C.surface,color:selSeller?C.text:C.textMuted}}>
             <option value="">Vendeur: {currentUser?.name} (moi)</option>
             {users.filter(u=>u.name!==currentUser?.name&&u.role!=="admin").map(u=>(<option key={u.id} value={u.name}>{u.name}</option>))}
           </select>
-          <Btn variant="outline" onClick={parkCart} disabled={!cart.length} style={{padding:"0 12px",borderRadius:8,fontSize:11,fontWeight:700,gap:5,position:"relative",whiteSpace:"nowrap"}} title="Mettre en attente"><Pause size={13}/> Attente
+          <Btn variant="outline" onClick={parkCart} disabled={!cart.length} style={{padding:"0 12px",height:34,borderRadius:8,fontSize:12,fontWeight:700,gap:5,position:"relative",whiteSpace:"nowrap"}} title="Mettre en attente"><Pause size={13}/> Attente
             {parked.length>0&&<span style={{position:"absolute",top:-5,right:-5,width:14,height:14,borderRadius:7,background:C.danger,color:"#fff",fontSize:7,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center"}}>{parked.length}</span>}</Btn>
         </div>
 
         {/* Customer */}
-        <button onClick={()=>setCustModal(true)} style={{display:"flex",alignItems:"center",gap:6,padding:"5px 8px",borderRadius:8,width:"100%",
+        <button onClick={()=>setCustModal(true)} style={{display:"flex",alignItems:"center",gap:6,padding:"5px 10px",minHeight:34,borderRadius:8,width:"100%",
           border:`1.5px dashed ${selCust?C.primary:C.border}`,background:selCust?`${C.primary}08`:"transparent",cursor:"pointer",marginBottom:5,
-          fontSize:10,fontWeight:600,color:selCust?C.primary:C.textMuted,transition:"all 0.15s"}}
+          fontSize:12,fontWeight:600,color:selCust?C.primary:C.textMuted,transition:"all 0.15s"}}
           onMouseEnter={e=>{if(!selCust)e.currentTarget.style.borderColor=C.primary+"66";}} onMouseLeave={e=>{if(!selCust)e.currentTarget.style.borderColor=C.border;}}>
           {selCust?<><div style={{width:22,height:22,borderRadius:11,background:C.primary,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontSize:8,fontWeight:700,flexShrink:0}}>{selCust.firstName[0]}{selCust.lastName[0]}</div><span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{selCust.firstName} {selCust.lastName} — {selCust.points}pts</span> <Badge color={C.accent}>{custTier?.name}</Badge></>
-          :<><Users size={12}/> Associer un client</>}
+          :<><Users size={14}/> Associer un client</>}
         </button>
 
         {/* Promo code input */}
         <div style={{display:"flex",gap:4}}>
-          <Input value={codeInput} onChange={e=>setCodeInput(e.target.value)} placeholder="Code promo…" style={{height:28,fontSize:10,padding:"3px 8px",borderRadius:8}}/>
-          <Btn variant="outline" onClick={()=>{setPromoCode(codeInput);}} style={{height:28,padding:"0 10px",fontSize:10,borderRadius:8}}>OK</Btn>
+          <Input value={codeInput} onChange={e=>setCodeInput(e.target.value)} placeholder="Code promo…" style={{height:34,fontSize:12,padding:"3px 10px",borderRadius:8}}/>
+          <Btn variant="outline" onClick={()=>{setPromoCode(codeInput);}} style={{height:34,padding:"0 14px",fontSize:12,borderRadius:8}}>OK</Btn>
         </div>
       </div>
 
@@ -540,13 +540,13 @@ function SalesScreen(){
         <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"flex",alignItems:"center",gap:4,marginBottom:3}}>
           <CreditCard size={11} color={cardType==="amex"?"#006FCF":C.info}/>
           <span style={{display:"inline-flex",gap:2}}>
-            <button onClick={()=>setCardType("card")} style={{padding:"1px 6px",borderRadius:4,border:`1px solid ${cardType==="card"?C.info:C.border}`,background:cardType==="card"?C.info:"transparent",color:cardType==="card"?"#fff":C.textMuted,fontSize:9,fontWeight:700,cursor:"pointer"}}>CB</button>
-            <button onClick={()=>setCardType("amex")} style={{padding:"1px 6px",borderRadius:4,border:`1px solid ${cardType==="amex"?"#006FCF":C.border}`,background:cardType==="amex"?"#006FCF":"transparent",color:cardType==="amex"?"#fff":C.textMuted,fontSize:9,fontWeight:700,cursor:"pointer"}}>AMEX</button></span>
-          <button onClick={()=>setPayCard(String(remaining.toFixed(2)))} style={{marginLeft:"auto",background:"none",border:"none",cursor:"pointer",fontSize:9,color:C.primary,fontWeight:600}}>= Reste</button></label>
+            <button onClick={()=>setCardType("card")} style={{padding:"4px 10px",minHeight:28,borderRadius:6,border:`1px solid ${cardType==="card"?C.info:C.border}`,background:cardType==="card"?C.info:"transparent",color:cardType==="card"?"#fff":C.textMuted,fontSize:12,fontWeight:700,cursor:"pointer"}}>CB</button>
+            <button onClick={()=>setCardType("amex")} style={{padding:"4px 10px",minHeight:28,borderRadius:6,border:`1px solid ${cardType==="amex"?"#006FCF":C.border}`,background:cardType==="amex"?"#006FCF":"transparent",color:cardType==="amex"?"#fff":C.textMuted,fontSize:12,fontWeight:700,cursor:"pointer"}}>AMEX</button></span>
+          <button onClick={()=>setPayCard(String(remaining.toFixed(2)))} style={{marginLeft:"auto",background:C.primaryLight,border:"none",borderRadius:6,padding:"4px 10px",minHeight:28,cursor:"pointer",fontSize:12,color:C.primary,fontWeight:700}}>= Reste</button></label>
           <Input type="number" step="0.01" value={payCard} onChange={e=>capPay(e.target.value,setPayCard,othersExceptCard)} placeholder="0.00"/></div>
         {[{l:"ESPÈCES",v:payCash,s:setPayCash,i:Banknote,c:C.primary,oth:othersExceptCash},{l:"CARTE CADEAU",v:payGC,s:setPayGC,i:Gift,c:C.accent,oth:othersExceptGC},{l:"CHÈQUE",v:payChq||"",s:v=>setPayChq(v),i:FileText,c:"#7B8794",oth:othersExceptChq}].map(x=>(
           <div key={x.l}><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"flex",alignItems:"center",gap:4,marginBottom:3}}><x.i size={11} color={x.c}/>{x.l}
-            <button onClick={()=>x.s(String(remaining.toFixed(2)))} style={{marginLeft:"auto",background:"none",border:"none",cursor:"pointer",fontSize:9,color:C.primary,fontWeight:600}}>= Reste</button></label>
+            <button onClick={()=>x.s(String(remaining.toFixed(2)))} style={{marginLeft:"auto",background:C.primaryLight,border:"none",borderRadius:6,padding:"4px 10px",minHeight:28,cursor:"pointer",fontSize:12,color:C.primary,fontWeight:700}}>= Reste</button></label>
             <Input type="number" step="0.01" value={x.v} onChange={e=>capPay(e.target.value,x.s,x.oth)} placeholder="0.00"/>
             {x.l==="CARTE CADEAU"&&(parseFloat(payGC)||0)>0&&<div style={{marginTop:6,padding:8,borderRadius:8,background:C.surfaceAlt,border:`1px solid ${C.border}`}}>
               {!gcExterne&&<div style={{display:"flex",gap:6}}>

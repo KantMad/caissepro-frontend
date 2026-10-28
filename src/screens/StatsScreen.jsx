@@ -12,7 +12,9 @@ import { norm } from "../utils.jsx";
 function StatsScreen(){
   const{tickets,products,avoirs,bestSellers:allBestSellers,salesBySeller,salesByVariant,caEvolution,salesByCollection,exportCSVReport,perm,commissions,salesGoals,setSellerGoal,settings,mode}=useApp();
   const[tab,setTab]=useState("ca");
-  const[dateFrom,setDateFrom]=useState("");const[dateTo,setDateTo]=useState("");const[catFilter,setCatFilter]=useState("");
+  const[dateFrom,setDateFrom]=useState("");const[dateTo,setDateTo]=useState("");
+  // Période choisie par bouton : mise en évidence (avant : aucun repère de la période active)
+  const[presetActif,setPresetActif]=useState("all");const[catFilter,setCatFilter]=useState("");
   const[apiSummary,setApiSummary]=useState(null);const[apiBySeller,setApiBySeller]=useState(null);const[apiByDay,setApiByDay]=useState(null);const[apiBestSellers,setApiBestSellers]=useState(null);
   // Les cartes du haut viennent du SERVEUR : l'ecran ne garde en memoire que les
   // 200 derniers tickets, les totaux calcules dessus etaient tronques sans le dire.
@@ -47,7 +49,7 @@ function StatsScreen(){
   useEffect(()=>{
     API.sales.byDay().then(d=>setApiByDay(d)).catch(()=>{});
   },[]);
-  const setPreset=(p)=>{const now=new Date();const fmt=dayKey;   // journée LOCALE
+  const setPreset=(p)=>{setPresetActif(p);const now=new Date();const fmt=dayKey;   // journée LOCALE
     if(p==="today"){setDateFrom(fmt(now));setDateTo(fmt(now));}
     else if(p==="week"){const d=new Date(now);d.setDate(d.getDate()-d.getDay()+1);setDateFrom(fmt(d));setDateTo(fmt(now));}
     else if(p==="month"){setDateFrom(fmt(new Date(now.getFullYear(),now.getMonth(),1)));setDateTo(fmt(now));}
@@ -153,11 +155,11 @@ function StatsScreen(){
     <div style={{display:"flex",gap:6,alignItems:"center",marginBottom:10,flexWrap:"wrap"}}>
       <span style={{fontSize:10,fontWeight:600,color:C.textMuted}}>Période:</span>
       {[{id:"all",l:"Tout"},{id:"today",l:"Aujourd'hui"},{id:"week",l:"Semaine"},{id:"month",l:"Ce mois"},{id:"lastmonth",l:"Mois dernier"},{id:"year",l:"Année"}].map(p=>(
-        <button key={p.id} onClick={()=>setPreset(p.id)} style={{padding:"3px 8px",borderRadius:6,border:`1px solid ${C.border}`,background:"transparent",
-          fontSize:10,fontWeight:600,cursor:"pointer",color:C.text}}>{p.l}</button>))}
-      <Input type="date" value={dateFrom} onChange={e=>setDateFrom(e.target.value)} style={{width:120,height:28,fontSize:10,padding:"2px 6px"}}/>
+        <button key={p.id} onClick={()=>setPreset(p.id)} aria-pressed={presetActif===p.id} style={{padding:"0 12px",minHeight:34,borderRadius:8,border:`1.5px solid ${presetActif===p.id?C.primary:C.border}`,
+          background:presetActif===p.id?C.primary:"transparent",fontSize:12,fontWeight:700,cursor:"pointer",color:presetActif===p.id?"#fff":C.text}}>{p.l}</button>))}
+      <Input type="date" value={dateFrom} onChange={e=>{setDateFrom(e.target.value);setPresetActif(null);}} style={{width:140,height:34,fontSize:12,padding:"2px 8px"}}/>
       <span style={{fontSize:10,color:C.textMuted}}>au</span>
-      <Input type="date" value={dateTo} onChange={e=>setDateTo(e.target.value)} style={{width:120,height:28,fontSize:10,padding:"2px 6px"}}/>
+      <Input type="date" value={dateTo} onChange={e=>{setDateTo(e.target.value);setPresetActif(null);}} style={{width:140,height:34,fontSize:12,padding:"2px 8px"}}/>
       <select value={catFilter} onChange={e=>setCatFilter(e.target.value)} style={{padding:"4px 8px",borderRadius:6,border:`1px solid ${C.border}`,fontSize:10,fontFamily:"inherit"}}>
         <option value="">Toutes catégories</option>{allCats.map(c=>(<option key={c} value={c}>{c}</option>))}</select></div>
     {(srvErreur||!srvTickets||srvTronque)&&<div style={{background:C.warnLight,border:`1px solid ${C.warn}33`,borderRadius:10,padding:"8px 12px",marginBottom:10,fontSize:11,color:"#92400E"}}>
@@ -174,8 +176,8 @@ function StatsScreen(){
 
     <div style={{display:"flex",gap:6,marginBottom:14,flexWrap:"wrap"}}>
       {[{id:"ca",l:"Évolution CA"},{id:"compare",l:"Comparaison"},{id:"hour",l:"CA par heure"},{id:"dow",l:"CA par jour"},{id:"best",l:"Best-sellers"},{id:"variantDetail",l:"Détail variantes"},{id:"seller",l:"Par vendeur"},{id:"variant",l:"Tailles/Couleurs"},{id:"collection",l:"Collections"},{id:"customers",l:"Clients"},{id:"returns",l:"Retours"},{id:"pay",l:"Paiements"},{id:"discounts",l:"Remises"}].map(t=>(
-        <button key={t.id} onClick={()=>setTab(t.id)} style={{padding:"5px 12px",borderRadius:8,border:`1.5px solid ${tab===t.id?C.primary:C.border}`,
-          background:tab===t.id?C.primary:"transparent",color:tab===t.id?"#fff":C.text,fontSize:11,fontWeight:600,cursor:"pointer"}}>{t.l}</button>))}</div>
+        <button key={t.id} onClick={()=>setTab(t.id)} style={{padding:"0 14px",minHeight:34,borderRadius:8,border:`1.5px solid ${tab===t.id?C.primary:C.border}`,
+          background:tab===t.id?C.primary:"transparent",color:tab===t.id?"#fff":C.text,fontSize:12,fontWeight:600,cursor:"pointer"}}>{t.l}</button>))}</div>
 
     {tab==="ca"&&<div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`}}>
       <ResponsiveContainer width="100%" height={280}><LineChart data={(!dateFrom&&!dateTo&&apiByDay&&apiByDay.length)?apiByDay.map(d=>({date:new Date(d.day||d.date).toLocaleDateString("fr-FR",{day:"2-digit",month:"short"}),ca:parseFloat(d.total||d.ca)||0})).reverse():fCAEvol}>
