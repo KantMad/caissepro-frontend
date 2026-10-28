@@ -483,6 +483,14 @@ function StoresManagementScreen(){
   const[storeUsers,setStoreUsers]=useState({});const[viewUsersId,setViewUsersId]=useState(null);
   const[assignModal,setAssignModal]=useState(null);const[assignUserId,setAssignUserId]=useState("");const[assignRole,setAssignRole]=useState("cashier");
   const[loading,setLoading]=useState(false);
+  // Magasins DÉSACTIVÉS : affichés à part avec « Réactiver » (avant : invisibles, il fallait du SQL)
+  const[inactifs,setInactifs]=useState([]);
+  const chargerInactifs=useCallback(()=>{API.stores.listAvecInactifs().then(r=>setInactifs((r||[]).filter(x=>x.active===false))).catch(()=>{});},[]);
+  useEffect(()=>{chargerInactifs();},[chargerInactifs,stores.length]);
+  const reactiver=async(st)=>{
+    if(!confirm(`Réactiver le magasin « ${st.name} » ?\n\nIl réapparaît dans la caisse ; affectez-y ensuite les vendeurs et vérifiez sa date de mise en service (Paramètres).`))return;
+    try{await API.stores.reactivate(st.id);const tous=await API.stores.list();setStores(tous);chargerInactifs();notify(`Magasin ${st.name} réactivé`,"success");}
+    catch(e){notify("Réactivation impossible : "+e.message,"error");}};
 
   // Load users for a specific store
   const loadStoreUsers=async(storeId)=>{
@@ -508,8 +516,8 @@ function StoresManagementScreen(){
     setLoading(false);};
 
   const deleteStore=async(id)=>{
-    if(!confirm("Supprimer ce magasin ? Cette action est irréversible pour un magasin sans ventes."))return;
-    try{await API.stores.remove(id);setStores(p=>p.filter(s=>s.id!==id));notify("Magasin supprimé","warn");}catch(e){notify(e.message,"error");}};
+    if(!confirm("Désactiver ce magasin ?\n\nIl disparaît de la caisse. Ses ventes et Z restent conservés (NF525) et il pourra être réactivé plus bas, dans « Magasins désactivés »."))return;
+    try{await API.stores.remove(id);setStores(p=>p.filter(s=>s.id!==id));chargerInactifs();notify("Magasin désactivé","warn");}catch(e){notify(e.message,"error");}};
 
   const assignUser=async()=>{
     if(!assignUserId){notify("Sélectionnez un utilisateur","error");return;}
@@ -593,6 +601,14 @@ function StoresManagementScreen(){
     {/* Edit modal */}
     {editStore&&<Modal open={true} title={`Modifier — ${editStore.name}`} onClose={()=>setEditStore(null)}>{formUI}</Modal>}
     {/* New modal */}
+    {inactifs.length>0&&<div data-testid="magasins-inactifs" style={{marginTop:20}}>
+      <div style={{fontSize:13,fontWeight:800,color:C.textMuted,marginBottom:8}}>Magasins désactivés ({inactifs.length})</div>
+      {inactifs.map(st=><div key={st.id} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",borderRadius:12,border:`1.5px dashed ${C.border}`,marginBottom:6,background:C.surfaceAlt}}>
+        <Store size={16} color={C.textMuted}/>
+        <div style={{flex:1}}><div style={{fontSize:13,fontWeight:700,color:C.textMuted}}>{st.name}</div>
+          <div style={{fontSize:11,color:C.textLight}}>{[st.address,st.postal_code,st.city].filter(Boolean).join(" ")||"Adresse non renseignée"}</div></div>
+        <Btn variant="outline" onClick={()=>reactiver(st)} style={{minHeight:32,fontSize:12}}>Réactiver</Btn></div>)}
+    </div>}
     {newModal&&<Modal open={true} title="Nouveau magasin" onClose={()=>setNewModal(false)}>{formUI}</Modal>}
     {/* Assign user modal */}
     {assignModal&&<Modal open={true} title={`Ajouter un utilisateur — ${stores.find(s=>s.id===assignModal)?.name||""}`} onClose={()=>setAssignModal(null)}>

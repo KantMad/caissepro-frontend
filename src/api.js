@@ -229,6 +229,8 @@ export const settings = {
 // ══ Stores (multi-magasin) ══
 export const stores = {
   list: () => api('/api/stores'),
+  listAvecInactifs: () => api('/api/stores?inactifs=1'),
+  reactivate: (id) => api(`/api/stores/${id}/reactivate`, { method: 'POST' }),
   get: (id) => api(`/api/stores/${id}`),
   create: (data) => api('/api/stores', { method: 'POST', body: JSON.stringify(data) }),
   update: (id, data) => api(`/api/stores/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
