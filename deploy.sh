@@ -55,8 +55,22 @@ fi
 # Tests AVANT toute mise en ligne (dont l'explorateur qui clique chaque ecran) : en cas d'echec,
 # la caisse en ligne reste sur la version precedente. Urgence seulement : SANS_TESTS=1 bash deploy.sh
 if [ "${SANS_TESTS:-0}" != "1" ]; then
-  echo "▶ Tests (2 a 4 min)"
-  if ! npm run test --silent > /tmp/caisse-tests.log 2>&1; then
+  # Une ligne par fichier de test termine + un signe de vie toutes les 30 s (l'explorateur d'ecrans
+  # dure plusieurs minutes sans rien afficher). Coupe au bout de 15 min s'il reste bloque.
+  echo "▶ Tests (3 a 8 min sur le VPS, une ligne par fichier termine)"
+  T0=$SECONDS
+  ( while sleep 30; do echo "  ... tests en cours ($(( SECONDS - T0 )) s)"; done ) &
+  VEILLE=$!
+  set +e
+  timeout 900 npm run test --silent -- --reporter=verbose 2>&1 | tee /tmp/caisse-tests.log \
+    | awk '$1=="×" { print; fflush() }
+           $1=="✓" && $2!=dernier { dernier=$2; print "  ✓ " $2; fflush() }
+           /Test Files|Tests  / { print; fflush() }'
+  CODE_TESTS=${PIPESTATUS[0]}
+  set -e
+  kill "$VEILLE" 2>/dev/null || true
+  [ "$CODE_TESTS" = "124" ] && echo "✗ Tests bloques depuis 15 min : arretes."
+  if [ "$CODE_TESTS" != "0" ]; then
     tail -40 /tmp/caisse-tests.log
     echo "✗ TESTS EN ECHEC : rien n'est mis en ligne, la caisse reste sur la version precedente."
     echo "  Journal complet : /tmp/caisse-tests.log"
