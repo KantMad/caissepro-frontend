@@ -3,7 +3,16 @@
 // Checks GitHub Releases for new APK versions
 // ═══════════════════════════════════════════════════════
 
-const GITHUB_REPO = 'KantMad/caissepro-frontend';
+// Canal de mise a jour de l'APK. Les versions publiees sur ce depot sont les APK de MCS, construits
+// pour ouvrir https://caisse.techincash.app : ils ne doivent JAMAIS etre proposes a une autre
+// instance (un terminal client s'ouvrirait sur la caisse de MCS). Une instance client n'a donc
+// aucune mise a jour proposee, sauf canal propre configure au build : VITE_APK_UPDATE_REPO.
+const CANAL_MCS = { repo: 'KantMad/caissepro-frontend', hote: 'caisse.techincash.app' };
+export function canalMiseAJour(hote = (typeof location !== 'undefined' ? location.hostname : ''), env = import.meta.env || {}) {
+  if (env.VITE_APK_UPDATE_REPO) return String(env.VITE_APK_UPDATE_REPO);
+  return hote === CANAL_MCS.hote ? CANAL_MCS.repo : null;
+}
+const GITHUB_REPO = canalMiseAJour();
 const CURRENT_VERSION = __APP_VERSION__; // Injected at build time by Vite
 const CHECK_INTERVAL = 30 * 60 * 1000; // Check every 30 minutes
 
@@ -19,6 +28,7 @@ export function onUpdateAvailable(callback) {
 }
 
 export async function checkForUpdate() {
+  if (!GITHUB_REPO) return null;   // instance sans canal de mise a jour (client, demo, local)
   if (_checking) return null;
   _checking = true;
 
