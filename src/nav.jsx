@@ -358,7 +358,41 @@ function DashboardNav({active,onNav,vp,mobileOpen,onCloseMobile}){
   return(<div style={{width:240,minWidth:240,background:"#0F172A",height:"100vh",display:"flex",flexDirection:"column"}}>{inner}</div>);
 }
 
-function DashOverview(){
+// « Premiers pas » : ce qui manque encore pour vendre en règle sur ce magasin (instance neuve,
+// nouveau magasin comme Nation). Admin uniquement ; disparaît quand tout est prêt.
+export function etapesPremiersPas({settings,products,users}){
+  const s=settings||{};
+  const siret=String(s.siret||"").replace(/\s/g,"");
+  return[
+    {id:"identite",l:"Identité du magasin (nom, adresse, SIRET, n° TVA)",ok:!!(s.name&&s.address&&s.postalCode&&s.city&&/^\d{14}$/.test(siret)&&s.tvaIntra),ecran:"settings",
+      aide:"Imprimés sur chaque ticket : obligatoires"},
+    {id:"legal",l:"Forme juridique et capital",ok:!!(s.legalForm&&s.capital),ecran:"settings",aide:"Mentions légales des factures"},
+    {id:"service",l:"Date de mise en service",ok:!!s.serviceStartDate,ecran:"settings",aide:"Borne les Z et le FEC : ventes d'essai exclues"},
+    {id:"catalogue",l:"Premiers articles",ok:(products||[]).length>0,ecran:"products",aide:"Création, import CSV ou transfert depuis un autre magasin"},
+    {id:"equipe",l:"Comptes de l'équipe (vendeurs, gérant)",ok:(users||[]).some(u=>u.role&&u.role!=="admin"),ecran:"users",aide:"Chacun vend sous son nom (NF525)"},
+  ];
+}
+function PremiersPas({onNav}){
+  const{settings,products,users,perm:p}=useApp();
+  if(!p().canSettings)return null;
+  const etapes=etapesPremiersPas({settings,products,users});
+  const reste=etapes.filter(e=>!e.ok);
+  if(!reste.length)return null;
+  return(<div data-testid="premiers-pas" style={{background:C.surface,border:`1.5px solid ${C.accent}55`,borderRadius:14,padding:16,marginBottom:18}}>
+    <div style={{display:"flex",alignItems:"baseline",gap:10,marginBottom:10}}>
+      <div style={{fontSize:15,fontWeight:800}}>Premiers pas</div>
+      <div style={{fontSize:12,color:C.textMuted}}>{etapes.length-reste.length}/{etapes.length} prêts — à compléter avant de vendre en règle</div></div>
+    {etapes.map(e=><div key={e.id} style={{display:"flex",alignItems:"center",gap:10,padding:"7px 0",borderTop:`1px solid ${C.border}`}}>
+      <span style={{width:20,height:20,borderRadius:10,flexShrink:0,display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:800,
+        background:e.ok?"#DCFCE7":C.surfaceAlt,color:e.ok?"#15803D":C.textMuted}}>{e.ok?"✓":""}</span>
+      <div style={{flex:1}}><div style={{fontSize:13,fontWeight:600,color:e.ok?C.textMuted:C.text,textDecoration:e.ok?"line-through":"none"}}>{e.l}</div>
+        {!e.ok&&<div style={{fontSize:11,color:C.textMuted}}>{e.aide}</div>}</div>
+      {!e.ok&&onNav&&<Btn variant="outline" onClick={()=>onNav(e.ecran)} style={{minHeight:30,fontSize:12}}>Compléter</Btn>}
+    </div>)}
+  </div>);
+}
+
+function DashOverview({onNav}){
   const{gt,tickets,closures,stockAlerts,bestSellers,perm:p}=useApp();
   const[apiStats,setApiStats]=useState(null);const[apiBest,setApiBest]=useState(null);
   const[apiToday,setApiToday]=useState(null);
@@ -381,6 +415,7 @@ function DashOverview(){
   const totalCA=apiStats?parseFloat(apiStats.grand_total)||parseFloat(gt)||0:parseFloat(gt)||0;
   const displayBest=apiBest&&apiBest.length?apiBest:bestSellers;
   return(<div style={{height:"100%",overflowY:"auto",padding:24,background:C.bg}}>
+    <PremiersPas onNav={onNav}/>
     <div style={{marginBottom:24}}>
       <h2 style={{fontSize:20,fontWeight:700,margin:"0 0 4px",letterSpacing:"-0.4px",color:C.text}}>Dashboard</h2>
       <p style={{fontSize:13,color:C.textMuted}}>{new Date().toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long",year:"numeric"})}</p></div>
@@ -648,10 +683,10 @@ function DashboardInterface(){
       </div>
       <TrainingBanner/><ServerHealthBanner/><ClotureRappelBanner/>
       <DashboardNav active={sc} onNav={setSc} vp={vp} mobileOpen={drawerOpen} onCloseMobile={()=>setDrawerOpen(false)}/>
-      <div style={{flex:1,overflow:"hidden"}}><ErrorBoundary><Suspense fallback={<ChargementEcran/>}><Sc/></Suspense></ErrorBoundary></div></div>);
+      <div style={{flex:1,overflow:"hidden"}}><ErrorBoundary><Suspense fallback={<ChargementEcran/>}><Sc onNav={setSc}/></Suspense></ErrorBoundary></div></div>);
   }
   return(<div style={{display:"flex",flexDirection:"column",height:"100vh",fontFamily:"'DM Sans',system-ui,sans-serif"}}><TrainingBanner/><ServerHealthBanner/><ClotureRappelBanner/>
-    <div style={{display:"flex",flex:1,minHeight:0}}><DashboardNav active={sc} onNav={setSc} vp={vp}/><div style={{flex:1,overflow:"hidden"}}><ErrorBoundary><Suspense fallback={<ChargementEcran/>}><Sc/></Suspense></ErrorBoundary></div></div></div>);
+    <div style={{display:"flex",flex:1,minHeight:0}}><DashboardNav active={sc} onNav={setSc} vp={vp}/><div style={{flex:1,overflow:"hidden"}}><ErrorBoundary><Suspense fallback={<ChargementEcran/>}><Sc onNav={setSc}/></Suspense></ErrorBoundary></div></div></div>);
 }
 
 function AppContent(){const{currentUser,mode}=useApp();if(!currentUser)return<LoginScreen/>;return mode==="cashier"?<CashierInterface/>:<DashboardInterface/>;}
