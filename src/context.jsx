@@ -601,7 +601,8 @@ function AppProvider({children}){
       if(prods)setProducts(norm.products(prods));
       if(apiSales&&Array.isArray(apiSales))setTickets(norm.sales(apiSales).sort((a,b)=>new Date(b.date||0)-new Date(a.date||0)).slice(0,500));
       if(setts)setSettings(s=>({...s,...setts}));
-      if(closData?.length)setClosures(closData.map(c=>({...c,type:c.closure_type,totalHT:parseFloat(c.total_ht),totalTVA:parseFloat(c.total_tva),totalTTC:parseFloat(c.total_ttc),totalMargin:parseFloat(c.total_margin||0),date:c.created_at,userName:c.user_name})));
+      // Meme normalisation qu'au chargement (montants NUMERIC en chaines, Z complementaire...)
+      if(closData?.length)setClosures(closData.map(normClosure));
       else setClosures([]);
       if(apiCounter&&!Array.isArray(apiCounter)){const seq=apiCounter.ticket_seq??apiCounter.seq??0;setTSeq(seq);if(apiCounter.last_hash||apiCounter.lastHash)setLastHash(apiCounter.last_hash||apiCounter.lastHash);if(apiCounter.grand_total!=null||apiCounter.grandTotal!=null)setGt(parseFloat(apiCounter.grand_total??apiCounter.grandTotal));}
       else{setTSeq(0);setLastHash("0".repeat(64));setGt(0);}
