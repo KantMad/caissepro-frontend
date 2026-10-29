@@ -44,6 +44,12 @@ jobs:
               *) awk -v a="$AGE" 'BEGIN{exit !(a <= 30)}' || ko "Prod : derniere sauvegarde vieille de $AGE h (sauvegarde nocturne en panne ?)" ;;
             esac
           fi
+          # Copie HORS du serveur (backup.sh --upload) : surveillee des qu'une premiere copie a reussi
+          EXT=$(curl -s --max-time 15 https://api.techincash.app/api/health | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{const j=JSON.parse(s);console.log(j.copieExterneH==null?"aucune":String(j.copieExterneH))}catch(e){console.log("aucune")}})')
+          echo "Derniere copie externe : $EXT h"
+          if [ "$EXT" != "aucune" ]; then
+            awk -v a="$EXT" 'BEGIN{exit !(a <= 30)}' || ko "Prod : derniere copie HORS serveur vieille de $EXT h (backup.sh --upload en echec ?)"
+          fi
 
           # Caisse : la page ET son script principal (un dist incomplet donne une page blanche)
           for SITE in https://caisse.techincash.app https://demo.techincash.app; do
