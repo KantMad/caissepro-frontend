@@ -44,6 +44,13 @@ jobs:
               *) awk -v a="$AGE" 'BEGIN{exit !(a <= 30)}' || ko "Prod : derniere sauvegarde vieille de $AGE h (sauvegarde nocturne en panne ?)" ;;
             esac
           fi
+          # Chaine NF525 de la prod, verifiee par l'API au demarrage puis toutes les 6 h
+          CH=$(curl -s --max-time 15 https://api.techincash.app/api/health | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{const j=JSON.parse(s);console.log(String(j.chaineNF525)+" "+String(j.chaineVerifieeH))}catch(e){console.log("illisible -")}})')
+          echo "Chaine NF525 prod : $CH"
+          case "$CH" in
+            rompue*) ko "Prod : CHAINE NF525 ROMPUE (detail : pm2 logs caissepro-api | grep NF525 ; node scripts/diagnostic-nf525.js)" ;;
+            ok*) H=${CH#ok }; [ "$H" = "null" ] || awk -v a="$H" 'BEGIN{exit !(a <= 8)}' || ko "Prod : chaine NF525 non verifiee depuis $H h" ;;
+          esac
           # Copie HORS du serveur (backup.sh --upload) : surveillee des qu'une premiere copie a reussi
           EXT=$(curl -s --max-time 15 https://api.techincash.app/api/health | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{const j=JSON.parse(s);console.log(j.copieExterneH==null?"aucune":String(j.copieExterneH))}catch(e){console.log("aucune")}})')
           echo "Derniere copie externe : $EXT h"
