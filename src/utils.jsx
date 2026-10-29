@@ -5,7 +5,19 @@ export const escapeHtml=(str)=>{if(!str)return"";return String(str).replace(/&/g
 
 /* ══════════ SECURITY — PIN hashing ══════════ */
 export const hashPin=async(pin)=>{const enc=new TextEncoder().encode(pin+"_caissepro_salt_v1");const buf=await crypto.subtle.digest("SHA-256",enc);return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,"0")).join("");};
-export const verifyPin=async(pin,hash)=>{if(!hash||hash==="****")return false;if(hash.length<60){return hash===pin;}const h=await hashPin(pin);return h===hash;};
+// Empreinte gardee sur l'appareil apres une connexion EN LIGNE reussie, pour la connexion
+// hors-ligne : PBKDF2-SHA256, sel aleatoire par compte, 100 000 iterations (format
+// pbkdf2$iterations$sel$empreinte). Ralentit fortement l'essai de tous les codes sur un appareil
+// vole, sans le rendre impossible pour un code a 4 chiffres : la vraie protection reste le serveur.
+const hex=(buf)=>Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,"0")).join("");
+const PBKDF2_ITER=100000;
+const pbkdf2=async(pin,selHex,iter)=>{const cle=await crypto.subtle.importKey("raw",new TextEncoder().encode(pin),"PBKDF2",false,["deriveBits"]);
+  const sel=new Uint8Array(selHex.match(/../g).map(h=>parseInt(h,16)));
+  return hex(await crypto.subtle.deriveBits({name:"PBKDF2",hash:"SHA-256",salt:sel,iterations:iter},cle,256));};
+export const hashPinFort=async(pin)=>{const sel=hex(crypto.getRandomValues(new Uint8Array(16)));return`pbkdf2$${PBKDF2_ITER}$${sel}$${await pbkdf2(pin,sel,PBKDF2_ITER)}`;};
+export const verifyPin=async(pin,hash)=>{if(!hash||hash==="****")return false;
+  if(hash.startsWith("pbkdf2$")){const[,iter,sel,attendu]=hash.split("$");return await pbkdf2(String(pin),sel,parseInt(iter,10))===attendu;}
+  if(hash.length<60){return hash===pin;}const h=await hashPin(pin);return h===hash;};
 
 /* ══════════ PRICING MODE HELPERS ══════════ */
 // pricingMode: "TTC" = prices stored are TTC, "HT" = prices stored are HT

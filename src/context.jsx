@@ -4,15 +4,29 @@ import { setOnAuthExpired, setStoreId, clearStoreId } from "./api.js";
 import printer from "./printer.js";
 import hardwareManager, { BrowserPrintAdapter } from "./hardware.js";
 import { CO, DEFAULT_TVA_RATES, PERMS, initUsers, LOYALTY_TIERS, C, categories as defaultCategories } from "./constants.jsx";
-import { hashPin, verifyPin, sha256, norm, loadVariantOrderFromSettings, autoImportSizesFromProducts, generateEAN13, DEFAULT_CAT_ICONS } from "./utils.jsx";
+import { hashPin, hashPinFort, verifyPin, sha256, norm, loadVariantOrderFromSettings, autoImportSizesFromProducts, generateEAN13, DEFAULT_CAT_ICONS } from "./utils.jsx";
 import { computeTotals, lineNetTTC } from "./lib/totals.js";
 import { dayKey } from "./lib/dates.js";
 import { getLoyaltyTier as loyaltyTierOf } from "./lib/loyalty.js";
 import { calcPromoDiscount as calcPromos } from "./lib/promos.js";
 import { aggregatePaymentsByMethod, normClosure, computeCommission, ratioRemiseGlobale } from "./lib/formatters.js";
 import Papa from "papaparse";
+import { lireCache, ecrireCache } from "./cacheLocal.js";
 
 /* ══════════ CONTEXT ══════════ */
+// Comptes du serveur + comptes de l'appareil. L'empreinte du PIN gardee sur l'appareil (connexion
+// hors-ligne) est CONSERVEE pour un compte toujours actif (avant : remplacee par « **** » a chaque
+// chargement -> connexion hors-ligne impossible pour tous les comptes du serveur), et retiree pour
+// un compte desactive.
+export function fusionnerComptes(prev,apiUsers){
+  return[...apiUsers.map(u=>{const local=prev.find(p=>p.id===u.id);
+      const pin=u.active!==false&&local?.pin&&local.pin!=="****"?local.pin:"****";
+      return{id:u.id,name:u.name,role:u.role,pin,apiSynced:true};}),
+    // comptes crees sur l'appareil et pas encore envoyes ; un compte du serveur absent de la liste
+    // (desactive / supprime) disparait de l'appareil avec son empreinte
+    ...prev.filter(lu=>!lu.apiSynced&&!apiUsers.find(au=>au.id===lu.id||au.name===lu.name))];
+}
+
 const AppCtx = createContext(null);
 // Operations fiscales / monetaires : jamais abandonnees ni videes de la file de synchro.
 // Mode formation RETIRE de la caisse (27/10/2026) : a l'usage, les vendeurs s'y perdaient
@@ -313,8 +327,7 @@ function AppProvider({children}){
         m.forEach(v=>v.sort((a,b)=>a.sortOrder-b.sortOrder));productPhotosMapRef.current=m;
       }catch(e){console.warn("Chargement photos produits echoue:",e.message);}
       // H4 fix: use callback form to avoid stale closure on users
-      if(apiUsers?.length){const merged=[...apiUsers.map(u=>({id:u.id,name:u.name,role:u.role,pin:"****",apiSynced:true}))];
-        setUsers(prev=>{const localOnly=prev.filter(lu=>!apiUsers.find(au=>au.name===lu.name));return[...merged,...localOnly];});}
+      if(apiUsers?.length)setUsers(prev=>fusionnerComptes(prev,apiUsers));
       // Load tickets and closures from backend
       try{const salesData=await API.sales.list({limit:200});if(salesData?.length)setTickets(norm.sales(salesData));}catch(e){console.warn("Chargement ventes échoué:",e.message);}
       try{const closData=await API.fiscal.closures();if(closData?.length)setClosures(closData.map(normClosure));}catch(e){console.warn("Chargement clôtures échoué:",e.message);}
@@ -338,7 +351,8 @@ function AppProvider({children}){
       try{await reloadCommissions();}catch(e){/* base commissions : repli calcul local */}
     }catch(e){
       console.warn("Chargement données échoué:",e.message);
-      if(e.message?.includes("401")||e.message?.includes("Unauthorized")){setCurrentUser(null);API.clearToken();}
+      if(e.status===401||e.message?.includes("401")||e.message?.includes("Unauthorized")){setCurrentUser(null);API.clearToken();}
+      else restaurerCacheRef.current();
     }
   },[]);
   useEffect(()=>{
@@ -564,8 +578,7 @@ function AppProvider({children}){
       if(apiSales&&Array.isArray(apiSales)){const mapped=apiSales.map(s=>({...s,ticketNumber:s.ticketNumber||s.ticket_number,totalHT:parseFloat(s.total_ht||s.totalHT)||0,totalTVA:parseFloat(s.total_tva||s.totalTVA)||0,totalTTC:parseFloat(s.total_ttc||s.totalTTC)||0,date:s.date||s.created_at,userName:s.userName||s.user_name,paymentMethod:s.paymentMethod||s.payment_method,customerName:s.customerName||s.customer_name,fingerprint:s.fingerprint}));
         setTickets(prev=>{const localOnly=prev.filter(lt=>lt.hash==="LOCAL"||!mapped.find(as=>as.ticketNumber===lt.ticketNumber));return[...localOnly,...mapped].sort((a,b)=>new Date(b.date||b.createdAt||0)-new Date(a.date||a.createdAt||0)).slice(0,500);});}
       if(apiCounter&&!Array.isArray(apiCounter)){const seq=apiCounter.ticket_seq??apiCounter.seq??0;setTSeq(seq);if(apiCounter.last_hash||apiCounter.lastHash)setLastHash(apiCounter.last_hash||apiCounter.lastHash);if(apiCounter.grand_total!=null||apiCounter.grandTotal!=null)setGt(parseFloat(apiCounter.grand_total??apiCounter.grandTotal));}
-      if(apiUsers&&apiUsers.length){const merged=[...apiUsers.map(u=>({id:u.id,name:u.name,role:u.role,pin:"****",apiSynced:true}))];
-        setUsers(prev=>{const localOnly=prev.filter(lu=>!apiUsers.find(au=>au.name===lu.name));return[...merged,...localOnly];});}
+      if(apiUsers&&apiUsers.length)setUsers(prev=>fusionnerComptes(prev,apiUsers));
       // Charger gift cards, paniers suspendus, favoris et footfall depuis le backend
       try{const gcs=await API.giftcards.list();if(gcs&&Array.isArray(gcs))setGiftCards(gcs.map(g=>({id:g.id,code:g.code,initialAmount:parseFloat(g.initial_amount||0),balance:parseFloat(g.remaining||0),createdDate:g.created_at,customerName:g.customer_name||"",barcode:g.barcode||null,transactions:g.transactions||[]})));}catch(e){console.warn("Chargement cartes cadeaux échoué:",e.message);}
       // les paniers mis en attente HORS-LIGNE (pas encore envoyés) sont conservés à côté de la liste serveur
@@ -576,7 +589,7 @@ function AppProvider({children}){
       // LOW-4: Load favorites and footfall from API
       try{const favs=await API.favorites.list();if(Array.isArray(favs))setFavorites(favs);}catch(e){console.warn("Chargement favoris échoué:",e.message);}
       try{const ff=await API.footfall.list();if(Array.isArray(ff))setFootfall(ff);}catch(e){console.warn("Chargement footfall échoué:",e.message);}
-    }catch(e){console.warn("Chargement données magasin échoué:",e.message);}
+    }catch(e){console.warn("Chargement données magasin échoué:",e.message);restaurerCacheRef.current();}
   },[]);
 
   // ══ Select a store (called after login or from dashboard store switcher) ══
@@ -615,9 +628,43 @@ function AppProvider({children}){
     notify(`Vue: ${storeName}`,"info");
   },[stores,notify]);
 
-  const login=async(n,pw)=>{
-    // Essai API d'abord
-    try{const res=await API.auth.login(n,pw);API.setToken(res.token);setCurrentUser(res.user);
+  // ══ Cache de l'appareil (mode hors-ligne) ══
+  // Catalogue et promos gardes dans IndexedDB (cacheLocal.js) a chaque changement, relus seulement
+  // si le chargement depuis l'API echoue (rechargement ou redemarrage pendant une coupure). Les
+  // clients n'y sont PAS (donnees personnelles : serveur uniquement, cf. H5/RGPD).
+  const etatCache=useRef({products:[],promos:[]});etatCache.current={products,promos};
+  useEffect(()=>{if(!products.length)return;
+    const t=setTimeout(()=>{ecrireCache("donnees-magasin",{storeId:API.getStoreId(),products,promos,at:new Date().toISOString()});},2000);
+    return()=>clearTimeout(t);},[products,promos]);
+  const restaurerCacheRef=useRef(async()=>{});
+  restaurerCacheRef.current=async()=>{
+    if(etatCache.current.products.length)return;
+    const c=await lireCache("donnees-magasin");
+    if(!c?.products?.length)return;
+    setProducts(c.products);if(Array.isArray(c.promos))setPromos(c.promos);
+    notify(`Catalogue de l'appareil utilisé (enregistré le ${new Date(c.at).toLocaleString("fr-FR")}) : stocks et prix peuvent avoir changé depuis`,"warn");
+  };
+  // Reconnexion automatique apres une connexion hors-ligne, des que l'API repond (identifiants
+  // gardes en MEMOIRE seulement, effaces par la reconnexion ou la deconnexion). Refus du serveur
+  // (code change, compte desactive) -> deconnexion : l'acces hors-ligne ne survit pas au serveur.
+  const identifiantsHorsLigne=useRef(null);
+  const logoutRef=useRef(()=>{});
+  const loginRef=useRef(null);
+  useEffect(()=>{if(!offlineMode)return;
+    // Sonde d'abord le serveur : toujours injoignable -> rien (avant tout appel a login, qui
+    // reecrirait LOGIN_OFFLINE au JET a chaque tentative)
+    const essayer=async()=>{const id=identifiantsHorsLigne.current;if(!id||!loginRef.current)return;
+      let res;
+      try{res=await API.auth.login(id.n,id.pw);}
+      catch(e){if(!(e.status&&e.status<500))return;
+        identifiantsHorsLigne.current=null;logoutRef.current();
+        notify("Reconnexion refusée par le serveur (code changé ou compte désactivé) : reconnectez-vous","error");return;}
+      await loginRef.current(id.n,id.pw,res);};
+    if(isOnline)essayer();
+    const iv=setInterval(essayer,60000);return()=>clearInterval(iv);},[offlineMode,isOnline]);// eslint-disable-line react-hooks/exhaustive-deps
+  const login=async(n,pw,reponseServeur)=>{
+    // Essai API d'abord (reponseServeur : deja obtenue par la reconnexion automatique)
+    try{const res=reponseServeur||await API.auth.login(n,pw);API.setToken(res.token);setCurrentUser(res.user);
       // Multi-store: récupérer les magasins de l'utilisateur
       const userStores=res.stores||[];
       setStores(userStores);
@@ -636,21 +683,32 @@ function AppProvider({children}){
         // Pas de magasins assignés — charger les données sans filtre (rétrocompatibilité)
         await loadStoreData();
       }
+      // Empreinte du PIN gardee sur l'appareil pour une future connexion hors-ligne (calcul en
+      // arriere-plan : ne retarde pas l'ouverture de la caisse)
+      hashPinFort(pw).then(empreinte=>setUsers(prev=>{const autres=prev.filter(u=>u.id!==res.user.id&&u.name!==res.user.name);
+        return[...autres,{id:res.user.id,name:res.user.name,role:res.user.role,pin:empreinte,apiSynced:true}];})).catch(()=>{});
+      identifiantsHorsLigne.current=null;
       setOfflineMode(false);setFiscalWarning(false);/* JET LOGIN écrit par le serveur (routes/auth.js) : plus de doublon */notify("Connecté au serveur","success");return{ok:true,stores:userStores};
     }catch(e){
-      // Serveur joignable qui refuse (trop d'essais) : afficher son motif, pas « hors ligne »
-      if(e.status===429){notify(e.message,"error");return{ok:false};}
-      console.warn("API indisponible, tentative login hors-ligne:",e.message);
-      // SEC-04: Offline login uses ONLY cached credentials from last successful online session (no hardcoded passwords)
-      if(users.length===0){notify("Connexion impossible en mode hors ligne — connectez-vous d'abord en ligne","error");return{ok:false};}
+      // Le SERVEUR a repondu (code faux, compte desactive, trop d'essais...) : jamais de bascule
+      // hors-ligne. Avant, toute erreur y basculait : un PIN change ou un compte desactive serait
+      // reste utilisable sur la tablette grace a l'empreinte gardee.
+      // (5xx = API arretee derriere nginx, 502 : traitee comme une coupure)
+      if(e.status&&e.status<500){notify(e.status===401?"Code incorrect":e.message,"error");return{ok:false,refuse:true};}
+      console.warn("API injoignable, tentative de connexion hors-ligne:",e.message);
+      // Hors-ligne : uniquement avec l'empreinte gardee apres une connexion EN LIGNE reussie sur cet appareil
       let localUser=null;
       for(const u of users){if(u.name===n&&u.pin&&u.pin!=="****"&&await verifyPin(pw,u.pin)){localUser=u;break;}}
       if(localUser){setCurrentUser({id:localUser.id,name:localUser.name,role:localUser.role});
-        /* le catalogue, les clients et les promos en memoire sont gardes (avant : remplaces par
-           les produits / clients / promos de DEMONSTRATION de constants.jsx) */
+        // catalogue et promos : ceux deja en memoire, sinon ceux gardes sur l'appareil
+        await restaurerCacheRef.current();
+        identifiantsHorsLigne.current={n,pw};   // reconnexion automatique au retour du reseau (memoire seulement)
         setOfflineMode(true);setFiscalWarning(true);addJET("LOGIN_OFFLINE",n);
         notify("Mode hors-ligne — chaîne fiscale non sécurisée, synchronisez dès que possible","warn");return{ok:true,stores:[]};}
+      notify(users.some(u=>u.name===n&&u.pin&&u.pin!=="****")?"Hors ligne : code incorrect"
+        :"Hors ligne : ce compte ne s'est encore jamais connecté sur cet appareil — connexion impossible sans internet","error");
       return{ok:false};}};
+  loginRef.current=login;
   const logout=async()=>{
     // Le mode formation ne survit pas a la fin de session : le caissier suivant doit
     // demarrer en production, et le changement est trace.
@@ -661,7 +719,9 @@ function AppProvider({children}){
       if(trainingMode){setTrainingMode(false);await addJET("PARAM_CHANGE",`Mode formation désactivé à la déconnexion de ${currentUser?.name||"?"}`);}
       await addJET("LOGOUT",currentUser?.name);
     }catch(e){/* la deconnexion ne doit jamais etre bloquee par le journal */}
+    identifiantsHorsLigne.current=null;
     API.clearToken();setCurrentUser(null);setCurrentStore(null);setStores([]);setViewingStoreId(null);setCart([]);setGDiscPct(0);setGDiscAmt(0);setSelCust(null);setOfflineMode(false);};
+  logoutRef.current=logout;
 
   // H1/H2 fix: Auto-logout on token expiration
   useEffect(()=>{setOnAuthExpired(()=>{notify("Session expirée — veuillez vous reconnecter","error");logout();});return()=>setOnAuthExpired(null);},[]);

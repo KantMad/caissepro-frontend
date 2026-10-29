@@ -3,7 +3,7 @@ import { Lock, User as UserIcon, Store, LayoutDashboard, CheckCircle2, AlertTria
 import * as API from "../api.js";
 import { CO, initUsers, C } from "../constants.jsx";
 import { Btn, Input } from "../ui.jsx";
-import { useApp } from "../context.jsx";
+import { useApp, fusionnerComptes } from "../context.jsx";
 import { libelleRole } from "../lib/formatters.js";
 import logo from "../assets/logo.png";
 
@@ -12,7 +12,8 @@ function LoginScreen(){
   // Fetch user profiles from API on mount (public endpoint, no auth needed) — always shows current users
   useEffect(()=>{
     API.auth.profiles().then(profiles=>{
-      if(profiles?.length){const merged=profiles.map(u=>({id:u.id,name:u.name,role:u.role,pin:"****",apiSynced:true}));setUsers(merged);}
+      // comptes actifs du serveur ; l'empreinte gardee pour la connexion hors-ligne est conservee
+      if(profiles?.length)setUsers(prev=>fusionnerComptes(prev,profiles));
     }).catch(()=>{});
   },[]);
   const allUsers=users&&users.length?users:initUsers;

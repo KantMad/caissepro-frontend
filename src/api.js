@@ -37,14 +37,19 @@ async function api(path, options = {}) {
 
   if (!res.ok) {
     // H2 fix: Auto-clear token on 401 (session expired)
+    // Connexion refusee (code faux) : ce n'est pas une session expiree
+    if (res.status === 401 && path === '/api/auth/login') {
+      const err = await res.json().catch(() => ({}));
+      throw Object.assign(new Error(err.error || 'Identifiants incorrects'), { status: 401 });
+    }
     if (res.status === 401) {
       clearToken();
       if (onAuthExpired) onAuthExpired();
-      throw new Error(`Session expirée — reconnectez-vous`);
+      throw Object.assign(new Error(`Session expirée — reconnectez-vous`), { status: 401 });
     }
     // 403 = permission denied, not session expired — don't clear token
     const err = await res.json().catch(() => ({ error: res.statusText }));
-    if (res.status === 403) throw new Error(err.error || `Permission refusée`);
+    if (res.status === 403) throw Object.assign(new Error(err.error || `Permission refusée`), { status: 403 });
     // Le corps de la reponse reste accessible (ex. complementPossible sur une cloture refusee)
     throw Object.assign(new Error(err.error || `Erreur ${res.status}`), { status: res.status, data: err });
   }
@@ -71,7 +76,10 @@ async function api(path, options = {}) {
 
 // ══ Auth ══
 export const auth = {
-  login: (name, password) => api('/api/auth/login', { method: 'POST', body: JSON.stringify({ name, password }) }),
+  // 8 s maximum : un wifi sans internet laissait l'ecran de connexion bloque ; l'abandon (AbortError,
+  // sans status) declenche la connexion hors-ligne.
+  login: (name, password) => api('/api/auth/login', { method: 'POST', body: JSON.stringify({ name, password }),
+    ...(typeof AbortSignal !== 'undefined' && AbortSignal.timeout ? { signal: AbortSignal.timeout(8000) } : {}) }),
   me: () => api('/api/auth/me'),
   profiles: () => api('/api/auth/profiles'),
   users: () => api('/api/auth/users'),
