@@ -1,6 +1,7 @@
 name: Surveillance prod
 
-# Toutes les 15 min (GitHub peut decaler de quelques minutes) : API, caisse, demo, certificats.
+# Demande : toutes les 15 min. En pratique GitHub espace les passages planifies (parfois plusieurs
+# heures) : c'est un filet de securite, pas une alarme a la minute. : API, caisse, demo, certificats.
 # En cas d'echec, GitHub envoie un e-mail au compte qui a modifie ce fichier en dernier.
 # Ne touche a rien sur le serveur : lecture seule (requetes HTTPS publiques), aucun secret.
 # Ici (depot PUBLIC) et non dans caissepro-api (prive) : minutes GitHub Actions gratuites sur un
@@ -31,9 +32,10 @@ jobs:
             esac
           done
 
-          # Sauvegarde nocturne de la prod (age fourni par /api/health). Controle UNE fois par jour
-          # (passage de 8 h UTC) ou a la demande : sinon une panne enverrait un e-mail toutes les 15 min.
-          if [ "$(date -u +%H)" = "08" ] || [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          # Sauvegarde nocturne de la prod (age fourni par /api/health), a chaque passage. GitHub espace
+          # en pratique les passages planifies de plusieurs heures (constate le 28-29/10/2026) : un
+          # controle limite a 8 h UTC pouvait ne jamais tourner. Alerte seulement au-dela de 30 h.
+          if true; then
             AGE=$(curl -s --max-time 15 https://api.techincash.app/api/health | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{const j=JSON.parse(s);console.log("sauvegardeH" in j?String(j.sauvegardeH):"absent")}catch(e){console.log("illisible")}})')
             echo "Derniere sauvegarde prod : il y a $AGE h"
             case "$AGE" in
