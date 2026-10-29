@@ -80,7 +80,9 @@ function FiscalScreen(){
         <div><strong>Algorithme de chaînage :</strong> SHA-256 (séquentiel, tickets + avoirs + JET)</div>
         <div><strong>Conservation :</strong> 6 ans (Art. L.102 B du LPF)</div>
         <div><strong>Format d'archive :</strong> NF525 — 10 fichiers CSV (Entete, Lignes, TVA, Pied, Client, Reglements, Duplicata, JET, GTT, GTJ)</div>
-        <div><strong>Date de mise en service :</strong> {new Date().getFullYear()}</div>
+        <div><strong>Justificatif :</strong> attestation individuelle de l'éditeur (modèle BOI-LETTRE-000242), à conserver signée avec le volet 2</div>
+        {/* Avant : l'annee en cours, quelle que soit la vraie date (Parametres) */}
+        <div><strong>Date de mise en service :</strong> {settings.serviceStartDate?new Date(String(settings.serviceStartDate).slice(0,10)+"T12:00:00").toLocaleDateString("fr-FR"):"non renseignée (Paramètres)"}</div>
       </div></div>
 
     <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:14}}>

@@ -245,7 +245,7 @@ function HelpCashierScreen(){
     ]},
     {icon:"🛡️",title:"Conformité NF525",desc:"Vérifier la chaîne fiscale, exporter FEC et archive.",steps:[
       "Cliquez sur « NF525 » dans la barre latérale gauche (13ème bouton, icône bouclier).",
-      "En haut : l'attestation de conformité avec le numéro de certification, l'organisme (INFOCERT/LNE) et la catégorie.",
+      "En haut : l'attestation de conformité (version du logiciel, justificatif, date de mise en service) et la catégorie.",
       "3 compteurs : Tickets (nombre total), Clôtures Z, GT (Grand Total cumulé).",
       "La chaîne SHA-256 : chaque vente est signée et chaînée à la précédente. Le dernier hash est affiché.",
       "Bouton « Archive fiscale » : télécharge un fichier JSON avec toutes les données fiscales.",

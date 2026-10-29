@@ -145,7 +145,7 @@ function HelpDashboardScreen(){
     ]},
     {icon:"🛡️",title:"Fiscal NF525",desc:"Conformité fiscale, clôtures Z, exports FEC et archive.",steps:[
       "Cliquez sur « Fiscal NF525 » dans la barre latérale gauche (13ème élément, icône bouclier).",
-      "En haut : l'attestation de conformité avec le numéro de certification (CERT-NF525-2026-001), l'organisme (INFOCERT/LNE), et les 4 conditions ISCA (Inaltérabilité, Sécurisation, Conservation, Archivage).",
+      "En haut : l'attestation de conformité (version du logiciel, justificatif = attestation individuelle de l'éditeur, date de mise en service) et les 4 conditions ISCA (Inaltérabilité, Sécurisation, Conservation, Archivage).",
       "3 compteurs récapitulatifs : Tickets (nombre total émis), Clôtures Z (nombre effectuées), GT (Grand Total cumulé en €).",
       "La chaîne SHA-256 : chaque vente est signée et chaînée à la précédente. Le dernier hash est affiché dans un encadré gris.",
       "2 boutons d'export :",
