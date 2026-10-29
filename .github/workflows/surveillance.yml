@@ -53,6 +53,10 @@ jobs:
             C=$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 "$SITE$JS")
             echo "$SITE$JS -> $C"
             [ "$C" = "200" ] || ko "$SITE$JS repond $C"
+            # Compression nginx (snippets/techincash-gzip.conf, 29/10/2026) : sans elle ~4x plus lourd
+            if ! curl -s -D - -o /dev/null --max-time 15 -H 'Accept-Encoding: gzip' "$SITE$JS" | grep -qi '^content-encoding: *gzip'; then
+              ko "$SITE : scripts envoyes SANS compression (include snippets/techincash-gzip.conf retire du site nginx ?)"
+            fi
           done
 
           # Certificats HTTPS : alerte 14 jours avant expiration (renouvellement certbot en panne ?)
