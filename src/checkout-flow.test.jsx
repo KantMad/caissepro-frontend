@@ -4,7 +4,7 @@
 // - Mode online : API.sales.checkout résout → on vérifie le payload envoyé + panier vidé.
 // - Mode offline : API.sales.checkout rejette → fallback local, ticket recalculé
 //   (c'est le chemin TTC-ancré corrigé pour l'arrondi).
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, act, cleanup } from "@testing-library/react";
 import React from "react";
 
@@ -29,7 +29,11 @@ const mount = () => render(<AppProvider><Harness /></AppProvider>);
 const prod = (over = {}) => ({ id: "p1", name: "Jean", sku: "SKU1", price: 209, costPrice: 80, taxRate: 0.20, category: "Jeans", ...over });
 const variant = (id = "v1") => ({ id, color: "Bleu", size: "M", ean: "" });
 
-beforeEach(() => { cleanup(); ctx = undefined; vi.clearAllMocks(); });
+// « Checkout API échoué, mode local » est ATTENDU dans les tests hors-ligne : on le tait. Emis
+// par le dernier test, il etait encore en transmission quand Vitest fermait le fichier sur le VPS
+// -> « Closing rpc while onUserConsoleLog was pending » et deploy.sh bloque (29/10/2026).
+beforeEach(() => { cleanup(); ctx = undefined; vi.clearAllMocks(); vi.spyOn(console, "warn").mockImplementation(() => {}); });
+afterEach(() => { vi.restoreAllMocks(); });
 
 describe("Paiement — mode online (API OK)", () => {
   it("envoie le bon payload et vide le panier", async () => {
