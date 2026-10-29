@@ -393,10 +393,21 @@ function AppProvider({children}){
             if(r?.id)setCashReg(prev=>prev&&!prev.id?{...prev,id:r.id,openingAmount:r.alreadyOpen?(parseFloat(r.opening_amount)||prev.openingAmount):prev.openingAmount}:prev);}
           else if(action.type==="closeRegister")await API.settings.closeRegister(action.data.registerId,{closingCash:action.data.closingCash??null,closingCard:action.data.closingCard??null});
           else if(action.type==="offlineSale")await API.sales.checkout(action.data);
-          else if(action.type==="offlineClosure")await API.fiscal.closure(action.data);
+          // Clôture et carte cadeau : si un passage précédent a été enregistré par le serveur mais que
+          // la réponse s'est perdue (coupure pendant l'envoi), le renvoi est refusé « déjà fait » (409).
+          // Avant : l'opération restait en file, en rouge, pour toujours. On vérifie que c'est bien
+          // la même avant de la retirer.
+          else if(action.type==="offlineClosure"){try{await API.fiscal.closure(action.data);}
+            catch(e){if(e.status!==409||e.data?.complementPossible)throw e;
+              notify(`Clôture hors-ligne déjà enregistrée par le serveur : ${e.message}`,"info");}}
           else if(action.type==="offlineAvoir"){await API.returns.create(action.data);/* FE-08: backend handles restock — no local increment here */}
           else if(action.type==="consumeAvoir")await API.returns.consume(action.data.avoirNumber,action.data.amount);
-          else if(action.type==="createGiftCard")await API.giftcards.create(action.data);
+          else if(action.type==="createGiftCard"){try{await API.giftcards.create(action.data);}
+            catch(e){if(e.status!==409)throw e;
+              const gc=await API.giftcards.get(action.data.code).catch(()=>null);
+              const memeCarte=gc&&Math.abs(parseFloat(gc.initial_amount??gc.initialAmount)-Number(action.data.initialAmount))<0.005
+                &&(!gc.store_id||!API.getStoreId()||gc.store_id===API.getStoreId());
+              if(!memeCarte)throw e;}}
           else if(action.type==="useGiftCard")await API.giftcards.use(action.data.code,action.data.amount);
           else if(action.type==="parkCart")await API.parked.save(action.data);
           else if(action.type==="updatePrice")await API.products.update(action.data.productId,{price:action.data.price});
@@ -1329,7 +1340,8 @@ function AppProvider({children}){
         byPayment:{cash,card,cheque:chequeLocal,giftcard:giftcardLocal,amex:amexLocal,avoir:avoirLocal},
         bySeller:pt.reduce((m,t)=>{const n=t.userName||"?";m[n]=(m[n]||0)+(t.totalTTC||0);return m;},{})};
       setClosures(p=>[cl,...p]);setGt(newGt);addAudit("CLOTURE",`Z ${type} (local)`);
-      addPendingSync({type:"offlineClosure",data:{type,actualCash:aCash,actualCard:aCard,offlineId:cl.id,offlineDate:clDate}});
+      // date : la journée clôturée hors-ligne (sinon le serveur choisit la journée à la réception)
+      addPendingSync({type:"offlineClosure",data:{type,...(type==="daily"?{date:today}:{}),actualCash:aCash,actualCard:aCard,offlineId:cl.id,offlineDate:clDate}});
       notify("Clôture enregistrée (hors-ligne) — synchro en attente","warn");return cl;
     }
   },[addAudit,tickets,closures,gt,cashReg,currentUser,notify,addPendingSync,cashMovements]);
