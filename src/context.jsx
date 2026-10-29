@@ -636,6 +636,8 @@ function AppProvider({children}){
       }
       setOfflineMode(false);setFiscalWarning(false);/* JET LOGIN écrit par le serveur (routes/auth.js) : plus de doublon */notify("Connecté au serveur","success");return{ok:true,stores:userStores};
     }catch(e){
+      // Serveur joignable qui refuse (trop d'essais) : afficher son motif, pas « hors ligne »
+      if(e.status===429){notify(e.message,"error");return{ok:false};}
       console.warn("API indisponible, tentative login hors-ligne:",e.message);
       // SEC-04: Offline login uses ONLY cached credentials from last successful online session (no hardcoded passwords)
       if(users.length===0){notify("Connexion impossible en mode hors ligne — connectez-vous d'abord en ligne","error");return{ok:false};}
