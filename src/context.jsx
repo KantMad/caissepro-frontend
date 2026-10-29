@@ -3,7 +3,7 @@ import * as API from "./api.js";
 import { setOnAuthExpired, setStoreId, clearStoreId } from "./api.js";
 import printer from "./printer.js";
 import hardwareManager, { BrowserPrintAdapter } from "./hardware.js";
-import { CO, DEFAULT_TVA_RATES, PERMS, initProducts, initUsers, initCustomers, LOYALTY_TIERS, initPromos, C, categories as defaultCategories } from "./constants.jsx";
+import { CO, DEFAULT_TVA_RATES, PERMS, initUsers, LOYALTY_TIERS, C, categories as defaultCategories } from "./constants.jsx";
 import { hashPin, verifyPin, sha256, norm, loadVariantOrderFromSettings, autoImportSizesFromProducts, generateEAN13, DEFAULT_CAT_ICONS } from "./utils.jsx";
 import { computeTotals, lineNetTTC } from "./lib/totals.js";
 import { dayKey } from "./lib/dates.js";
@@ -97,7 +97,9 @@ function AppProvider({children}){
   useEffect(()=>{try{localStorage.setItem("caissepro_closures",JSON.stringify(closures));}catch(e){}},[closures]);
   const[avoirs,setAvoirs]=useState(()=>{try{const s=localStorage.getItem("caissepro_avoirs");return s?norm.avoirs(JSON.parse(s)):[];}catch(e){return[];}});
   useEffect(()=>{try{localStorage.setItem("caissepro_avoirs",JSON.stringify(avoirs));}catch(e){}},[avoirs]);
-  const[promos,setPromos]=useState(initPromos);
+  // Vide au depart : avant, les promos de DEMONSTRATION (dont le code WELCOME10 -10 %, actif)
+  // restaient en place si le chargement depuis le serveur echouait (29/10/2026).
+  const[promos,setPromos]=useState([]);
   const[parked,setParked]=useState(()=>{try{const s=localStorage.getItem("caissepro_parked");return s?JSON.parse(s):[];}catch(e){return[];}});
   useEffect(()=>{try{localStorage.setItem("caissepro_parked",JSON.stringify(parked));}catch(e){}},[parked]);
   const[retoucheBons,setRetoucheBons]=useState(()=>{try{const s=localStorage.getItem("caissepro_retouches");return s?JSON.parse(s):[];}catch(e){return[];}});
@@ -644,7 +646,8 @@ function AppProvider({children}){
       let localUser=null;
       for(const u of users){if(u.name===n&&u.pin&&u.pin!=="****"&&await verifyPin(pw,u.pin)){localUser=u;break;}}
       if(localUser){setCurrentUser({id:localUser.id,name:localUser.name,role:localUser.role});
-        setProducts(initProducts);setCustomers(initCustomers);setPromos(initPromos);
+        /* le catalogue, les clients et les promos en memoire sont gardes (avant : remplaces par
+           les produits / clients / promos de DEMONSTRATION de constants.jsx) */
         setOfflineMode(true);setFiscalWarning(true);addJET("LOGIN_OFFLINE",n);
         notify("Mode hors-ligne — chaîne fiscale non sécurisée, synchronisez dès que possible","warn");return{ok:true,stores:[]};}
       return{ok:false};}};
