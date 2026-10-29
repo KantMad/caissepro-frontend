@@ -235,6 +235,7 @@ function UsersScreen(){
     if(!form.name){notify("Nom requis","error");return;}
     // Pour un nouvel utilisateur, le PIN est obligatoire. Pour une modification, il est optionnel.
     if(!editUser&&!form.pin){notify("Nom et PIN requis","error");return;}
+    if(form.pin&&form.pin.length<4){notify("PIN : 4 caractères minimum","error");return;}
     // Hash PIN before storing locally (server receives plaintext for its own hashing)
     const hashedPin=form.pin?await hashPin(form.pin):null;
     // Construire les données API — n'envoyer le password que s'il a été modifié
