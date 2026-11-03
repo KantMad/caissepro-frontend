@@ -1143,9 +1143,15 @@ function AppProvider({children}){
     return ok;
   },[products,currentUser,addAudit,addPendingSync,notify]);
 
+  // Variante creee par un import de catalogue et JAMAIS recue (aucun mouvement de stock, champ
+  // deja_stocke de l'API, migration 045) : son stock 0 n'est ni une rupture ni un reassort a faire.
+  // MCS : 50 188 alertes, presque toutes des articles du catalogue jamais rentres en boutique.
+  // Champ absent (ancienne API) : comportement d'avant.
+  const jamaisStocke=v=>v.deja_stocke===false&&v.stock<=0;
   // ══ P2: Reorder suggestions ══
   const reorderSuggestions=useMemo(()=>{const suggestions=[];
     products.forEach(p=>p.variants.forEach(v=>{
+      if(jamaisStocke(v))return;
       if(v.stock<=(v.stockAlert||5)){suggestions.push({product:p,variant:v,currentStock:v.stock,suggestedQty:Math.max(10,(v.stockAlert||5)*3-v.stock)});}}));
     return suggestions;},[products]);
 
@@ -1386,6 +1392,7 @@ function AppProvider({children}){
 
   // Alerts
   const stockAlerts=useMemo(()=>{const a=[];products.forEach(p=>p.variants.forEach(v=>{
+    if(jamaisStocke(v))return;
     if(v.stock<=0)a.push({product:p,variant:v,level:"rupture"});
     else if(v.stock<=(v.stockAlert||5))a.push({product:p,variant:v,level:"bas"});}));return a;},[products]);
 
