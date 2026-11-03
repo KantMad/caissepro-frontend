@@ -236,6 +236,37 @@ describe("Écrans — rendu sans plantage", () => {
     expect(container.textContent).toMatch(/CA retouches/);
   });
 
+  it("Tickets : créer un nouveau client depuis « Changer le client » et le relier à la vente", async () => {
+    const API = await import("./api.js");
+    const avant = { c: API.customers.create, r: API.sales.reassignCustomer };
+    const creer = vi.fn(() => Promise.resolve({ id: "c9", first_name: "Hugo", last_name: "Marchal", phone: "0611223344", email: "", points: 0, total_spent: "0" }));
+    const relier = vi.fn(() => Promise.resolve({ ok: true }));
+    Object.assign(API.customers, { create: creer }); Object.assign(API.sales, { reassignCustomer: relier });
+    try {
+      const { findAllByText, findByText, getByText, getByPlaceholderText, queryAllByText } = render(<AppProvider><HistoryScreen /></AppProvider>);
+      // le nom figure aussi sur le ticket affiché : on compte les occurrences
+      const tk = await findAllByText(/2026-000045/, {}, { timeout: 2000 }); fireEvent.click(tk[0]);
+      fireEvent.click(await findByText("Client"));
+      // Recherche : filtre la liste
+      const n = (await findAllByText("Inès Démo")).length;
+      fireEvent.change(getByPlaceholderText("Rechercher (nom, téléphone, email)"), { target: { value: "zzz" } });
+      expect(queryAllByText("Inès Démo")).toHaveLength(n - 1);
+      fireEvent.change(getByPlaceholderText("Rechercher (nom, téléphone, email)"), { target: { value: "00 00 03" } });
+      expect(queryAllByText("Inès Démo")).toHaveLength(n);
+      // Nouveau client -> créé sur le serveur, sélectionné, puis relié au ticket
+      fireEvent.click(getByText("Nouveau client"));
+      fireEvent.change(getByPlaceholderText("Prénom"), { target: { value: " Hugo " } });
+      fireEvent.change(getByPlaceholderText("Nom"), { target: { value: "Marchal" } });
+      fireEvent.change(getByPlaceholderText("Téléphone"), { target: { value: "0611223344" } });
+      fireEvent.click(getByText("Créer le client"));
+      await waitFor(() => expect(creer).toHaveBeenCalled());
+      expect(creer.mock.calls[0][0]).toMatchObject({ firstName: "Hugo", lastName: "Marchal", phone: "0611223344" });
+      expect(await findByText(/Sélectionné : Hugo Marchal/)).toBeTruthy();
+      fireEvent.click(getByText("Attribuer"));
+      await waitFor(() => expect(relier).toHaveBeenCalledWith("sale1", "c9"));
+    } finally { Object.assign(API.customers, { create: avant.c }); Object.assign(API.sales, { reassignCustomer: avant.r }); }
+  });
+
   it("Retour : un ancien ticket (hors des 200 en mémoire) est trouvé via le serveur", async () => {
     const { getByPlaceholderText, findByText } = render(<AppProvider><ReturnScreen /></AppProvider>);
     fireEvent.change(getByPlaceholderText("N° ticket, nom client…"), { target: { value: "2025-000999" } });

@@ -10,8 +10,11 @@ import { getPaymentLabel, getAvoirRemaining, isAvoirPartiallyUsed, lineDiscountE
 import { dayKey } from "../lib/dates.js";
 
 function HistoryScreen(){
-  const{tickets,setTickets,avoirs,settings,processReturn,perm:p,printerConnected,thermalPrint,setSelectedAvoir,setMode,notify,customers,setCustomers,retoucheBons,updateRetoucheStatus,scanBarcode,setScanBarcode,trainingMode}=useApp();
+  const{tickets,setTickets,avoirs,settings,processReturn,perm:p,printerConnected,thermalPrint,setSelectedAvoir,setMode,notify,customers,setCustomers,addCustomer,retoucheBons,updateRetoucheStatus,scanBarcode,setScanBarcode,trainingMode}=useApp();
   const[tab,setTab]=useState("tickets");const[reprintTk,setReprintTk]=useState(null);const[reassignModal,setReassignModal]=useState(null);const[reassignCust,setReassignCust]=useState(null);
+  // Changer le client d'un ticket : recherche + creation sur place (demande MCS, 03/11/2026 : relier
+  // une vente deja encaissee a un client qui n'avait pas encore de fiche)
+  const[reassignQ,setReassignQ]=useState("");const[nouveauClient,setNouveauClient]=useState(null);
   const[search,setSearch]=useState("");const[dateFilter,setDateFilter]=useState("");const[retDateFrom,setRetDateFrom]=useState("");const[retDateTo,setRetDateTo]=useState("");const[retClientFilter,setRetClientFilter]=useState("");const[retStatusFilter,setRetStatusFilter]=useState("");
   // Pre-fill search from barcode scan
   useEffect(()=>{if(scanBarcode){setSearch(scanBarcode);
@@ -291,7 +294,7 @@ function HistoryScreen(){
             (tk.barcode?ean13SvgHtml(tk.barcode,160,45):"")+
             `</body></html>`);w.document.close();setTimeout(()=>w.print(),300);}
         }} style={{flex:1}}><Gift size={14}/> Cadeau</Btn>
-        <Btn variant="outline" onClick={()=>{setReassignModal(tk);setReassignCust(null);}} style={{flex:1}}><UserIcon size={14}/> Client</Btn>
+        <Btn variant="outline" onClick={()=>{setReassignModal(tk);setReassignCust(null);setReassignQ("");setNouveauClient(null);}} style={{flex:1}}><UserIcon size={14}/> Client</Btn>
         <Btn variant="outline" onClick={()=>{const s=encodeURIComponent(`Ticket ${tkNum} — ${settings.name||CO.name}`);
           const b=encodeURIComponent(`Bonjour,\n\nTicket N°${tkNum}\nDate: ${tkDateStr}\nTotal: ${tkTTC.toFixed(2)}€\n\n${settings.name||CO.name}\nSIRET: ${settings.siret||CO.siret}`);
           window.open(`mailto:?subject=${s}&body=${b}`);}} style={{flex:1}}><Mail size={14}/> Email</Btn>
@@ -427,9 +430,34 @@ function HistoryScreen(){
     <Modal open={!!reassignModal} onClose={()=>setReassignModal(null)} title="Changer le client">
       {reassignModal&&<div>
         <div style={{fontSize:11,color:C.textMuted,marginBottom:10}}>Ticket: {reassignModal.ticketNumber} — {(reassignModal.totalTTC||parseFloat(reassignModal.total_ttc)||0).toFixed(2)}€</div>
+        {nouveauClient?<div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:10,padding:10,borderRadius:10,border:`1.5px solid ${C.primary}`}}>
+          <div style={{fontSize:12,fontWeight:700}}>Nouveau client</div>
+          <Input value={nouveauClient.firstName} onChange={e=>setNouveauClient(n=>({...n,firstName:e.target.value}))} placeholder="Prénom"/>
+          <Input value={nouveauClient.lastName} onChange={e=>setNouveauClient(n=>({...n,lastName:e.target.value}))} placeholder="Nom"/>
+          <Input value={nouveauClient.phone} onChange={e=>setNouveauClient(n=>({...n,phone:e.target.value}))} placeholder="Téléphone" inputMode="tel"/>
+          <Input value={nouveauClient.email} onChange={e=>setNouveauClient(n=>({...n,email:e.target.value}))} placeholder="Email" type="email"/>
+          <div style={{display:"flex",gap:8}}>
+            <Btn variant="outline" onClick={()=>setNouveauClient(null)} style={{flex:1}}>Annuler</Btn>
+            <Btn disabled={nouveauClient.enCours||!nouveauClient.firstName.trim()||!nouveauClient.lastName.trim()} onClick={async()=>{
+              setNouveauClient(n=>({...n,enCours:true}));
+              const{enCours,...fiche}=nouveauClient;
+              const c=await addCustomer({...fiche,firstName:fiche.firstName.trim(),lastName:fiche.lastName.trim(),city:"",notes:""});
+              // Fiche gardee seulement sur l'appareil (pas de connexion) : le serveur ne peut pas la relier au ticket
+              if(!c||c.local){setNouveauClient(n=>n&&{...n,enCours:false});return;}
+              setReassignCust(c);setNouveauClient(null);setReassignQ("");
+            }} style={{flex:1,background:C.primary}}>Créer le client</Btn></div>
+        </div>
+        :<div style={{display:"flex",gap:8,marginBottom:8}}>
+          <Input value={reassignQ} onChange={e=>setReassignQ(e.target.value)} placeholder="Rechercher (nom, téléphone, email)" style={{flex:1}}/>
+          <Btn variant="outline" onClick={()=>setNouveauClient({firstName:"",lastName:"",phone:"",email:""})}><Plus size={14}/> Nouveau client</Btn></div>}
+        {reassignCust&&<div style={{fontSize:12,fontWeight:700,color:C.primary,marginBottom:6}}>Sélectionné : {reassignCust.firstName} {reassignCust.lastName}</div>}
         <div style={{display:"flex",flexDirection:"column",gap:4,maxHeight:300,overflowY:"auto"}}>
           <button onClick={()=>setReassignCust(null)} style={{padding:8,borderRadius:8,border:`2px solid ${!reassignCust?C.primary:C.border}`,background:!reassignCust?C.primaryLight:"transparent",cursor:"pointer",textAlign:"left",fontSize:11,fontWeight:600}}>Aucun client</button>
-          {customers.map(c=>(<button key={c.id} onClick={()=>setReassignCust(c)}
+          {customers.filter(c=>{const q=reassignQ.trim().toLowerCase();if(!q)return true;
+            const qTel=q.replace(/[^0-9]/g,"");
+            return `${c.firstName||""} ${c.lastName||""} ${c.lastName||""} ${c.firstName||""} ${c.email||""}`.toLowerCase().includes(q)
+              ||(qTel.length>=3&&String(c.phone||"").replace(/[^0-9]/g,"").includes(qTel));})
+            .map(c=>(<button key={c.id} onClick={()=>setReassignCust(c)}
             style={{padding:8,borderRadius:8,border:`2px solid ${reassignCust?.id===c.id?C.primary:C.border}`,background:reassignCust?.id===c.id?C.primaryLight:"transparent",cursor:"pointer",textAlign:"left"}}>
             <div style={{fontSize:11,fontWeight:600}}>{c.firstName} {c.lastName}</div>
             <div style={{fontSize:9,color:C.textMuted}}>{c.email||c.phone||""}</div></button>))}
