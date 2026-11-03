@@ -4,7 +4,7 @@
 // Objectif : attraper les plantages au rendu (variable non définie, import manquant)
 // que `vite build` ne voit pas — ils n'apparaissaient qu'à l'écran, en production.
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, cleanup, fireEvent, waitFor } from "@testing-library/react";
+import { render, cleanup, fireEvent, waitFor, act } from "@testing-library/react";
 import React from "react";
 
 vi.mock("./printer.js", () => ({ default: { connect: vi.fn(), isConnected: () => false, disconnect: vi.fn(), on: () => () => {} } }));
@@ -103,7 +103,7 @@ vi.mock("./api.js", () => {
   return mod;
 });
 
-import AppProvider from "./context.jsx";
+import AppProvider, { useApp } from "./context.jsx";
 import {
   SalesScreen, StatsScreen, StockScreen, HistoryScreen, ReturnScreen, ClosureScreen,
   CustomersScreen, FiscalScreen, AuditScreen, ProductsScreen, LabelsScreen,
@@ -265,6 +265,19 @@ describe("Écrans — rendu sans plantage", () => {
       fireEvent.click(getByText("Attribuer"));
       await waitFor(() => expect(relier).toHaveBeenCalledWith("sale1", "c9"));
     } finally { Object.assign(API.customers, { create: avant.c }); Object.assign(API.sales, { reassignCustomer: avant.r }); }
+  });
+
+  it("Vente : espèces au montant exact -> pas de ligne « Rendu monnaie » ; billet plus grand -> rendu affiché", async () => {
+    let ctx; const Harness = () => { ctx = useApp(); return null; };
+    const { findByText, findAllByText, getByText, queryByTestId, getByTestId } = render(<AppProvider><Harness /><SalesScreen /></AppProvider>);
+    await waitFor(() => expect(ctx).toBeTruthy());
+    act(() => { ctx.addToCart({ id: "p1", name: "Jean", sku: "S1", price: 74.9, costPrice: 30, taxRate: 0.2, category: "Jeans" }, { id: "v1", color: "Bleu", size: "38", ean: "" }); });
+    fireEvent.click(await findByText(/Règlement — 74\.90€/));
+    fireEvent.click(await findByText("Espèces"));
+    const exact = await findAllByText("74.90€"); fireEvent.click(exact[exact.length - 1]);   // bouton « montant exact » du pavé
+    expect(queryByTestId("rendu-monnaie")).toBeNull();
+    fireEvent.click(getByText("80.00€"));
+    expect(getByTestId("rendu-monnaie").textContent).toMatch(/5\.10€/);
   });
 
   it("Retour : un ancien ticket (hors des 200 en mémoire) est trouvé via le serveur", async () => {

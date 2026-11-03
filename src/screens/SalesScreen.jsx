@@ -399,7 +399,8 @@ function SalesScreen(){
             <span style={{fontSize:14,fontWeight:800}}>Total TTC</span>
             <span style={{fontSize:20,fontWeight:900,color:C.primary,letterSpacing:"-0.8px"}}>{totals.tTTC.toFixed(2)}€</span></div></div>
 
-        {cashGiven&&parseFloat(cashGiven)>0&&<div style={{background:C.primaryLight,borderRadius:10,padding:"var(--pad-sm,10px)",marginBottom:6,display:"flex",justifyContent:"space-between",alignItems:"center",
+        {/* Rendu affiche seulement s'il y a de la monnaie a rendre (montant exact : pas de ligne « 0,00 € », MCS 03/11/2026) */}
+        {change>0.004&&<div style={{background:C.primaryLight,borderRadius:10,padding:"var(--pad-sm,10px)",marginBottom:6,display:"flex",justifyContent:"space-between",alignItems:"center",
           border:`1px solid ${C.primary}15`,boxShadow:`0 2px 8px ${C.primary}10`}}>
           <span style={{fontSize:12,fontWeight:700,color:C.primaryDark}}>Rendu monnaie</span>
           <span style={{fontSize:18,fontWeight:900,color:C.primary,letterSpacing:"-0.5px"}}>{change.toFixed(2)}€</span></div>}
@@ -732,10 +733,10 @@ function SalesScreen(){
       
       <div style={{marginBottom:12}}>
         <Numpad value={numpadValue} onChange={setNumpadValue} label="Montant donné par le client"/>
-        {parseFloat(numpadValue)>0&&<div style={{background:C.primaryLight,borderRadius:12,padding:14,marginTop:10,
+        {parseFloat(numpadValue)-totals.tTTC>0.004&&<div data-testid="rendu-monnaie" style={{background:C.primaryLight,borderRadius:12,padding:14,marginTop:10,
           display:"flex",justifyContent:"space-between",alignItems:"center",border:`1px solid ${C.primary}15`}}>
           <span style={{fontSize:14,fontWeight:700,color:C.primaryDark}}>Rendu monnaie</span>
-          <span style={{fontSize:26,fontWeight:900,color:C.primary,letterSpacing:"-0.5px"}}>{Math.max(0,parseFloat(numpadValue)-totals.tTTC).toFixed(2)}€</span></div>}
+          <span style={{fontSize:26,fontWeight:900,color:C.primary,letterSpacing:"-0.5px"}}>{(parseFloat(numpadValue)-totals.tTTC).toFixed(2)}€</span></div>}
         <div style={{display:"flex",gap:6,marginTop:10}}>
           {montantsEspeces(totals.tTTC).map(v=>(
             <Btn key={v} variant="outline" onClick={()=>setNumpadValue(String(v))} style={{flex:1,fontSize:11,borderRadius:10}}>{v.toFixed(2)}€</Btn>))}
