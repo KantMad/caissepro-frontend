@@ -319,6 +319,16 @@ describe("Écrans — rendu sans plantage", () => {
     }
   });
 
+  it("Stock > Réception : le prix de vente TTC de l'article scanné est affiché", async () => {
+    const { getAllByText, getByPlaceholderText, findByText, container } = render(<AppProvider><StockScreen /></AppProvider>);
+    const b = getAllByText("Réception"); fireEvent.click(b[b.length - 1]);
+    const champ = getByPlaceholderText("Scanner un code-barres ou saisir EAN...");
+    await waitFor(() => { fireEvent.change(champ, { target: { value: "2996000000028" } }); fireEvent.keyDown(champ, { key: "Enter" });
+      expect(container.textContent).toMatch(/Jean droit coupe mom/); });
+    expect(await findByText("Prix TTC")).toBeTruthy();
+    expect(container.querySelector('td[data-label="Prix TTC"]').textContent).toBe("74.90 €");
+  });
+
   it("Statistiques : tous les onglets s'ouvrent", () => {
     const { getAllByText, container } = render(<AppProvider><StatsScreen /></AppProvider>);
     for (const t of ["Évolution CA", "Comparaison", "CA par heure", "CA par jour", "Best-sellers",

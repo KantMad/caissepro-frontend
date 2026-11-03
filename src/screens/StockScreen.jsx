@@ -56,7 +56,7 @@ function StockScreen(){
     const{product:p,variant:v}=found;
     setBatchItems(prev=>{const idx=prev.findIndex(i=>i.variantId===v.id);
       if(idx>=0){const next=[...prev];next[idx]={...next[idx],qty:next[idx].qty+1};return next;}
-      return[...prev,{productId:p.id,variantId:v.id,name:p.name,sku:p.sku,color:v.color,size:v.size,ean:v.ean,currentStock:v.stock,qty:1}];});
+      return[...prev,{productId:p.id,variantId:v.id,name:p.name,sku:p.sku,color:v.color,size:v.size,ean:v.ean,currentStock:v.stock,price:p.price,qty:1}];});
     // Audio feedback
     try{const ac=new(window.AudioContext||window.webkitAudioContext)();const o=ac.createOscillator();const g=ac.createGain();o.connect(g);g.connect(ac.destination);o.frequency.value=1200;g.gain.value=0.08;o.start();o.stop(ac.currentTime+0.08);}catch(e){}
   },[findByEAN,notify]);
@@ -197,12 +197,14 @@ function StockScreen(){
       {batchItems.length>0&&<div style={{maxHeight:400,overflowY:"auto",marginBottom:12}}>
         <table className="rtable" style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
           <thead><tr style={{borderBottom:`2px solid ${C.border}`,position:"sticky",top:0,background:C.surface}}>
-            {["Produit","Variante","EAN","Stock actuel","Qté reçue",""].map(h=>(
+            {["Produit","Variante","EAN","Prix TTC","Stock actuel","Qté reçue",""].map(h=>(
               <th key={h} style={{padding:6,textAlign:"left",fontSize:9,fontWeight:700,color:C.textMuted}}>{h}</th>))}</tr></thead>
           <tbody>{batchItems.map((item,i)=>(<tr key={item.variantId} style={{borderBottom:`1px solid ${C.border}`,background:i===batchItems.length-1?`${C.primary}08`:"transparent"}}>
             <td data-label="Produit" style={{padding:6,fontWeight:600}}>{item.name} <span style={{color:C.textMuted,fontSize:9}}>({item.sku})</span></td>
             <td data-label="Variante" style={{padding:6}}>{item.color}/{item.size}</td>
             <td data-label="EAN" style={{padding:6,fontSize:9,color:C.textMuted,fontFamily:"monospace"}}>{item.ean||"—"}</td>
+            {/* Prix de vente TTC affiche a la reception (demande MCS, 03/11/2026 : verifier l'etiquette) */}
+            <td data-label="Prix TTC" style={{padding:6,fontWeight:700}}>{Number(item.price)>0?`${Number(item.price).toFixed(2)} €`:"—"}</td>
             <td data-label="Stock actuel" style={{padding:6,color:C.textMuted}}>{item.currentStock}</td>
             <td data-label="Qté reçue" style={{padding:6}}>
               <div style={{display:"flex",alignItems:"center",gap:4}}>
