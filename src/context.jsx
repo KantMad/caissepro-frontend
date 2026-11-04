@@ -1180,11 +1180,16 @@ function AppProvider({children}){
     return Object.values(byRate);},[tickets]);
 
   // ══ P2: Stock aging ══
+  // Derniere vente par article indexee en UN passage sur les tickets : avant, chaque article
+  // reparcourait tous les tickets (10 000 articles chez MCS -> latence apres chaque vente).
   const stockAging=useMemo(()=>{
+    const derniere=new Map();
+    for(const t of tickets)for(const i of t.items||[]){const id=i.product?.id||i.product_id;if(id&&!derniere.has(id))derniere.set(id,t);}
     return products.map(p=>{const totalStock=p.variants.reduce((s,v)=>s+v.stock,0);
-      const totalValue=totalStock*p.costPrice;const lastSale=tickets.find(t=>(t.items||[]).some(i=>(i.product?.id||i.product_id)===p.id));
+      if(totalStock<=0)return null;
+      const totalValue=totalStock*p.costPrice;const lastSale=derniere.get(p.id);
       const daysSinceLastSale=lastSale?Math.floor((Date.now()-new Date(lastSale.date||lastSale.createdAt||lastSale.created_at).getTime())/(1000*60*60*24)):999;
-      return{...p,totalStock,totalValue,daysSinceLastSale};}).filter(p=>p.totalStock>0).sort((a,b)=>b.daysSinceLastSale-a.daysSinceLastSale);
+      return{...p,totalStock,totalValue,daysSinceLastSale};}).filter(Boolean).sort((a,b)=>b.daysSinceLastSale-a.daysSinceLastSale);
   },[products,tickets]);
 
   // ══ P3: Duplicate product — via API ══

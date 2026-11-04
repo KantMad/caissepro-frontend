@@ -9,6 +9,23 @@ import { useApp } from "../context.jsx";
 import { tauxMarque } from "../lib/formatters.js";
 import { sortSizes } from "./_shared.js";
 
+// Catalogue importe (gestlog/TIO : ~50 000 variantes chez MCS) : une liste deroulante de
+// 10 000 articles ou un tableau de 50 000 lignes figeait la tablette (Inventaire : 20 s a
+// l'ouverture, 1,5 s par chiffre tape). On n'affiche que les premiers resultats de la recherche,
+// plus l'article deja choisi ; le scan EAN reste le moyen direct.
+const MAX_LISTE=100,MAX_LIGNES=200;
+const indexRecherche=new WeakMap();
+function filtrerProduits(products,q,garder,max=MAX_LISTE){
+  let idx=indexRecherche.get(products);
+  if(!idx){idx=products.map(p=>`${p.name||""} ${p.sku||""} ${(p.variants||[]).map(v=>v.ean||"").join(" ")}`.toLowerCase());indexRecherche.set(products,idx);}
+  q=(q||"").trim().toLowerCase();const liste=[];let total=0;
+  for(let i=0;i<products.length;i++){if(q&&!idx[i].includes(q))continue;total++;if(liste.length<max)liste.push(products[i]);}
+  if(garder&&!liste.some(p=>p.id===garder)){const g=products.find(p=>p.id===garder);if(g)liste.unshift(g);}
+  return{liste,reste:Math.max(0,total-max)};}
+const optionsProduits=r=><>{r.liste.map(p=>(<option key={p.id} value={p.id}>{p.name} ({p.sku})</option>))}
+  {r.reste>0&&<option disabled value="__reste">… {r.reste} autre(s) article(s) : affinez la recherche ou scannez</option>}</>;
+const champRecherche={marginBottom:4,height:28,fontSize:10,padding:"2px 8px"};
+
 function StockScreen(){
   const{products,setProducts,stockAlerts,stockMoves,receiveStock,receiveBatchStock,stockAging,reorderSuggestions,adjustStock,notify,findByEAN,users,addStockMove,addAudit,settings,perm,defectiveStock,loadDefectiveStock,receiveDefectiveStock,adjustDefectiveStock,setScanOverride,clearScanOverride,mode,thermalPrint,printReceiptOnly,currentStore,currentUser,stores,refreshProducts}=useApp();
   // Valorisation du stock au PRIX D'ACHAT (cost_price de l'import) — DASHBOARD uniquement
@@ -64,6 +81,10 @@ function StockScreen(){
   const resolveEAN=useCallback((ean)=>{const found=findByEAN(ean);if(!found)return null;return{productId:found.product.id,variantId:found.variant.id,product:found.product,variant:found.variant};},[findByEAN]);
   const[adjProd,setAdjProd]=useState("");const[adjVar,setAdjVar]=useState("");const[adjQty,setAdjQty]=useState("");const[adjReason,setAdjReason]=useState("INVENTAIRE");
   const[invSearch,setInvSearch]=useState("");const[invCounts,setInvCounts]=useState({});
+  const invLignes=useMemo(()=>{const lignes=[];let total=0;
+    for(const p of filtrerProduits(products,invSearch,null,Infinity).liste)for(const v of p.variants||[]){total++;if(lignes.length<MAX_LIGNES)lignes.push({p,v});}
+    return{lignes,reste:total-lignes.length};},[products,invSearch]);
+  const[rechDef,setRechDef]=useState("");const[rechDefAdj,setRechDefAdj]=useState("");const[rechTr,setRechTr]=useState("");
   const[stSearchMatrix,setStSearchMatrix]=useState("");const[stSearchReceipt,setStSearchReceipt]=useState("");const[stSearchAdj,setStSearchAdj]=useState("");
   const[csvStockModal,setCsvStockModal]=useState(false);const[csvStStep,setCsvStStep]=useState(0);const[csvStData,setCsvStData]=useState([]);const[csvStHeaders,setCsvStHeaders]=useState([]);const[csvStMapping,setCsvStMapping]=useState({});const[csvStPreview,setCsvStPreview]=useState([]);
   const[csvStMode,setCsvStMode]=useState("add");// "add" = ajouter au stock, "replace" = remplacer
@@ -156,7 +177,7 @@ function StockScreen(){
     {tab==="matrix"&&<><Input value={stSearchMatrix} onChange={e=>{setStSearchMatrix(e.target.value);}} placeholder="Rechercher produit (nom, SKU, EAN)..." style={{marginBottom:6,height:32,fontSize:11,padding:"4px 10px"}}
         onKeyDown={e=>{if(e.key==="Enter"){const r=resolveEAN(stSearchMatrix.trim());if(r){setSel(r.productId);setStSearchMatrix("");notify(`${r.product.name} — ${r.variant.color}/${r.variant.size}`,"info");}}}}/>
       <select value={sel} onChange={e=>setSel(e.target.value)} style={{padding:8,borderRadius:8,border:`1.5px solid ${C.border}`,fontSize:12,marginBottom:12,fontFamily:"inherit"}}>
-      {products.filter(p=>!stSearchMatrix||p.name.toLowerCase().includes(stSearchMatrix.toLowerCase())||p.sku.toLowerCase().includes(stSearchMatrix.toLowerCase())||(p.variants||[]).some(v=>(v.ean||"").includes(stSearchMatrix))).map(p=>(<option key={p.id} value={p.id}>{p.name} ({p.sku})</option>))}</select>
+      {optionsProduits(filtrerProduits(products,stSearchMatrix,sel))}</select>
     {p&&<div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`,overflowX:"auto"}}>
       <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
         <thead><tr><th style={{padding:8,textAlign:"left",borderBottom:`2px solid ${C.border}`,fontSize:10}}>Couleur\Taille</th>
@@ -241,7 +262,8 @@ function StockScreen(){
 
     {tab==="alerts"&&<div style={{display:"flex",flexDirection:"column",gap:6}}>
       {stockAlerts.length===0&&<div style={{textAlign:"center",padding:30,color:C.textLight}}>Aucune alerte</div>}
-      {stockAlerts.map((a,i)=>(<div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:10,borderRadius:10,
+      {stockAlerts.length>MAX_LIGNES&&<div style={{fontSize:11,color:C.textMuted,padding:"2px 4px"}}>{stockAlerts.length} alertes — affichage des {MAX_LIGNES} premières</div>}
+      {stockAlerts.slice(0,MAX_LIGNES).map((a,i)=>(<div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:10,borderRadius:10,
         background:a.level==="rupture"?C.dangerLight:C.warnLight,border:`1.5px solid ${a.level==="rupture"?C.danger+"44":C.warn+"44"}`}}>
         <AlertTriangle size={16} color={a.level==="rupture"?C.danger:C.warn}/>
         <div style={{flex:1}}><div style={{fontSize:12,fontWeight:600}}>{a.product.name} — {a.variant.color}/{a.variant.size}</div>
@@ -290,8 +312,9 @@ function StockScreen(){
           onKeyDown={e=>{if(e.key==="Enter"){const r=resolveEAN(e.target.value.trim());if(r){setDefProd(r.productId);setDefVar(r.variantId);setDefQty(prev=>prev&&defProd===r.productId&&defVar===r.variantId?String(parseInt(prev)+1):"1");e.target.value="";notify(`${r.product.name} ${r.variant.color}/${r.variant.size}`,"info");}else{notify("EAN inconnu: "+e.target.value,"warn");e.target.value="";}}}}/>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
           <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>PRODUIT</label>
+            <Input value={rechDef} onChange={e=>setRechDef(e.target.value)} placeholder="Rechercher (nom, SKU, EAN)..." style={champRecherche}/>
             <select value={defProd} onChange={e=>{setDefProd(e.target.value);setDefVar("");setDefQty("");}} style={{width:"100%",padding:8,borderRadius:8,border:`1.5px solid ${C.border}`,fontSize:11,fontFamily:"inherit"}}>
-              <option value="">Sélectionner…</option>{products.map(p=>(<option key={p.id} value={p.id}>{p.name} ({p.sku})</option>))}</select></div>
+              <option value="">Sélectionner…</option>{optionsProduits(filtrerProduits(products,rechDef,defProd))}</select></div>
           {defProd&&<div><label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>VARIANTE</label>
             <select value={defVar} onChange={e=>setDefVar(e.target.value)} style={{width:"100%",padding:8,borderRadius:8,border:`1.5px solid ${C.border}`,fontSize:11,fontFamily:"inherit"}}>
               <option value="">Sélectionner…</option>{products.find(x=>x.id===defProd)?.variants.map(v=>(<option key={v.id} value={v.id}>{v.color}/{v.size} (stock: {v.stock}, def: {v.defective||0})</option>))}</select></div>}
@@ -310,8 +333,9 @@ function StockScreen(){
           onKeyDown={e=>{if(e.key==="Enter"){const r=resolveEAN(e.target.value.trim());if(r){setDefAdjProd(r.productId);setDefAdjVar(r.variantId);setDefAdjQty(String(r.variant.defective||0));e.target.value="";notify(`${r.product.name} ${r.variant.color}/${r.variant.size}`,"info");}else{notify("EAN inconnu: "+e.target.value,"warn");e.target.value="";}}}}/>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
           <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>PRODUIT</label>
+            <Input value={rechDefAdj} onChange={e=>setRechDefAdj(e.target.value)} placeholder="Rechercher (nom, SKU, EAN)..." style={champRecherche}/>
             <select value={defAdjProd} onChange={e=>{setDefAdjProd(e.target.value);setDefAdjVar("");setDefAdjQty("");}} style={{width:"100%",padding:8,borderRadius:8,border:`1.5px solid ${C.border}`,fontSize:11,fontFamily:"inherit"}}>
-              <option value="">Sélectionner…</option>{products.map(p=>(<option key={p.id} value={p.id}>{p.name} ({p.sku})</option>))}</select></div>
+              <option value="">Sélectionner…</option>{optionsProduits(filtrerProduits(products,rechDefAdj,defAdjProd))}</select></div>
           {defAdjProd&&<div><label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>VARIANTE</label>
             <select value={defAdjVar} onChange={e=>{setDefAdjVar(e.target.value);const pr=products.find(x=>x.id===defAdjProd);const v=pr?.variants.find(x=>x.id===e.target.value);if(v)setDefAdjQty(String(v.defective||0));}} style={{width:"100%",padding:8,borderRadius:8,border:`1.5px solid ${C.border}`,fontSize:11,fontFamily:"inherit"}}>
               <option value="">Sélectionner…</option>{products.find(x=>x.id===defAdjProd)?.variants.map(v=>(<option key={v.id} value={v.id}>{v.color}/{v.size} (stock: {v.stock}, def: {v.defective||0})</option>))}</select></div>}
@@ -357,7 +381,7 @@ function StockScreen(){
         <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>PRODUIT</label>
           <Input value={stSearchAdj} onChange={e=>setStSearchAdj(e.target.value)} placeholder="Rechercher (nom, SKU, EAN)..." style={{marginBottom:4,height:28,fontSize:10,padding:"2px 8px"}}/>
           <select value={adjProd} onChange={e=>{setAdjProd(e.target.value);setAdjVar("");setAdjQty("");}} style={{width:"100%",padding:10,borderRadius:10,border:`2px solid ${C.border}`,fontSize:12,fontFamily:"inherit"}}>
-            <option value="">Sélectionner…</option>{products.filter(p=>!stSearchAdj||p.name.toLowerCase().includes(stSearchAdj.toLowerCase())||p.sku.toLowerCase().includes(stSearchAdj.toLowerCase())||(p.variants||[]).some(v=>(v.ean||"").includes(stSearchAdj))).map(p=>(<option key={p.id} value={p.id}>{p.name} ({p.sku})</option>))}</select></div>
+            <option value="">Sélectionner…</option>{optionsProduits(filtrerProduits(products,stSearchAdj,adjProd))}</select></div>
         {adjProd&&<div><label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>VARIANTE</label>
           <select value={adjVar} onChange={e=>{setAdjVar(e.target.value);const pr=products.find(x=>x.id===adjProd);const v=pr?.variants.find(x=>x.id===e.target.value);if(v)setAdjQty(String(v.stock));}} style={{width:"100%",padding:10,borderRadius:10,border:`2px solid ${C.border}`,fontSize:12,fontFamily:"inherit"}}>
             <option value="">Sélectionner…</option>{products.find(x=>x.id===adjProd)?.variants.map(v=>(<option key={v.id} value={v.id}>{v.color}/{v.size} (stock: {v.stock})</option>))}</select></div>}
@@ -387,8 +411,7 @@ function StockScreen(){
         <table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
           <thead><tr style={{borderBottom:`2px solid ${C.border}`,position:"sticky",top:0,background:C.surface}}>
             {["Produit","Variante","EAN","Stock actuel","Stock compté","Écart"].map(h=>(<th key={h} style={{padding:6,textAlign:"left",fontSize:9,fontWeight:700,color:C.textMuted}}>{h}</th>))}</tr></thead>
-          <tbody>{products.filter(p=>!invSearch||p.name.toLowerCase().includes(invSearch.toLowerCase())||p.sku.toLowerCase().includes(invSearch.toLowerCase())||(p.variants||[]).some(v=>(v.ean||"").includes(invSearch))).flatMap(p=>
-            p.variants.map(v=>{const key=`${p.id}_${v.id}`;const counted=invCounts[key];const diff=counted!==undefined&&counted!==""?parseInt(counted)-v.stock:null;
+          <tbody>{invLignes.lignes.map(({p,v})=>{const key=`${p.id}_${v.id}`;const counted=invCounts[key];const diff=counted!==undefined&&counted!==""?parseInt(counted)-v.stock:null;
               return(<tr key={key} style={{borderBottom:`1px solid ${C.border}`,background:diff!==null&&diff!==0?(diff>0?C.primaryLight:C.dangerLight):"transparent"}}>
                 <td style={{padding:6,fontWeight:600}}>{p.name} <span style={{color:C.textMuted,fontSize:9}}>({p.sku})</span></td>
                 <td style={{padding:6}}>{v.color}/{v.size}</td>
@@ -400,8 +423,8 @@ function StockScreen(){
                     setInvVu(prev=>key in prev?prev:{...prev,[key]:v.stock});}}
                   style={{width:60,padding:"3px 6px",borderRadius:6,border:`1.5px solid ${C.border}`,fontSize:11,textAlign:"center",fontFamily:"inherit"}}/></td>
                 <td style={{padding:6,fontWeight:700,color:diff===null||diff===0?C.textMuted:diff>0?"#059669":C.danger}}>
-                  {diff!==null?(diff>0?`+${diff}`:diff):"—"}</td></tr>);})
-          )}</tbody></table></div>
+                  {diff!==null?(diff>0?`+${diff}`:diff):"—"}</td></tr>);})}</tbody></table>
+        {invLignes.reste>0&&<div style={{padding:8,fontSize:11,color:C.textMuted,textAlign:"center"}}>… {invLignes.reste} autre(s) variante(s) : recherchez ou scannez un article pour le compter</div>}</div>
       <Btn onClick={async()=>{
         // On ATTEND chaque ajustement et on compte les vrais succes : avant, le message
         // « N ajustement(s) valide(s) » partait avant la reponse du serveur.
@@ -424,7 +447,7 @@ function StockScreen(){
         <div style={{display:"flex",gap:6,justifyContent:"flex-end"}}><Btn variant="outline" onClick={()=>{setCsvStockModal(true);setCsvStStep(0);setCsvStData([]);setCsvStPreview([]);setCsvStResult(null);setCsvStMode("add");setCsvStMatchField("ean");}} style={{fontSize:10,padding:"4px 10px"}}><Upload size={11}/> Import CSV stock</Btn></div>
         <Input value={stSearchReceipt} onChange={e=>setStSearchReceipt(e.target.value)} placeholder="Rechercher produit..." style={{height:28,fontSize:10,padding:"2px 8px"}}/>
         <select value={rcProd} onChange={e=>{setRcProd(e.target.value);setRcVar("");}} style={{padding:10,borderRadius:10,border:`2px solid ${C.border}`,fontSize:12,fontFamily:"inherit"}}>
-          <option value="">Sélectionner un produit</option>{products.filter(p=>!stSearchReceipt||p.name.toLowerCase().includes(stSearchReceipt.toLowerCase())||p.sku.toLowerCase().includes(stSearchReceipt.toLowerCase())).map(p=>(<option key={p.id} value={p.id}>{p.name} ({p.sku})</option>))}</select>
+          <option value="">Sélectionner un produit</option>{optionsProduits(filtrerProduits(products,stSearchReceipt,rcProd))}</select>
         {rcProd&&<select value={rcVar} onChange={e=>setRcVar(e.target.value)} style={{padding:10,borderRadius:10,border:`2px solid ${C.border}`,fontSize:12,fontFamily:"inherit"}}>
           <option value="">Variante</option>{products.find(x=>x.id===rcProd)?.variants.map(v=>(<option key={v.id} value={v.id}>{v.color}/{v.size} (stock: {v.stock})</option>))}</select>}
         <Input type="number" value={rcQty} onChange={e=>setRcQty(e.target.value)} placeholder="Quantité reçue"/>
@@ -609,9 +632,10 @@ function StockScreen(){
         onKeyDown={e=>{if(e.key==="Enter"){const c=e.target.value.trim();e.target.value="";if(c)trScan(c);}}}/>
       <div style={{display:"grid",gridTemplateColumns:"2fr 1.4fr 70px auto",gap:8,alignItems:"end",marginBottom:12}}>
         <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>PRODUIT</label>
+          <Input value={rechTr} onChange={e=>setRechTr(e.target.value)} placeholder="Rechercher (nom, SKU, EAN)..." style={champRecherche}/>
           <select value={trProd} onChange={e=>{setTrProd(e.target.value);setTrVar("");}} style={{width:"100%",padding:8,borderRadius:8,border:`1.5px solid ${C.border}`,fontSize:11,fontFamily:"inherit"}}>
             <option value="">Sélectionner…</option>
-            {products.map(p=>(<option key={p.id} value={p.id}>{p.name} ({p.sku})</option>))}</select></div>
+            {optionsProduits(filtrerProduits(products,rechTr,trProd))}</select></div>
         <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>VARIANTE</label>
           <select value={trVar} onChange={e=>setTrVar(e.target.value)} style={{width:"100%",padding:8,borderRadius:8,border:`1.5px solid ${C.border}`,fontSize:11,fontFamily:"inherit"}}>
             <option value="">Sélectionner…</option>
