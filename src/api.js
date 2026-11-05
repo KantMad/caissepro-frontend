@@ -83,6 +83,7 @@ export const auth = {
   me: () => api('/api/auth/me'),
   profiles: () => api('/api/auth/profiles'),
   users: () => api('/api/auth/users'),
+  vendeurs: () => api('/api/auth/vendeurs'),
   createUser: (data) => api('/api/auth/users', { method: 'POST', body: JSON.stringify(data) }),
   updateUser: (id, data) => api(`/api/auth/users/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   deleteUser: (id) => api(`/api/auth/users/${id}`, { method: 'DELETE' }),

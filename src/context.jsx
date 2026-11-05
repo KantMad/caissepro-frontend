@@ -180,6 +180,9 @@ function AppProvider({children}){
   // Barcode scanner auto-start (moved after findByEAN/addToCart declarations)
   // SEC-04: Removed hardcoded PIN hash and default users. Offline login uses only cached credentials from last successful online session.
   const[users,setUsersRaw]=useState(()=>{try{const s=localStorage.getItem("caissepro_users");return s?JSON.parse(s):[];}catch(e){return[];}});
+  // Vendeur choisi au panier : tous les comptes actifs du magasin + les admins, depuis le SERVEUR
+  // pour tout role (/auth/users est reserve aux admins : un caissier n'avait qu'une vieille copie).
+  const[vendeurs,setVendeurs]=useState([]);
   const setUsers=useCallback((v)=>{setUsersRaw(prev=>{const next=typeof v==="function"?v(prev):v;try{localStorage.setItem("caissepro_users",JSON.stringify(next));}catch(e){}return next;});},[]);
   // ══ Pending sync queue — retry offline user/settings changes when back online ══
   const[pendingSync,setPendingSync]=useState(()=>{try{const s=localStorage.getItem("caissepro_pendingSync");return s?JSON.parse(s):[];}catch(e){return[];}});
@@ -312,6 +315,9 @@ function AppProvider({children}){
     return()=>{window.removeEventListener("online",on);window.removeEventListener("offline",off);clearInterval(iv);};},[]);
 
   // ══ Auto-reconnect on page refresh if token exists ══
+  useEffect(()=>{if(!currentUser?.id)return;let ok=true;
+    Promise.resolve().then(()=>API.auth.vendeurs()).then(r=>{if(ok&&Array.isArray(r))setVendeurs(r);}).catch(()=>{});
+    return()=>{ok=false;};},[currentUser?.id,currentStore?.id]);
   const loadAllData=useCallback(async()=>{
     try{
       const[prods,custs,prms,setts,apiUsers]=await Promise.all([
@@ -2151,7 +2157,7 @@ function AppProvider({children}){
     }catch(e){console.warn("Reload photos echoue:",e.message);}
   },[]);
 
-  return<AppCtx.Provider value={{currentUser,login,logout,mode,setMode,offlineMode,
+  return<AppCtx.Provider value={{currentUser,vendeurs,login,logout,mode,setMode,offlineMode,
     stores,setStores,currentStore,setCurrentStore,selectStore,viewingStoreId,switchViewingStore,effectiveStoreId,
     products,setProducts,addProduct,customers,setCustomers,addCustomer,openCustomerDisplay,footfall,addFootfall,
     cart,addToCart,addCustomItem,removeFromCart,voidSale,updateQty,updateItemDisc,clearCart,gDiscPct,gDiscAmt,setCartGD,

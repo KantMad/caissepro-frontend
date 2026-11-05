@@ -93,6 +93,9 @@ vi.mock("./api.js", () => {
     stores: ns({ list: liste([{ id: STORE, name: "Boutique" }]) }),
     exports: ns({ url: () => "http://x", salesDetailUrl: () => "http://x" }),
     integrations: ns({ gestlogDeliveries: liste([]), gestlogCatalogImports: liste([]) }),
+    // Vendeurs au panier : admins compris, servis a tout role (le caissier n'a pas /auth/users)
+    auth: ns({ vendeurs: liste([{ id: "u1", name: "Admin", role: "admin" }, { id: "ua", name: "Quentin", role: "admin" },
+                                { id: "um", name: "Lina", role: "manager" }, { id: "uc", name: "Sophie", role: "cashier" }]) }),
     audit: ns({ list: liste([{ id: "au1", action: "VENTE", detail: "Ticket", user_name: "Sophie", created_at: "2026-10-20T09:00:00.000Z" }]) }),
   };
   for (const n of ["auth", "stock", "giftcards", "parked", "pricehistory", "favorites",
@@ -265,6 +268,15 @@ describe("Écrans — rendu sans plantage", () => {
       fireEvent.click(getByText("Attribuer"));
       await waitFor(() => expect(relier).toHaveBeenCalledWith("sale1", "c9"));
     } finally { Object.assign(API.customers, { create: avant.c }); Object.assign(API.sales, { reassignCustomer: avant.r }); }
+  });
+
+  it("Vente : le choix du vendeur liste tous les comptes du magasin, admins compris (connecté en caissier)", async () => {
+    sessionStorage.setItem("caissepro_user", JSON.stringify({ id: "uc", name: "Sophie", role: "cashier" }));
+    const { container } = render(<AppProvider><SalesScreen /></AppProvider>);
+    await waitFor(() => {
+      const choix = [...container.querySelectorAll("select")].find(s => /Vendeur:/.test(s.textContent));
+      expect([...choix.options].map(o => o.textContent)).toEqual(["Vendeur: Sophie (moi)", "Admin", "Quentin", "Lina"]);
+    });
   });
 
   it("Vente : espèces au montant exact -> pas de ligne « Rendu monnaie » ; billet plus grand -> rendu affiché", async () => {

@@ -20,7 +20,7 @@ function SalesScreen(){
     gDiscPct,gDiscAmt,setCartGD,promoCode,setPromoCode,calcPromoDiscount,isOnline,findByEAN,offlineMode,
     parked,parkCart,restoreCart,removeParked,customers,addCustomer,selCust,setSelCust,perm,notify,
     stockAlerts,activePromos,avoirPayment,selectedAvoir,setSelectedAvoir,getLoyaltyTier,tickets,saleNote,setSaleNote,favorites,toggleFavorite,getLastPriceForCustomer,settings,
-    printerConnected,thermalPrint,pendingSync,clearPendingSync,users,currentUser,currentStore,avoirs,consumeAvoir,checkGiftCard,setScanOverride,clearScanOverride,isAvoirExpired,addAudit,addJET,trainingMode,cartTotals,retoucheBons,addRetoucheBon,cashReg,closures,allCategories,getVariantPhotos}=useApp();
+    printerConnected,thermalPrint,pendingSync,clearPendingSync,users,vendeurs,currentUser,currentStore,avoirs,consumeAvoir,checkGiftCard,setScanOverride,clearScanOverride,isAvoirExpired,addAudit,addJET,trainingMode,cartTotals,retoucheBons,addRetoucheBon,cashReg,closures,allCategories,getVariantPhotos}=useApp();
   const categories=allCategories;
   const[search,setSearch]=useState("");const[cat,setCat]=useState("Tous");const[vm,setVm]=useState(null);const[selSeller,setSelSeller]=useState(null);
   // Remises cumulables : pourcentage d'abord, puis euros TTC sur le reste
@@ -308,7 +308,9 @@ function SalesScreen(){
         <div style={{display:"flex",gap:4,marginBottom:5}}>
           <select value={selSeller||""} onChange={e=>setSelSeller(e.target.value||null)} style={{flex:1,height:34,fontSize:12,padding:"3px 8px",borderRadius:8,border:`1px solid ${C.border}`,fontFamily:"inherit",background:C.surface,color:selSeller?C.text:C.textMuted}}>
             <option value="">Vendeur: {currentUser?.name} (moi)</option>
-            {users.filter(u=>u.name!==currentUser?.name&&u.role!=="admin").map(u=>(<option key={u.id} value={u.name}>{u.name}</option>))}
+            {/* Tous les comptes actifs du magasin, admins compris (avant : admins exclus) ; repli hors-ligne
+                sur la copie de l'appareil */}
+            {(vendeurs.length?vendeurs:users).filter(u=>u.name!==currentUser?.name&&u.active!==false).map(u=>(<option key={u.id} value={u.name}>{u.name}</option>))}
           </select>
           <Btn variant="outline" onClick={parkCart} disabled={!cart.length} style={{padding:"0 12px",height:34,borderRadius:8,fontSize:12,fontWeight:700,gap:5,position:"relative",whiteSpace:"nowrap"}} title="Mettre en attente"><Pause size={13}/> Attente
             {parked.length>0&&<span style={{position:"absolute",top:-5,right:-5,width:14,height:14,borderRadius:7,background:C.danger,color:"#fff",fontSize:7,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center"}}>{parked.length}</span>}</Btn>
