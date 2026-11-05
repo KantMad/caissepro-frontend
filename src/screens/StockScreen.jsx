@@ -89,6 +89,7 @@ function StockScreen(){
   const[csvStockModal,setCsvStockModal]=useState(false);const[csvStStep,setCsvStStep]=useState(0);const[csvStData,setCsvStData]=useState([]);const[csvStHeaders,setCsvStHeaders]=useState([]);const[csvStMapping,setCsvStMapping]=useState({});const[csvStPreview,setCsvStPreview]=useState([]);
   const[csvStMode,setCsvStMode]=useState("add");// "add" = ajouter au stock, "replace" = remplacer
   const[csvStMatchField,setCsvStMatchField]=useState("ean");// champ de matching: ean, sku, name_color_size
+  const ouvrirImportCsv=()=>{setCsvStockModal(true);setCsvStStep(0);setCsvStData([]);setCsvStPreview([]);setCsvStResult(null);setCsvStMode("add");setCsvStMatchField("ean");};
   const[csvStImporting,setCsvStImporting]=useState(false);const[csvStResult,setCsvStResult]=useState(null);
   const[defProd,setDefProd]=useState("");const[defVar,setDefVar]=useState("");const[defQty,setDefQty]=useState("");const[defReason,setDefReason]=useState("");
   const[defAdjProd,setDefAdjProd]=useState("");const[defAdjVar,setDefAdjVar]=useState("");const[defAdjQty,setDefAdjQty]=useState("");const[defAdjReason,setDefAdjReason]=useState("");
@@ -195,6 +196,9 @@ function StockScreen(){
         <h3 style={{fontSize:14,fontWeight:700,margin:0}}>Réception réassort</h3>
         <Badge color={C.primary}>{batchItems.reduce((s,i)=>s+i.qty,0)} pièces — {batchItems.length} réf</Badge>
         <div style={{flex:1}}/>
+        {/* Import d'un fichier de stock (ajout ou remplacement, par EAN/SKU) : la fenetre n'etait plus
+            ouverte par aucun bouton depuis le passage de la Reception au scan en continu */}
+        <Btn variant="outline" onClick={ouvrirImportCsv} style={{fontSize:10,padding:"4px 10px"}}><Upload size={11}/> Import CSV stock</Btn>
         {batchItems.length>0&&<Btn variant="outline" onClick={()=>{if(confirm("Vider la réception en cours ?"))setBatchItems([]);}} style={{fontSize:10,padding:"4px 10px",color:C.danger,borderColor:C.danger}}>Vider</Btn>}
       </div>
 
@@ -444,7 +448,7 @@ function StockScreen(){
     {/* Stock receipt modal */}
     <Modal open={rcModal} onClose={()=>setRcModal(false)} title="Réception de marchandise">
       <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:12}}>
-        <div style={{display:"flex",gap:6,justifyContent:"flex-end"}}><Btn variant="outline" onClick={()=>{setCsvStockModal(true);setCsvStStep(0);setCsvStData([]);setCsvStPreview([]);setCsvStResult(null);setCsvStMode("add");setCsvStMatchField("ean");}} style={{fontSize:10,padding:"4px 10px"}}><Upload size={11}/> Import CSV stock</Btn></div>
+        <div style={{display:"flex",gap:6,justifyContent:"flex-end"}}><Btn variant="outline" onClick={ouvrirImportCsv} style={{fontSize:10,padding:"4px 10px"}}><Upload size={11}/> Import CSV stock</Btn></div>
         <Input value={stSearchReceipt} onChange={e=>setStSearchReceipt(e.target.value)} placeholder="Rechercher produit..." style={{height:28,fontSize:10,padding:"2px 8px"}}/>
         <select value={rcProd} onChange={e=>{setRcProd(e.target.value);setRcVar("");}} style={{padding:10,borderRadius:10,border:`2px solid ${C.border}`,fontSize:12,fontFamily:"inherit"}}>
           <option value="">Sélectionner un produit</option>{optionsProduits(filtrerProduits(products,stSearchReceipt,rcProd))}</select>
@@ -534,19 +538,19 @@ function StockScreen(){
               notify("Associez les colonnes Nom, Couleur et Taille (mode matching Nom+Couleur+Taille)","error");return;}
             // Build preview
             const getF=(row,f)=>{const h=Object.entries(csvStMapping).find(([,v])=>v===f);return h?(row[h[0]]??"").toString().trim():"";};
+            // Index construit UNE fois : avant, chaque ligne reparcourait les ~50 000 variantes du
+            // catalogue MCS (1 767 lignes -> ~90 millions de comparaisons, tablette figee).
+            const cleNcs=(n,c,t)=>`${n.toLowerCase().trim()}|${c.toLowerCase().trim()}|${t.toLowerCase().trim()}`;
+            const index=new Map();
+            for(const p of products){for(const v of (p.variants||[])){
+              const k=matchField==="ean"?(v.ean||"").toLowerCase():matchField==="sku"?(p.sku||"").toLowerCase():cleNcs(p.name||"",v.color||"",v.size||"");
+              if(k&&!index.has(k))index.set(k,{product:p,variant:v});}}
             const rows=csvStData.map(row=>{
               const ean=getF(row,"ean");const sku=getF(row,"sku");const name=getF(row,"name");const color=getF(row,"color");const size=getF(row,"size");
               const stockVal=parseInt(getF(row,"stock"));const qty=isNaN(stockVal)?null:stockVal;const sup=getF(row,"supplier");
               // Matching
-              let match=null;
-              for(const p of products){for(const v of (p.variants||[])){
-                if(matchField==="ean"&&ean&&v.ean&&v.ean.toLowerCase()===ean.toLowerCase()){match={product:p,variant:v};break;}
-                if(matchField==="sku"&&sku&&p.sku&&p.sku.toLowerCase()===sku.toLowerCase()){match={product:p,variant:v};break;}
-                if(matchField==="name_color_size"&&name&&color&&size&&
-                  p.name.toLowerCase().trim()===name.toLowerCase().trim()&&
-                  (v.color||"").toLowerCase().trim()===color.toLowerCase().trim()&&
-                  (v.size||"").toLowerCase().trim()===size.toLowerCase().trim()){match={product:p,variant:v};break;}
-              }if(match)break;}
+              const cle=matchField==="ean"?ean.toLowerCase():matchField==="sku"?sku.toLowerCase():(name&&color&&size?cleNcs(name,color,size):"");
+              const match=(cle&&index.get(cle))||null;
               const currentStock=match?match.variant.stock:null;
               const newStock=match&&qty!==null?(csvStMode==="add"?currentStock+qty:qty):null;
               const diff=match&&newStock!==null?newStock-currentStock:null;

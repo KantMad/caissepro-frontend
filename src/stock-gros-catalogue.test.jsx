@@ -20,7 +20,7 @@ vi.mock("./api.js", () => {
     setOnAuthExpired: () => {}, setStoreId: () => {}, clearStoreId: () => {},
     setToken: () => {}, getToken: () => "t", clearToken: () => {}, getStoreId: () => "s1",
     products: ns({ list: () => Promise.resolve(P) }), sales: ns(), fiscal: ns(), audit: ns(), settings: ns(),
-    customers: ns(), returns: ns(), giftcards: ns(), parked: ns(), stores: ns(), auth: ns(), favorites: ns(), stock: ns(), tenues: ns(), transfers: ns(), users: ns(), retouches: ns(), cashMovements: ns(), promos: ns(),
+    customers: ns(), returns: ns(), giftcards: ns(), parked: ns(), stores: ns(), auth: ns(), favorites: ns(), stock: ns({ adjust: (d) => { (globalThis.__ajustements ||= []).push(d); return Promise.resolve({ ok: true }); } }), tenues: ns(), transfers: ns(), users: ns(), retouches: ns(), cashMovements: ns(), promos: ns(),
     health: () => Promise.resolve({ status: "ok" }),
   };
 });
@@ -54,6 +54,19 @@ describe("Stock : gros catalogue", () => {
       await onglet(t);
       for (const s of r.container.querySelectorAll("select")) expect(s.options.length, t).toBeLessThanOrEqual(102);
     }
+    // Import CSV stock : de nouveau accessible depuis Reception ; remplacement par EAN, index
+    // (avant : chaque ligne reparcourait tout le catalogue), y compris une remise a 0
+    await onglet("Réception");
+    fireEvent.click(r.getByText("Import CSV stock"));
+    fireEvent.click(r.getByText("Remplacer le stock"));
+    const csv = new File(["EAN;Quantite;Article\n3000000019994;7;Article 1999\n3000000000000;0;Article 0\n1234;3;Inconnu\n"], "alignement.csv", { type: "text/csv" });
+    fireEvent.change(r.getByText(/CSV avec colonnes/).parentElement.querySelector('input[type="file"]'), { target: { files: [csv] } });
+    fireEvent.click(await r.findByText(/Analyser et previsualiser/));
+    expect(r.getByText("2 trouves")).toBeTruthy();
+    expect(r.getByText("1 non trouves")).toBeTruthy();
+    await act(async () => { fireEvent.click(r.getByText(/Remplacer le stock — 2 ligne/)); });
+    await waitFor(() => expect((globalThis.__ajustements || []).map(a => `${a.variantId}:${a.newStock}`)).toEqual(["v1999_4:7", "v0_0:0"]));
+    fireEvent.click(r.container.ownerDocument.querySelector('[aria-label="Fermer"]') || r.getAllByText(/Fermer/).at(-1));
     // Alertes : 1 800 ruptures (articles 200 a 1 999 deja stockes puis a 0) -> 200 affichees
     await onglet("Alertes");
     expect(r.container.textContent).toMatch(/alertes — affichage des 200 premières/);
