@@ -2013,6 +2013,29 @@ function AppProvider({children}){
     }catch(e){if(!opts.lot)notify("Erreur: "+e.message,"error");return false;}
   },[products,addAudit,notify]);
 
+  // Ajustements / réceptions en masse (import CSV, inventaire) : un appel par tranche de 200 lignes.
+  // Une requête par ligne dépassait la limite de l'API (200 requêtes/minute) : 1 594 lignes sur
+  // 1 990 refusées lors d'un import (05/11/2026). Renvoie le compte réel des lignes acceptées.
+  const adjustStockLot=useCallback(async(items,reason)=>{
+    let ok=0,ko=0;const erreurs=[];
+    for(let i=0;i<items.length;i+=200){const tranche=items.slice(i,i+200);
+      try{const r=await API.stock.adjustBatch({reason,items:tranche.map(({variantId,newStock,expectedStock})=>({variantId,newStock,...(expectedStock!=null?{expectedStock}:{})}))});
+        for(const x of r?.results||[]){if(x.ok)ok++;else{ko++;erreurs.push(x);}}}
+      catch(e){ko+=tranche.length;erreurs.push({error:e.message});}}
+    try{const prods=await API.products.list();setProducts(norm.products(prods));}catch(e){console.error("refreshProducts:",e);}
+    return{ok,ko,erreurs};
+  },[]);
+  const receiveStockLot=useCallback(async(items)=>{
+    let ok=0,ko=0;const erreurs=[];const parFournisseur=new Map();
+    // quantité <= 0 : refusée seule (le serveur refuserait toute la tranche)
+    for(const it of items){if(!(it.quantity>0)){ko++;erreurs.push({variantId:it.variantId,error:"Quantité > 0 requise"});continue;}const f=it.supplier||"Import CSV";if(!parFournisseur.has(f))parFournisseur.set(f,[]);parFournisseur.get(f).push(it);}
+    for(const [supplier,lignes] of parFournisseur)for(let i=0;i<lignes.length;i+=200){const tranche=lignes.slice(i,i+200);
+      try{await API.stock.receiveBatch({supplier,items:tranche.map(({productId,variantId,quantity})=>({productId,variantId,quantity}))});ok+=tranche.length;}
+      catch(e){ko+=tranche.length;erreurs.push({error:e.message});}}
+    try{const prods=await API.products.list();setProducts(norm.products(prods));}catch(e){console.error("refreshProducts:",e);}
+    return{ok,ko,erreurs};
+  },[]);
+
   // ══ DEFECTIVE STOCK ══
   const[defectiveStock,setDefectiveStock]=useState([]);
   const loadDefectiveStock=useCallback(async()=>{
@@ -2174,7 +2197,7 @@ function AppProvider({children}){
     notifications,notify,
     processReturn,giftCards,createGiftCard,useGiftCard,checkGiftCard,
     updateProduct,deleteProduct,addVariantToProduct,deleteVariant,reorderVariants,
-    updateCustomer,deleteCustomer,adjustStock,
+    updateCustomer,deleteCustomer,adjustStock,adjustStockLot,receiveStockLot,
     defectiveStock,loadDefectiveStock,receiveDefectiveStock,adjustDefectiveStock,
     printerConnected,printerType,thermalPrint,printReceiptOnly,connectPrinter,disconnectPrinter,isSunmi,isAndroid,
     hwId,hwProfile,switchHardware,hardwareProfiles:hardwareManager.profiles,

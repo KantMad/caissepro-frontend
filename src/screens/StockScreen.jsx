@@ -27,7 +27,7 @@ const optionsProduits=r=><>{r.liste.map(p=>(<option key={p.id} value={p.id}>{p.n
 const champRecherche={marginBottom:4,height:28,fontSize:10,padding:"2px 8px"};
 
 function StockScreen(){
-  const{products,setProducts,stockAlerts,stockMoves,receiveStock,receiveBatchStock,stockAging,reorderSuggestions,adjustStock,notify,findByEAN,users,addStockMove,addAudit,settings,perm,defectiveStock,loadDefectiveStock,receiveDefectiveStock,adjustDefectiveStock,setScanOverride,clearScanOverride,mode,thermalPrint,printReceiptOnly,currentStore,currentUser,stores,refreshProducts}=useApp();
+  const{products,setProducts,stockAlerts,stockMoves,receiveStock,receiveBatchStock,adjustStockLot,receiveStockLot,stockAging,reorderSuggestions,adjustStock,notify,findByEAN,users,addStockMove,addAudit,settings,perm,defectiveStock,loadDefectiveStock,receiveDefectiveStock,adjustDefectiveStock,setScanOverride,clearScanOverride,mode,thermalPrint,printReceiptOnly,currentStore,currentUser,stores,refreshProducts}=useApp();
   // Valorisation du stock au PRIX D'ACHAT (cost_price de l'import) — DASHBOARD uniquement
   // Prix d'achat : saisi HT (confirmé le 27/10/2026), utilisé tel quel.
   const coutHT=(p)=>parseFloat(p.costPrice)||0;
@@ -436,9 +436,8 @@ function StockScreen(){
           const[pid,vid]=key.split("_");const pr=products.find(x=>x.id===pid);const vr=pr?.variants.find(x=>x.id===vid);
           const vu=invVu[key]??vr?.stock;
           if(pr&&vr&&parseInt(val)!==vu)aFaire.push([pid,vid,parseInt(val),vu]);});
-        let ok=0,ko=0;
-        for(const [pid,vid,val,vu] of aFaire){try{const r=await adjustStock(pid,vid,val,"INVENTAIRE",{lot:true,expectedStock:vu});if(r)ok++;else ko++;}catch(e){ko++;}}
-        setInvCounts({});setInvVu({});refreshProducts();
+        const{ok,ko}=await adjustStockLot(aFaire.map(([,variantId,newStock,expectedStock])=>({variantId,newStock,expectedStock})),"INVENTAIRE");
+        setInvCounts({});setInvVu({});
         if(ko)notify(`${ok} ajustement(s) enregistré(s), ${ko} refusé(s) : article vendu ou reçu pendant le comptage — recomptez-le`,"error");
         else notify(`${ok} ajustement(s) enregistré(s)`,"success");}}
         disabled={!Object.values(invCounts).some(v=>v!==""&&v!==undefined)}
@@ -592,17 +591,10 @@ function StockScreen(){
             const toProcess=csvStPreview.filter(r=>r.status==="found"&&r.qty!==null&&r.match);
             if(!toProcess.length){notify("Aucune ligne a traiter","warn");return;}
             setCsvStImporting(true);
-            let ok=0,err=0;
-            // Compte réel des lignes acceptées par le serveur (avant : toute ligne comptait « traitée »)
-            for(const r of toProcess){
-              try{
-                const reussi=csvStMode==="add"
-                  ?await receiveStock(r.match.product.id,r.match.variant.id,r.qty,r.supplier||"Import CSV",{lot:true})
-                  :await adjustStock(r.match.product.id,r.match.variant.id,r.qty,r.supplier?`Import CSV (${r.supplier})`:"Import CSV - remplacement stock",{lot:true});
-                if(reussi)ok++;else err++;
-              }catch(e){err++;}
-            }
-            refreshProducts();
+            // Par lots de 200 (une requête par ligne dépassait la limite de l'API) ; compte réel des lignes acceptées
+            const{ok,ko:err}=csvStMode==="add"
+              ?await receiveStockLot(toProcess.map(r=>({productId:r.match.product.id,variantId:r.match.variant.id,quantity:r.qty,supplier:r.supplier||"Import CSV"})))
+              :await adjustStockLot(toProcess.map(r=>({variantId:r.match.variant.id,newStock:r.qty})),"Import CSV - remplacement stock");
             setCsvStImporting(false);
             setCsvStResult({ok,err,total:toProcess.length});
             addAudit("STOCK",`Import CSV stock (${csvStMode}) — ${ok}/${toProcess.length} lignes traitees`);

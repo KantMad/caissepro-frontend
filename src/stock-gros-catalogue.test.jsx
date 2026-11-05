@@ -20,7 +20,7 @@ vi.mock("./api.js", () => {
     setOnAuthExpired: () => {}, setStoreId: () => {}, clearStoreId: () => {},
     setToken: () => {}, getToken: () => "t", clearToken: () => {}, getStoreId: () => "s1",
     products: ns({ list: () => Promise.resolve(P) }), sales: ns(), fiscal: ns(), audit: ns(), settings: ns(),
-    customers: ns(), returns: ns(), giftcards: ns(), parked: ns(), stores: ns(), auth: ns(), favorites: ns(), stock: ns({ adjust: (d) => { (globalThis.__ajustements ||= []).push(d); return Promise.resolve({ ok: true }); } }), tenues: ns(), transfers: ns(), users: ns(), retouches: ns(), cashMovements: ns(), promos: ns(),
+    customers: ns(), returns: ns(), giftcards: ns(), parked: ns(), stores: ns(), auth: ns(), favorites: ns(), stock: ns({ adjustBatch: (d) => { (globalThis.__ajustements ||= []).push(...d.items); return Promise.resolve({ ok: true, results: d.items.map(i => ({ variantId: i.variantId, ok: true })) }); } }), tenues: ns(), transfers: ns(), users: ns(), retouches: ns(), cashMovements: ns(), promos: ns(),
     health: () => Promise.resolve({ status: "ok" }),
   };
 });

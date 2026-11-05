@@ -159,6 +159,8 @@ export const stock = {
   receive: (data) => api('/api/stock/receive', { method: 'POST', body: JSON.stringify(data) }),
   receiveBatch: (data) => api('/api/stock/receive-batch', { method: 'POST', body: JSON.stringify(data) }),
   adjust: (data) => api('/api/stock/adjust', { method: 'POST', body: JSON.stringify(data) }),
+  // { reason, items:[{variantId,newStock,expectedStock?}] } (500 lignes max) -> { results:[{variantId,ok,error}] }
+  adjustBatch: (data) => api('/api/stock/adjust-batch', { method: 'POST', body: JSON.stringify(data) }),
   aging: () => api('/api/stock/aging'),
   reorder: () => api('/api/stock/reorder'),
   defective: () => api('/api/stock/defective'),
