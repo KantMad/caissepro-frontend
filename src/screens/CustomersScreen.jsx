@@ -9,7 +9,7 @@ import { useApp } from "../context.jsx";
 import { formatAmount } from "../lib/formatters.js";
 
 function CustomersScreen(){
-  const{customers,setCustomers,tickets,exportCustomerRGPD,getLoyaltyTier,updateCustomer,deleteCustomer,addCustomer,notify,settings}=useApp();
+  const{customers,setCustomers,tickets,exportCustomerRGPD,getLoyaltyTier,updateCustomer,deleteCustomer,addCustomer,notify,settings,currentUser}=useApp();
   const[sel,setSel]=useState(null);const[search,setSearch]=useState("");
   const[editMode,setEditMode]=useState(false);
   const[editData,setEditData]=useState({});
@@ -90,7 +90,8 @@ function CustomersScreen(){
               {!editMode?<>
                 <Btn variant="outline" onClick={startEdit} style={{fontSize:12,padding:"0 12px",minHeight:30}}><Edit size={13}/> Modifier</Btn>
                 <Btn variant="outline" onClick={()=>exportCustomerRGPD(sel.id)} style={{fontSize:10,padding:"4px 10px"}}><Download size={11}/> RGPD</Btn>
-                <Btn variant="ghost" onClick={()=>setConfirmDel(true)} style={{color:C.danger,padding:"4px 8px"}}><Trash2 size={11}/></Btn>
+                {/* Gerant et admin seulement (le serveur refuse le caissier) */}
+                {["admin","manager"].includes(currentUser?.role)&&<Btn variant="ghost" onClick={()=>setConfirmDel(true)} title="Supprimer ce client" style={{color:C.danger,padding:"4px 8px"}}><Trash2 size={11}/></Btn>}
               </>:<>
                 <Btn variant="success" onClick={saveEdit} style={{fontSize:10,padding:"4px 10px"}}><Save size={11}/> Sauver</Btn>
                 <Btn variant="outline" onClick={()=>setEditMode(false)} style={{fontSize:10,padding:"4px 10px"}}>Annuler</Btn>
