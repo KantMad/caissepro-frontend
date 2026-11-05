@@ -37,6 +37,11 @@ function csvAutoDetect(headers){const m={};const norm=s=>s.toLowerCase().replace
 // fichier exporté par la caisse elle-même (décimales à la virgule).
 export function csvNum(v){let t=String(v??"").replace(/[\s\u00a0€%]/g,"");if(!t)return NaN;
   if(t.includes(","))t=t.replace(/\./g,"").replace(",",".");return parseFloat(t);}
+// Accents abimes (« Marron Ã©bÃ¨ne ») : fichier UTF-8 enregistre une 2e fois comme du Latin-1
+// (Excel). Re-decode si le texte a cette signature et redevient de l'UTF-8 valide ; sinon intact.
+export function reparerAccents(v){const t=String(v??"");
+  if(!/[ÃÂ][\u0080-\u00BF]/.test(t)||/[^\u0000-\u00FF]/.test(t))return v;
+  try{return new TextDecoder("utf-8",{fatal:true}).decode(Uint8Array.from(t,c=>c.charCodeAt(0)));}catch(e){return v;}}
 function csvParseTax(v){const n=csvNum(v);if(isNaN(n))return 0.20;return n>1?n/100:n;}
 
 function CSVImportWizard({open,onClose,existingProducts,onImportComplete}){
@@ -61,7 +66,7 @@ function CSVImportWizard({open,onClose,existingProducts,onImportComplete}){
 
   // Step 0: File upload — restore saved mapping if column names match
   const handleFile=(e)=>{const file=e.target.files?.[0];if(!file)return;setFileName(file.name);
-    Papa.parse(file,{header:true,skipEmptyLines:true,complete:(r)=>{
+    Papa.parse(file,{header:true,skipEmptyLines:true,transformHeader:reparerAccents,transform:reparerAccents,complete:(r)=>{
       setRawData(r.data);setCsvHeaders(r.meta.fields||[]);
       // Try to restore saved mapping from last import
       let restoredMapping=null;
@@ -114,7 +119,9 @@ function CSVImportWizard({open,onClose,existingProducts,onImportComplete}){
           // le même article (même code-barres) sur plusieurs colis/commandes. Sans fusion,
           // deux variantes identiques -> viole UNIQUE(product_id,color,size) -> 23505 à la
           // création (tout le produit est annulé). La quantité est la SOMME des lignes.
-          const vm=new Map();let order=0;
+          // Meme EAN = meme variante, meme si la couleur est ecrite autrement (« 213 » / « Chocolat »,
+          // accents abimes) : avant, deux variantes sous un seul code-barres (32 doublons chez MCS).
+          const vm=new Map(),parEan=new Map();let order=0;
           group.rows.forEach((r)=>{const gv=(f)=>r[mapping[f]]||"";
             const color=gv("color")||"Défaut",size=gv("size")||"TU";
             const key=`${color.toLowerCase().trim()}|${size.toLowerCase().trim()}`;
@@ -122,11 +129,13 @@ function CSVImportWizard({open,onClose,existingProducts,onImportComplete}){
             // Stock FOURNI par le fichier ? (colonne mappée et cellule non vide). Sinon, en mise à
             // jour « remplacer », le stock existant est conservé — avant il était remis à 0.
             const stockFourni=!!mapping.stock&&String(gv("stock")).trim()!=="";
-            const ex=vm.get(key);
-            if(ex){ex.stock+=stock;ex.stockFourni=ex.stockFourni||stockFourni;if(!ex.ean&&gv("ean"))ex.ean=gv("ean");}
-            else vm.set(key,{id:`iv-${Date.now()}-${order}-${Math.random().toString(36).slice(2,6)}`,
-              color,colorCode:gv("colorCode")||"",size,ean:gv("ean")||"",
-              stock,stockFourni,defective:0,stockAlert:Math.max(0,parseInt(gv("stockAlert"))||5),sortOrder:order++});});
+            const ean=String(gv("ean")).trim();
+            const ex=(ean&&parEan.get(ean))||vm.get(key);
+            if(ex){ex.stock+=stock;ex.stockFourni=ex.stockFourni||stockFourni;if(!ex.ean&&ean){ex.ean=ean;parEan.set(ean,ex);}}
+            else{const nv={id:`iv-${Date.now()}-${order}-${Math.random().toString(36).slice(2,6)}`,
+              color,colorCode:gv("colorCode")||"",size,ean,
+              stock,stockFourni,defective:0,stockAlert:Math.max(0,parseInt(gv("stockAlert"))||5),sortOrder:order++};
+              vm.set(key,nv);if(ean)parEan.set(ean,nv);}});
           return[...vm.values()];
         })(),
         sourceRows:group.indices.map(i=>i+2),
@@ -155,7 +164,9 @@ function CSVImportWizard({open,onClose,existingProducts,onImportComplete}){
           // Separate new variants from existing ones that need updating
           const newVariants=[];const updatedVariants=[];
           product.variants.forEach(v=>{
-            const match=existingMatch.variants.find(ev=>(ev.ean&&ev.ean===v.ean)||(ev.size===v.size&&ev.color===v.color));
+            // L'EAN d'abord : sinon une variante de meme couleur/taille mais d'un autre code-barres
+            // pouvait etre prise, et la vraie (meme EAN) recreee a cote
+            const match=(v.ean&&existingMatch.variants.find(ev=>ev.ean===v.ean))||existingMatch.variants.find(ev=>ev.size===v.size&&ev.color===v.color);
             if(match){
               const existingStock=match.stock||0;
               const csvStock=v.stock||0;
