@@ -3,6 +3,7 @@ import { Search, Receipt, RotateCcw, Users, DollarSign, Download, FileText, Data
 import { CO, C } from "../constants.jsx";
 import { Modal, Btn, Input } from "../ui.jsx";
 import { useApp } from "../context.jsx";
+import FactureDialog from "../FactureDialog.jsx";
 import * as API from "../api.js";
 import { dayKey } from "../lib/dates.js";
 
@@ -128,13 +129,9 @@ function ExportsScreen(){
   const deselectAllFields=(t)=>setFields(p=>{const n={...p,[t]:{}};FIELD_DEFS[t].forEach(f=>{n[t][f.key]=false;});return n;});
 
   // Invoice state
-  const[invoiceModal,setInvoiceModal]=useState(false);
-  const[invoiceTicket,setInvoiceTicket]=useState(null);
-  const[invoiceClient,setInvoiceClient]=useState(null);
-  const[invoiceClientSearch,setInvoiceClientSearch]=useState("");
+  const[invoiceModal,setInvoiceModal]=useState(false);   // choix du ticket a facturer
   const[invoiceTicketSearch,setInvoiceTicketSearch]=useState("");
-  const[invoiceNotes,setInvoiceNotes]=useState("");
-  const[invoiceDue,setInvoiceDue]=useState(()=>{const d=new Date();d.setDate(d.getDate()+30);return dayKey(d);});
+  const[factureTk,setFactureTk]=useState(null);
 
   // --- Filtered data ---
   const filterByDate=(items,dateField="date")=>items.filter(i=>{
@@ -315,142 +312,7 @@ function ExportsScreen(){
   // Tous les onglets sont servis par le backend (cf. SERVER_EXPORT).
   const doExport=()=>downloadServerExport("xlsx");
 
-  // --- Invoice generation ---
-  const generateInvoice=async(ticket,client)=>{
-    const storeName=settings.name||CO.name;
-    const storeAddr=settings.address||CO.address;
-    const storePC=settings.postalCode||CO.postalCode;
-    const storeCity=settings.city||CO.city;
-    const storeSiret=settings.siret||CO.siret;
-    const storeTVA=settings.tvaIntra||CO.tvaIntra;
-    const storePhone=settings.phone||CO.phone;
-    const storeLegal=settings.legalForm||CO.legalForm||"";
-    const storeCapital=settings.capital||CO.capital||"";
-    const clientName=client?`${client.firstName||""} ${client.lastName||""}`.trim():(ticket.customerName||"Client comptoir");
-    const clientEmail=client?.email||"";
-    const clientPhone=client?.phone||"";
-    const clientCity=client?.city||"";
-    const clientAddr=client?.address||"";
-
-    // Numéro et date attribués par le SERVEUR (continus, conservés, une facture par ticket).
-    // Avant : FA-<année>-<6 derniers chiffres de l'horloge>, ni continu ni enregistré.
-    if(!ticket.id){notify("Ticket pas encore enregistré sur le serveur : facture impossible pour l'instant","error");return;}
-    // Fenêtre ouverte AU CLIC (avant l'appel réseau), sinon le navigateur la bloque
-    const w=window.open("","_blank","width=860,height=1000");
-    let inv;
-    try{inv=await API.invoices.create({saleId:ticket.id,customerId:client?.id||ticket.customerId||null,clientName,
-      clientAddress:[clientAddr,clientCity].filter(Boolean).join(", "),clientEmail,notes:invoiceNotes||null,dueDate:invoiceDue||null});}
-    catch(e){if(w)w.close();notify("Facture non émise : "+e.message,"error");return;}
-    const invoiceNum=inv.invoice_number;
-    const invoiceDate=new Date(inv.created_at).toLocaleDateString("fr-FR",{day:"2-digit",month:"long",year:"numeric"});
-
-    const items=(ticket.items||[]).map(i=>{
-      const name=i.product?.name||i.product_name||"Article";
-      const variant=i.variant?` (${i.variant.color||i.variant_color||""}${i.variant.size||i.variant_size?"/":""}${i.variant.size||i.variant_size||""})`.replace("(/","(").replace("/)",")").replace("()",""):"";
-      const qty=i.quantity;
-      const unitHT=i.lineHT?i.lineHT/qty:(i.line_ht||0)/qty;
-      const taxRate=i.product?.taxRate||i.tax_rate||0.20;
-      const lineHT=unitHT*qty;
-      const lineTVA=lineHT*taxRate;
-      return{name:name+variant,qty,unitHT,taxRate,lineHT,lineTVA,lineTTC:lineHT+lineTVA};
-    });
-
-    const totalHT=items.reduce((s,i)=>s+i.lineHT,0);
-    const totalTVA=items.reduce((s,i)=>s+i.lineTVA,0);
-    const totalTTC=items.reduce((s,i)=>s+i.lineTTC,0);
-    // La remise globale porte sur le HT : le TTC net suit le meme ratio (cf. lib/totals.js
-    // et create_sale). Soustraire la remise du TTC donnait une facture > au ticket.
-    const globalDisc=ticket.globalDiscount||0;
-    const ratio=globalDisc>0&&totalHT>0?Math.min(globalDisc/totalHT,1):0;
-    const netHT=Math.round(totalHT*(1-ratio)*100)/100;
-    const netTVA=Math.round(totalTVA*(1-ratio)*100)/100;
-    const netTTC=Math.round((netHT+netTVA)*100)/100;
-
-    // TVA breakdown — sur les bases NETTES, sinon la mention fiscale de la facture est fausse
-    const tvaBreakdown={};items.forEach(i=>{const r=`${(i.taxRate*100).toFixed(1)}%`;if(!tvaBreakdown[r])tvaBreakdown[r]={base:0,tva:0};
-      tvaBreakdown[r].base+=i.lineHT*(1-ratio);tvaBreakdown[r].tva+=i.lineTVA*(1-ratio);});
-
-    const payLabels={cash:"Espèces",card:"Carte bancaire",amex:"American Express",contactless:"Sans-contact",giftcard:"Carte cadeau",cheque:"Chèque",avoir:"Avoir"};
-    const paymentInfo=(ticket.payments||[]).map(p=>`${payLabels[p.method]||p.method}: ${(Number(p.amount)||0).toFixed(2)} EUR`).join(" / ");
-
-    // Generate printable HTML
-    const html=`<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><title>Facture ${invoiceNum}</title>
-<style>
-*{margin:0;padding:0;box-sizing:border-box;}
-body{font-family:'Segoe UI','Helvetica Neue',Arial,sans-serif;color:#1e293b;background:#fff;padding:40px;max-width:800px;margin:0 auto;font-size:13px;line-height:1.5;}
-.header{display:flex;justify-content:space-between;align-items:start;margin-bottom:32px;padding-bottom:20px;border-bottom:2px solid #047857;}
-.store-name{font-size:22px;font-weight:800;color:#047857;letter-spacing:-0.5px;margin-bottom:4px;}
-.store-info{font-size:11px;color:#64748b;line-height:1.6;}
-.invoice-title{text-align:right;}
-.invoice-title h1{font-size:28px;font-weight:800;color:#0f172a;letter-spacing:-0.8px;}
-.invoice-title .num{font-size:13px;color:#047857;font-weight:600;margin-top:2px;}
-.invoice-title .date{font-size:11px;color:#64748b;margin-top:4px;}
-.parties{display:grid;grid-template-columns:1fr 1fr;gap:30px;margin-bottom:28px;}
-.party{background:#f8fafc;border-radius:10px;padding:16px;border:1px solid #e2e8f0;}
-.party-label{font-size:9px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px;}
-.party-name{font-size:14px;font-weight:700;color:#0f172a;margin-bottom:4px;}
-.party-detail{font-size:11px;color:#64748b;line-height:1.5;}
-table{width:100%;border-collapse:collapse;margin-bottom:20px;}
-thead th{text-align:left;padding:10px 12px;background:#f1f5f9;font-size:10px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.03em;border-bottom:2px solid #e2e8f0;}
-thead th:last-child,thead th:nth-child(2),thead th:nth-child(3),thead th:nth-child(4),thead th:nth-child(5){text-align:right;}
-tbody td{padding:10px 12px;border-bottom:1px solid #f1f5f9;font-size:12px;}
-tbody td:last-child,tbody td:nth-child(2),tbody td:nth-child(3),tbody td:nth-child(4),tbody td:nth-child(5){text-align:right;font-variant-numeric:tabular-nums;}
-tbody tr:last-child td{border-bottom:2px solid #e2e8f0;}
-.totals{display:flex;justify-content:flex-end;margin-bottom:20px;}
-.totals-table{width:280px;}
-.totals-row{display:flex;justify-content:space-between;padding:5px 0;font-size:12px;color:#64748b;}
-.totals-row.bold{font-weight:700;color:#0f172a;font-size:14px;padding:10px 0;border-top:2px solid #0f172a;margin-top:4px;}
-.totals-row.discount{color:#059669;}
-.tva-box{background:#f8fafc;border-radius:10px;padding:14px;margin-bottom:20px;border:1px solid #e2e8f0;}
-.tva-box h4{font-size:10px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:8px;}
-.tva-row{display:flex;justify-content:space-between;font-size:11px;color:#475569;padding:3px 0;}
-.payment-box{background:#ecfdf5;border-radius:10px;padding:14px;margin-bottom:20px;border:1px solid #04785722;}
-.payment-box .label{font-size:10px;font-weight:700;color:#047857;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px;}
-.payment-box .value{font-size:12px;color:#065f46;font-weight:600;}
-.notes{background:#fffbeb;border-radius:10px;padding:14px;margin-bottom:20px;border:1px solid #d9770622;font-size:11px;color:#92400e;}
-.notes .label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px;}
-.footer{margin-top:32px;padding-top:16px;border-top:1px solid #e2e8f0;font-size:10px;color:#94a3b8;text-align:center;line-height:1.6;}
-.ref{font-size:10px;color:#94a3b8;margin-bottom:20px;}
-@media print{body{padding:20px;} .no-print{display:none !important;}}
-.print-btn{position:fixed;top:16px;right:16px;background:#047857;color:#fff;border:none;border-radius:10px;padding:12px 24px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;box-shadow:0 4px 12px rgba(4,120,87,0.3);}
-.print-btn:hover{background:#065f46;}
-</style></head><body>
-<button class="print-btn no-print" onclick="window.print()">Imprimer / PDF</button>
-<div class="header">
-  <div><div class="store-name">${storeName}</div>
-    <div class="store-info">${storeAddr}<br>${storePC} ${storeCity}<br>Tel: ${storePhone}<br>SIRET: ${storeSiret}<br>TVA: ${storeTVA}${storeLegal?`<br>${storeLegal}${storeCapital?` — Capital: ${storeCapital}`:""}`:""}
-    </div></div>
-  <div class="invoice-title"><h1>FACTURE</h1><div class="num">${invoiceNum}</div>
-    <div class="date">${invoiceDate}</div>
-    <div class="date">Échéance: ${new Date(invoiceDue).toLocaleDateString("fr-FR")}</div></div></div>
-<div class="parties">
-  <div class="party"><div class="party-label">Émetteur</div>
-    <div class="party-name">${storeName}</div>
-    <div class="party-detail">${storeAddr}<br>${storePC} ${storeCity}<br>SIRET: ${storeSiret}<br>TVA: ${storeTVA}</div></div>
-  <div class="party"><div class="party-label">Client</div>
-    <div class="party-name">${clientName}</div>
-    <div class="party-detail">${clientAddr?clientAddr+"<br>":""}${clientCity?clientCity+"<br>":""}${clientEmail?clientEmail+"<br>":""}${clientPhone?clientPhone:""}</div></div></div>
-<div class="ref">Réf. ticket: ${ticket.ticketNumber||""} du ${new Date(ticket.date||ticket.createdAt).toLocaleDateString("fr-FR")}</div>
-<table><thead><tr><th>Désignation</th><th>Qté</th><th>P.U. HT</th><th>TVA</th><th>Total HT</th><th>Total TTC</th></tr></thead>
-<tbody>${items.map(i=>`<tr><td>${i.name}</td><td>${i.qty}</td><td>${i.unitHT.toFixed(2)} EUR</td><td>${(i.taxRate*100).toFixed(1)}%</td><td>${i.lineHT.toFixed(2)} EUR</td><td>${i.lineTTC.toFixed(2)} EUR</td></tr>`).join("")}</tbody></table>
-<div class="tva-box"><h4>Récapitulatif TVA</h4>${Object.entries(tvaBreakdown).map(([r,v])=>`<div class="tva-row"><span>TVA ${r} sur ${v.base.toFixed(2)} EUR</span><span>${v.tva.toFixed(2)} EUR</span></div>`).join("")}</div>
-<div class="totals"><div class="totals-table">
-  <div class="totals-row"><span>Sous-total HT</span><span>${totalHT.toFixed(2)} EUR</span></div>
-  <div class="totals-row"><span>TVA</span><span>${totalTVA.toFixed(2)} EUR</span></div>
-  ${globalDisc>0?`<div class="totals-row discount"><span>Remise (HT)</span><span>-${globalDisc.toFixed(2)} EUR</span></div>`:""}
-  <div class="totals-row bold"><span>TOTAL TTC</span><span>${netTTC.toFixed(2)} EUR</span></div></div></div>
-<div class="payment-box"><div class="label">Règlement</div><div class="value">${paymentInfo||"Non renseigné"}</div></div>
-${invoiceNotes?`<div class="notes"><div class="label">Remarques</div>${invoiceNotes}</div>`:""}
-<div class="footer">${storeName} — ${storeAddr}, ${storePC} ${storeCity} — SIRET: ${storeSiret} — TVA intracommunautaire: ${storeTVA}<br>
-${storeLegal?`${storeLegal}${storeCapital?` au capital de ${storeCapital}`:""}`:""}<br>
-Facture générée par ${CO.sw} v${CO.ver}</div></body></html>`;
-
-    if(w){w.document.write(html);w.document.close();}else notify("Fenêtre d'impression bloquée : autorisez les fenêtres pour ce site","warn");
-    // Journal d'audit écrit par le serveur à l'émission ; JET pour l'impression
-    addJET("FACTURE",`${inv.reprint?"Réimpression":"Émission"} facture ${invoiceNum}`);
-    notify(inv.reprint?`Facture ${invoiceNum} déjà émise pour ce ticket : réimpression (même numéro)`:`Facture ${invoiceNum} émise`,"success");
-    setInvoiceModal(false);setInvoiceTicket(null);setInvoiceClient(null);setInvoiceNotes("");
-  };
+  // Facture : FactureDialog (emission serveur, rendu A4 serveur, email) — partagee avec l'ecran Tickets
 
   const salesDetailCount=useMemo(()=>filteredSales.reduce((s,t)=>s+(t.items||[]).length,0),[filteredSales]);
   const tabs=[
@@ -587,8 +449,7 @@ Facture générée par ${CO.sw} v${CO.ver}</div></body></html>`;
                 return(<tr key={idx} style={{borderBottom:`1px solid ${C.surfaceAlt}`}}
                   onMouseEnter={e=>e.currentTarget.style.background=C.surfaceAlt} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
                   {tab==="sales"&&<td style={{padding:"8px 10px",whiteSpace:"nowrap"}}>
-                    <button onClick={()=>{setInvoiceTicket(item);setInvoiceModal(true);
-                      const c=customers.find(c=>c.id===item.customerId);if(c)setInvoiceClient(c);}}
+                    <button onClick={()=>setFactureTk(item)}
                       style={{background:`${C.primary}10`,color:C.primary,border:"none",borderRadius:6,padding:"4px 8px",fontSize:10,fontWeight:600,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",gap:3}}>
                       <FileText size={10}/> Facture</button></td>}
                   {vals.map((v,vi)=>(
@@ -602,61 +463,19 @@ Facture générée par ${CO.sw} v${CO.ver}</div></body></html>`;
       </div>
     </div>
 
-    {/* Invoice generation modal */}
-    <Modal open={invoiceModal} onClose={()=>{setInvoiceModal(false);setInvoiceTicket(null);setInvoiceClient(null);}} title="Générer une facture" sub="Sélectionnez un ticket de vente et un client pour créer une facture">
-      <div style={{display:"flex",flexDirection:"column",gap:12}}>
-        {/* Ticket selection */}
-        <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>TICKET DE VENTE</label>
-          {invoiceTicket?<div style={{display:"flex",alignItems:"center",gap:10,padding:10,background:C.primaryLight,borderRadius:10,border:`1px solid ${C.primary}22`}}>
-            <Receipt size={16} color={C.primary}/>
-            <div style={{flex:1}}><div style={{fontSize:12,fontWeight:700}}>{invoiceTicket.ticketNumber}</div>
-              <div style={{fontSize:10,color:C.textMuted}}>{new Date(invoiceTicket.date||invoiceTicket.createdAt).toLocaleString("fr-FR")} — {(invoiceTicket.totalTTC||0).toFixed(2)}€ — {invoiceTicket.customerName||"Comptoir"}</div></div>
-            <button onClick={()=>setInvoiceTicket(null)} style={{background:"none",border:"none",cursor:"pointer"}}><X size={14} color={C.textMuted}/></button></div>
-          :<div>
-            <Input value={invoiceTicketSearch} onChange={e=>setInvoiceTicketSearch(e.target.value)} placeholder="Rechercher un ticket..." style={{fontSize:11,padding:"8px 10px",marginBottom:6}}/>
-            <div style={{maxHeight:160,overflowY:"auto",border:`1px solid ${C.border}`,borderRadius:10}}>
-              {tickets.filter(t=>!invoiceTicketSearch||(t.ticketNumber||"").toLowerCase().includes(invoiceTicketSearch.toLowerCase())||(t.customerName||"").toLowerCase().includes(invoiceTicketSearch.toLowerCase()))
-                .slice(0,20).map(t=>(<button key={t.ticketNumber||t.seq} onClick={()=>{setInvoiceTicket(t);setInvoiceTicketSearch("");
-                  const c=customers.find(c=>c.id===t.customerId);if(c)setInvoiceClient(c);}}
-                  style={{width:"100%",display:"flex",alignItems:"center",gap:8,padding:"8px 10px",background:"transparent",border:"none",borderBottom:`1px solid ${C.surfaceAlt}`,cursor:"pointer",fontFamily:"inherit",textAlign:"left"}}
-                  onMouseEnter={e=>e.currentTarget.style.background=C.surfaceAlt} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
-                  <span style={{fontSize:11,fontWeight:600,color:C.primary,minWidth:120}}>{t.ticketNumber}</span>
-                  <span style={{fontSize:10,color:C.textMuted,flex:1}}>{new Date(t.date||t.createdAt).toLocaleDateString("fr-FR")} — {t.customerName||"Comptoir"}</span>
-                  <span style={{fontSize:11,fontWeight:700}}>{(t.totalTTC||0).toFixed(2)}€</span></button>))}</div></div>}
-        </div>
-
-        {/* Client selection */}
-        <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>CLIENT</label>
-          {invoiceClient?<div style={{display:"flex",alignItems:"center",gap:10,padding:10,background:C.surfaceAlt,borderRadius:10,border:`1px solid ${C.border}`}}>
-            <div style={{width:28,height:28,borderRadius:8,background:`${C.primary}15`,display:"flex",alignItems:"center",justifyContent:"center",color:C.primary,fontSize:12,fontWeight:700}}>{(invoiceClient.firstName||"C")[0]}</div>
-            <div style={{flex:1}}><div style={{fontSize:12,fontWeight:700}}>{invoiceClient.firstName} {invoiceClient.lastName}</div>
-              <div style={{fontSize:10,color:C.textMuted}}>{invoiceClient.email||""} {invoiceClient.phone?`— ${invoiceClient.phone}`:""}</div></div>
-            <button onClick={()=>setInvoiceClient(null)} style={{background:"none",border:"none",cursor:"pointer"}}><X size={14} color={C.textMuted}/></button></div>
-          :<div>
-            <Input value={invoiceClientSearch} onChange={e=>setInvoiceClientSearch(e.target.value)} placeholder="Rechercher un client..." style={{fontSize:11,padding:"8px 10px",marginBottom:6}}/>
-            <div style={{maxHeight:140,overflowY:"auto",border:`1px solid ${C.border}`,borderRadius:10}}>
-              {customers.filter(c=>!invoiceClientSearch||`${c.firstName} ${c.lastName}`.toLowerCase().includes(invoiceClientSearch.toLowerCase())||(c.email||"").toLowerCase().includes(invoiceClientSearch.toLowerCase())||(c.phone||"").includes(invoiceClientSearch))
-                .slice(0,15).map(c=>(<button key={c.id} onClick={()=>{setInvoiceClient(c);setInvoiceClientSearch("");}}
-                  style={{width:"100%",display:"flex",alignItems:"center",gap:8,padding:"8px 10px",background:"transparent",border:"none",borderBottom:`1px solid ${C.surfaceAlt}`,cursor:"pointer",fontFamily:"inherit",textAlign:"left"}}
-                  onMouseEnter={e=>e.currentTarget.style.background=C.surfaceAlt} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
-                  <div style={{width:24,height:24,borderRadius:6,background:`${C.primary}12`,display:"flex",alignItems:"center",justifyContent:"center",color:C.primary,fontSize:10,fontWeight:700}}>{(c.firstName||"?")[0]}</div>
-                  <span style={{fontSize:11,fontWeight:600,flex:1}}>{c.firstName} {c.lastName}</span>
-                  <span style={{fontSize:10,color:C.textMuted}}>{c.email||c.phone||""}</span></button>))}</div></div>}
-        </div>
-
-        {/* Due date + notes */}
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-          <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>DATE D'ÉCHÉANCE</label>
-            <Input type="date" value={invoiceDue} onChange={e=>setInvoiceDue(e.target.value)} style={{fontSize:11,padding:"8px 10px"}}/></div></div>
-        <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>REMARQUES (optionnel)</label>
-          <textarea value={invoiceNotes} onChange={e=>setInvoiceNotes(e.target.value)} placeholder="Conditions de paiement, remarques..."
-            style={{width:"100%",height:60,padding:"8px 10px",borderRadius:10,border:`1.5px solid ${C.border}`,fontSize:11,fontFamily:"inherit",resize:"vertical",background:C.surface}}/></div>
-
-        <Btn onClick={()=>{if(!invoiceTicket){notify("Sélectionnez un ticket","error");return;}generateInvoice(invoiceTicket,invoiceClient);}}
-          disabled={!invoiceTicket} style={{width:"100%",height:44,background:C.primary,gap:6,marginTop:4}}>
-          <FileText size={14}/> Générer la facture</Btn>
-      </div>
+    {/* Choix du ticket, puis FactureDialog (client, emission, impression / email) */}
+    <Modal open={invoiceModal} onClose={()=>setInvoiceModal(false)} title="Générer une facture" sub="Sélectionnez le ticket de vente à facturer">
+      <Input value={invoiceTicketSearch} onChange={e=>setInvoiceTicketSearch(e.target.value)} placeholder="Rechercher un ticket (numéro, client)..." style={{fontSize:11,padding:"8px 10px",marginBottom:6}}/>
+      <div style={{maxHeight:320,overflowY:"auto",border:`1px solid ${C.border}`,borderRadius:10}}>
+        {tickets.filter(t=>!invoiceTicketSearch||(t.ticketNumber||"").toLowerCase().includes(invoiceTicketSearch.toLowerCase())||(t.customerName||"").toLowerCase().includes(invoiceTicketSearch.toLowerCase()))
+          .slice(0,30).map(t=>(<button key={t.ticketNumber||t.seq} onClick={()=>{setInvoiceModal(false);setInvoiceTicketSearch("");setFactureTk(t);}}
+            style={{width:"100%",display:"flex",alignItems:"center",gap:8,padding:"8px 10px",background:"transparent",border:"none",borderBottom:`1px solid ${C.surfaceAlt}`,cursor:"pointer",fontFamily:"inherit",textAlign:"left"}}
+            onMouseEnter={e=>e.currentTarget.style.background=C.surfaceAlt} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+            <span style={{fontSize:11,fontWeight:600,color:C.primary,minWidth:120}}>{t.ticketNumber}</span>
+            <span style={{fontSize:10,color:C.textMuted,flex:1}}>{new Date(t.date||t.createdAt).toLocaleDateString("fr-FR")} — {t.customerName||"Comptoir"}</span>
+            <span style={{fontSize:11,fontWeight:700}}>{(t.totalTTC||0).toFixed(2)}€</span></button>))}</div>
     </Modal>
+    <FactureDialog ticket={factureTk} onClose={()=>setFactureTk(null)}/>
   </div>);
 }
 

@@ -70,6 +70,8 @@ async function api(path, options = {}) {
     URL.revokeObjectURL(url);
     return { ok: true };
   }
+  // Document a afficher (facture A4) : texte HTML brut
+  if (ct && ct.includes('text/html')) return res.text();
 
   return res.json();
 }
@@ -321,6 +323,9 @@ export const cashMovements = {
 export const invoices = {
   create: (data) => api('/api/invoices', { method: 'POST', body: JSON.stringify(data) }),
   list: () => api('/api/invoices'),
+  // Facture A4 rendue par le serveur (donnees figees) ; envoi par email (tablette : pas d'impression A4)
+  html: (id) => api(`/api/invoices/${id}/html`),
+  email: (id, to) => api(`/api/invoices/${id}/email`, { method: 'POST', body: JSON.stringify({ to }) }),
 };
 
 export const exports = {

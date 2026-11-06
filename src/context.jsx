@@ -1978,10 +1978,11 @@ function AppProvider({children}){
 
   // ══ CUSTOMER EDIT — via API ══
   const updateCustomer=useCallback(async(customerId,updates)=>{
-    try{await API.customers.update(customerId,updates);
-      setCustomers(prev=>prev.map(c=>c.id===customerId?{...c,...updates}:c));
-      addAudit("CLIENT",`Client modifié: ${updates.firstName||""} ${updates.lastName||""}`);
-      return true;
+    // Fiche renvoyee par le serveur (SIREN / TVA normalises) ; retournee a l'ecran appelant
+    try{const r=await API.customers.update(customerId,updates);const maj=r&&r.id?norm.customer(r):updates;
+      setCustomers(prev=>prev.map(c=>c.id===customerId?{...c,...maj}:c));
+      addAudit("CLIENT",`Client modifié: ${maj.companyName||`${maj.firstName||""} ${maj.lastName||""}`}`);
+      return maj;
     }catch(e){notify("Client non modifié : "+e.message,"error");return false;}
   },[addAudit]);
 

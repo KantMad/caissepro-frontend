@@ -1,11 +1,12 @@
 import React, { useState, useMemo, useEffect } from "react";
-import { CreditCard, Banknote, Gift, Plus, Minus, User as UserIcon, Receipt, RotateCcw, AlertTriangle, Printer, Mail } from "lucide-react";
+import { CreditCard, Banknote, Gift, Plus, Minus, User as UserIcon, Receipt, RotateCcw, AlertTriangle, Printer, Mail, FileText } from "lucide-react";
 import * as API from "../api.js";
 import printer from "../printer.js";
 import { CO, C } from "../constants.jsx";
 import { EAN13Svg, ean13SvgHtml, norm } from "../utils.jsx";
 import { Modal, Btn, Input, Badge } from "../ui.jsx";
 import { useApp } from "../context.jsx";
+import FactureDialog from "../FactureDialog.jsx";
 import { getPaymentLabel, getAvoirRemaining, isAvoirPartiallyUsed, lineDiscountEuro, globalDiscountTTC, ratioRemiseGlobale, tvaParTaux, libelleTaux, libellePaiementTicket, pointsFidelite, donneesAvoir } from "../lib/formatters.js";
 import { dayKey } from "../lib/dates.js";
 
@@ -25,7 +26,7 @@ function HistoryScreen(){
     setScanBarcode(null);}},[scanBarcode,setScanBarcode]);
   const[returnModal,setReturnModal]=useState(null);
   const[returnItems,setReturnItems]=useState([]);const[returnReason,setReturnReason]=useState("");const[returnMethod,setReturnMethod]=useState("cash");
-  const[avoirDetail,setAvoirDetail]=useState(null);
+  const[avoirDetail,setAvoirDetail]=useState(null);const[factureTk,setFactureTk]=useState(null);
   const[page,setPage]=useState(0);const PAGE_SIZE=25;
 
   useEffect(()=>{setPage(0);},[search,dateFilter]);
@@ -295,6 +296,8 @@ function HistoryScreen(){
             `</body></html>`);w.document.close();setTimeout(()=>w.print(),300);}
         }} style={{flex:1}}><Gift size={14}/> Cadeau</Btn>
         <Btn variant="outline" onClick={()=>{setReassignModal(tk);setReassignCust(null);setReassignQ("");setNouveauClient(null);}} style={{flex:1}}><UserIcon size={14}/> Client</Btn>
+        {/* Facture (clients professionnels) : ouverte a tous les comptes, numero attribue par le serveur */}
+        {!trainingMode&&<Btn variant="outline" onClick={()=>{setReprintTk(null);setFactureTk(tk);}} style={{flex:1}}><FileText size={14}/> Facture</Btn>}
         <Btn variant="outline" onClick={()=>{const s=encodeURIComponent(`Ticket ${tkNum} — ${settings.name||CO.name}`);
           const b=encodeURIComponent(`Bonjour,\n\nTicket N°${tkNum}\nDate: ${tkDateStr}\nTotal: ${tkTTC.toFixed(2)}€\n\n${settings.name||CO.name}\nSIRET: ${settings.siret||CO.siret}`);
           window.open(`mailto:?subject=${s}&body=${b}`);}} style={{flex:1}}><Mail size={14}/> Email</Btn>
@@ -426,6 +429,8 @@ function HistoryScreen(){
         </div>);
       }})()}
     </Modal>
+
+    <FactureDialog ticket={factureTk} onClose={()=>setFactureTk(null)}/>
 
     <Modal open={!!reassignModal} onClose={()=>setReassignModal(null)} title="Changer le client">
       {reassignModal&&<div>

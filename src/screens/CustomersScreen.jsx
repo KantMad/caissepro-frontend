@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Search, Trash2, Plus, Receipt, Euro, Download, Save, Upload, Heart, Star, Edit, ChevronDown, Package } from "lucide-react";
+import { Search, Trash2, Plus, Receipt, Euro, Download, Save, Upload, Heart, Star, Edit, ChevronDown, Package, Building2 } from "lucide-react";
 import Papa from "papaparse";
 import * as API from "../api.js";
 import { norm } from "../utils.jsx";
@@ -7,6 +7,7 @@ import { LOYALTY_TIERS, C } from "../constants.jsx";
 import { Modal, Btn, Input, Badge, SC, ConfirmDialog } from "../ui.jsx";
 import { useApp } from "../context.jsx";
 import { formatAmount } from "../lib/formatters.js";
+import { ChampsClient, CLIENT_VIDE, erreurClient, corpsClient, nomClient, contactClient, estPro, texteRechercheClient } from "../clientPro.jsx";
 
 function CustomersScreen(){
   const{customers,setCustomers,tickets,exportCustomerRGPD,getLoyaltyTier,updateCustomer,deleteCustomer,addCustomer,notify,settings,currentUser}=useApp();
@@ -15,7 +16,7 @@ function CustomersScreen(){
   const[editData,setEditData]=useState({});
   const[custHistory,setCustHistory]=useState([]);const[loadingHist,setLoadingHist]=useState(false);const[expandedTk,setExpandedTk]=useState(null);
   const[newCustModal,setNewCustModal]=useState(false);
-  const[nc,setNc]=useState({firstName:"",lastName:"",email:"",phone:"",city:"",notes:""});
+  const[nc,setNc]=useState(CLIENT_VIDE);
   const[confirmDel,setConfirmDel]=useState(false);
   const[csvModal,setCsvModal]=useState(false);const[csvStep,setCsvStep]=useState(0);const[csvData,setCsvData]=useState([]);const[csvHeaders,setCsvHeaders]=useState([]);
   const[csvMapping,setCsvMapping]=useState({});const[csvPreview,setCsvPreview]=useState([]);
@@ -46,13 +47,14 @@ function CustomersScreen(){
       // Fallback: filter local tickets
       setCustHistory(tickets.filter(t=>t.customerId===sel.id));
     }).finally(()=>setLoadingHist(false));},[sel?.id]);
-  const filtered=customers.filter(c=>!search||`${c.firstName} ${c.lastName} ${c.email} ${c.phone}`.toLowerCase().includes(search.toLowerCase()));
+  const filtered=customers.filter(c=>!search||texteRechercheClient(c).includes(search.toLowerCase()));
   const custTickets=custHistory.length?custHistory:(sel?tickets.filter(t=>t.customerId===sel.id):[]);
   const custAvg=custTickets.length?custTickets.reduce((s,t)=>s+(t.totalTTC||parseFloat(t.total_ttc)||0),0)/custTickets.length:0;
 
-  const startEdit=()=>{setEditData({firstName:sel.firstName,lastName:sel.lastName,email:sel.email,phone:sel.phone,city:sel.city||""});setEditMode(true);};
+  const startEdit=()=>{setEditData(Object.fromEntries(Object.keys(CLIENT_VIDE).filter(k=>k!=="notes").map(k=>[k,sel[k]??CLIENT_VIDE[k]])));setEditMode(true);};
   // La fiche affichée ne change que si le serveur a bien enregistré (sinon : message d'erreur)
-  const saveEdit=async()=>{if(await updateCustomer(sel.id,editData)){setSel(s=>({...s,...editData}));setEditMode(false);}};
+  const saveEdit=async()=>{const err=erreurClient(editData);if(err){notify(err,"error");return;}
+    const{notes:_n,...corps}=corpsClient(editData);const r=await updateCustomer(sel.id,corps);if(r){setSel(s=>({...s,...r}));setEditMode(false);}};
 
   return(<div style={{height:"100%",overflowY:"auto",padding:20,background:C.bg}}>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
@@ -68,8 +70,8 @@ function CustomersScreen(){
           <div key={c.id} onClick={()=>{setSel(c);setEditMode(false);}} style={{display:"flex",alignItems:"center",gap:8,padding:sel?8:12,borderRadius:sel?8:12,
             background:sel?.id===c.id?C.primaryLight:C.surface,border:`1.5px solid ${sel?.id===c.id?C.primary:C.border}`,cursor:"pointer",transition:"all 0.15s"}}
             onMouseEnter={e=>{if(sel?.id!==c.id)e.currentTarget.style.borderColor=C.primary+"66";}} onMouseLeave={e=>{if(sel?.id!==c.id)e.currentTarget.style.borderColor=C.border;}}>
-            <div style={{width:sel?30:36,height:sel?30:36,borderRadius:sel?15:18,background:C.primary,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:700,fontSize:sel?10:12}}>{c.firstName?.[0]}{c.lastName?.[0]}</div>
-            <div style={{flex:1,minWidth:0}}><div style={{fontSize:sel?11:13,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.firstName} {c.lastName}</div>
+            <div style={{width:sel?30:36,height:sel?30:36,borderRadius:sel?15:18,background:C.primary,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:700,fontSize:sel?10:12}}>{estPro(c)?<Building2 size={sel?14:16}/>:<>{c.firstName?.[0]}{c.lastName?.[0]}</>}</div>
+            <div style={{flex:1,minWidth:0}}><div style={{fontSize:sel?11:13,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{nomClient(c)}{contactClient(c)&&<span style={{fontWeight:400,color:C.textMuted}}> — {contactClient(c)}</span>}</div>
               <div style={{fontSize:sel?9:10,color:C.textMuted}}>{tier.name} — {c.points}pts — {formatAmount(c.totalSpent)}€</div>
               {!sel&&c.phone&&<div style={{fontSize:9,color:C.textLight,marginTop:1}}>{c.phone}{c.email?` — ${c.email}`:""}</div>}</div>
           </div>);})}</div>
@@ -77,15 +79,11 @@ function CustomersScreen(){
       {sel&&<div style={{flex:1,minWidth:0}}>
         <div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`,marginBottom:10}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"start",marginBottom:10}}>
-            {!editMode?<div><div style={{fontSize:18,fontWeight:700}}>{sel.firstName} {sel.lastName}</div>
-              <div style={{fontSize:12,color:C.textMuted}}>{sel.email||"Pas d'email"} — {sel.phone||"Pas de tél."}{sel.city?` — ${sel.city}`:""}</div></div>
-            :<div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,flex:1,marginRight:10}}>
-              <div><label style={{fontSize:9,color:C.textMuted}}>PRÉNOM</label><Input value={editData.firstName||""} onChange={e=>setEditData(p=>({...p,firstName:e.target.value}))}/></div>
-              <div><label style={{fontSize:9,color:C.textMuted}}>NOM</label><Input value={editData.lastName||""} onChange={e=>setEditData(p=>({...p,lastName:e.target.value}))}/></div>
-              <div><label style={{fontSize:9,color:C.textMuted}}>EMAIL</label><Input value={editData.email||""} onChange={e=>setEditData(p=>({...p,email:e.target.value}))}/></div>
-              <div><label style={{fontSize:9,color:C.textMuted}}>TÉLÉPHONE</label><Input value={editData.phone||""} onChange={e=>setEditData(p=>({...p,phone:e.target.value}))}/></div>
-              <div><label style={{fontSize:9,color:C.textMuted}}>VILLE</label><Input value={editData.city||""} onChange={e=>setEditData(p=>({...p,city:e.target.value}))}/></div>
-            </div>}
+            {!editMode?<div><div style={{fontSize:18,fontWeight:700,display:"flex",alignItems:"center",gap:6}}>{estPro(sel)&&<Building2 size={18} color={C.primary}/>}{nomClient(sel)}
+                {estPro(sel)&&<Badge color={C.primary}>Professionnel</Badge>}</div>
+              {estPro(sel)&&<div style={{fontSize:12,color:C.text}}>{[contactClient(sel),sel.legalForm,sel.siren&&`${sel.siren.length===14?"SIRET":"SIREN"} ${sel.siren}`,sel.vatNumber&&`TVA ${sel.vatNumber}`].filter(Boolean).join(" — ")}</div>}
+              <div style={{fontSize:12,color:C.textMuted}}>{sel.email||"Pas d'email"} — {sel.phone||"Pas de tél."}{[sel.address,[sel.postalCode,sel.city].filter(Boolean).join(" ")].filter(Boolean).length?` — ${[sel.address,[sel.postalCode,sel.city].filter(Boolean).join(" ")].filter(Boolean).join(", ")}`:""}</div></div>
+            :<div style={{flex:1,marginRight:10}}><ChampsClient v={editData} set={setEditData}/></div>}
             <div style={{display:"flex",gap:4}}>
               {!editMode?<>
                 <Btn variant="outline" onClick={startEdit} style={{fontSize:12,padding:"0 12px",minHeight:30}}><Edit size={13}/> Modifier</Btn>
@@ -158,16 +156,9 @@ function CustomersScreen(){
 
     {/* New customer modal */}
     <Modal open={newCustModal} onClose={()=>setNewCustModal(false)} title="Nouveau client">
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}>
-        <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>PRÉNOM</label><Input value={nc.firstName} onChange={e=>setNc(p=>({...p,firstName:e.target.value}))}/></div>
-        <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>NOM</label><Input value={nc.lastName} onChange={e=>setNc(p=>({...p,lastName:e.target.value}))}/></div>
-        <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>EMAIL</label><Input value={nc.email} onChange={e=>setNc(p=>({...p,email:e.target.value}))}/></div>
-        <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>TÉLÉPHONE</label><Input value={nc.phone} onChange={e=>setNc(p=>({...p,phone:e.target.value}))}/></div>
-        <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>VILLE</label><Input value={nc.city} onChange={e=>setNc(p=>({...p,city:e.target.value}))}/></div></div>
-      <div style={{marginBottom:12}}><label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>NOTES</label>
-        <textarea value={nc.notes} onChange={e=>setNc(p=>({...p,notes:e.target.value}))} style={{width:"100%",height:50,padding:8,borderRadius:8,border:`1.5px solid ${C.border}`,fontSize:11,fontFamily:"inherit",resize:"vertical"}} placeholder="Notes…"/></div>
-      <Btn onClick={async()=>{if(nc.firstName&&nc.lastName){const c=await addCustomer(nc);if(c){setSel(c);setNewCustModal(false);
-        setNc({firstName:"",lastName:"",email:"",phone:"",city:"",notes:""});}}}}
+      <div style={{marginBottom:12}}><ChampsClient v={nc} set={setNc} notes/></div>
+      <Btn onClick={async()=>{const err=erreurClient(nc);if(err){notify(err,"error");return;}
+        const c=await addCustomer(corpsClient(nc));if(c){setSel(c);setNewCustModal(false);setNc(CLIENT_VIDE);}}}
         style={{width:"100%",height:40,background:C.primary}}>Créer le client</Btn></Modal>
 
     {/* CSV Import Modal */}
@@ -200,7 +191,7 @@ function CustomersScreen(){
 
     {/* Delete confirmation */}
     <ConfirmDialog open={confirmDel} onClose={()=>setConfirmDel(false)} onConfirm={()=>{deleteCustomer(sel.id);setSel(null);}}
-      title="Supprimer ce client ?" message={`Supprimer ${sel?.firstName} ${sel?.lastName} et toutes ses données ? Son historique d'achat sera conservé dans les tickets.`}/>
+      title="Supprimer ce client ?" message={`Supprimer ${nomClient(sel)} et toutes ses données ? Son historique d'achat sera conservé dans les tickets.`}/>
   </div>);
 }
 

@@ -140,7 +140,10 @@ export const norm={
       });
     return{...p,price:parseFloat(p.price),costPrice:parseFloat(p.cost_price||p.costPrice||0),
     taxRate:parseFloat(p.tax_rate||p.taxRate||0.20),category:p.category||"",collection:p.collection||"",variants}},
-  customer(c){return{...c,firstName:c.first_name||c.firstName,lastName:c.last_name||c.lastName,
+  customer(c){return{...c,firstName:c.first_name??c.firstName,lastName:c.last_name??c.lastName,
+    customerType:c.customer_type||c.customerType||"particulier",companyName:c.company_name??c.companyName??"",
+    legalForm:c.legal_form??c.legalForm??"",siren:c.siren||"",vatNumber:c.vat_number??c.vatNumber??"",
+    address:c.address||"",postalCode:c.postal_code??c.postalCode??"",
     totalSpent:parseFloat(c.total_spent||c.totalSpent||0),points:parseInt(c.points||0)}},
   products(list){return(list||[]).map(norm.product)},
   customers(list){return(list||[]).map(norm.customer)},
