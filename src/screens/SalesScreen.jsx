@@ -7,6 +7,7 @@ import { catIcon, EAN13Svg, ean13SvgHtml, norm } from "../utils.jsx";
 import { ProductIcon, colorHex } from "../ProductIcon.jsx";
 import { Modal, Btn, Input, Badge, Numpad } from "../ui.jsx";
 import { useApp } from "../context.jsx";
+import { nomClient, texteRechercheClient } from "../clientPro.jsx";
 import { getPaymentLabel, getAvoirRemaining, lineDiscountEuro, globalDiscountTTC, tvaParTaux, libelleTaux, libellePaiementTicket, pointsFidelite } from "../lib/formatters.js";
 import { lineNetTTC, round2, montantsEspeces } from "../lib/totals.js";
 import { dayKey } from "../lib/dates.js";
@@ -29,7 +30,7 @@ function SalesScreen(){
   const[lastTk,setLastTk]=useState(null);const[tkModal,setTkModal]=useState(false);const[busy,setBusy]=useState(false);
   const[payModal,setPayModal]=useState(false);const[cashGiven,setCashGiven]=useState("");
   const[cashNumpadModal,setCashNumpadModal]=useState(false);const[numpadValue,setNumpadValue]=useState("");
-  const[custModal,setCustModal]=useState(false);const[parkedModal,setParkedModal]=useState(false);
+  const[custModal,setCustModal]=useState(false);const[custQ,setCustQ]=useState("");const[parkedModal,setParkedModal]=useState(false);
   const[payMethodModal,setPayMethodModal]=useState(false);const[avoirSelectModal,setAvoirSelectModal]=useState(false);
   const[retoucheModal,setRetoucheModal]=useState(false);const[retForm,setRetForm]=useState({client:"",phone:"",date:dayKey(),notes:"",items:[{desc:"",price:""}]});
   const[newCustModal,setNewCustModal]=useState(false);const[ncF,setNcF]=useState("");const[ncL,setNcL]=useState("");const[ncE,setNcE]=useState("");const[ncP,setNcP]=useState("");
@@ -321,7 +322,7 @@ function SalesScreen(){
           border:`1.5px dashed ${selCust?C.primary:C.border}`,background:selCust?`${C.primary}08`:"transparent",cursor:"pointer",marginBottom:5,
           fontSize:12,fontWeight:600,color:selCust?C.primary:C.textMuted,transition:"all 0.15s"}}
           onMouseEnter={e=>{if(!selCust)e.currentTarget.style.borderColor=C.primary+"66";}} onMouseLeave={e=>{if(!selCust)e.currentTarget.style.borderColor=C.border;}}>
-          {selCust?<><div style={{width:22,height:22,borderRadius:11,background:C.primary,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontSize:8,fontWeight:700,flexShrink:0}}>{selCust.firstName[0]}{selCust.lastName[0]}</div><span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{selCust.firstName} {selCust.lastName} — {selCust.points}pts</span> <Badge color={C.accent}>{custTier?.name}</Badge></>
+          {selCust?<><div style={{width:22,height:22,borderRadius:11,background:C.primary,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontSize:8,fontWeight:700,flexShrink:0}}>{nomClient(selCust).slice(0,2).toUpperCase()}</div><span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{nomClient(selCust)} — {selCust.points}pts</span> <Badge color={C.accent}>{custTier?.name}</Badge></>
           :<><Users size={14}/> Associer un client</>}
         </button>
 
@@ -575,17 +576,26 @@ function SalesScreen(){
       <Btn onClick={doSplitPay} disabled={busy||remaining>0.01||overpaid} style={{width:"100%",height:44,background:C.fiscal}}><Split size={16}/> Valider</Btn>
       </>);})()}</Modal>
 
-    <Modal open={custModal} onClose={()=>setCustModal(false)} title="Client">
+    <Modal open={custModal} onClose={()=>{setCustModal(false);setCustQ("");}} title="Client">
       <div style={{display:"flex",flexDirection:"column",gap:6}}>
-        <Btn variant="outline" onClick={()=>{setSelCust(null);setCustModal(false);}} style={{borderColor:C.danger+"44",color:C.danger}}>Aucun client</Btn>
-        <Btn variant="outline" onClick={()=>{setCustModal(false);setNewCustModal(true);}}><Plus size={14}/> Nouveau client</Btn>
-        {customers.map(c=>{const tier=getLoyaltyTier(c.points);return(<button key={c.id} onClick={()=>{setSelCust(c);setCustModal(false);}} style={{display:"flex",alignItems:"center",gap:10,
+        {/* Recherche : nom, prenom, societe, SIREN, email, telephone (chiffres seuls : « 06 12 » trouve 0612…) */}
+        <div style={{position:"relative"}}>
+          <Search size={15} color={C.textMuted} style={{position:"absolute",left:12,top:"50%",transform:"translateY(-50%)"}}/>
+          <Input autoFocus value={custQ} onChange={e=>setCustQ(e.target.value)} placeholder="Rechercher : nom, téléphone, email, société…" style={{paddingLeft:36}}/></div>
+        <div style={{display:"flex",gap:6}}>
+          <Btn variant="outline" onClick={()=>{setSelCust(null);setCustModal(false);setCustQ("");}} style={{flex:1,borderColor:C.danger+"44",color:C.danger}}>Aucun client</Btn>
+          <Btn variant="outline" onClick={()=>{setCustModal(false);setCustQ("");setNewCustModal(true);}} style={{flex:1}}><Plus size={14}/> Nouveau client</Btn></div>
+        {(()=>{const q=custQ.trim().toLowerCase();const qTel=q.replace(/[^0-9]/g,"");
+          const trouves=customers.filter(c=>!q||texteRechercheClient(c).includes(q)||(qTel.length>=3&&String(c.phone||"").replace(/[^0-9]/g,"").includes(qTel)));
+          return(<>{q&&!trouves.length&&<div style={{padding:12,fontSize:12,color:C.textMuted,textAlign:"center"}}>Aucun client pour « {custQ.trim()} »</div>}
+        {trouves.slice(0,60).map(c=>{const tier=getLoyaltyTier(c.points);return(<button key={c.id} onClick={()=>{setSelCust(c);setCustModal(false);setCustQ("");}} style={{display:"flex",alignItems:"center",gap:10,
           padding:10,borderRadius:10,border:`1.5px solid ${selCust?.id===c.id?C.primary:C.border}`,background:selCust?.id===c.id?C.primaryLight:"transparent",cursor:"pointer"}}>
-          <div style={{width:32,height:32,borderRadius:16,background:C.primary,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:700,fontSize:11}}>{c.firstName[0]}{c.lastName[0]}</div>
-          <div style={{flex:1,textAlign:"left"}}><div style={{fontSize:12,fontWeight:600}}>{c.firstName} {c.lastName}</div>
-            <div style={{fontSize:10,color:C.textMuted}}>{c.phone}</div></div>
+          <div style={{width:32,height:32,borderRadius:16,background:C.primary,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:700,fontSize:11}}>{nomClient(c).slice(0,2).toUpperCase()}</div>
+          <div style={{flex:1,textAlign:"left"}}><div style={{fontSize:12,fontWeight:600}}>{nomClient(c)}</div>
+            <div style={{fontSize:10,color:C.textMuted}}>{[c.phone,c.email].filter(Boolean).join(" — ")}</div></div>
           <div style={{textAlign:"right"}}><Badge color={C.accent}>{tier.name} — {c.points}pts</Badge></div>
         </button>);})}
+        {trouves.length>60&&<div style={{fontSize:10,color:C.textMuted,textAlign:"center"}}>{trouves.length-60} autre(s) : affinez la recherche</div>}</>);})()}
       </div></Modal>
 
     {/* New customer */}

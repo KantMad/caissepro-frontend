@@ -270,6 +270,19 @@ describe("Écrans — rendu sans plantage", () => {
     } finally { Object.assign(API.customers, { create: avant.c }); Object.assign(API.sales, { reassignCustomer: avant.r }); }
   });
 
+  it("Vente : la fenêtre Client a une recherche (nom, téléphone avec espaces) et sélectionne le client", async () => {
+    const { findByText, getByPlaceholderText, queryByText, findByText: f2 } = render(<AppProvider><SalesScreen /></AppProvider>);
+    fireEvent.click(await findByText(/Associer un client/, {}, { timeout: 2000 }));
+    const champ = getByPlaceholderText(/Rechercher : nom, téléphone/);
+    await f2("Inès Démo");
+    fireEvent.change(champ, { target: { value: "dupont" } });
+    expect(queryByText("Inès Démo")).toBeNull();
+    expect(await findByText(/Aucun client pour « dupont »/)).toBeTruthy();
+    fireEvent.change(champ, { target: { value: "06 00 00 00 03" } });
+    fireEvent.click(await findByText("Inès Démo"));
+    expect(await findByText(/Inès Démo — 310pts/)).toBeTruthy();
+  });
+
   it("Vente : le choix du vendeur liste tous les comptes du magasin, admins compris (connecté en caissier)", async () => {
     sessionStorage.setItem("caissepro_user", JSON.stringify({ id: "uc", name: "Sophie", role: "cashier" }));
     const { container } = render(<AppProvider><SalesScreen /></AppProvider>);
