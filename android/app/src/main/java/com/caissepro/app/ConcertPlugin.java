@@ -348,24 +348,26 @@ public class ConcertPlugin extends Plugin {
             byte[] buffer = new byte[2048];
             int totalRead = 0;
 
-            // Some terminals send the response in chunks
-            // Wait for data, then read until no more data for 500ms
-            long startTime = System.currentTimeMillis();
-            while (System.currentTimeMillis() - startTime < READ_TIMEOUT) {
-                if (in.available() > 0) {
-                    int bytesRead = in.read(buffer, totalRead, buffer.length - totalRead);
-                    if (bytesRead > 0) {
-                        totalRead += bytesRead;
-                        // Wait a bit to see if more data comes
-                        Thread.sleep(200);
-                        if (in.available() == 0) break; // No more data
-                    } else if (bytesRead == -1) {
-                        break; // Connection closed
-                    }
-                } else {
-                    Thread.sleep(100);
-                }
+            // Lecture BLOQUANTE (setSoTimeout = 3 min) : detecte tout de suite une connexion fermee
+            // par le TPE (read = -1). L'ancienne boucle sur available() ne voyait pas la fermeture et
+            // attendait 3 min pour rien (MCS 09/11/2026, TPE wifi).
+            int first;
+            try {
+                first = in.read(buffer, 0, buffer.length);
+            } catch (java.net.SocketTimeoutException e) {
+                throw new IOException("Pas de reponse du TPE (timeout " + READ_TIMEOUT + "ms)");
             }
+            if (first == -1) throw new IOException("Connexion fermee par le TPE sans reponse");
+            totalRead = first;
+            // Certains TPE envoient la reponse en plusieurs morceaux : lire jusqu'a 500 ms de silence
+            socket.setSoTimeout(500);
+            try {
+                while (totalRead < buffer.length) {
+                    int n = in.read(buffer, totalRead, buffer.length - totalRead);
+                    if (n <= 0) break;
+                    totalRead += n;
+                }
+            } catch (java.net.SocketTimeoutException e) { /* fin de la reponse */ }
 
             if (totalRead == 0) {
                 throw new IOException("Pas de reponse du TPE (timeout " + READ_TIMEOUT + "ms)");
@@ -377,8 +379,6 @@ public class ConcertPlugin extends Plugin {
             // Parse TLV response
             return parseV3Response(response);
 
-        } catch (InterruptedException e) {
-            throw new IOException("Interrupted while waiting for TPE response");
         } finally {
             try { socket.close(); } catch (Exception e) {}
         }

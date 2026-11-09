@@ -42,9 +42,33 @@ function ManualPaymentModal(){
   </div>);
 }
 
+/* ══════════ Attente TPE (paiement carte en cours) ══════════ */
+// Apres 20 s sans reponse, bouton « Le TPE ne repond pas » : evite d'attendre 3 min (TPE wifi muet).
+export function TpeWaitModal(){
+  const[req,setReq]=useState(null);
+  const[now,setNow]=useState(Date.now());
+  useEffect(()=>{
+    const handler=(e)=>{setReq(e.detail);setNow(Date.now());};
+    window.addEventListener('caissepro:tpe-wait',handler);
+    return()=>window.removeEventListener('caissepro:tpe-wait',handler);
+  },[]);
+  useEffect(()=>{if(!req)return;const t=setInterval(()=>setNow(Date.now()),1000);return()=>clearInterval(t);},[req]);
+  if(!req)return null;
+  const s=Math.max(0,Math.floor((now-req.startedAt)/1000));
+  return(<div style={{position:'fixed',inset:0,zIndex:99990,background:'rgba(0,0,0,0.45)',display:'flex',alignItems:'center',justifyContent:'center'}}>
+    <div style={{background:'#fff',borderRadius:20,padding:28,maxWidth:420,width:'90%',textAlign:'center',boxShadow:'0 24px 48px rgba(0,0,0,0.2)'}}>
+      <h3 style={{fontSize:17,fontWeight:700,color:C.text,marginBottom:6}}>Paiement sur le TPE</h3>
+      <div style={{fontSize:32,fontWeight:800,color:C.primary,marginBottom:6}}>{(req.amount||0).toFixed(2)} EUR</div>
+      <p style={{color:C.textLight,fontSize:13,lineHeight:1.5,marginBottom:4}}>Le client suit les instructions sur le TPE.</p>
+      <p style={{color:C.textMuted,fontSize:12}}>En attente depuis {s} s</p>
+      {s>=20&&<button onClick={()=>req.abort?.()} style={{marginTop:16,width:'100%',padding:'13px 18px',borderRadius:12,border:`1px solid ${C.border}`,background:'#fff',color:C.text,fontWeight:700,fontSize:14,cursor:'pointer'}}>Le TPE ne répond pas</button>}
+    </div>
+  </div>);
+}
+
 /* ══════════ APP ══════════ */
 export default function App(){
-  return(<ErrorBoundary><AppProvider><AppContent/><ToastContainer/><ManualPaymentModal/>
+  return(<ErrorBoundary><AppProvider><AppContent/><ToastContainer/><TpeWaitModal/><ManualPaymentModal/>
     <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;0,9..40,800;0,9..40,900&display=swap');
       *{margin:0;padding:0;box-sizing:border-box}
       :root{--cart-w:380px;--nav-w:72px;--bottomnav-h:0px;--tap:44px;--pad:20px;--pad-sm:14px;--gap:14px;--gap-sm:10px;--radius:14px;--radius-sm:10px;--card-min:155px;--prod-cols:5;--font-base:13px;--topbar-pad:12px 20px;--cart-pad:16px 20px 12px;--cart-item-pad:12px;--total-pad:16px;--btn-h:52px;--btn-font:14px}

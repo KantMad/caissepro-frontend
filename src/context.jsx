@@ -913,11 +913,18 @@ function AppProvider({children}){
           // Délai de sécurité de 3 min. À l'échéance, le TPE peut encore accepter la carte : annuler
           // d'office la vente laissait un client débité SANS ticket. On demande au caissier ce que
           // le TPE affiche ; si le TPE répond « accepté » plus tard, on l'alerte (rembourser).
+          // Fenetre d'attente (App.jsx TpeWaitModal) : apres 20 s, le caissier peut declarer « le TPE
+          // ne repond pas » sans attendre les 3 min (MCS 09/11/2026 : TPE wifi muet, deplacement).
           const charge=hardwareManager.charge(p.amount,{currency:'EUR',reference:ref,method:p.method});
-          let result=await Promise.race([charge,new Promise(r=>setTimeout(()=>r({_timeout:true}),180000))]);
+          let abandon;const parCaissier=new Promise(r=>{abandon=()=>r({_timeout:true,_caissier:true});});
+          let minuterie;
+          window.dispatchEvent(new CustomEvent('caissepro:tpe-wait',{detail:{amount:p.amount,startedAt:Date.now(),abort:()=>abandon()}}));
+          let result;
+          try{result=await Promise.race([charge,parCaissier,new Promise(r=>{minuterie=setTimeout(()=>r({_timeout:true}),180000);})]);}
+          finally{clearTimeout(minuterie);window.dispatchEvent(new CustomEvent('caissepro:tpe-wait',{detail:null}));}
           if(result&&result._timeout){
-            const accepte=window.confirm(`Le TPE ne répond plus depuis 3 minutes (${p.amount.toFixed(2)} €).\n\nOK = le TPE a ACCEPTÉ le paiement (ticket client imprimé) → la vente est enregistrée.\nAnnuler = paiement non passé → la vente est abandonnée.`);
-            addAudit("TPE_TIMEOUT",`Délai TPE dépassé ${p.amount.toFixed(2)}€ (${ref}) — caissier : ${accepte?"accepté":"non passé"}`,ref);
+            const accepte=window.confirm(`${result._caissier?"Le TPE ne répond pas":"Le TPE ne répond plus depuis 3 minutes"} (${p.amount.toFixed(2)} €).\n\nOK = le TPE a ACCEPTÉ le paiement (ticket client imprimé) → la vente est enregistrée.\nAnnuler = paiement non passé → la vente est abandonnée.`);
+            addAudit("TPE_TIMEOUT",`${result._caissier?"TPE sans réponse (signalé par le caissier)":"Délai TPE dépassé"} ${p.amount.toFixed(2)}€ (${ref}) — caissier : ${accepte?"accepté":"non passé"}`,ref);
             if(!accepte)charge.then(late=>{if(late&&late.success){
               addAudit("TPE_LATE_SUCCESS",`Paiement CB ${p.amount.toFixed(2)}€ accepté APRÈS abandon de la vente (${ref}) — à rembourser`,ref);
               notify(`ATTENTION : le TPE a accepté ${p.amount.toFixed(2)} € après l'abandon de la vente — remboursez le client ou refaites la vente`,"danger");}}).catch(()=>{});
