@@ -77,9 +77,10 @@ function StatsScreen(){
   },[srvStats,statsLocal,catFilter]);
   const prevStats=useMemo(()=>{
     if(srvPrev&&!catFilter){const n=(v)=>parseFloat(v)||0;const c=n(srvPrev.ticket_count);
-      return{tTTC:n(srvPrev.total_ttc),count:c,upt:c?n(srvPrev.total_pieces)/c:0};}
+      return{tTTC:n(srvPrev.total_ttc),tHT:n(srvPrev.total_ht),count:c,upt:c?n(srvPrev.total_pieces)/c:0};}
     const t=prevTickets.reduce((s,t)=>s+(t.totalTTC||parseFloat(t.total_ttc)||0),0);
-    return{tTTC:t,count:prevTickets.length,upt:salesIndex(prevTickets)};},[srvPrev,prevTickets,catFilter]);
+    const h=prevTickets.reduce((s,t)=>s+(t.totalHT||parseFloat(t.total_ht)||0),0);
+    return{tTTC:t,tHT:h,count:prevTickets.length,upt:salesIndex(prevTickets)};},[srvPrev,prevTickets,catFilter]);
   const pctChange=(cur,prev)=>{if(!prev)return null;const pct=((cur-prev)/prev*100);return pct;};
   const PctBadge=({cur,prev})=>{const p=pctChange(cur,prev);if(p===null||!dateFrom)return null;
     return<Badge color={p>=0?"#059669":C.danger}>{p>=0?"+":""}{p.toFixed(1)}%</Badge>;};
@@ -168,6 +169,7 @@ function StatsScreen(){
        :"Chargement du détail de la période… (en attendant : 200 derniers tickets)"}</div>}
     <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:10,marginBottom:16}}>
       <div><SC icon={Euro} label="CA TTC" value={`${formatAmount(stats.tTTC)}€`} color={C.primary} sub={<PctBadge cur={stats.tTTC} prev={prevStats.tTTC}/>}/></div>
+      <div><SC icon={Euro} label="CA HT" value={`${formatAmount(stats.tHT)}€`} color={C.primary} sub={<PctBadge cur={stats.tHT} prev={prevStats.tHT}/>}/></div>
       <div><SC icon={Receipt} label="Tickets" value={stats.count} color={C.info} sub={<PctBadge cur={stats.count} prev={prevStats.count}/>}/></div>
       <SC icon={TrendingUp} label="Panier moy." value={`${stats.avg.toFixed(1)}€`} color={C.accent}/>
       <div><SC icon={Receipt} label="Indice de vente" value={stats.upt.toFixed(2)} color={C.info} sub={<span style={{fontSize:10,color:C.textMuted}}>pièces/ticket · {stats.pieces} pièces <PctBadge cur={stats.upt} prev={prevStats.upt}/></span>}/></div>

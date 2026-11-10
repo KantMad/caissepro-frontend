@@ -153,7 +153,7 @@ function HelpCashierScreen(){
     ]},
     {icon:"📊",title:"Consulter les statistiques",desc:"Voir le CA, le panier moyen, les graphiques et les performances.",steps:[
       "Cliquez sur « Stats » dans la barre latérale gauche (3ème bouton, icône graphique).",
-      "En haut : 5 indicateurs — CA TTC, Nombre de tickets, Panier moyen, Marge (€), Marge (%). Si une période est sélectionnée, un badge vert/rouge indique l'évolution vs la période précédente.",
+      "En haut : les indicateurs — CA TTC, CA HT, Nombre de tickets, Panier moyen, Marge (€), Marge (%). Si une période est sélectionnée, un badge vert/rouge indique l'évolution vs la période précédente.",
       "FILTRES : sous les indicateurs, sélectionnez une période rapide (Aujourd'hui, Semaine, Ce mois, Mois dernier, Année, Tout) ou des dates précises avec les champs « du / au ». Filtrez aussi par catégorie.",
       "13 onglets sont disponibles pour détailler les statistiques :",
       "  • « Évolution CA » → Graphique en barres du CA jour par jour.",

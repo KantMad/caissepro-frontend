@@ -37,7 +37,7 @@ function HelpDashboardScreen(){
     ]},
     {icon:"📈",title:"Statistiques de vente",desc:"Analyser le CA, les tendances, les graphiques et les performances.",steps:[
       "Cliquez sur « Statistiques » dans la barre latérale gauche (4ème élément, icône graphique).",
-      "En haut : 5 indicateurs clés — CA TTC, Nombre de tickets, Panier moyen, Marge (€), Marge (%). Si une période est filtrée, un badge vert/rouge montre l'évolution par rapport à la période précédente.",
+      "En haut : les indicateurs clés — CA TTC, CA HT, Nombre de tickets, Panier moyen, Marge (€), Marge (%). Si une période est filtrée, un badge vert/rouge montre l'évolution par rapport à la période précédente.",
       "FILTRES DE PÉRIODE : sous les indicateurs, cliquez sur un bouton rapide (Tout, Aujourd'hui, Semaine, Ce mois, Mois dernier, Année) ou saisissez des dates précises dans les champs « du / au ». Vous pouvez aussi filtrer par catégorie de produit.",
       "13 onglets sont disponibles pour détailler les statistiques :",
       "  • « Évolution CA » → Graphique en barres du chiffre d'affaires jour par jour sur la période sélectionnée.",

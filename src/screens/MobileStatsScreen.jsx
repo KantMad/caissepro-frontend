@@ -51,6 +51,7 @@ export default function MobileStatsScreen() {
   }, [srv, tickets, period]);
 
   const ca = useMemo(() => fT.reduce((s, t) => s + ttcOf(t), 0), [fT]);
+  const caHT = useMemo(() => fT.reduce((s, t) => s + (t.totalHT || parseFloat(t.total_ht) || 0), 0), [fT]);
   const nb = fT.length;
   const panier = nb ? ca / nb : 0;
   const articles = useMemo(() => fT.reduce((s, t) => s + ticketPieces(t), 0), [fT]);
@@ -110,7 +111,8 @@ export default function MobileStatsScreen() {
         <div style={{ background: `linear-gradient(135deg, ${C.primary}, ${C.primaryDark})`, borderRadius: 20, padding: 20, color: "#fff", boxShadow: `0 8px 24px -10px ${C.primary}` }}>
           <div style={{ fontSize: 12, opacity: 0.85, fontWeight: 600, display: "flex", alignItems: "center", gap: 6 }}><TrendingUp size={14} /> Chiffre d'affaires TTC</div>
           <div style={{ fontSize: 40, fontWeight: 800, letterSpacing: "-1.5px", marginTop: 4, lineHeight: 1 }}>{formatAmount(ca)}€</div>
-          <div style={{ fontSize: 12, opacity: 0.85, marginTop: 6 }}>{nb} vente{nb > 1 ? "s" : ""} · panier moyen {formatAmount(panier)}€</div>
+          <div style={{ fontSize: 13, opacity: 0.9, fontWeight: 700, marginTop: 6 }}>CA HT {formatAmount(caHT)}€</div>
+          <div style={{ fontSize: 12, opacity: 0.85, marginTop: 4 }}>{nb} vente{nb > 1 ? "s" : ""} · panier moyen {formatAmount(panier)}€</div>
         </div>
 
         {/* KPIs */}
