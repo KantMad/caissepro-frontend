@@ -506,7 +506,7 @@ function AppProvider({children}){
   // saveSettingsToAPI with JET logging (addJET must be declared first)
   const saveSettingsToAPI=useCallback(async(newSettings)=>{
     // NF525: détecter les modifications de données société (code 410)
-    const companyFields=["name","address","postalCode","city","siret","tvaIntra","phone","legalForm","capital"];
+    const companyFields=["name","address","postalCode","city","siret","tvaIntra","phone","legalForm","capital","invoiceCompanyName","invoiceHeadOffice","invoiceRcs"];
     const changed=companyFields.filter(f=>newSettings[f]!==undefined&&newSettings[f]!==settings[f]);
     if(changed.length>0)addJET("COMPANY_CHANGE",`Modification données société: ${changed.map(f=>`${f}: ${settings[f]||"(vide)"} → ${newSettings[f]}`).join(", ")}`);
     else addJET("PARAM_CHANGE",`Modification paramètres: ${Object.keys(newSettings).join(", ")}`);

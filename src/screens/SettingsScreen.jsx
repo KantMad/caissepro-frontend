@@ -1063,7 +1063,7 @@ function SettingsScreen(){
   return(<div style={{height:"100%",overflowY:"auto",padding:"var(--pad,16px)",background:C.bg}}>
     <h2 style={{fontSize:20,fontWeight:800,marginBottom:10}}>Paramètres</h2>
     <div style={{display:"flex",gap:6,marginBottom:14,flexWrap:"wrap"}}>
-      {[{id:"general",l:"Général"},{id:"retouche",l:"✂️ Retouches"},{id:"pricing",l:"💰 Prix HT/TTC"},{id:"commission",l:"Commission"},{id:"printer",l:"Imprimante"},{id:"tpe",l:"Terminal paiement"},{id:"receipt",l:"Ticket"},{id:"screen2",l:"📺 Écran 2"},{id:"caticons",l:"🏷️ Catégories"},{id:"return",l:"Retours"},{id:"sizes",l:"📏 Ordre tailles"},{id:"clock",l:"Pointages"},{id:"prices",l:"Historique prix"},{id:"backup",l:"Backup"},{id:"debug",l:"Diagnostic"}].map(t=>(
+      {[{id:"general",l:"Général"},{id:"retouche",l:"✂️ Retouches"},{id:"pricing",l:"💰 Prix HT/TTC"},{id:"commission",l:"Commission"},{id:"printer",l:"Imprimante"},{id:"tpe",l:"Terminal paiement"},{id:"receipt",l:"Ticket"},{id:"invoice",l:"Facture"},{id:"screen2",l:"📺 Écran 2"},{id:"caticons",l:"🏷️ Catégories"},{id:"return",l:"Retours"},{id:"sizes",l:"📏 Ordre tailles"},{id:"clock",l:"Pointages"},{id:"prices",l:"Historique prix"},{id:"backup",l:"Backup"},{id:"debug",l:"Diagnostic"}].map(t=>(
         <button key={t.id} onClick={()=>setTab(t.id)} style={{padding:"0 14px",minHeight:32,borderRadius:8,border:`1.5px solid ${tab===t.id?C.primary:C.border}`,
           background:tab===t.id?C.primary:"transparent",color:tab===t.id?"#fff":C.text,fontSize:12,fontWeight:600,cursor:"pointer"}}>{t.l}</button>))}</div>
 
@@ -1079,6 +1079,25 @@ function SettingsScreen(){
         <div style={{fontSize:10,color:C.textMuted,marginTop:4,lineHeight:1.5}}>Premier jour d'utilisation réelle. Les ventes d'essai antérieures sont
           écartées des statistiques, du FEC, des exports et des clôtures (elles restent conservées). Ne la changez pas sans l'accord de votre expert‑comptable.</div></div>
       <Btn onClick={()=>{saveSettingsNotify(settings,"Paramètres");addAudit("CONFIG","Paramètres mis à jour");}} style={{width:"100%",height:40,marginTop:8,background:C.primary}}><Save size={14}/> Enregistrer</Btn></div>}
+
+    {/* Facture A4 : identite du vendeur. Copiee sur chaque facture A SON EMISSION (API migration 048) :
+        un changement ici ne modifie pas les factures deja emises. */}
+    {tab==="invoice"&&<div style={{maxWidth:560}}>
+      <div style={{fontSize:11,color:C.textMuted,lineHeight:1.6,marginBottom:12}}>Mentions des factures A4 (clients professionnels et particuliers).
+        Laissez vide pour utiliser les informations du magasin (onglet Général). Les factures déjà émises ne changent pas.</div>
+      {[{l:"Raison sociale (vendeur et pied de page)",k:"invoiceCompanyName",ph:settings.name||"Nom de la société"},
+        {l:"RCS (ville et numéro)",k:"invoiceRcs",ph:"Paris 912 345 678"}].map(f=>(
+        <div key={f.k} style={{marginBottom:10}}><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>{f.l}</label>
+          <Input value={settings[f.k]||""} placeholder={f.ph} onChange={e=>setSettings(s=>({...s,[f.k]:e.target.value}))}/></div>))}
+      {[{l:"Adresse du siège social (si différente du magasin)",k:"invoiceHeadOffice",ph:"8 rue …\n75002 Paris",h:54},
+        {l:"Mention libre en pied de facture",k:"invoiceFooterText",ph:"Merci de votre confiance…",h:70}].map(f=>(
+        <div key={f.k} style={{marginBottom:10}}><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>{f.l}</label>
+          <textarea value={settings[f.k]||""} placeholder={f.ph} onChange={e=>setSettings(s=>({...s,[f.k]:e.target.value}))}
+            style={{width:"100%",height:f.h,padding:8,borderRadius:10,border:`1.5px solid ${C.border}`,fontSize:12,fontFamily:"inherit",resize:"vertical"}}/></div>))}
+      <div style={{fontSize:10,color:C.textMuted,lineHeight:1.6,marginBottom:6}}>Forme juridique, capital, SIRET et n° TVA : onglet Général.</div>
+      <Btn onClick={()=>saveSettingsNotify({invoiceCompanyName:settings.invoiceCompanyName||"",invoiceRcs:settings.invoiceRcs||"",
+          invoiceHeadOffice:settings.invoiceHeadOffice||"",invoiceFooterText:settings.invoiceFooterText||""},"Mentions de facture")}
+        style={{width:"100%",height:40,marginTop:8,background:C.primary}}><Save size={14}/> Enregistrer</Btn></div>}
 
     {tab==="retouche"&&<div style={{maxWidth:650}}>
       <div style={{background:C.primaryLight,borderRadius:16,padding:20,border:`1.5px solid ${C.primary}22`,marginBottom:16}}>
