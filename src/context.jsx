@@ -2027,7 +2027,7 @@ function AppProvider({children}){
   const adjustStockLot=useCallback(async(items,reason)=>{
     let ok=0,ko=0;const erreurs=[];
     for(let i=0;i<items.length;i+=200){const tranche=items.slice(i,i+200);
-      try{const r=await API.stock.adjustBatch({reason,items:tranche.map(({variantId,newStock,expectedStock})=>({variantId,newStock,...(expectedStock!=null?{expectedStock}:{})}))});
+      try{const r=await API.stock.adjustBatch({reason,items:tranche.map(({variantId,newStock,expectedStock,counted,seenStock})=>(counted!=null&&seenStock!=null?{variantId,counted,seenStock}:{variantId,newStock,...(expectedStock!=null?{expectedStock}:{})}))});
         for(const x of r?.results||[]){if(x.ok)ok++;else{ko++;erreurs.push(x);}}}
       catch(e){ko+=tranche.length;erreurs.push({error:e.message});}}
     try{const prods=await API.products.list();setProducts(norm.products(prods));}catch(e){console.error("refreshProducts:",e);}

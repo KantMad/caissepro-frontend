@@ -81,9 +81,34 @@ function StockScreen(){
   const resolveEAN=useCallback((ean)=>{const found=findByEAN(ean);if(!found)return null;return{productId:found.product.id,variantId:found.variant.id,product:found.product,variant:found.variant};},[findByEAN]);
   const[adjProd,setAdjProd]=useState("");const[adjVar,setAdjVar]=useState("");const[adjQty,setAdjQty]=useState("");const[adjReason,setAdjReason]=useState("INVENTAIRE");
   const[invSearch,setInvSearch]=useState("");const[invCounts,setInvCounts]=useState({});
+  const[invComptesSeuls,setInvComptesSeuls]=useState(false);
   const invLignes=useMemo(()=>{const lignes=[];let total=0;
-    for(const p of filtrerProduits(products,invSearch,null,Infinity).liste)for(const v of p.variants||[]){total++;if(lignes.length<MAX_LIGNES)lignes.push({p,v});}
-    return{lignes,reste:total-lignes.length};},[products,invSearch]);
+    const garder=invComptesSeuls?(p,v)=>{const x=invCounts[`${p.id}_${v.id}`];return x!==undefined&&x!=="";}:null;
+    for(const p of filtrerProduits(products,invSearch,null,Infinity).liste)for(const v of p.variants||[]){if(garder&&!garder(p,v))continue;total++;if(lignes.length<MAX_LIGNES)lignes.push({p,v});}
+    return{lignes,reste:total-lignes.length};},[products,invSearch,invComptesSeuls,invCounts]);
+  // ══ Inventaire en pause / reprise ══
+  // Le comptage est enregistre sur le SERVEUR au fil de la saisie (envoi groupe ~1 s apres la
+  // derniere frappe) : quitter l'onglet, fermer la caisse ou changer d'appareil ne le perd plus.
+  // Avant, il ne vivait que dans l'ecran. Plusieurs appareils peuvent compter en meme temps.
+  const[invSession,setInvSession]=useState(null);const[invEtat,setInvEtat]=useState("");// "", "envoi", "ok", "erreur"
+  const invAEnvoyer=useRef({});const invMinuterie=useRef(null);
+  const invEnvoyer=useCallback(async()=>{clearTimeout(invMinuterie.current);invMinuterie.current=null;
+    const lot=invAEnvoyer.current;if(!Object.keys(lot).length)return true;invAEnvoyer.current={};
+    setInvEtat("envoi");
+    try{const s=await API.stock.saveInventorySession(lot);setInvSession(s?.id?s:null);setInvEtat("ok");return true;}
+    catch(e){invAEnvoyer.current={...lot,...invAEnvoyer.current};setInvEtat("erreur");return false;}},[]);
+  const invNoter=(key,val,vu)=>{const n=parseInt(val,10);
+    invAEnvoyer.current[key]=val===""||!Number.isFinite(n)?null:{c:Math.max(0,n),s:vu};
+    clearTimeout(invMinuterie.current);invMinuterie.current=setTimeout(invEnvoyer,1000);};
+  const invRaz=()=>{setInvCounts({});setInvVu({});setInvSession(null);invAEnvoyer.current={};setInvEtat("");};
+  // Ouverture de l'onglet : reprise de l'inventaire en cours ; sortie : envoi immediat du reste
+  useEffect(()=>{if(tab!=="inventory")return;let annule=false;
+    API.stock.inventorySession().then(s=>{if(annule||!s?.id)return;setInvSession(s);
+      const c={},vu={};for(const[k,x]of Object.entries(s.counts||{})){c[k]=String(x.c);vu[k]=x.s;}
+      const local=invAEnvoyer.current;// saisie pas encore envoyee : prioritaire
+      for(const[k,x]of Object.entries(local)){if(x===null){delete c[k];delete vu[k];}else{c[k]=String(x.c);vu[k]=x.s;}}
+      setInvCounts(c);setInvVu(vu);}).catch(()=>{});
+    return()=>{annule=true;invEnvoyer();};},[tab]);// eslint-disable-line react-hooks/exhaustive-deps
   const[rechDef,setRechDef]=useState("");const[rechDefAdj,setRechDefAdj]=useState("");const[rechTr,setRechTr]=useState("");
   const[stSearchMatrix,setStSearchMatrix]=useState("");const[stSearchReceipt,setStSearchReceipt]=useState("");const[stSearchAdj,setStSearchAdj]=useState("");
   const[csvStockModal,setCsvStockModal]=useState(false);const[csvStStep,setCsvStStep]=useState(0);const[csvStData,setCsvStData]=useState([]);const[csvStHeaders,setCsvStHeaders]=useState([]);const[csvStMapping,setCsvStMapping]=useState({});const[csvStPreview,setCsvStPreview]=useState([]);
@@ -408,14 +433,24 @@ function StockScreen(){
 
     {/* Inventory tab */}
     {tab==="inventory"&&<div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`}}>
-      <h3 style={{fontSize:14,fontWeight:700,marginBottom:10}}>Inventaire complet</h3>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,marginBottom:10,flexWrap:"wrap"}}>
+        <h3 style={{fontSize:14,fontWeight:700}}>Inventaire complet</h3>
+        <span data-testid="inv-etat" style={{fontSize:10,fontWeight:600,color:invEtat==="erreur"?C.danger:C.textMuted}}>
+          {invEtat==="envoi"?"Enregistrement…":invEtat==="erreur"?"Non enregistré (connexion) — nouvel essai à la prochaine saisie ou à la pause":invEtat==="ok"?"Comptage enregistré":""}</span></div>
+      {invSession&&<div data-testid="inv-reprise" style={{fontSize:11,padding:"8px 10px",borderRadius:8,background:C.primaryLight,border:`1px solid ${C.primary}33`,marginBottom:10}}>
+        Inventaire en cours depuis le {new Date(invSession.created_at).toLocaleString("fr-FR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"})}
+        {invSession.created_by_name?` (${invSession.created_by_name})`:""} — <b>{Object.keys(invSession.counts||{}).length} article(s) compté(s)</b>
+        {invSession.updated_at?`, dernière saisie le ${new Date(invSession.updated_at).toLocaleString("fr-FR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"})}${invSession.updated_by_name?` par ${invSession.updated_by_name}`:""}`:""}.
+        Les ventes faites pendant la pause seront déduites à la validation.</div>}
+      <label style={{display:"flex",alignItems:"center",gap:6,fontSize:11,marginBottom:8,cursor:"pointer"}}>
+        <input type="checkbox" checked={invComptesSeuls} onChange={e=>setInvComptesSeuls(e.target.checked)}/> Afficher seulement les articles déjà comptés</label>
       <Input value={invSearch} onChange={e=>setInvSearch(e.target.value)} placeholder="Rechercher produit (nom, SKU, EAN)..." style={{marginBottom:10,height:32,fontSize:11,padding:"4px 10px"}}
         onKeyDown={e=>{if(e.key==="Enter"){const r=resolveEAN(invSearch.trim());if(r){setInvSearch(r.product.name);notify(`${r.product.name} ${r.variant.color}/${r.variant.size}`,"info");}}}}/>
       <div style={{maxHeight:400,overflowY:"auto",marginBottom:12}}>
         <table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
           <thead><tr style={{borderBottom:`2px solid ${C.border}`,position:"sticky",top:0,background:C.surface}}>
             {["Produit","Variante","EAN","Stock actuel","Stock compté","Écart"].map(h=>(<th key={h} style={{padding:6,textAlign:"left",fontSize:9,fontWeight:700,color:C.textMuted}}>{h}</th>))}</tr></thead>
-          <tbody>{invLignes.lignes.map(({p,v})=>{const key=`${p.id}_${v.id}`;const counted=invCounts[key];const diff=counted!==undefined&&counted!==""?parseInt(counted)-v.stock:null;
+          <tbody>{invLignes.lignes.map(({p,v})=>{const key=`${p.id}_${v.id}`;const counted=invCounts[key];const diff=counted!==undefined&&counted!==""?parseInt(counted)-(invVu[key]??v.stock):null;
               return(<tr key={key} style={{borderBottom:`1px solid ${C.border}`,background:diff!==null&&diff!==0?(diff>0?C.primaryLight:C.dangerLight):"transparent"}}>
                 <td style={{padding:6,fontWeight:600}}>{p.name} <span style={{color:C.textMuted,fontSize:9}}>({p.sku})</span></td>
                 <td style={{padding:6}}>{v.color}/{v.size}</td>
@@ -423,23 +458,45 @@ function StockScreen(){
                 <td style={{padding:6,fontWeight:700}}>{v.stock}</td>
                 <td style={{padding:6}}><input type="number" min="0" value={invCounts[key]??""}
                   onChange={e=>{const val=e.target.value;setInvCounts(prev=>({...prev,[key]:val}));
-                    // stock vu au moment du comptage : le serveur refuse si l'article a bougé depuis
-                    setInvVu(prev=>key in prev?prev:{...prev,[key]:v.stock});}}
+                    // stock vu au moment du comptage : à la validation, une vente faite depuis
+                    // (inventaire en pause) est déduite au lieu d'être effacée
+                    const vu=invVu[key]??v.stock;setInvVu(prev=>key in prev?prev:{...prev,[key]:vu});invNoter(key,val,vu);}}
                   style={{width:60,padding:"3px 6px",borderRadius:6,border:`1.5px solid ${C.border}`,fontSize:11,textAlign:"center",fontFamily:"inherit"}}/></td>
                 <td style={{padding:6,fontWeight:700,color:diff===null||diff===0?C.textMuted:diff>0?"#059669":C.danger}}>
                   {diff!==null?(diff>0?`+${diff}`:diff):"—"}</td></tr>);})}</tbody></table>
         {invLignes.reste>0&&<div style={{padding:8,fontSize:11,color:C.textMuted,textAlign:"center"}}>… {invLignes.reste} autre(s) variante(s) : recherchez ou scannez un article pour le compter</div>}</div>
+      <div style={{display:"flex",gap:8,marginBottom:8}}>
+        <Btn variant="outline" data-testid="inv-pause" onClick={async()=>{
+          const ok=await invEnvoyer();
+          if(!ok){notify("Comptage non enregistré : vérifiez la connexion avant de quitter","error");return;}
+          if(!invSession&&!Object.values(invCounts).some(v=>v!==""&&v!==undefined)){notify("Aucun article compté","info");return;}
+          notify("Inventaire en pause : reprenez-le quand vous voulez depuis l'onglet Inventaire, sur n'importe quel appareil","success");setTab("matrix");}}
+          style={{flex:1,height:40}}>Mettre en pause</Btn>
+        <Btn variant="outline" onClick={async()=>{
+          if(!confirm("Abandonner l'inventaire en cours ? Les quantités comptées seront effacées, le stock ne sera pas modifié."))return;
+          clearTimeout(invMinuterie.current);invAEnvoyer.current={};
+          try{await API.stock.closeInventorySession("abandoned");invRaz();notify("Inventaire abandonné","info");}
+          catch(e){notify("Abandon impossible : "+e.message,"error");}}}
+          disabled={!invSession&&!Object.values(invCounts).some(v=>v!==""&&v!==undefined)}
+          style={{height:40,color:C.danger,borderColor:C.danger}}><Trash2 size={14}/> Abandonner</Btn></div>
       <Btn onClick={async()=>{
-        // On ATTEND chaque ajustement et on compte les vrais succes : avant, le message
-        // « N ajustement(s) valide(s) » partait avant la reponse du serveur.
+        // On ATTEND chaque ajustement et on compte les vrais succes. Chaque ligne part avec la
+        // quantite comptee ET le stock vu au comptage : le serveur deduit ce qui a ete vendu ou
+        // recu depuis (inventaire mis en pause puis repris).
+        await invEnvoyer();
         const aFaire=[];Object.entries(invCounts).forEach(([key,val])=>{if(val===""||val===undefined)return;
           const[pid,vid]=key.split("_");const pr=products.find(x=>x.id===pid);const vr=pr?.variants.find(x=>x.id===vid);
           const vu=invVu[key]??vr?.stock;
-          if(pr&&vr&&parseInt(val)!==vu)aFaire.push([pid,vid,parseInt(val),vu]);});
-        const{ok,ko}=await adjustStockLot(aFaire.map(([,variantId,newStock,expectedStock])=>({variantId,newStock,expectedStock})),"INVENTAIRE");
-        setInvCounts({});setInvVu({});
-        if(ko)notify(`${ok} ajustement(s) enregistré(s), ${ko} refusé(s) : article vendu ou reçu pendant le comptage — recomptez-le`,"error");
-        else notify(`${ok} ajustement(s) enregistré(s)`,"success");}}
+          if(pr&&vr&&parseInt(val)!==vu)aFaire.push({key,variantId:vid,counted:parseInt(val),seenStock:vu});});
+        const{ok,ko,erreurs}=await adjustStockLot(aFaire,"INVENTAIRE");
+        if(ko){// lignes refusees : gardees dans l'inventaire en cours, le reste est retire
+          const refuses=new Set(erreurs.map(x=>x.variantId).filter(Boolean));
+          const patch={};aFaire.forEach(l=>{if(!refuses.has(l.variantId))patch[l.key]=null;});
+          Object.entries(invCounts).forEach(([key,val])=>{if(!aFaire.some(l=>l.key===key)&&val!=="")patch[key]=null;});
+          try{const s=await API.stock.saveInventorySession(patch);setInvSession(s?.id?s:null);
+            const c={},vu={};for(const[k,x]of Object.entries(s?.counts||{})){c[k]=String(x.c);vu[k]=x.s;}setInvCounts(c);setInvVu(vu);}catch(e){}
+          notify(`${ok} ajustement(s) enregistré(s), ${ko} refusé(s) — restés dans l'inventaire en cours`,"error");}
+        else{try{await API.stock.closeInventorySession("done");}catch(e){}invRaz();notify(`${ok} ajustement(s) enregistré(s)`,"success");}}}
         disabled={!Object.values(invCounts).some(v=>v!==""&&v!==undefined)}
         style={{width:"100%",height:40,background:C.primary}}><Save size={14}/> Valider l'inventaire</Btn>
     </div>}

@@ -163,6 +163,10 @@ export const stock = {
   adjust: (data) => api('/api/stock/adjust', { method: 'POST', body: JSON.stringify(data) }),
   // { reason, items:[{variantId,newStock,expectedStock?}] } (500 lignes max) -> { results:[{variantId,ok,error}] }
   adjustBatch: (data) => api('/api/stock/adjust-batch', { method: 'POST', body: JSON.stringify(data) }),
+  // Inventaire en cours (pause / reprise) : enregistre au fil du comptage, repris sur tout appareil
+  inventorySession: () => api('/api/stock/inventory-session'),
+  saveInventorySession: (counts) => api('/api/stock/inventory-session', { method: 'PUT', body: JSON.stringify({ counts }) }),
+  closeInventorySession: (status) => api('/api/stock/inventory-session/close', { method: 'POST', body: JSON.stringify({ status }) }),
   aging: () => api('/api/stock/aging'),
   reorder: () => api('/api/stock/reorder'),
   defective: () => api('/api/stock/defective'),
