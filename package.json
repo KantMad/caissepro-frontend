@@ -1,6 +1,6 @@
 {
   "name": "caissepro-frontend",
-  "version": "7.0.16",
+  "version": "7.0.17",
   "type": "module",
   "scripts": {
     "dev": "vite",

@@ -906,7 +906,16 @@ function AppProvider({children}){
 
     // ── TPE: charge card payments via hardware terminal BEFORE finalizing ──
     const cardMethods=['card','amex','contactless'];
+    // « CB déjà encaissée sur le TPE » (MCS 13/11/2026) : paiement passé au TPE mais vente perdue
+    // côté caisse (coupure). On refait la vente SANS renvoyer le montant au terminal (sinon 2e
+    // débit). Réservé responsable/admin, n° d'autorisation du ticket TPE obligatoire, journalisé.
+    const dejaEncaisses=payments.filter(p=>p.alreadyCharged);
+    if(dejaEncaisses.length){
+      if(!perm().canVoid){notify("« CB déjà encaissée » : réservé à un responsable","error");return null;}
+      if(dejaEncaisses.some(p=>!cardMethods.includes(p.method)||!String(p.authCode||"").trim())){notify("« CB déjà encaissée » : n° d'autorisation du ticket TPE requis","error");return null;}
+    }
     for(const p of payments){
+      if(p.alreadyCharged){p.authCode=String(p.authCode).trim();p.cardType=p.method;continue;}
       if(cardMethods.includes(p.method)&&p.amount>0){
         try{
           const ref=`CP-${Date.now()}`;
@@ -991,6 +1000,7 @@ function AppProvider({children}){
         customerName:selCust?`${selCust.firstName||selCust.first_name} ${selCust.lastName||selCust.last_name}`:null,
         avoirUsed:selectedAvoir&&avoirPayment>0?{avoirNumber:selectedAvoir.avoirNumber,amount:avoirPayment,remainingAfter:avoirRemainingAfterSale}:null};
       setTickets(prev=>[fullTicket,...prev]);
+      for(const p of dejaEncaisses)addAudit("TPE_DEJA_ENCAISSE",`CB ${p.amount.toFixed(2)}€ déclarée déjà encaissée sur le TPE (autorisation ${p.authCode}) — ticket ${fullTicket.ticketNumber||fullTicket.ticket_number||""} — par ${currentUser?.name||"?"}`,fullTicket.ticketNumber||fullTicket.ticket_number||"");
       notify("Vente enregistrée","success");return fullTicket;
     }catch(e){
       // Seule une COUPURE RESEAU (fetch -> TypeError) bascule en vente hors-ligne.
@@ -1000,7 +1010,7 @@ function AppProvider({children}){
       if(!(e instanceof TypeError)){
         // Carte déjà débitée au TPE alors que la vente est refusée : remboursement AUTOMATIQUE
         // demandé au terminal (avant : simple message, et un nouvel essai débitait une 2e fois).
-        const debits=payments.filter(p=>cardMethods.includes(p.method)&&(p.authCode||p.transactionId));
+        const debits=payments.filter(p=>cardMethods.includes(p.method)&&!p.alreadyCharged&&(p.authCode||p.transactionId));// « déjà encaissée » : pas de remboursement auto (le paiement vient d'une vente perdue, on peut réessayer)
         let nonAnnules=0;
         for(const p of debits){
           let r=null;try{r=await hardwareManager.refund(p.amount,{currency:"EUR",reference:`ANNUL-${p.transactionId||p.authCode||Date.now()}`,originalTransactionId:p.transactionId});}catch(err){r={success:false,error:err.message};}
@@ -1069,9 +1079,10 @@ function AppProvider({children}){
       // payer plusieurs ventes hors-ligne, refusées ensuite pour solde insuffisant à la synchro)
       payments.filter(p=>p.method==="giftcard"&&p.giftCardCode).forEach(p=>{const code=String(p.giftCardCode).toUpperCase();
         setGiftCards(gs=>gs.map(g=>(g.code.toUpperCase()===code||String(g.barcode||"")===code)?{...g,balance:Math.max(0,Math.round(((g.balance||0)-p.amount)*100)/100)}:g));});
+      for(const p of dejaEncaisses)addAudit("TPE_DEJA_ENCAISSE",`CB ${p.amount.toFixed(2)}€ déclarée déjà encaissée sur le TPE (autorisation ${p.authCode}) — ticket ${ticket.ticketNumber||""} (hors-ligne) — par ${currentUser?.name||"?"}`,ticket.ticketNumber||"");
       notify("Vente enregistrée (hors-ligne) — synchro en attente","warn");return ticket;
     }
-  },[cart,gDiscPct,gDiscAmt,currentUser,selCust,calcPromoDiscount,promoCode,saleNote,cashReg,tSeq,gt,lastHash,avoirPayment,selectedAvoir,consumeAvoir,addStockMove,notify,settings.pricingMode,addPendingSync,trainingMode,currentStore,hardwareManager]);
+  },[cart,gDiscPct,gDiscAmt,currentUser,selCust,calcPromoDiscount,promoCode,saleNote,cashReg,tSeq,gt,lastHash,avoirPayment,selectedAvoir,consumeAvoir,addStockMove,notify,settings.pricingMode,addPendingSync,trainingMode,currentStore,hardwareManager,perm,addAudit]);
   _doCheckoutRef.current=_doCheckout;
 
   // Stock receipt - via API

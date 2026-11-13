@@ -107,7 +107,7 @@ function SalesScreen(){
     return cartTotals;
   },[cartTotals,avoirPayment]);
 
-  const[payCard,setPayCard]=useState("");const[payCash,setPayCash]=useState("");const[payGC,setPayGC]=useState("");const[payChq,setPayChq]=useState("");const[payAmex,setPayAmex]=useState("");const[cardType,setCardType]=useState("card");
+  const[payCard,setPayCard]=useState("");const[payCash,setPayCash]=useState("");const[payGC,setPayGC]=useState("");const[payChq,setPayChq]=useState("");const[payAmex,setPayAmex]=useState("");const[cardType,setCardType]=useState("card");const[cbDeja,setCbDeja]=useState(false);const[cbAuto,setCbAuto]=useState("");
   // Carte cadeau : carte Tech in Cash scannée (débitée par le serveur dans la vente) ou carte EXTERNE
   const[gcCode,setGcCode]=useState("");const[gcExterne,setGcExterne]=useState(false);const[gcSolde,setGcSolde]=useState(null);
   const verifierCarte=async(code)=>{const c=String(code||"").trim();if(!c){setGcSolde(null);return;}
@@ -122,10 +122,11 @@ function SalesScreen(){
   useEffect(()=>{if(!gcActif)return;
     setScanOverride(code=>{setGcCode(code);verifierCarte(code);});
     return()=>clearScanOverride();},[gcActif]);// eslint-disable-line react-hooks/exhaustive-deps
-  const openPay=()=>{setPayCard("");setPayCash("");setPayGC("");setPayChq("");setPayAmex("");setCashGiven("");setCardType("card");setGcCode("");setGcExterne(false);setGcSolde(null);setPayModal(true);};
+  const openPay=()=>{setPayCard("");setPayCash("");setPayGC("");setPayChq("");setPayAmex("");setCashGiven("");setCardType("card");setCbDeja(false);setCbAuto("");setGcCode("");setGcExterne(false);setGcSolde(null);setPayModal(true);};
   const doSplitPay=async()=>{const payments=[];
     const c=parseFloat(payCard)||0;const ca=parseFloat(payCash)||0;const g=parseFloat(payGC)||0;const chq=parseFloat(payChq)||0;
-    if(c>0)payments.push({method:cardType,amount:c});if(ca>0)payments.push({method:"cash",amount:ca});
+    if(c>0&&cbDeja&&!cbAuto.trim()){notify("Saisissez le n° d'autorisation imprimé sur le ticket du TPE","error");return;}
+    if(c>0)payments.push(cbDeja?{method:cardType,amount:c,alreadyCharged:true,authCode:cbAuto.trim()}:{method:cardType,amount:c});if(ca>0)payments.push({method:"cash",amount:ca});
     if(g>0){
       if(!gcExterne&&!gcCode.trim()){notify("Carte cadeau : scannez la carte ou cochez « Carte externe »","error");return;}
       if(!gcExterne&&gcSolde?.solde!=null&&g>gcSolde.solde+0.01){notify(`Solde de la carte insuffisant (${gcSolde.solde.toFixed(2)}€)`,"error");return;}
@@ -548,7 +549,14 @@ function SalesScreen(){
             <button onClick={()=>setCardType("card")} style={{padding:"4px 10px",minHeight:28,borderRadius:6,border:`1px solid ${cardType==="card"?C.info:C.border}`,background:cardType==="card"?C.info:"transparent",color:cardType==="card"?"#fff":C.textMuted,fontSize:12,fontWeight:700,cursor:"pointer"}}>CB</button>
             <button onClick={()=>setCardType("amex")} style={{padding:"4px 10px",minHeight:28,borderRadius:6,border:`1px solid ${cardType==="amex"?"#006FCF":C.border}`,background:cardType==="amex"?"#006FCF":"transparent",color:cardType==="amex"?"#fff":C.textMuted,fontSize:12,fontWeight:700,cursor:"pointer"}}>AMEX</button></span>
           <button onClick={()=>setPayCard(String(remaining.toFixed(2)))} style={{marginLeft:"auto",background:C.primaryLight,border:"none",borderRadius:6,padding:"4px 10px",minHeight:28,cursor:"pointer",fontSize:12,color:C.primary,fontWeight:700}}>= Reste</button></label>
-          <Input type="number" step="0.01" value={payCard} onChange={e=>capPay(e.target.value,setPayCard,othersExceptCard)} placeholder="0.00"/></div>
+          <Input type="number" step="0.01" value={payCard} onChange={e=>capPay(e.target.value,setPayCard,othersExceptCard)} placeholder="0.00"/>
+          {/* Coupure : paiement passé au TPE mais vente perdue côté caisse → refaire la vente sans
+              renvoyer le montant au TPE (sinon 2e débit). Responsable/admin, journalisé. */}
+          {perm().canVoid&&(parseFloat(payCard)||0)>0&&<div style={{marginTop:6,padding:8,borderRadius:8,background:cbDeja?"#FEF3C7":C.surfaceAlt,border:`1px solid ${cbDeja?"#D97706":C.border}`}}>
+            <label style={{display:"flex",alignItems:"center",gap:6,fontSize:11,fontWeight:600,cursor:"pointer"}}>
+              <input type="checkbox" checked={cbDeja} onChange={e=>setCbDeja(e.target.checked)}/> CB déjà encaissée sur le TPE (coupure)</label>
+            {cbDeja&&<><div style={{fontSize:10,color:"#92400E",margin:"4px 0 6px"}}>Le montant ne sera PAS envoyé au TPE. À utiliser seulement si le ticket TPE prouve que le client a déjà payé.</div>
+              <Input value={cbAuto} onChange={e=>setCbAuto(e.target.value)} placeholder="N° d'autorisation (ticket TPE)" style={{fontSize:11}}/></>}</div>}</div>
         {[{l:"ESPÈCES",v:payCash,s:setPayCash,i:Banknote,c:C.primary,oth:othersExceptCash},{l:"CARTE CADEAU",v:payGC,s:setPayGC,i:Gift,c:C.accent,oth:othersExceptGC},{l:"CHÈQUE",v:payChq||"",s:v=>setPayChq(v),i:FileText,c:"#7B8794",oth:othersExceptChq}].map(x=>(
           <div key={x.l}><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"flex",alignItems:"center",gap:4,marginBottom:3}}><x.i size={11} color={x.c}/>{x.l}
             <button onClick={()=>x.s(String(remaining.toFixed(2)))} style={{marginLeft:"auto",background:C.primaryLight,border:"none",borderRadius:6,padding:"4px 10px",minHeight:28,cursor:"pointer",fontSize:12,color:C.primary,fontWeight:700}}>= Reste</button></label>
