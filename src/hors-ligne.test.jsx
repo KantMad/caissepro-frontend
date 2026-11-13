@@ -72,7 +72,9 @@ describe("Connexion", () => {
     render(<AppProvider><Harness /></AppProvider>);
     await act(async () => { await ctx.login("Léa", "4821"); });
     await attendre(() => ctx.users.find(u => u.id === "u1")?.pin?.startsWith("pbkdf2$"));
-    expect(JSON.stringify(ctx.users)).not.toContain("4821");   // jamais le code en clair
+    // jamais le code en clair. L'empreinte (sel aleatoire, hexadecimal) est retiree avant la
+    // recherche : elle contenait parfois « 4821 » par hasard -> faux echec, deploiement bloque (13/11/2026).
+    expect(JSON.stringify(ctx.users.map(u => ({ ...u, pin: String(u.pin || "").startsWith("pbkdf2$") ? "[empreinte]" : u.pin })))).not.toContain("4821");
 
     // Coupure + redemarrage de la tablette : seul le stockage de l'appareil reste
     cache.set("donnees-magasin", { storeId: "m1", products: [{ id: "p1", name: "Chemise", variants: [] }], promos: [], at: "2026-10-29T10:00:00Z" });

@@ -81,10 +81,19 @@ function AppProvider({children}){
   const[productPhotos,setProductPhotos]=useState([]);
   const productPhotosMapRef=useRef(new Map()); // Map<"skuBase-colorKey", [{url, sortOrder}]>
   const[customers,setCustomers]=useState([]);
-  const[cart,setCart]=useState([]);
+  // Panier en cours gardé en sessionStorage (cache temporaire, pas une vente) : il survit au
+  // RECHARGEMENT de l'application (mise à jour du serveur pendant que la caisse est ouverte ->
+  // écran de gestion rechargé, mise à jour auto, erreur d'affichage, retour arrière). MCS
+  // 13/11/2026 : « le panier disparaît si je change de page ». Repris seulement pour le même
+  // utilisateur et le même magasin, et moins de 12 h après ; vidé à la déconnexion et après la vente.
+  const panierSauve=useRef(undefined);
+  if(panierSauve.current===undefined){panierSauve.current=null;
+    try{const x=JSON.parse(sessionStorage.getItem("caissepro_panier")||"null");
+      if(x&&Array.isArray(x.cart)&&x.cart.length&&x.userId&&x.userId===currentUser?.id&&x.storeId===(currentStore?.id||null)&&Date.now()-(x.savedAt||0)<12*3600e3)panierSauve.current=x;}catch(e){/* illisible : ignoré */}}
+  const[cart,setCart]=useState(()=>panierSauve.current?.cart||[]);
   // Remise panier cumulable : % d'abord, puis euros TTC sur le reste
-  const[gDiscPct,setGDiscPct]=useState(0);const[gDiscAmt,setGDiscAmt]=useState(0);
-  const[promoCode,setPromoCode]=useState("");
+  const[gDiscPct,setGDiscPct]=useState(()=>panierSauve.current?.gDiscPct||0);const[gDiscAmt,setGDiscAmt]=useState(()=>panierSauve.current?.gDiscAmt||0);
+  const[promoCode,setPromoCode]=useState(()=>panierSauve.current?.promoCode||"");
   const[cashReg,setCashReg]=useState(()=>{try{const s=localStorage.getItem("caissepro_cashreg");return s?JSON.parse(s):null;}catch(e){return null;}});
   useEffect(()=>{try{if(cashReg)localStorage.setItem("caissepro_cashreg",JSON.stringify(cashReg));else localStorage.removeItem("caissepro_cashreg");}catch(e){}},[cashReg]);
   const[isOnline,setIsOnline]=useState(true);
@@ -120,7 +129,7 @@ function AppProvider({children}){
   const[tenues,setTenues]=useState(()=>{try{const s=localStorage.getItem("caissepro_tenues");return s?JSON.parse(s):[];}catch(e){return[];}});
   const[cashMovements,setCashMovements]=useState(()=>{try{const s=localStorage.getItem("caissepro_cashmoves");return s?JSON.parse(s):[];}catch(e){return[];}});
   useEffect(()=>{try{localStorage.setItem("caissepro_retouches",JSON.stringify(retoucheBons.slice(0,500)));}catch(e){}},[retoucheBons]);
-  const[selCust,setSelCust]=useState(null);
+  const[selCust,setSelCust]=useState(()=>panierSauve.current?.selCust||null);
   const[stockMoves,setStockMoves]=useState(()=>{try{const s=localStorage.getItem("caissepro_stockmoves");return s?JSON.parse(s):[];}catch(e){return[];}});
   useEffect(()=>{try{localStorage.setItem("caissepro_stockmoves",JSON.stringify(stockMoves.slice(0,500)));}catch(e){}},[stockMoves]);
   const[settings,setSettings]=useState(()=>{try{const s=localStorage.getItem("caissepro_settings");return s?{...CO,loyaltyTiers:LOYALTY_TIERS,returnPolicy:{days:30,conditions:"Article non porté, étiquette présente"},pricingMode:"TTC",...JSON.parse(s)}:{...CO,loyaltyTiers:LOYALTY_TIERS,returnPolicy:{days:30,conditions:"Article non porté, étiquette présente"},pricingMode:"TTC"};}catch(e){return{...CO,loyaltyTiers:LOYALTY_TIERS,returnPolicy:{days:30,conditions:"Article non porté, étiquette présente"},pricingMode:"TTC"};}});
@@ -144,7 +153,12 @@ function AppProvider({children}){
       return{ok:false,ignoredKeys:[],error:e.message};
     }
   },[]);
-  const[saleNote,setSaleNote]=useState("");
+  const[saleNote,setSaleNote]=useState(()=>panierSauve.current?.saleNote||"");
+  useEffect(()=>{try{
+    if(cart.length&&currentUser?.id)sessionStorage.setItem("caissepro_panier",JSON.stringify({userId:currentUser.id,storeId:currentStore?.id||null,savedAt:Date.now(),cart,gDiscPct,gDiscAmt,promoCode,saleNote,
+      selCust:selCust?{...selCust,email:undefined,phone:undefined,notes:undefined}:null}));
+    else sessionStorage.removeItem("caissepro_panier");}catch(e){/* stockage plein/indisponible : sans effet sur la vente */}
+  },[cart,gDiscPct,gDiscAmt,promoCode,saleNote,selCust,currentUser,currentStore]);
   const[clockEntries,setClockEntries]=useState(()=>{try{const s=localStorage.getItem("caissepro_clock");return s?JSON.parse(s):[];}catch(e){return[];}});
   useEffect(()=>{try{localStorage.setItem("caissepro_clock",JSON.stringify(clockEntries.slice(0,500)));}catch(e){}},[clockEntries]);
   const[priceHistory,setPriceHistory]=useState(()=>{try{const s=localStorage.getItem("caissepro_pricehistory");return s?norm.priceHistories(JSON.parse(s)):[];}catch(e){return[];}});
