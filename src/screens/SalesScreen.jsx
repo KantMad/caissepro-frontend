@@ -796,6 +796,10 @@ function SalesScreen(){
           <RotateCcw size={24} color={C.fiscal} style={{marginBottom:6}}/><div style={{fontSize:13,fontWeight:700,color:C.text}}>Avoir</div>
           <div style={{fontSize:10,color:C.textMuted}}>{avoirs.filter(a=>!a.used&&getAvoirRemaining(a)>0).length} avoir(s) dispo.</div></button>
       </div>
+      {/* Coupure : CB passée au TPE mais vente perdue en caisse (responsable/admin) */}
+      {perm().canVoid&&<button data-testid="cb-deja-encaissee" onClick={()=>{setPayMethodModal(false);openPay();setPayCard(String(totals.tTTC.toFixed(2)));setCbDeja(true);}}
+        style={{width:"100%",padding:10,borderRadius:12,border:"1.5px dashed #D97706",background:"#FEF3C7",cursor:"pointer",marginBottom:10,display:"flex",alignItems:"center",justifyContent:"center",gap:8,fontSize:12,fontWeight:700,color:"#92400E"}}>
+        <CreditCard size={16} color="#D97706"/> CB déjà encaissée sur le TPE (coupure)</button>}
       <div style={{borderTop:`1px solid ${C.border}`,paddingTop:10}}>
         <button onClick={()=>{setPayMethodModal(false);openPay();}} style={{width:"100%",padding:14,borderRadius:14,border:`2px solid ${C.fiscal}25`,background:`${C.fiscal}06`,cursor:"pointer",textAlign:"center",transition:"all 0.15s",display:"flex",alignItems:"center",justifyContent:"center",gap:10}}
           onMouseEnter={e=>e.currentTarget.style.borderColor=C.fiscal} onMouseLeave={e=>e.currentTarget.style.borderColor=`${C.fiscal}25`}>

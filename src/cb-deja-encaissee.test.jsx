@@ -4,20 +4,22 @@
 // TPE mais la vente n'est pas enregistrée en caisse. On refait la vente SANS renvoyer le montant
 // au terminal (sinon 2e débit). Responsable/admin seulement, n° d'autorisation obligatoire.
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, act, cleanup } from "@testing-library/react";
+import { render, act, cleanup, fireEvent } from "@testing-library/react";
+import { SalesScreen } from "./screens/index.js";
 import React from "react";
 
 vi.mock("./printer.js", () => ({ default: { connect: vi.fn(), isConnected: () => false, disconnect: vi.fn(), on: () => () => {} } }));
 vi.mock("./hardware.js", () => ({
   default: { init: () => "browser", currentProfile: { id: "browser" }, setHardware: vi.fn(), getActiveAdapter: () => null, detect: vi.fn(), on: () => () => {}, charge: vi.fn(), refund: vi.fn() },
 }));
-vi.mock("./api.js", () => ({
-  setOnAuthExpired: () => {}, setStoreId: () => {}, clearStoreId: () => {},
-  setToken: () => {}, getToken: () => null, clearToken: () => {}, getStoreId: () => null,
-  sales: { checkout: vi.fn(), list: () => Promise.resolve([]) },
-  products: { list: () => Promise.resolve([]) },
-  fiscal: { closure: vi.fn() }, audit: { create: vi.fn(() => Promise.resolve()) },
-}));
+vi.mock("./api.js", () => {
+  const ns = (fixes = {}) => new Proxy(fixes, { get: (t, k) => (k in t ? t[k] : (k === "then" ? undefined : () => Promise.resolve([]))) });
+  return new Proxy({
+    setOnAuthExpired: () => {}, setStoreId: () => {}, clearStoreId: () => {},
+    setToken: () => {}, getToken: () => null, clearToken: () => {}, getStoreId: () => null,
+    sales: ns({ checkout: vi.fn() }), audit: ns({ create: vi.fn(() => Promise.resolve()) }),
+  }, { get: (t, k) => (k in t ? t[k] : (k === "then" || k === "__esModule" ? undefined : ns())) });
+});
 
 import * as API from "./api.js";
 import hardwareManager from "./hardware.js";
@@ -69,5 +71,25 @@ describe("CB déjà encaissée sur le TPE", () => {
     act(() => { ctx.addToCart(prod, variant); });
     await act(async () => { await ctx.checkout([{ method: "card", amount: 120, alreadyCharged: true, authCode: "123456" }], "X"); });
     expect(hardwareManager.refund).not.toHaveBeenCalled();
+  });
+
+  it("écran : bouton dans « Règlement » pour un responsable, absent pour un caissier", async () => {
+    API.sales.checkout.mockResolvedValue({ seq: 2, hash: "h", grandTotal: "120", ticket_number: "TK-10", totalHT: 100, totalTVA: 20, totalTTC: 120, items: [], payments: [] });
+    sessionStorage.setItem("caissepro_user", JSON.stringify({ id: "u1", name: "Fred", role: "manager" }));
+    const r = render(<AppProvider><Harness /><SalesScreen /></AppProvider>);
+    act(() => { ctx.addToCart(prod, variant); });
+    fireEvent.click(r.getByText(/Règlement — 120\.00€/));
+    fireEvent.click(r.getByTestId("cb-deja-encaissee"));
+    const caseCochee = r.getByLabelText(/CB déjà encaissée sur le TPE/);
+    expect(caseCochee.checked).toBe(true);
+    fireEvent.change(r.getByPlaceholderText("N° d'autorisation (ticket TPE)"), { target: { value: "654321" } });
+    await act(async () => { fireEvent.click(r.getByText("Valider")); });
+    expect(hardwareManager.charge).not.toHaveBeenCalled();
+    expect(API.sales.checkout.mock.calls[0][0].payments[0]).toMatchObject({ method: "card", amount: 120, authCode: "654321" });
+    cleanup(); sessionStorage.setItem("caissepro_user", JSON.stringify({ id: "u2", name: "Léa", role: "cashier" }));
+    const r2 = render(<AppProvider><Harness /><SalesScreen /></AppProvider>);
+    act(() => { ctx.addToCart(prod, variant); });
+    fireEvent.click(r2.getByText(/Règlement — 120\.00€/));
+    expect(r2.queryByTestId("cb-deja-encaissee")).toBeNull();
   });
 });
