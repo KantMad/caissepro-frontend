@@ -107,7 +107,12 @@ function SalesScreen(){
     return cartTotals;
   },[cartTotals,avoirPayment]);
 
-  const[payCard,setPayCard]=useState("");const[payCash,setPayCash]=useState("");const[payGC,setPayGC]=useState("");const[payChq,setPayChq]=useState("");const[payAmex,setPayAmex]=useState("");const[cardType,setCardType]=useState("card");const[cbDeja,setCbDeja]=useState(false);const[cbAuto,setCbAuto]=useState("");
+  const[payCard,setPayCard]=useState("");const[payCash,setPayCash]=useState("");const[payGC,setPayGC]=useState("");const[payChq,setPayChq]=useState("");const[payAmex,setPayAmex]=useState("");const[cardType,setCardType]=useState("card");const[cbDeja,setCbDeja]=useState(false);const[cbAuto,setCbAuto]=useState("");const[cbDejaModal,setCbDejaModal]=useState(false);const[cbDejaAuto,setCbDejaAuto]=useState("");
+  // Bouton dédié « CB déjà passée sur le TPE » (MCS 13/11/2026 : le responsable ne trouvait pas
+  // l'option dans le paiement). Visible par tous ; réservé responsable/admin à l'usage.
+  const ouvrirCbDeja=()=>{if(!cart.length)return;
+    if(!perm().canVoid){notify("« CB déjà passée sur le TPE » : connectez-vous avec un compte responsable ou admin","error");return;}
+    setPayMethodModal(false);setCbDejaAuto("");setCbDejaModal(true);};
   // Carte cadeau : carte Tech in Cash scannée (débitée par le serveur dans la vente) ou carte EXTERNE
   const[gcCode,setGcCode]=useState("");const[gcExterne,setGcExterne]=useState(false);const[gcSolde,setGcSolde]=useState(null);
   const verifierCarte=async(code)=>{const c=String(code||"").trim();if(!c){setGcSolde(null);return;}
@@ -420,6 +425,9 @@ function SalesScreen(){
             {busy?<span className="spin-loader"/>:<><CheckCircle2 size={16}/> Valider (avoir) — 0.00€</>}</Btn>
         :<Btn onClick={()=>setPayMethodModal(true)} disabled={!cart.length||busy} style={{width:"100%",height:"var(--btn-h,52px)",borderRadius:"var(--radius,14px)",background:C.primary,fontSize:"var(--btn-font,14px)",gap:6,boxShadow:`0 4px 16px ${C.primary}30`,marginBottom:5,letterSpacing:"-0.3px"}}>
           {busy?<span className="spin-loader"/>:<><Wallet size={16}/> Règlement — {totals.tTTC.toFixed(2)}€</>}</Btn>}
+        <Btn variant="outline" data-testid="bouton-cb-deja" onClick={ouvrirCbDeja} disabled={!cart.length||busy}
+          style={{width:"100%",height:36,fontSize:12,borderRadius:8,gap:6,marginBottom:4,borderColor:"#D97706",color:"#92400E",background:"#FEF3C7"}}>
+          <CreditCard size={14}/> CB déjà passée sur le TPE</Btn>
         <div style={{display:"flex",gap:4}}>
           <Btn variant="outline" onClick={()=>setRetoucheModal(true)} style={{flex:1,height:36,fontSize:12,borderRadius:8,gap:4}}><Edit size={14}/> Retouche</Btn>
           <Btn variant="outline" onClick={()=>{if(!cart.length)return;if(!perm().canVoid){notify("Vider le panier : réservé au gérant (ou supprimez les lignes une à une)","error");return;}setConfirmClear(true);}} style={{flex:1,borderColor:`${C.danger}20`,color:C.danger,height:36,fontSize:12,borderRadius:8}}><RotateCcw size={9}/> Vider</Btn>
@@ -429,6 +437,18 @@ function SalesScreen(){
     </>}
 
     {/* MODALS */}
+    <Modal open={cbDejaModal} onClose={()=>setCbDejaModal(false)} title="CB déjà passée sur le TPE" sub={`Montant : ${totals.tTTC.toFixed(2)}€`}>
+      <div style={{fontSize:12,lineHeight:1.5,padding:10,borderRadius:10,background:"#FEF3C7",border:"1px solid #D97706",color:"#92400E",marginBottom:12}}>
+        À utiliser uniquement si le client <b>a déjà payé sur le TPE</b> (ticket TPE imprimé) mais que la vente n'est pas enregistrée dans la caisse (coupure).
+        Le montant ne sera <b>pas</b> envoyé au TPE.</div>
+      <label style={{fontSize:11,fontWeight:700,color:C.textMuted,display:"block",marginBottom:4}}>N° D'AUTORISATION (imprimé sur le ticket TPE)</label>
+      <Input value={cbDejaAuto} onChange={e=>setCbDejaAuto(e.target.value)} placeholder="Ex. 123456" style={{marginBottom:12}}/>
+      <Btn data-testid="valider-cb-deja" disabled={busy||!cbDejaAuto.trim()||!cart.length} onClick={async()=>{
+        const payments=[{method:"card",amount:totals.tTTC,alreadyCharged:true,authCode:cbDejaAuto.trim()}].filter(p=>p.amount>0);
+        if(avoirPayment>0)payments.push({method:"avoir",amount:avoirPayment});
+        setBusy(true);try{const t=await checkout(payments,selSeller);if(t){setLastTk(t);setCbDejaModal(false);setTkModal(true);setSelSeller(null);}}finally{setBusy(false);}}}
+        style={{width:"100%",height:44,background:"#D97706"}}><CheckCircle2 size={16}/> Enregistrer la vente — {totals.tTTC.toFixed(2)}€ en CB</Btn>
+    </Modal>
     <Modal open={!!vm} onClose={()=>setVm(null)} title="Choisir une variante" sub={vm?`${vm.name} — ${vm.price.toFixed(2)}€`:""}>
       {vm&&<>
         <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:14,padding:"10px 12px",background:C.surfaceAlt,borderRadius:12}}>
@@ -797,7 +817,7 @@ function SalesScreen(){
           <div style={{fontSize:10,color:C.textMuted}}>{avoirs.filter(a=>!a.used&&getAvoirRemaining(a)>0).length} avoir(s) dispo.</div></button>
       </div>
       {/* Coupure : CB passée au TPE mais vente perdue en caisse (responsable/admin) */}
-      {perm().canVoid&&<button data-testid="cb-deja-encaissee" onClick={()=>{setPayMethodModal(false);openPay();setPayCard(String(totals.tTTC.toFixed(2)));setCbDeja(true);}}
+      {perm().canVoid&&<button data-testid="cb-deja-encaissee" onClick={ouvrirCbDeja}
         style={{width:"100%",padding:10,borderRadius:12,border:"1.5px dashed #D97706",background:"#FEF3C7",cursor:"pointer",marginBottom:10,display:"flex",alignItems:"center",justifyContent:"center",gap:8,fontSize:12,fontWeight:700,color:"#92400E"}}>
         <CreditCard size={16} color="#D97706"/> CB déjà encaissée sur le TPE (coupure)</button>}
       <div style={{borderTop:`1px solid ${C.border}`,paddingTop:10}}>

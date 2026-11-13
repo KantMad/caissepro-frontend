@@ -73,23 +73,26 @@ describe("CB déjà encaissée sur le TPE", () => {
     expect(hardwareManager.refund).not.toHaveBeenCalled();
   });
 
-  it("écran : bouton dans « Règlement » pour un responsable, absent pour un caissier", async () => {
+  it("écran : bouton dédié sur l'écran de vente ; caissier prévenu qu'il faut un responsable", async () => {
     API.sales.checkout.mockResolvedValue({ seq: 2, hash: "h", grandTotal: "120", ticket_number: "TK-10", totalHT: 100, totalTVA: 20, totalTTC: 120, items: [], payments: [] });
     sessionStorage.setItem("caissepro_user", JSON.stringify({ id: "u1", name: "Fred", role: "manager" }));
     const r = render(<AppProvider><Harness /><SalesScreen /></AppProvider>);
     act(() => { ctx.addToCart(prod, variant); });
-    fireEvent.click(r.getByText(/Règlement — 120\.00€/));
-    fireEvent.click(r.getByTestId("cb-deja-encaissee"));
-    const caseCochee = r.getByLabelText(/CB déjà encaissée sur le TPE/);
-    expect(caseCochee.checked).toBe(true);
-    fireEvent.change(r.getByPlaceholderText("N° d'autorisation (ticket TPE)"), { target: { value: "654321" } });
-    await act(async () => { fireEvent.click(r.getByText("Valider")); });
+    fireEvent.click(r.getByTestId("bouton-cb-deja"));
+    await act(async () => { fireEvent.click(r.getByTestId("valider-cb-deja")); });   // sans n° d'autorisation : rien
+    expect(API.sales.checkout).not.toHaveBeenCalled();
+    fireEvent.change(r.getByPlaceholderText("Ex. 123456"), { target: { value: "654321" } });
+    await act(async () => { fireEvent.click(r.getByTestId("valider-cb-deja")); });
     expect(hardwareManager.charge).not.toHaveBeenCalled();
-    expect(API.sales.checkout.mock.calls[0][0].payments[0]).toMatchObject({ method: "card", amount: 120, authCode: "654321" });
+    expect(API.sales.checkout.mock.calls[0][0].payments).toEqual([expect.objectContaining({ method: "card", amount: 120, authCode: "654321" })]);
+    // Le bouton est aussi proposé dans « Règlement »
+    act(() => { ctx.addToCart(prod, variant); });
+    fireEvent.click(r.getByText(/Règlement — 120\.00€/));
+    expect(r.getByTestId("cb-deja-encaissee")).toBeTruthy();
     cleanup(); sessionStorage.setItem("caissepro_user", JSON.stringify({ id: "u2", name: "Léa", role: "cashier" }));
     const r2 = render(<AppProvider><Harness /><SalesScreen /></AppProvider>);
     act(() => { ctx.addToCart(prod, variant); });
-    fireEvent.click(r2.getByText(/Règlement — 120\.00€/));
-    expect(r2.queryByTestId("cb-deja-encaissee")).toBeNull();
+    fireEvent.click(r2.getByTestId("bouton-cb-deja"));            // visible, mais refusé avec explication
+    expect(r2.queryByTestId("valider-cb-deja")).toBeNull();
   });
 });

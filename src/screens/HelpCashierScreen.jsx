@@ -19,6 +19,7 @@ function HelpCashierScreen(){
       "  • « Cadeau » (doré) → Paiement par carte cadeau.",
       "  • « Chèque » (gris) → Paiement par chèque.",
       "  • « Fractionné » (violet) → Répartir entre plusieurs moyens de paiement (voir section dédiée).",
+      "  • « CB déjà passée sur le TPE » (orange, sous Règlement) → Après une coupure : le client a payé sur le TPE (ticket TPE imprimé) mais la vente n'est pas dans la caisse. Refaites le panier, cliquez ce bouton, saisissez le n° d'autorisation du ticket TPE, puis « Enregistrer la vente ». Rien n'est renvoyé au TPE (pas de double débit). Réservé au responsable ou à l'admin, noté dans le journal.",
       "Après validation, le ticket s'affiche avec l'empreinte NF525. Cliquez « Imprimer » pour l'impression thermique, « Email » pour l'envoyer au client, ou « Terminé » pour revenir à l'écran de vente."
     ]},
     {icon:"🔍",title:"Filtrer les produits et favoris",desc:"Trouver rapidement un produit par catégorie ou favoris.",steps:[
