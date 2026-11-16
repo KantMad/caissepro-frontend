@@ -6,6 +6,7 @@ import { verifyPin, EAN13Svg, norm } from "../utils.jsx";
 import * as API from "../api.js";
 import { Modal, Btn, Input, Badge } from "../ui.jsx";
 import { useApp } from "../context.jsx";
+import { MOTIFS_RETOUR_LIBRE_DEFAUT } from "../constants.jsx";
 import { getPaymentLabel, getAvoirRemaining, formatAmount, ratioRemiseGlobale, donneesAvoir } from "../lib/formatters.js";
 
 function ReturnScreen(){
@@ -16,6 +17,10 @@ function ReturnScreen(){
   const[returnItems,setReturnItems]=useState([]);
   const REASONS=rp.reasons?.length?rp.reasons:["Echange taille","Echange couleur","Defectueux","N'aime plus","Cadeau a retourner","Erreur de commande","Autre"];
   const[reason,setReason]=useState(REASONS[0]);
+  // Retour libre (sans ticket) : motif OBLIGATOIRE choisi dans une liste dédiée (MCS 16/11/2026),
+  // modifiable dans Paramètres > Retours > « Motifs du retour libre ».
+  const FREE_REASONS=rp.freeReasons?.length?rp.freeReasons:MOTIFS_RETOUR_LIBRE_DEFAUT;
+  const[freeReason,setFreeReason]=useState("");
   const ALL_REFUND_METHODS=[{id:"avoir",l:"Avoir / Credit magasin",i:Gift,d:"Genere un avoir utilisable en caisse",sk:"allowAvoir"},
     {id:"cash",l:"Remboursement especes",i:Banknote,d:"Remboursement immediat en liquide",sk:"allowCashRefund"},
     {id:"card",l:"Remboursement carte",i:CreditCard,d:"Remboursement sur la carte du client",sk:"allowCardRefund"},
@@ -51,17 +56,21 @@ function ReturnScreen(){
     const vus=new Set(local.map(t=>t.ticketNumber));
     return[...local,...srvTk.filter(t=>!vus.has(t.ticketNumber))].slice(0,10);},[tickets,searchTk,srvTk]);
 
-  const foundProducts=useMemo(()=>{if(!searchProd||searchProd.length<2)return[];const q=searchProd.toLowerCase();
-    return products.filter(p=>p.name.toLowerCase().includes(q)||p.sku.toLowerCase().includes(q)||p.variants.some(v=>(v.ean||"").includes(q)))
-      .slice(0,8);},[products,searchProd]);
+  // Un EAN scanné ou saisi en entier n'affiche QUE la variante concernée (avant : toutes les
+  // tailles/couleurs du produit). Recherche par nom/réf : toutes les variantes ; EAN partiel :
+  // seulement les variantes dont l'EAN correspond.
+  const foundProducts=useMemo(()=>{if(!searchProd||searchProd.trim().length<2)return[];const q=searchProd.trim().toLowerCase();
+    const exacts=[];for(const p of products){const vs=(p.variants||[]).filter(v=>String(v.ean||"").toLowerCase()===q);if(vs.length)exacts.push({...p,variants:vs});}
+    if(exacts.length)return exacts.slice(0,8);
+    return products.map(p=>{if((p.name||"").toLowerCase().includes(q)||(p.sku||"").toLowerCase().includes(q))return p;
+      const vs=(p.variants||[]).filter(v=>String(v.ean||"").toLowerCase().includes(q));return vs.length?{...p,variants:vs}:null;})
+      .filter(Boolean).slice(0,8);},[products,searchProd]);
 
   // ══ Scan override: intercept barcode scans to search products instead of adding to cart ══
   const handleReturnScan=useCallback((code)=>{
     // Try as ticket barcode first
     const tk=tickets.find(t=>t.barcode===code);
     if(tk){setSearchTk(code);setMode("ticket");notify(`Ticket ${tk.ticketNumber} trouvé`,"info");return;}
-    // Ticket ancien (hors des 200 en mémoire) : recherche serveur par code-barres de vente (200…)
-    if(/^200\d{10}$/.test(code)){setSearchTk(code);setMode("ticket");notify("Recherche du ticket dans l'historique…","info");return;}
     // Try as avoir barcode
     const av=avoirs.find(a=>a.barcode===code);
     if(av){setAvoirLookup(code);notify(`Avoir ${av.avoirNumber} trouvé`,"info");return;}
@@ -74,6 +83,9 @@ function ReturnScreen(){
       toggleItem({product:found.product,variant:found.variant,quantity:1,lineTTC:found.product.price,unit_price:found.product.price},found.variant,99);
       notify(`${found.product.name} ${found.variant.color}/${found.variant.size} ajouté au retour`,"success");
       return;}
+    // Ticket ancien (hors des 200 en mémoire) : recherche serveur par code-barres de vente (200…).
+    // Testé APRÈS le catalogue : un EAN produit commençant par 200 ne doit pas basculer en recherche de ticket.
+    if(/^200\d{10}$/.test(code)){setSearchTk(code);setMode("ticket");notify("Recherche du ticket dans l'historique…","info");return;}
     notify("Code-barres inconnu: "+code,"warn");
   },[tickets,avoirs,findByEAN,notify,mode]);
   useEffect(()=>{setScanOverride(handleReturnScan);return()=>clearScanOverride();},[setScanOverride,clearScanOverride,handleReturnScan]);
@@ -99,6 +111,7 @@ function ReturnScreen(){
   const doReturn=async()=>{if(returnBusy)return;if(!returnItems.length){notify("Selectionnez au moins un article","error");return;}
     // Enforce maxNoApproval
     if(besoinValidation){notify(motifValidation,"error");return;}
+    if(mode==="free"&&!freeReason){notify("Choisissez le motif du retour libre","error");return;}
     // Anti-doublon par article: le backend verifie les quantites deja retournees
     // Le alreadyReturnedMap + effectiveMax dans toggleItem empechent deja de depasser cote UI
     setReturnBusy(true);
@@ -119,15 +132,15 @@ function ReturnScreen(){
       unitPrice:r.unitPrice||0,
       taxRate:products.find(p=>p.id===r.productId)?.taxRate||0.20}));
     try{
-    const avoir=await processReturn(syntheticTicket,enrichedItems,reason,refundMethod,restock,defective,{approved:managerApproved,approvalPin:managerApproved?approvalPin:""});
+    const avoir=await processReturn(syntheticTicket,enrichedItems,mode==="free"?freeReason:reason,refundMethod,restock,defective,{approved:managerApproved,approvalPin:managerApproved?approvalPin:""});
     if(avoir){
       if(refundMethod==="exchange"){
         setSelectedAvoir({avoirNumber:avoir.avoirNumber,totalTTC:avoir.totalTTC||0,remaining:avoir.remaining||avoir.totalTTC||0,applied:avoir.totalTTC||0});
         setAppMode("cashier");
         notify(`Avoir ${avoir.avoirNumber} de ${(avoir.totalTTC||0).toFixed(2)}EUR applique -- Scannez les nouveaux articles`,"success");
-        setReturnItems([]);setSelectedTk(null);setSearchTk("");setSearchProd("");setFreeItem(null);
+        setReturnItems([]);setSelectedTk(null);setSearchTk("");setSearchProd("");setFreeItem(null);setFreeReason("");
       } else {
-        setLastAvoir(avoir);setReturnItems([]);setSelectedTk(null);setSearchTk("");setSearchProd("");setFreeItem(null);
+        setLastAvoir(avoir);setReturnItems([]);setSelectedTk(null);setSearchTk("");setSearchProd("");setFreeItem(null);setFreeReason("");
       }
     }}finally{setReturnBusy(false);}};
 
@@ -156,7 +169,7 @@ function ReturnScreen(){
       {[{id:"ticket",l:"Par ticket de caisse",i:Receipt},
         ...(rp.requireReceipt===true?[]:[{id:"scan",l:"Par scan / recherche produit",i:ScanLine},{id:"free",l:"Retour libre (sans ticket)",i:Edit}])
       ].map(m=>(
-        <button key={m.id} onClick={()=>{setMode(m.id);setSelectedTk(null);setReturnItems([]);setFreeItem(null);if(m.id==="ticket")setManagerApproved(false);setManagerPinInput("");setManagerPinError("");}}
+        <button key={m.id} onClick={()=>{setMode(m.id);setSelectedTk(null);setReturnItems([]);setFreeItem(null);setFreeReason("");if(m.id==="ticket")setManagerApproved(false);setManagerPinInput("");setManagerPinError("");}}
           style={{flex:1,padding:"12px 14px",borderRadius:12,border:`2px solid ${mode===m.id?C.primary:C.border}`,
             background:mode===m.id?C.primaryLight:"transparent",cursor:"pointer",transition:"all 0.15s",textAlign:"left"}}>
           <div style={{display:"flex",alignItems:"center",gap:8}}>
@@ -286,10 +299,15 @@ function ReturnScreen(){
             <span style={{fontSize:16,fontWeight:800}}>Total retour</span>
             <span style={{fontSize:20,fontWeight:900,color:C.danger}}>-{returnTotal.toFixed(2)}€</span></div></div>
 
-        <div style={{marginBottom:10}}>
+        {mode==="free"?<div style={{marginBottom:10}}>
+          <label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:4}}>MOTIF DU RETOUR LIBRE (obligatoire)</label>
+          <select data-testid="motif-retour-libre" value={freeReason} onChange={e=>setFreeReason(e.target.value)} style={{width:"100%",padding:8,borderRadius:8,border:`1.5px solid ${freeReason?C.border:C.warn}`,fontSize:11,fontFamily:"inherit"}}>
+            <option value="">— Choisir le motif —</option>
+            {FREE_REASONS.map(r=>(<option key={r} value={r}>{r}</option>))}</select></div>
+        :<div style={{marginBottom:10}}>
           <label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:4}}>MOTIF DU RETOUR</label>
           <select value={reason} onChange={e=>setReason(e.target.value)} style={{width:"100%",padding:8,borderRadius:8,border:`1.5px solid ${C.border}`,fontSize:11,fontFamily:"inherit"}}>
-            {REASONS.map(r=>(<option key={r} value={r}>{r}</option>))}</select></div>
+            {REASONS.map(r=>(<option key={r} value={r}>{r}</option>))}</select></div>}
 
         <div style={{marginBottom:10}}>
           <label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:4}}>MODE DE REMBOURSEMENT</label>

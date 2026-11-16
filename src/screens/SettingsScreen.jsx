@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import { Trash2, CreditCard, Plus, XCircle, RotateCcw, Euro, AlertTriangle, Save, Activity, Printer, Box, Star, Grid, ScanLine, Check, X, Scissors, Monitor, Wifi, Code, Receipt, Upload, Zap } from "lucide-react";
 import * as API from "../api.js";
 import printer from "../printer.js";
-import { C, setHighContrast, isHighContrast } from "../constants.jsx";
+import { C, setHighContrast, isHighContrast, MOTIFS_RETOUR_LIBRE_DEFAUT } from "../constants.jsx";
 import { DEFAULT_CAT_ICONS, getVariantOrderMap, saveVariantOrderMap, DEFAULT_SIZE_RANKING, getSizeRanking, saveSizeRanking, norm, LABEL_FORMATS } from "../utils.jsx";
 import { Btn, Input, Badge } from "../ui.jsx";
 import { useApp } from "../context.jsx";
@@ -1466,6 +1466,22 @@ function SettingsScreen(){
                 style={{background:"none",border:"none",cursor:"pointer",padding:0,display:"flex"}}><X size={12} color={C.textMuted}/></button></div>))}
           <input placeholder="Nouveau motif…" id="_newReason" onKeyDown={e=>{if(e.key==="Enter"&&e.target.value.trim()){const r=e.target.value.trim();const reasons=[...(settings.returnPolicy?.reasons||["Échange taille","Échange couleur","Défectueux","Ne convient pas","Erreur achat","Autre"]),r];setSettings(s=>({...s,returnPolicy:{...s.returnPolicy,reasons}}));e.target.value="";}}}
             style={{padding:"4px 10px",borderRadius:8,border:`1.5px dashed ${C.primary}`,background:"transparent",color:C.text,fontSize:11,width:140,outline:"none"}}/>
+        </div>
+      </div>
+
+      <div data-testid="reglage-motifs-retour-libre" style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`,marginBottom:14}}>
+        <h4 style={{fontSize:13,fontWeight:700,marginBottom:8}}>Motifs du retour libre (sans ticket)</h4>
+        <p style={{fontSize:10,color:C.textMuted,marginBottom:10}}>Liste déroulante obligatoire lors d'un retour libre en caisse. Tapez un motif puis Entrée pour l'ajouter.</p>
+        <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+          {(settings.returnPolicy?.freeReasons?.length?settings.returnPolicy.freeReasons:MOTIFS_RETOUR_LIBRE_DEFAUT).map((r,i)=>(
+            <div key={i} style={{display:"flex",alignItems:"center",gap:4,padding:"4px 10px",borderRadius:8,background:C.surfaceAlt,border:`1px solid ${C.border}`,fontSize:11}}>
+              {r}<button aria-label={`Retirer ${r}`} onClick={()=>{const l=[...(settings.returnPolicy?.freeReasons?.length?settings.returnPolicy.freeReasons:MOTIFS_RETOUR_LIBRE_DEFAUT)];l.splice(i,1);
+                if(!l.length){notify("Gardez au moins un motif","warn");return;}setSettings(s=>({...s,returnPolicy:{...s.returnPolicy,freeReasons:l}}));}}
+                style={{background:"none",border:"none",cursor:"pointer",padding:0,display:"flex"}}><X size={12} color={C.textMuted}/></button></div>))}
+          <input placeholder="Nouveau motif…" data-testid="nouveau-motif-retour-libre" onKeyDown={e=>{const r=e.target.value.trim();if(e.key==="Enter"&&r){const l=settings.returnPolicy?.freeReasons?.length?settings.returnPolicy.freeReasons:MOTIFS_RETOUR_LIBRE_DEFAUT;
+              if(l.some(x=>x.toLowerCase()===r.toLowerCase())){notify("Ce motif existe déjà","warn");return;}
+              setSettings(s=>({...s,returnPolicy:{...s.returnPolicy,freeReasons:[...l,r]}}));e.target.value="";}}}
+            style={{padding:"4px 10px",borderRadius:8,border:`1.5px dashed ${C.primary}`,background:"transparent",color:C.text,fontSize:11,width:160,outline:"none"}}/>
         </div>
       </div>
 

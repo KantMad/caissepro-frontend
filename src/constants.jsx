@@ -40,3 +40,6 @@ export const CAT_COLORS={"T-shirts":"#0369A1","Jeans":"#047857","Robes":"#D97706
 
 /* ══════════ CATEGORY ICON ══════════ */
 export const DEFAULT_CAT_ICONS={"T-shirts":"👕","Jeans":"👖","Robes":"👗","Pulls":"🧶","Chemises":"👔","Vestes":"🧥","Pantalons":"👖","Chaussures":"👟","Accessoires":"👜","Divers":"📦"};
+
+// Retour libre (sans ticket) : motifs proposés par défaut (Paramètres > Retours pour en ajouter)
+export const MOTIFS_RETOUR_LIBRE_DEFAUT = ["Retour site internet", "Retour autre boutique"];
