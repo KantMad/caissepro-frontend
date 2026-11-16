@@ -8,6 +8,7 @@ import { useApp } from "../context.jsx";
 import { getPaymentLabel, ticketPieces, salesIndex, formatAmount, lignesNettes } from "../lib/formatters.js";
 import { dayKey, rangeToInstants, previousRange } from "../lib/dates.js";
 import { norm } from "../utils.jsx";
+import RechercheVentesProduit from "./RechercheVentesProduit.jsx";
 
 function StatsScreen(){
   const{tickets,products,avoirs,bestSellers:allBestSellers,salesBySeller,salesByVariant,caEvolution,salesByCollection,exportCSVReport,perm,commissions,salesGoals,setSellerGoal,settings,mode}=useApp();
@@ -175,6 +176,8 @@ function StatsScreen(){
       <div><SC icon={Receipt} label="Indice de vente" value={stats.upt.toFixed(2)} color={C.info} sub={<span style={{fontSize:10,color:C.textMuted}}>pièces/ticket · {stats.pieces} pièces <PctBadge cur={stats.upt} prev={prevStats.upt}/></span>}/></div>
       {mode!=="cashier"&&<SC icon={BarChart2} label="Marge" value={`${formatAmount(stats.margin)}€`} color="#059669"/>}
       {mode!=="cashier"&&<SC icon={BarChart2} label="Marge %" value={stats.tHT>0?`${(stats.margin/stats.tHT*100).toFixed(1)}%`:"—"} color="#059669"/>}</div>
+
+    <RechercheVentesProduit dateFrom={dateFrom} dateTo={dateTo}/>
 
     <div style={{display:"flex",gap:6,marginBottom:14,flexWrap:"wrap"}}>
       {[{id:"ca",l:"Évolution CA"},{id:"compare",l:"Comparaison"},{id:"hour",l:"CA par heure"},{id:"dow",l:"CA par jour"},{id:"best",l:"Best-sellers"},{id:"variantDetail",l:"Détail variantes"},{id:"seller",l:"Par vendeur"},{id:"variant",l:"Tailles/Couleurs"},{id:"collection",l:"Collections"},{id:"customers",l:"Clients"},{id:"returns",l:"Retours"},{id:"pay",l:"Paiements"},{id:"discounts",l:"Remises"}].map(t=>(

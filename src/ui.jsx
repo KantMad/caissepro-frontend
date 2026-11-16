@@ -44,8 +44,8 @@ export const Btn=({children,onClick,variant="primary",disabled,style:s,...r})=>{
 
 export const Input=({style:s,...p})=>(<input {...p} style={{width:"100%",padding:"10px 14px",borderRadius:10,border:`1.5px solid ${C.border}`,
   fontSize:13,background:C.surface,outline:"none",boxSizing:"border-box",fontFamily:"inherit",transition:"all 0.2s cubic-bezier(0.16,1,0.3,1)",color:C.text,...s}}
-  onFocus={e=>{e.target.style.borderColor=C.primary;e.target.style.boxShadow=`0 0 0 3px ${C.primary}12`;}}
-  onBlur={e=>{e.target.style.borderColor=C.border;e.target.style.boxShadow="none";}}/>);
+  onFocus={e=>{e.target.style.borderColor=C.primary;e.target.style.boxShadow=`0 0 0 3px ${C.primary}12`;p.onFocus?.(e);}}
+  onBlur={e=>{e.target.style.borderColor=C.border;e.target.style.boxShadow="none";p.onBlur?.(e);}}/>);// onFocus/onBlur de l'appelant appeles aussi (avant : ignores)
 
 export const Badge=({children,color=C.primary,bg})=>(<span style={{display:"inline-flex",alignItems:"center",padding:"3px 8px",
   borderRadius:6,fontSize:10,fontWeight:600,color,background:bg||`${color}12`,letterSpacing:"-0.01em"}}>{children}</span>);
