@@ -857,7 +857,7 @@ class ThermalPrinter {
       await this.bold(false);
 
       const payments = closure.payments || closure.byPayment || {};
-      const payLabels = { cash: 'Especes', card: 'Carte', giftcard: 'Cadeaux', cheque: 'Cheques', avoir: 'Avoirs' };
+      const payLabels = { cash: 'Especes', card: 'Carte', giftcard: 'Cadeaux', cheque: 'Cheques', transfer: 'Virements', avoir: 'Avoirs' };
       for (const [method, amount] of Object.entries(payments)) {
         await this.bold(true); await this.line(`  ${payLabels[method] || method}`, `${(typeof amount === 'number' ? amount : amount?.total || 0).toFixed(2)}€`); await this.bold(false);
       }
@@ -1097,7 +1097,7 @@ class ThermalPrinter {
       await this.bold(false);
       if (data.byPayment) {
         const bpc = data.byPaymentCount || {};
-        const lbls = { cash: 'Especes', card: 'Carte bancaire', amex: 'American Express', contactless: 'Sans contact', giftcard: 'Cartes cadeaux', cheque: 'Cheques', avoir: 'Avoirs utilises' };
+        const lbls = { cash: 'Especes', card: 'Carte bancaire', amex: 'American Express', contactless: 'Sans contact', giftcard: 'Cartes cadeaux', cheque: 'Cheques', transfer: 'Virements', avoir: 'Avoirs utilises' };
         for (const k of Object.keys(lbls)) {
           const v = Number(data.byPayment[k]) || 0;
           if (v !== 0) await this.line(lbls[k] + (bpc[k] ? `(x${bpc[k]})` : ''), `${v.toFixed(2)} EUR`);

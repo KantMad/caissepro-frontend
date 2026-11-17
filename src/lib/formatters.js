@@ -12,8 +12,8 @@ export const formatAmount = (v) => {
 
 // ── Libellés des méthodes de paiement ──
 export const PAYMENT_LABELS = {
-  short: { cash: "ESP", card: "CB", amex: "AMEX", giftcard: "CAD", cheque: "CHQ", avoir: "AVOIR", contactless: "SC" },
-  full: { cash: "Espèces", card: "CB", amex: "American Express", contactless: "Sans-contact", giftcard: "Cadeau", cheque: "Chèque", avoir: "Avoir", MIXTE: "Mixte", exchange: "Échange" },
+  short: { cash: "ESP", card: "CB", amex: "AMEX", giftcard: "CAD", cheque: "CHQ", transfer: "VIR", avoir: "AVOIR", contactless: "SC" },
+  full: { cash: "Espèces", card: "CB", amex: "American Express", contactless: "Sans-contact", giftcard: "Cadeau", cheque: "Chèque", transfer: "Virement", avoir: "Avoir", MIXTE: "Mixte", exchange: "Échange" },
   refund: { cash: "Espèces", card: "Carte bancaire", avoir: "Avoir client", exchange: "Échange" },
 };
 export const getPaymentLabel = (method, variant = "full") =>
@@ -161,7 +161,7 @@ export const globalDiscountTTC = (ticket) => {
 // ── Ticket de vente : briques communes aux 5 canaux d'impression ──
 // Libelle de paiement imprime (ASCII, imprimantes thermiques) : avant, chaque canal avait sa
 // propre table et « contactless »/« amex » sortaient en code brut sur certains.
-const PAIEMENT_TICKET = { cash: 'ESP', card: 'CB', amex: 'AMEX', contactless: 'SANS CONTACT', giftcard: 'CARTE CADEAU', cheque: 'CHQ', avoir: 'AVOIR' };
+const PAIEMENT_TICKET = { cash: 'ESP', card: 'CB', amex: 'AMEX', contactless: 'SANS CONTACT', giftcard: 'CARTE CADEAU', cheque: 'CHQ', transfer: 'VIREMENT', avoir: 'AVOIR' };
 export const libellePaiementTicket = (m) => PAIEMENT_TICKET[m] || String(m || '?').toUpperCase();
 
 // Ventilation de la TVA par taux (mention obligatoire de la note). Les lignes sont nettes de leurs
@@ -241,7 +241,7 @@ export const donneesAvoir = (a) => {
 // ── Agrégation des paiements par méthode (clôtures, stats) ──
 // contactless manquait : les paiements sans contact disparaissaient du bloc « Reglements »
 // du Resume mobile et du Z hors ligne (somme des reglements < CA affiche).
-export const PAYMENT_METHODS = ["cash", "card", "contactless", "amex", "cheque", "giftcard", "avoir"];
+export const PAYMENT_METHODS = ["cash", "card", "contactless", "amex", "cheque", "transfer", "giftcard", "avoir"];
 export const aggregatePaymentsByMethod = (tickets) => {
   const out = {};
   for (const m of PAYMENT_METHODS) {

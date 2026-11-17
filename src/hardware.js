@@ -993,7 +993,7 @@ class SunmiPrinterAdapter {
     // ── Reglements entrants (montant + nombre) ──
     cmds.push({ cmd: 'line', char: '-', len: 32 });
     bold(true); size(26); text('REGLEMENTS ENTRANTS\n'); size(24); bold(false);
-    const payLbl = { cash: 'Especes', card: 'CB', amex: 'AMEX', contactless: 'Sans contact', giftcard: 'Cadeau', cheque: 'Cheque', avoir: 'Avoir' };
+    const payLbl = { cash: 'Especes', card: 'CB', amex: 'AMEX', contactless: 'Sans contact', giftcard: 'Cadeau', cheque: 'Cheque', transfer: 'Virement', avoir: 'Avoir' };
     let anyPay = false;
     for (const k of Object.keys(payLbl)) {
       const v = Number(bp[k]) || 0;
@@ -1468,7 +1468,7 @@ class BrowserPrintAdapter {
     // (fermeture lancee depuis Tiroir-caisse -> le dernier mouvement d'especes etait imprime).
     const s = settings || {}; const co = companyInfo || {};
     const bp = data.byPayment || {};
-    const payLbl = { cash: 'Especes', card: 'CB', amex: 'AMEX', contactless: 'Sans contact', giftcard: 'Cadeau', cheque: 'Cheque', avoir: 'Avoir' };
+    const payLbl = { cash: 'Especes', card: 'CB', amex: 'AMEX', contactless: 'Sans contact', giftcard: 'Cadeau', cheque: 'Cheque', transfer: 'Virement', avoir: 'Avoir' };
     const row = (l, v) => `<div class="row"><span>${l}</span><span>${v}</span></div>`;
     let h = `<div class="center bold big">${s.name || co.name || 'Ma Boutique'}</div><div class="sep"></div>`;
     h += `<div class="center bold big">FERMETURE DE CAISSE</div><div class="sep"></div>`;
@@ -1792,7 +1792,7 @@ async function _textBasedPrint(adapter, type, data, settings, companyInfo, width
     }
     lines.push(dsep);
     lines.push('REGLEMENTS ENTRANTS');
-    const payLblT = { cash: 'Especes', card: 'CB', amex: 'AMEX', contactless: 'Sans contact', giftcard: 'Cadeau', cheque: 'Cheque', avoir: 'Avoir' };
+    const payLblT = { cash: 'Especes', card: 'CB', amex: 'AMEX', contactless: 'Sans contact', giftcard: 'Cadeau', cheque: 'Cheque', transfer: 'Virement', avoir: 'Avoir' };
     let anyPayT = false;
     for (const k of Object.keys(payLblT)) {
       const v = Number(bpT[k]) || 0;

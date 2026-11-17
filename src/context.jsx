@@ -1379,14 +1379,14 @@ function AppProvider({children}){
       const clHash=await sha256(hashInput);
       const clFingerprint=clHash.slice(0,16).toUpperCase();
       // Paiements par méthode (via le helper aggregatePaymentsByMethod)
-      const chequeLocal=byMethod.cheque,giftcardLocal=byMethod.giftcard,amexLocal=byMethod.amex,avoirLocal=byMethod.avoir;
+      const chequeLocal=byMethod.cheque,transferLocal=byMethod.transfer,giftcardLocal=byMethod.giftcard,amexLocal=byMethod.amex,avoirLocal=byMethod.avoir;
       const cl={id:`cl-${Date.now()}`,type,period:today,date:clDate,
         ticketCount:pt.length,totalHT,totalTVA,totalTTC,totalMargin,
         expectedCash:(cashReg?.openingAmount||0)+cash+cashIn-cashOut,actualCash:aCash,actualCard:aCard,
         cashIn,cashOut,
         grandTotal:newGt,userName:currentUser?.name,
         hash:clHash,fingerprint:clFingerprint,
-        byPayment:{cash,card,cheque:chequeLocal,giftcard:giftcardLocal,amex:amexLocal,avoir:avoirLocal},
+        byPayment:{cash,card,cheque:chequeLocal,transfer:transferLocal,giftcard:giftcardLocal,amex:amexLocal,avoir:avoirLocal},
         bySeller:pt.reduce((m,t)=>{const n=t.userName||"?";m[n]=(m[n]||0)+(t.totalTTC||0);return m;},{})};
       setClosures(p=>[cl,...p]);setGt(newGt);addAudit("CLOTURE",`Z ${type} (local)`);
       // date : la journée clôturée hors-ligne (sinon le serveur choisit la journée à la réception)

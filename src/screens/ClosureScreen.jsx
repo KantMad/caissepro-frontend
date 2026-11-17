@@ -258,6 +258,7 @@ function ClosureScreen(){
           <div style={{display:"flex",justifyContent:"space-between"}}><span>Espèces</span><span>{(reportModal.byPayment.cash||0).toFixed(2)}€</span></div>
           <div style={{display:"flex",justifyContent:"space-between"}}><span>Carte bancaire</span><span>{(reportModal.byPayment.card||0).toFixed(2)}€</span></div>
           {(reportModal.byPayment.cheque||0)>0&&<div style={{display:"flex",justifyContent:"space-between"}}><span>Chèques</span><span>{reportModal.byPayment.cheque.toFixed(2)}€</span></div>}
+          {(reportModal.byPayment.transfer||0)>0&&<div style={{display:"flex",justifyContent:"space-between"}}><span>Virements</span><span>{reportModal.byPayment.transfer.toFixed(2)}€</span></div>}
           {(reportModal.byPayment.giftcard||0)>0&&<div style={{display:"flex",justifyContent:"space-between"}}><span>Cartes cadeaux</span><span>{reportModal.byPayment.giftcard.toFixed(2)}€</span></div>}
           {(reportModal.byPayment.amex||0)>0&&<div style={{display:"flex",justifyContent:"space-between"}}><span>American Express</span><span>{reportModal.byPayment.amex.toFixed(2)}€</span></div>}
           {(reportModal.byPayment.avoir||0)>0&&<div style={{display:"flex",justifyContent:"space-between"}}><span>Avoirs utilisés</span><span>{reportModal.byPayment.avoir.toFixed(2)}€</span></div>}

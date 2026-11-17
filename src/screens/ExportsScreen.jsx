@@ -203,7 +203,7 @@ function ExportsScreen(){
 
   // --- Build export rows ---
   const buildSalesRows=()=>{
-    const sel=fields.sales;const payLabels={cash:"Espèces",card:"CB",amex:"Amex",contactless:"Sans-contact",giftcard:"Carte cadeau",cheque:"Chèque",avoir:"Avoir"};
+    const sel=fields.sales;const payLabels={cash:"Espèces",card:"CB",amex:"Amex",contactless:"Sans-contact",giftcard:"Carte cadeau",cheque:"Chèque",transfer:"Virement",avoir:"Avoir"};
     return filteredSales.map(t=>{const row={};
       if(sel.ticketNumber)row["N° Ticket"]=t.ticketNumber;
       if(sel.date)row["Date"]=new Date(t.date||t.createdAt).toLocaleString("fr-FR");
@@ -261,7 +261,7 @@ function ExportsScreen(){
   };
 
   const buildSalesDetailRows=()=>{
-    const sel=fields.salesDetail||{};const payLabels={cash:"Espèces",card:"CB",amex:"Amex",contactless:"Sans-contact",giftcard:"Carte cadeau",cheque:"Chèque",avoir:"Avoir"};
+    const sel=fields.salesDetail||{};const payLabels={cash:"Espèces",card:"CB",amex:"Amex",contactless:"Sans-contact",giftcard:"Carte cadeau",cheque:"Chèque",transfer:"Virement",avoir:"Avoir"};
     const rows=[];
     filteredSales.forEach(t=>{const seller=t.sellerName||t.seller_name||t.userName||t.user_name||"";
       const client=t.customerName||t.customer_name||"";
@@ -381,7 +381,7 @@ function ExportsScreen(){
                 <Input type="number" value={maxAmount} onChange={e=>setMaxAmount(e.target.value)} placeholder="9999" style={{fontSize:11,padding:"7px 8px"}}/></div></div>
             {tab==="sales"&&<div><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>MODE PAIEMENT</label>
               <select value={payMethodFilter} onChange={e=>setPayMethodFilter(e.target.value)} style={{width:"100%",padding:"8px 10px",borderRadius:10,border:`1.5px solid ${C.border}`,fontSize:11,fontFamily:"inherit",background:C.surface}}>
-                <option value="all">Tous</option><option value="cash">Espèces</option><option value="card">CB</option><option value="amex">Amex</option><option value="cheque">Chèque</option><option value="giftcard">Carte cadeau</option><option value="avoir">Avoir</option></select></div>}
+                <option value="all">Tous</option><option value="cash">Espèces</option><option value="card">CB</option><option value="amex">Amex</option><option value="cheque">Chèque</option><option value="transfer">Virement</option><option value="giftcard">Carte cadeau</option><option value="avoir">Avoir</option></select></div>}
             {(tab==="returns"||tab==="refunds")&&<div><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>MODE REMBOURSEMENT</label>
               <select value={refundMethodFilter} onChange={e=>setRefundMethodFilter(e.target.value)} style={{width:"100%",padding:"8px 10px",borderRadius:10,border:`1.5px solid ${C.border}`,fontSize:11,fontFamily:"inherit",background:C.surface}}>
                 <option value="all">Tous</option><option value="avoir">Avoir</option><option value="cash">Espèces</option><option value="card">CB</option></select></div>}

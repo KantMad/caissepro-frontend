@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from "react";
-import { ShoppingCart, Search, Trash2, Percent, CreditCard, Banknote, Gift, Plus, Minus, Wallet, Package, RotateCcw, Users, FileText, CheckCircle2, AlertTriangle, WifiOff, Pause, Play, Printer, Star, Zap, ScanLine, Split, Mail, XOctagon, Edit } from "lucide-react";
+import { ShoppingCart, Search, Trash2, Percent, CreditCard, Banknote, Gift, Plus, Minus, Wallet, Package, RotateCcw, Users, FileText, CheckCircle2, AlertTriangle, WifiOff, Pause, Play, Printer, Star, Zap, ScanLine, Split, Mail, XOctagon, Edit, Landmark } from "lucide-react";
 import printer from "../printer.js";
 import * as API from "../api.js";
 import { CO, C, CAT_COLORS } from "../constants.jsx";
@@ -107,7 +107,7 @@ function SalesScreen(){
     return cartTotals;
   },[cartTotals,avoirPayment]);
 
-  const[payCard,setPayCard]=useState("");const[payCash,setPayCash]=useState("");const[payGC,setPayGC]=useState("");const[payChq,setPayChq]=useState("");const[payAmex,setPayAmex]=useState("");const[cardType,setCardType]=useState("card");const[cbDeja,setCbDeja]=useState(false);const[cbAuto,setCbAuto]=useState("");const[cbDejaModal,setCbDejaModal]=useState(false);const[cbDejaAuto,setCbDejaAuto]=useState("");
+  const[payCard,setPayCard]=useState("");const[payCash,setPayCash]=useState("");const[payGC,setPayGC]=useState("");const[payChq,setPayChq]=useState("");const[payVir,setPayVir]=useState("");const[payAmex,setPayAmex]=useState("");const[cardType,setCardType]=useState("card");const[cbDeja,setCbDeja]=useState(false);const[cbAuto,setCbAuto]=useState("");const[cbDejaModal,setCbDejaModal]=useState(false);const[cbDejaAuto,setCbDejaAuto]=useState("");
   // Bouton dédié « CB déjà passée sur le TPE » (MCS 13/11/2026 : le responsable ne trouvait pas
   // l'option dans le paiement). Visible par tous ; réservé responsable/admin à l'usage.
   const ouvrirCbDeja=()=>{if(!cart.length)return;
@@ -127,15 +127,15 @@ function SalesScreen(){
   useEffect(()=>{if(!gcActif)return;
     setScanOverride(code=>{setGcCode(code);verifierCarte(code);});
     return()=>clearScanOverride();},[gcActif]);// eslint-disable-line react-hooks/exhaustive-deps
-  const openPay=()=>{setPayCard("");setPayCash("");setPayGC("");setPayChq("");setPayAmex("");setCashGiven("");setCardType("card");setCbDeja(false);setCbAuto("");setGcCode("");setGcExterne(false);setGcSolde(null);setPayModal(true);};
+  const openPay=()=>{setPayCard("");setPayCash("");setPayGC("");setPayChq("");setPayVir("");setPayAmex("");setCashGiven("");setCardType("card");setCbDeja(false);setCbAuto("");setGcCode("");setGcExterne(false);setGcSolde(null);setPayModal(true);};
   const doSplitPay=async()=>{const payments=[];
-    const c=parseFloat(payCard)||0;const ca=parseFloat(payCash)||0;const g=parseFloat(payGC)||0;const chq=parseFloat(payChq)||0;
+    const c=parseFloat(payCard)||0;const ca=parseFloat(payCash)||0;const g=parseFloat(payGC)||0;const chq=parseFloat(payChq)||0;const vir=parseFloat(payVir)||0;
     if(c>0&&cbDeja&&!cbAuto.trim()){notify("Saisissez le n° d'autorisation imprimé sur le ticket du TPE","error");return;}
     if(c>0)payments.push(cbDeja?{method:cardType,amount:c,alreadyCharged:true,authCode:cbAuto.trim()}:{method:cardType,amount:c});if(ca>0)payments.push({method:"cash",amount:ca});
     if(g>0){
       if(!gcExterne&&!gcCode.trim()){notify("Carte cadeau : scannez la carte ou cochez « Carte externe »","error");return;}
       if(!gcExterne&&gcSolde?.solde!=null&&g>gcSolde.solde+0.01){notify(`Solde de la carte insuffisant (${gcSolde.solde.toFixed(2)}€)`,"error");return;}
-      payments.push(gcExterne?{method:"giftcard",amount:g,external:true}:{method:"giftcard",amount:g,giftCardCode:gcCode.trim()});}if(chq>0)payments.push({method:"cheque",amount:chq});if(avoirPayment>0)payments.push({method:"avoir",amount:avoirPayment});
+      payments.push(gcExterne?{method:"giftcard",amount:g,external:true}:{method:"giftcard",amount:g,giftCardCode:gcCode.trim()});}if(chq>0)payments.push({method:"cheque",amount:chq});if(vir>0)payments.push({method:"transfer",amount:vir});if(avoirPayment>0)payments.push({method:"avoir",amount:avoirPayment});
     if(!payments.length)return;setBusy(true);try{const t=await checkout(payments,selSeller);if(t){setLastTk({...t,...monnaie(cashGiven,ca)});setPayModal(false);setTkModal(true);setSelSeller(null);}}finally{setBusy(false);setCashGiven("");}};
   // Rendu monnaie imprimé sur le ticket : montant remis par le client vs part payée en espèces
   const monnaie=(donne,partEspeces)=>{const d=parseFloat(donne)||0;const r=Math.round((d-(partEspeces||0))*100)/100;
@@ -552,15 +552,16 @@ function SalesScreen(){
       </div></Modal>
 
     <Modal open={payModal} onClose={()=>setPayModal(false)} title="Paiement fractionné" sub={`Total: ${totals.tTTC.toFixed(2)}€`}>
-      {(()=>{const paid=(parseFloat(payCard)||0)+(parseFloat(payCash)||0)+(parseFloat(payGC)||0)+(parseFloat(payChq)||0)+(avoirPayment||0);
+      {(()=>{const paid=(parseFloat(payCard)||0)+(parseFloat(payCash)||0)+(parseFloat(payGC)||0)+(parseFloat(payChq)||0)+(parseFloat(payVir)||0)+(avoirPayment||0);
         const remaining=Math.max(0,totals.tTTC-paid);
         const overpaid=paid>totals.tTTC+0.01;
         // FE-04: helper to cap a payment field so total does not exceed tTTC
         const capPay=(val,setter,otherTotal)=>{const v=parseFloat(val)||0;const max=Math.max(0,Math.round((totals.tTTC-otherTotal)*100)/100);if(v>max){setter(String(max.toFixed(2)));}else{setter(val);}};
-        const othersExceptCard=(parseFloat(payCash)||0)+(parseFloat(payGC)||0)+(parseFloat(payChq)||0)+(avoirPayment||0);
-        const othersExceptCash=(parseFloat(payCard)||0)+(parseFloat(payGC)||0)+(parseFloat(payChq)||0)+(avoirPayment||0);
-        const othersExceptGC=(parseFloat(payCard)||0)+(parseFloat(payCash)||0)+(parseFloat(payChq)||0)+(avoirPayment||0);
-        const othersExceptChq=(parseFloat(payCard)||0)+(parseFloat(payCash)||0)+(parseFloat(payGC)||0)+(avoirPayment||0);
+        const othersExceptCard=(parseFloat(payCash)||0)+(parseFloat(payGC)||0)+(parseFloat(payChq)||0)+(parseFloat(payVir)||0)+(avoirPayment||0);
+        const othersExceptCash=(parseFloat(payCard)||0)+(parseFloat(payGC)||0)+(parseFloat(payChq)||0)+(parseFloat(payVir)||0)+(avoirPayment||0);
+        const othersExceptGC=(parseFloat(payCard)||0)+(parseFloat(payCash)||0)+(parseFloat(payChq)||0)+(parseFloat(payVir)||0)+(avoirPayment||0);
+        const othersExceptChq=(parseFloat(payCard)||0)+(parseFloat(payCash)||0)+(parseFloat(payGC)||0)+(parseFloat(payVir)||0)+(avoirPayment||0);
+        const othersExceptVir=(parseFloat(payCard)||0)+(parseFloat(payCash)||0)+(parseFloat(payGC)||0)+(parseFloat(payChq)||0)+(avoirPayment||0);
         return(<>
       <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:12}}>
         <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"flex",alignItems:"center",gap:4,marginBottom:3}}>
@@ -577,7 +578,7 @@ function SalesScreen(){
               <input type="checkbox" checked={cbDeja} onChange={e=>setCbDeja(e.target.checked)}/> CB déjà encaissée sur le TPE (coupure)</label>
             {cbDeja&&<><div style={{fontSize:10,color:"#92400E",margin:"4px 0 6px"}}>Le montant ne sera PAS envoyé au TPE. À utiliser seulement si le ticket TPE prouve que le client a déjà payé.</div>
               <Input value={cbAuto} onChange={e=>setCbAuto(e.target.value)} placeholder="N° d'autorisation (ticket TPE)" style={{fontSize:11}}/></>}</div>}</div>
-        {[{l:"ESPÈCES",v:payCash,s:setPayCash,i:Banknote,c:C.primary,oth:othersExceptCash},{l:"CARTE CADEAU",v:payGC,s:setPayGC,i:Gift,c:C.accent,oth:othersExceptGC},{l:"CHÈQUE",v:payChq||"",s:v=>setPayChq(v),i:FileText,c:"#7B8794",oth:othersExceptChq}].map(x=>(
+        {[{l:"ESPÈCES",v:payCash,s:setPayCash,i:Banknote,c:C.primary,oth:othersExceptCash},{l:"CARTE CADEAU",v:payGC,s:setPayGC,i:Gift,c:C.accent,oth:othersExceptGC},{l:"CHÈQUE",v:payChq||"",s:v=>setPayChq(v),i:FileText,c:"#7B8794",oth:othersExceptChq},{l:"VIREMENT",v:payVir||"",s:v=>setPayVir(v),i:Landmark,c:"#0F766E",oth:othersExceptVir}].map(x=>(
           <div key={x.l}><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"flex",alignItems:"center",gap:4,marginBottom:3}}><x.i size={11} color={x.c}/>{x.l}
             <button onClick={()=>x.s(String(remaining.toFixed(2)))} style={{marginLeft:"auto",background:C.primaryLight,border:"none",borderRadius:6,padding:"4px 10px",minHeight:28,cursor:"pointer",fontSize:12,color:C.primary,fontWeight:700}}>= Reste</button></label>
             <Input type="number" step="0.01" value={x.v} onChange={e=>capPay(e.target.value,x.s,x.oth)} placeholder="0.00"/>
@@ -807,6 +808,10 @@ function SalesScreen(){
         <button onClick={async()=>{setPayMethodModal(false);await quickPay("cheque");}} style={{padding:16,borderRadius:14,border:`2px solid #7B879425`,background:"#7B879406",cursor:"pointer",textAlign:"center",transition:"all 0.15s"}}
           onMouseEnter={e=>e.currentTarget.style.borderColor="#7B8794"} onMouseLeave={e=>e.currentTarget.style.borderColor="#7B879425"}>
           <FileText size={24} color="#7B8794" style={{marginBottom:6}}/><div style={{fontSize:13,fontWeight:700,color:C.text}}>Chèque</div><div style={{fontSize:10,color:C.textMuted}}>Paiement par chèque</div></button>
+        {/* Virement : reçu HORS caisse (rien n'est envoyé au TPE), la vente est simplement marquée « Virement ». */}
+        <button data-testid="payer-virement" onClick={async()=>{setPayMethodModal(false);await quickPay("transfer");}} style={{padding:16,borderRadius:14,border:"2px solid #0F766E25",background:"#0F766E06",cursor:"pointer",textAlign:"center",transition:"all 0.15s"}}
+          onMouseEnter={e=>e.currentTarget.style.borderColor="#0F766E"} onMouseLeave={e=>e.currentTarget.style.borderColor="#0F766E25"}>
+          <Landmark size={24} color="#0F766E" style={{marginBottom:6}}/><div style={{fontSize:13,fontWeight:700,color:C.text}}>Virement</div><div style={{fontSize:10,color:C.textMuted}}>Reçu hors caisse (pas de TPE)</div></button>
         <button onClick={()=>{setPayMethodModal(false);openPay();setPayGC(String(totals.tTTC.toFixed(2)));}} style={{padding:16,borderRadius:14,border:`2px solid ${C.accent}25`,background:`${C.accent}06`,cursor:"pointer",textAlign:"center",transition:"all 0.15s"}}
           onMouseEnter={e=>e.currentTarget.style.borderColor=C.accent} onMouseLeave={e=>e.currentTarget.style.borderColor=`${C.accent}25`}>
           <Gift size={24} color={C.accent} style={{marginBottom:6}}/><div style={{fontSize:13,fontWeight:700,color:C.text}}>Carte cadeau</div><div style={{fontSize:10,color:C.textMuted}}>Scanner la carte (ou carte externe)</div></button>
