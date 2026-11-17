@@ -4,6 +4,7 @@
 import React from "react";
 import { C } from "./constants.jsx";
 import { Input } from "./ui.jsx";
+import { useApp } from "./context.jsx";
 
 export const FORMES_JURIDIQUES = [
   "AE - Auto-entrepreneur / Micro-entreprise","EI - Entreprise Individuelle","EURL - Entreprise Unipersonnelle à Responsabilité Limitée",
@@ -16,14 +17,16 @@ export const FORMES_JURIDIQUES = [
 ];
 
 export const CLIENT_VIDE = { customerType:"particulier", companyName:"", legalForm:"", siren:"", vatNumber:"",
-  firstName:"", lastName:"", email:"", phone:"", address:"", postalCode:"", city:"", notes:"" };
+  firstName:"", lastName:"", email:"", phone:"", address:"", postalCode:"", city:"", notes:"",
+  // Tech in touch : carte scannée en caisse + infos du profil envoyées à l'app de fidélité
+  titBarcode:"", birthdate:"", gender:"", clothingSize:"" };
 
 export const estPro = (c) => c?.customerType === "pro" && !!c?.companyName;
 // Nom affiche : raison sociale pour un pro, sinon prenom + nom
 export const nomClient = (c) => !c ? "" : estPro(c) ? c.companyName : `${c.firstName||""} ${c.lastName||""}`.trim();
 export const contactClient = (c) => estPro(c) ? `${c.firstName||""} ${c.lastName||""}`.trim() : "";
 // Texte de recherche (nom, raison sociale, SIREN, email, telephone)
-export const texteRechercheClient = (c) => `${c.firstName||""} ${c.lastName||""} ${c.lastName||""} ${c.firstName||""} ${c.companyName||""} ${c.siren||""} ${c.email||""} ${c.phone||""}`.toLowerCase();
+export const texteRechercheClient = (c) => `${c.firstName||""} ${c.lastName||""} ${c.lastName||""} ${c.firstName||""} ${c.companyName||""} ${c.siren||""} ${c.email||""} ${c.phone||""} ${c.titBarcode||""}`.toLowerCase();
 
 // Champs manquants avant enregistrement (null si la fiche peut partir au serveur)
 export function erreurClient(v) {
@@ -36,6 +39,8 @@ export const corpsClient = (v) => Object.fromEntries(Object.keys(CLIENT_VIDE).ma
 const Lbl = ({ children }) => <label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:2}}>{children}</label>;
 
 export function ChampsClient({ v, set, notes = false }) {
+  const { settings, setScanOverride, clearScanOverride } = useApp();
+  const tit = !!settings?.titEnabled;
   const pro = v.customerType === "pro";
   const ch = (k) => (e) => { const x = e.target.value; set(p => ({ ...p, [k]: x })); };
   const champ = (k, label, props = {}) => <div><Lbl>{label}</Lbl><Input value={v[k] || ""} onChange={ch(k)} {...props}/></div>;
@@ -67,6 +72,17 @@ export function ChampsClient({ v, set, notes = false }) {
       {champ("postalCode","CODE POSTAL",{inputMode:"numeric"})}
       {champ("city","VILLE")}
     </div>
+    {tit && <div data-testid="champs-tit" style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,padding:10,borderRadius:10,border:`1.5px solid ${C.border}`}}>
+      <div style={{gridColumn:"1 / -1",fontSize:11,fontWeight:700}}>Fidélité Tech in touch</div>
+      <div style={{gridColumn:"1 / -1"}}>{champ("titBarcode","CARTE TECH IN TOUCH (scannez la carte)",{placeholder:"TIT…",
+        onFocus:()=>setScanOverride?.(code=>set(p=>({...p,titBarcode:String(code).trim().toUpperCase()}))),onBlur:()=>clearScanOverride?.()})}</div>
+      {champ("birthdate","DATE DE NAISSANCE",{type:"date"})}
+      <div><Lbl>CIVILITÉ</Lbl>
+        <select value={v.gender || ""} onChange={ch("gender")}
+          style={{width:"100%",padding:"10px 12px",borderRadius:10,border:`1.5px solid ${C.border}`,fontSize:13,fontFamily:"inherit",background:C.surface}}>
+          <option value="">—</option><option value="mme">Mme</option><option value="mr">M.</option><option value="other">Autre</option></select></div>
+      {champ("clothingSize","TAILLE HABITUELLE",{placeholder:"S, M, 38…"})}
+    </div>}
     {notes && <div><Lbl>NOTES</Lbl>
       <textarea value={v.notes || ""} onChange={ch("notes")} placeholder="Notes…"
         style={{width:"100%",height:50,padding:8,borderRadius:8,border:`1.5px solid ${C.border}`,fontSize:11,fontFamily:"inherit",resize:"vertical"}}/></div>}

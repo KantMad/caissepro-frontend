@@ -396,5 +396,15 @@ export const integrations = {
   gestlogCatalogImports: () => api('/api/integrations/gestlog/catalog-imports'),
 };
 
+// ══ Tech in touch (app de fidélité) — routes présentes seulement si la liaison est active ══
+export const tit = {
+  status: () => api('/api/tit/status'),
+  resync: () => api('/api/tit/resync', { method: 'POST' }),
+  retry: () => api('/api/tit/retry', { method: 'POST' }),
+  offers: () => api('/api/tit/offers'),
+  createOffer: (data) => api('/api/tit/offers', { method: 'POST', body: JSON.stringify(data) }),
+  updateOffer: (id, data) => api(`/api/tit/offers/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+};
+
 // ══ Health ══
 export const health = () => api('/api/health');

@@ -1459,6 +1459,7 @@ function AppProvider({children}){
   const retoucheBonsRef=useRef(retoucheBons);retoucheBonsRef.current=retoucheBons;
   const avoirsRef=useRef(avoirs);avoirsRef.current=avoirs;
   const tenuesRef=useRef(tenues);tenuesRef.current=tenues;
+  const customersRef=useRef(customers);customersRef.current=customers;
   const[scanBarcode,setScanBarcode]=useState(null);
   // ══ Scan override: screens can register a callback to intercept barcode scans ══
   const scanOverrideRef=useRef(null);
@@ -1471,6 +1472,11 @@ function AppProvider({children}){
       // Encaissement en cours (TPE en attente de la carte…) : l'article scanné serait ajouté au
       // panier puis effacé avec lui à la fin de la vente, sans avoir été vendu.
       if(checkoutLock.current){notifyRef.current("Paiement en cours — article non ajouté, rescannez-le après la vente","error");return;}
+      // 0b. Carte Tech in touch (TIT…) : sélectionne le client de la vente
+      const codeMaj=String(code||"").trim().toUpperCase();
+      const clientCarte=codeMaj&&customersRef.current.find(c=>c.titBarcode&&String(c.titBarcode).toUpperCase()===codeMaj);
+      if(clientCarte){setSelCust(clientCarte);notifyRef.current(`Client ${clientCarte.companyName||`${clientCarte.firstName||""} ${clientCarte.lastName||""}`.trim()} (carte Tech in touch)`,"success");return;}
+      if(/^TIT/.test(codeMaj)){notifyRef.current("Carte Tech in touch inconnue : associez-la au client dans sa fiche (Clients > Modifier)","warn");return;}
       // 1. Try product EAN
       const found=findByEANRef.current(code);
       if(found){addToCartRef.current(found.product,found.variant);notifyRef.current(found.product.name+" ajouté ("+code+")");return;}

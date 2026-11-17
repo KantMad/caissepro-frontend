@@ -144,7 +144,10 @@ export const norm={
     customerType:c.customer_type||c.customerType||"particulier",companyName:c.company_name??c.companyName??"",
     legalForm:c.legal_form??c.legalForm??"",siren:c.siren||"",vatNumber:c.vat_number??c.vatNumber??"",
     address:c.address||"",postalCode:c.postal_code??c.postalCode??"",
-    totalSpent:parseFloat(c.total_spent||c.totalSpent||0),points:parseInt(c.points||0)}},
+    totalSpent:parseFloat(c.total_spent||c.totalSpent||0),points:parseInt(c.points||0),
+    // Tech in touch (API migration 051)
+    titBarcode:c.tit_barcode??c.titBarcode??"",birthdate:c.birthdate?String(c.birthdate).slice(0,10):"",
+    gender:c.gender||"",clothingSize:c.clothing_size??c.clothingSize??""}},
   products(list){return(list||[]).map(norm.product)},
   customers(list){return(list||[]).map(norm.customer)},
   avoir(a){return{...a,
