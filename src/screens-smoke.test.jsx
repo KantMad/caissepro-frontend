@@ -283,6 +283,20 @@ describe("Écrans — rendu sans plantage", () => {
     expect(await findByText(/Inès Démo — 310pts/)).toBeTruthy();
   });
 
+  it("Retouche : « Associer un client » est une recherche (téléphone, nom) qui remplit nom et téléphone", async () => {
+    const { findByText, getByTestId, queryByText, getByPlaceholderText } = render(<AppProvider><SalesScreen /></AppProvider>);
+    fireEvent.click(await findByText(/Retouche$/, {}, { timeout: 2000 }));
+    const champ = getByTestId("retouche-recherche-client");
+    fireEvent.change(champ, { target: { value: "dupont" } });
+    expect(await findByText(/Aucun client pour « dupont »/)).toBeTruthy();
+    fireEvent.change(champ, { target: { value: "06 00 00 00 03" } });
+    fireEvent.click(await findByText("Inès Démo"));
+    expect(getByPlaceholderText("Nom complet").value).toBe("Inès Démo");
+    expect(getByPlaceholderText("06 XX XX XX XX").value).not.toBe("");
+    expect(champ.value).toBe("");
+    expect(queryByText(/Aucun client pour/)).toBeNull();
+  });
+
   it("Vente : le choix du vendeur liste tous les comptes du magasin, admins compris (connecté en caissier)", async () => {
     sessionStorage.setItem("caissepro_user", JSON.stringify({ id: "uc", name: "Sophie", role: "cashier" }));
     const { container } = render(<AppProvider><SalesScreen /></AppProvider>);

@@ -32,7 +32,7 @@ function SalesScreen(){
   const[cashNumpadModal,setCashNumpadModal]=useState(false);const[numpadValue,setNumpadValue]=useState("");
   const[custModal,setCustModal]=useState(false);const[custQ,setCustQ]=useState("");const[parkedModal,setParkedModal]=useState(false);
   const[payMethodModal,setPayMethodModal]=useState(false);const[avoirSelectModal,setAvoirSelectModal]=useState(false);
-  const[retoucheModal,setRetoucheModal]=useState(false);const[retForm,setRetForm]=useState({client:"",phone:"",date:dayKey(),notes:"",items:[{desc:"",price:""}]});
+  const[retoucheModal,setRetoucheModal]=useState(false);const[retForm,setRetForm]=useState({client:"",phone:"",date:dayKey(),notes:"",items:[{desc:"",price:""}]});const[retCustQ,setRetCustQ]=useState("");
   const[newCustModal,setNewCustModal]=useState(false);const[ncF,setNcF]=useState("");const[ncL,setNcL]=useState("");const[ncE,setNcE]=useState("");const[ncP,setNcP]=useState("");
   const[syncConfirm,setSyncConfirm]=useState(false);const[avoirSearch,setAvoirSearch]=useState("");
   const[clock,setClock]=useState(new Date());useEffect(()=>{const t=setInterval(()=>setClock(new Date()),30000);return()=>clearInterval(t);},[]);
@@ -867,7 +867,7 @@ function SalesScreen(){
     </Modal>
 
     {/* RETOUCHE MODAL */}
-    <Modal open={retoucheModal} onClose={()=>setRetoucheModal(false)} title="Bon de retouche" wide>
+    <Modal open={retoucheModal} onClose={()=>{setRetoucheModal(false);setRetCustQ("");}} title="Bon de retouche" wide>
       {/* Quick-pick retouche options */}
       <div style={{marginBottom:14}}>
         <label style={{fontSize:10,fontWeight:700,color:C.textMuted,display:"block",marginBottom:6}}>RETOUCHES COURANTES — cliquez pour ajouter</label>
@@ -889,9 +889,20 @@ function SalesScreen(){
         <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>DATE DE RETRAIT</label>
           <Input type="date" value={retForm.date} onChange={e=>setRetForm(f=>({...f,date:e.target.value}))}/></div>
         <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>ASSOCIER UN CLIENT</label>
-          <select value="" onChange={e=>{const c=customers.find(x=>x.id===e.target.value);if(c)setRetForm(f=>({...f,client:`${c.firstName} ${c.lastName}`,phone:c.phone||""}));}}
-            style={{width:"100%",padding:10,borderRadius:10,border:`2px solid ${C.border}`,fontSize:12,fontFamily:"inherit"}}>
-            <option value="">-- Sélectionner --</option>{customers.map(c=>(<option key={c.id} value={c.id}>{c.firstName} {c.lastName}</option>))}</select></div>
+          {/* Recherche (19/11/2026) : nom, téléphone, email, société, carte — même règle que le client de la vente */}
+          <div style={{position:"relative"}}>
+            <Search size={14} color={C.textMuted} style={{position:"absolute",left:11,top:"50%",transform:"translateY(-50%)"}}/>
+            <Input data-testid="retouche-recherche-client" value={retCustQ} onChange={e=>setRetCustQ(e.target.value)} placeholder="Rechercher : nom, téléphone, email…" style={{paddingLeft:32}}/>
+            {retCustQ.trim()&&(()=>{const q=retCustQ.trim().toLowerCase();const qTel=q.replace(/[^0-9]/g,"");
+              const trouves=customers.filter(c=>texteRechercheClient(c).includes(q)||(qTel.length>=3&&String(c.phone||"").replace(/[^0-9]/g,"").includes(qTel))).slice(0,8);
+              return(<div style={{position:"absolute",top:"100%",left:0,right:0,zIndex:20,marginTop:4,background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:10,boxShadow:"0 8px 24px rgba(0,0,0,0.12)",maxHeight:240,overflowY:"auto"}}>
+                {!trouves.length&&<div style={{padding:10,fontSize:11,color:C.textMuted}}>Aucun client pour « {retCustQ.trim()} »</div>}
+                {trouves.map(c=>(<button key={c.id} type="button" onClick={()=>{setRetForm(f=>({...f,client:nomClient(c),phone:c.phone||""}));setRetCustQ("");}}
+                  style={{display:"block",width:"100%",textAlign:"left",padding:"8px 10px",border:"none",borderBottom:`1px solid ${C.border}`,background:"transparent",cursor:"pointer",fontFamily:"inherit"}}>
+                  <div style={{fontSize:12,fontWeight:600}}>{nomClient(c)}</div>
+                  <div style={{fontSize:10,color:C.textMuted}}>{[c.phone,c.email].filter(Boolean).join(" — ")}</div></button>))}
+              </div>);})()}
+          </div></div>
       </div>
       <div style={{marginBottom:12}}>
         <label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>TRAVAUX DE RETOUCHE (champ libre)</label>
