@@ -547,6 +547,8 @@ class SunmiPrinterAdapter {
     align(1); size(32); bold(true);
     text('BON DE RETOUCHE\n');
     size(24); bold(false);
+    // 2 exemplaires (19/11/2026) : client puis boutique (thermalPrint, context.jsx)
+    if (bon._exemplaire) { bold(true); text(`EXEMPLAIRE ${String(bon._exemplaire).toUpperCase()}\n`); bold(false); }
     cmds.push({ cmd: 'line', char: '=', len: 32 });
 
     align(0); bold(true);
@@ -616,6 +618,7 @@ class SunmiPrinterAdapter {
     try {
       await this._cap('printerInit', {});
       await this.printText('BON DE RETOUCHE\n');
+      if (bon?._exemplaire) await this.printText(`EXEMPLAIRE ${String(bon._exemplaire).toUpperCase()}\n`);
       await this.printText(`N: ${bon?.num || '?'}\nClient: ${bon?.client || '?'}\n`);
       for (const item of (bon?.items || [])) { if (item.desc) await this.printText(`${item.desc}  ${parseFloat(item.price || 0).toFixed(2)} EUR\n`); }
       await this._cap('lineWrap', { lines: 4 });
@@ -1373,6 +1376,7 @@ class BrowserPrintAdapter {
     const s = settings || {}; const co = companyInfo || {};
     let h = `<div class="center bold big">${s.name || co.name || 'Ma Boutique'}</div><div class="sep"></div>`;
     h += `<div class="center bold big">BON DE RETOUCHE</div>`;
+    if (bon._exemplaire) h += `<div class="center bold">EXEMPLAIRE ${escapeHtml(String(bon._exemplaire).toUpperCase())}</div>`;
     const sc = bon.shortCode || bon.short_code || '';
     if (sc) h += `<div class="center bold" style="font-size:32px">${escapeHtml(sc)}</div>`;
     h += `<div class="center">N: ${bon.num || bon.retouche_number || '?'}</div><div class="sep"></div>`;
@@ -1678,6 +1682,7 @@ async function _textBasedPrint(adapter, type, data, settings, companyInfo, width
   } else if (type === 'retouche') {
     header();
     lines.push('BON DE RETOUCHE');
+    if (data._exemplaire) lines.push(`EXEMPLAIRE ${String(data._exemplaire).toUpperCase()}`);
     lines.push(`N: ${data.num || data.retouche_number || '?'}`);
     lines.push(dsep);
     if (data.client || data.client_name) lines.push(`Client: ${data.client || data.client_name}`);

@@ -202,13 +202,14 @@ function HistoryScreen(){
             </div>
             <Btn variant="outline" onClick={async()=>{const printed=await thermalPrint("retouche",b);if(!printed){
               const w=window.open("","_blank","width=400,height=600");if(w){w.document.write(`<html><head><title>Bon ${b.num}</title><style>body{font-family:'Courier New',monospace;font-size:12px;padding:10px;max-width:300px;margin:0 auto;}h2{text-align:center;font-size:14px;margin:4px 0;}hr{border:none;border-top:1px dashed #333;margin:6px 0;}.row{display:flex;justify-content:space-between;}.center{text-align:center;}.short-code{text-align:center;font-size:32px;font-weight:900;letter-spacing:6px;margin:8px 0;padding:8px;border:3px solid #000;}</style></head><body>`+
-                `<h2>${settings.name||"Tech in Cash"}</h2><hr><h2>BON DE RETOUCHE</h2><div class="short-code">${sc}</div><div class="center" style="font-size:10px;margin-bottom:6px;">Ref: ${b.num}</div><hr>`+
+              ["CLIENT","BOUTIQUE"].map((ex,k)=>`<div style="${k?"page-break-before:always;":""}">`+
+                `<h2>${settings.name||"Tech in Cash"}</h2><hr><h2>BON DE RETOUCHE</h2><div class="center" style="font-weight:900;margin-bottom:4px;">EXEMPLAIRE ${ex}</div><div class="short-code">${sc}</div><div class="center" style="font-size:10px;margin-bottom:6px;">Ref: ${b.num}</div><hr>`+
                 `<div class="row"><span>Client:</span><strong>${b.client||""}</strong></div>`+
                 `<div class="row"><span>Tel:</span><span>${b.phone||""}</span></div>`+
                 (b.dateRetrait?`<div class="row"><span>Retrait:</span><span>${new Date(b.dateRetrait).toLocaleDateString("fr-FR")}</span></div>`:"")+`<hr>`+
                 (b.items||[]).filter(i=>i.desc).map(i=>`<div class="row"><span>${i.desc}</span><strong>${parseFloat(i.price||0).toFixed(2)}EUR</strong></div>`).join("")+
-                `<hr><div class="row"><strong>TOTAL</strong><strong>${(b.total||0).toFixed(2)}EUR TTC</strong></div>`+
-                `</body></html>`);w.document.close();setTimeout(()=>w.print(),300);}
+                `<hr><div class="row"><strong>TOTAL</strong><strong>${(b.total||0).toFixed(2)}EUR TTC</strong></div>`+`</div>`).join("")+
+              `</body></html>`);w.document.close();setTimeout(()=>w.print(),300);}
             }}} style={{fontSize:10,padding:"4px 10px"}}><Printer size={12}/></Btn>
             <div style={{display:"flex",flexDirection:"column",gap:3}}>
               {st==="pending"&&<Btn variant="outline" onClick={async()=>{if(await updateRetoucheStatus(b.id,"ready"))notify(`${b.num} marqué Prêt`);}} style={{fontSize:8,padding:"2px 6px",borderColor:"#10B981",color:"#10B981"}}>Prêt</Btn>}

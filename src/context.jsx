@@ -1569,6 +1569,13 @@ function AppProvider({children}){
   // Tickets déjà imprimés sur ce poste : la 2e impression d'un même ticket est un duplicata.
   const ticketsImprimes=useRef(new Set());
   const thermalPrint=useCallback(async(type,data)=>{
+    // Bon de retouche (19/11/2026) : DEUX exemplaires, client puis boutique, sur tous les canaux.
+    if(type==="retouche"&&data&&!data._exemplaire){
+      const client=await thermalPrint("retouche",{...data,_exemplaire:"client"});
+      if(!client)return false;   // pas d'imprimante : l'appelant ouvre l'aperçu (2 exemplaires)
+      await thermalPrint("retouche",{...data,_exemplaire:"boutique"});
+      return true;
+    }
     // NF525 : seule une RÉIMPRESSION est un duplicata — tracée (audit + JET) et imprimée avec la
     // mention « DUPLICATA ». Avant : le ticket original était tracé comme duplicata, sans mention.
     // Le ticket cadeau n'est pas une copie du ticket fiscal (aucun montant) : jamais duplicata.

@@ -1405,6 +1405,7 @@ class ThermalPrinter {
       await this.text('BON DE RETOUCHE');
       await this.newline();
       await this.normalSize();
+      if (bon._exemplaire) { await this.text(`EXEMPLAIRE ${String(bon._exemplaire).toUpperCase()}`); await this.newline(); }
       await this.bold(false);
 
       await this.separator('=');
