@@ -8,7 +8,7 @@ import { useApp } from "../context.jsx";
 import { tauxMarque } from "../lib/formatters.js";
 import { sortVariantsBySize } from "./_shared.js";
 import CSVImportWizard from "./CSVImportWizard.jsx";
-import { estEpicerie, produitParDefaut, couleurVariante, tailleVariante, libelleTaille, libelleCollection, venduAuPoids, libellePrixPoids } from "../metier.js";
+import { estEpicerie, produitParDefaut, couleurVariante, tailleVariante, libelleTaille, libelleCollection, venduAuPoids, libellePrixPoids, affStock } from "../metier.js";
 
 // Mode de vente (epicerie) : a l'unite, ou au poids avec le prix pour N grammes
 const MODES_VENTE=[{v:"",l:"À l'unité"},{v:"100",l:"Au poids — prix pour 100 g"},{v:"50",l:"Au poids — prix pour 50 g"},{v:"1000",l:"Au poids — prix au kg"}];
@@ -75,7 +75,7 @@ function ProductsScreen(){
             <td data-label="Coût" style={{padding:"6px 10px",color:C.textMuted}}>{q.costPrice?.toFixed(2)||"—"}€</td>
             <td data-label="Marge" style={{padding:"6px 10px"}}><Badge color={mg>50?"#059669":mg>30?C.accent:C.danger}>{mg.toFixed(0)}%</Badge></td>
             <td data-label="TVA" style={{padding:"6px 10px"}}>{(q.taxRate*100).toFixed(0)}%</td>
-            <td data-label="Stock" style={{padding:"6px 10px",fontWeight:700,color:ts<=5?C.danger:C.text}}>{ts}</td>
+            <td data-label="Stock" style={{padding:"6px 10px",fontWeight:700,color:ts<=(venduAuPoids(q)?250:5)?C.danger:C.text}}>{affStock(q,ts)}</td>
             <td data-label="Variantes" style={{padding:"6px 10px"}}>{q.variants.length}</td>
             <td data-label="Actions" style={{padding:"6px 10px"}} onClick={e=>e.stopPropagation()}>
               <div style={{display:"flex",gap:8}}>
@@ -120,7 +120,7 @@ function ProductsScreen(){
           {editModal.variants.map(v=>(<div key={v.id} style={{display:"flex",alignItems:"center",gap:8,padding:6,borderRadius:8,border:`1px solid ${C.border}`,fontSize:11}}>
             {!epi&&<Badge color={C.primary}>{v.color}</Badge>}{!epi&&v.colorCode&&<span style={{fontSize:8,fontFamily:"monospace",color:C.accent,background:C.accentLight,padding:"1px 4px",borderRadius:4}}>{v.colorCode}</span>}{(!epi||detailVariante("",v.size))&&<Badge color={C.info}>{v.size}</Badge>}
             <span style={{color:C.textMuted,fontFamily:"monospace",fontSize:9}}>{v.ean||"—"}</span>
-            <span style={{marginLeft:"auto",fontWeight:700,color:v.stock<=0?C.danger:v.stock<=(v.stockAlert||5)?C.warn:C.primary}}>Stock: {v.stock}</span>
+            <span style={{marginLeft:"auto",fontWeight:700,color:v.stock<=0?C.danger:v.stock<=(v.stockAlert||5)?C.warn:C.primary}}>Stock: {affStock(editModal,v.stock)}</span>
             <button onClick={async()=>{if(await deleteVariant(editModal.id,v.id)){
               setEditModal(prev=>prev?{...prev,variants:prev.variants.filter(x=>x.id!==v.id)}:null);}}}
               style={{background:"none",border:"none",cursor:"pointer",color:C.danger,fontSize:9}}>
@@ -163,8 +163,8 @@ function ProductsScreen(){
         {!epi&&<div><label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>CODE COULEUR</label><Input value={newVar.colorCode} onChange={e=>setNewVar(v=>({...v,colorCode:e.target.value}))} placeholder="ex: BLK, NVY, 001"/></div>}
         <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>{libelleTaille(settings)}</label><Input value={newVar.size} placeholder={epi?"ex : 250 g, 500 g, 1 L":""} onChange={e=>setNewVar(v=>({...v,size:e.target.value}))}/></div>
         <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>EAN</label><Input value={newVar.ean} placeholder="Vide = code interne généré" onChange={e=>setNewVar(v=>({...v,ean:e.target.value}))}/></div>
-        <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>STOCK INITIAL</label><Input type="number" value={newVar.stock} onChange={e=>setNewVar(v=>({...v,stock:e.target.value}))}/></div>
-        <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>SEUIL ALERTE</label><Input type="number" value={newVar.stockAlert} onChange={e=>setNewVar(v=>({...v,stockAlert:e.target.value}))}/></div></div>
+        <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>{venduAuPoids(products.find(x=>x.id===addVarModal))?"STOCK INITIAL (g)":"STOCK INITIAL"}</label><Input type="number" value={newVar.stock} onChange={e=>setNewVar(v=>({...v,stock:e.target.value}))}/></div>
+        <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>{venduAuPoids(products.find(x=>x.id===addVarModal))?"SEUIL ALERTE (g)":"SEUIL ALERTE"}</label><Input type="number" value={newVar.stockAlert} onChange={e=>setNewVar(v=>({...v,stockAlert:e.target.value}))}/></div></div>
       <Btn onClick={()=>{if(epi?newVar.size.trim():(newVar.color&&newVar.size)){
         addVariantToProduct(addVarModal,{color:couleurVariante(settings,newVar.color),colorCode:epi?"":(newVar.colorCode||""),size:newVar.size.trim(),ean:newVar.ean||"",stock:parseInt(newVar.stock)||0,stockAlert:parseInt(newVar.stockAlert)||5});
         setAddVarModal(null);}}} style={{width:"100%",height:40,background:C.primary}}>Ajouter la variante</Btn></Modal>
@@ -194,13 +194,14 @@ function ProductsScreen(){
         {!epi&&<div><label style={{fontSize:9,color:C.textMuted}}>CODE COULEUR</label><Input value={nv.colorCode} onChange={e=>setNv(v=>({...v,colorCode:e.target.value}))} placeholder="BLK"/></div>}
         <div><label style={{fontSize:9,color:C.textMuted}}>{libelleTaille(settings)}</label><Input value={nv.size} placeholder={epi?"250 g":""} onChange={e=>setNv(v=>({...v,size:e.target.value}))}/></div>
         <div><label style={{fontSize:9,color:C.textMuted}}>EAN</label><Input value={nv.ean} placeholder="Vide = code interne généré" onChange={e=>setNv(v=>({...v,ean:e.target.value}))}/></div>
-        <div><label style={{fontSize:9,color:C.textMuted}}>STOCK</label><Input type="number" value={nv.stock} onChange={e=>setNv(v=>({...v,stock:e.target.value}))}/></div>
-        <div><label style={{fontSize:9,color:C.textMuted}}>ALERTE</label><Input type="number" value={nv.stockAlert} onChange={e=>setNv(v=>({...v,stockAlert:e.target.value}))}/></div></div>
+        <div><label style={{fontSize:9,color:C.textMuted}}>{np.poidsRefG?"STOCK (g)":"STOCK"}</label><Input type="number" value={nv.stock} onChange={e=>setNv(v=>({...v,stock:e.target.value}))}/></div>
+        <div><label style={{fontSize:9,color:C.textMuted}}>{np.poidsRefG?"ALERTE (g)":"ALERTE"}</label><Input type="number" value={nv.stockAlert} onChange={e=>setNv(v=>({...v,stockAlert:e.target.value}))}/></div></div>
       <Btn onClick={()=>{if(np.name&&np.sku&&np.price){
         addProduct({name:np.name,sku:np.sku,price:parseFloat(np.price),costPrice:parseFloat(np.costPrice)||0,
           taxRate:parseFloat(np.taxRate),category:np.category,collection:np.collection,poidsRefG:parseInt(np.poidsRefG)||null,
           variants:[{id:`v${Date.now()}`,color:couleurVariante(settings,nv.color),colorCode:epi?"":(nv.colorCode||""),size:np.poidsRefG&&!nv.size.trim()?"Vrac":tailleVariante(settings,nv.size),ean:nv.ean||"",
-            stock:parseInt(nv.stock)||0,defective:0,stockAlert:parseInt(nv.stockAlert)||5}]});
+            stock:parseInt(nv.stock)||0,defective:0,// vrac : seuil par defaut 250 g (5 grammes n'a pas de sens)
+            stockAlert:np.poidsRefG&&String(nv.stockAlert)==="5"?250:(parseInt(nv.stockAlert)||5)}]});
         setCreateModal(false);setNp(npVide());
         setNv({color:"",colorCode:"",size:"",ean:"",stock:"",stockAlert:"5"});}}}
         style={{width:"100%",height:44,background:C.primary}}>Créer le produit</Btn></Modal>

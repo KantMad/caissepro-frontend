@@ -8,6 +8,8 @@ import { Modal, Btn, Input, Badge } from "../ui.jsx";
 import { useApp } from "../context.jsx";
 import { tauxMarque } from "../lib/formatters.js";
 import { sortSizes } from "./_shared.js";
+import { affStock, venduAuPoids, quantiteValorisee } from "../metier.js";
+import { detailVariante } from "../lib/formatters.js";
 
 // Catalogue importe (gestlog/TIO : ~50 000 variantes chez MCS) : une liste deroulante de
 // 10 000 articles ou un tableau de 50 000 lignes figeait la tablette (Inventaire : 20 s a
@@ -32,7 +34,10 @@ function StockScreen(){
   // Prix d'achat : saisi HT (confirmé le 27/10/2026), utilisé tel quel.
   const coutHT=(p)=>parseFloat(p.costPrice)||0;
   const stockValuation=useMemo(()=>{let value=0,units=0,valued=0,unvalued=0;
-    (products||[]).forEach(p=>{const cost=coutHT(p);(p.variants||[]).forEach(v=>{const st=parseInt(v.stock)||0;if(st<=0)return;units+=st;if(cost>0){value+=st*cost;valued+=st;}else unvalued+=st;});});
+    (products||[]).forEach(p=>{const cost=coutHT(p);(p.variants||[]).forEach(v=>{const st=parseInt(v.stock)||0;if(st<=0)return;
+      // Vrac : stock en grammes, valorise au prix d'achat de la quantite de reference ; pas compte en pieces
+      if(venduAuPoids(p)){if(cost>0)value+=quantiteValorisee(p,st)*cost;return;}
+      units+=st;if(cost>0){value+=st*cost;valued+=st;}else unvalued+=st;});});
     return{value:Math.round(value*100)/100,units,valued,unvalued};
   },[products,settings?.pricingMode]);// eslint-disable-line react-hooks/exhaustive-deps
   const isDashboard=mode!=="cashier";
@@ -61,7 +66,7 @@ function StockScreen(){
     return(products||[]).map(p=>{const totalStock=(p.variants||[]).reduce((s,v)=>s+(parseInt(v.stock)||0),0);
       const d=derniereVente[p.id];
       const daysSinceLastSale=d?Math.floor((Date.now()-new Date(d).getTime())/86400000):999;
-      return{...p,totalStock,totalValue:totalStock*coutHT(p),daysSinceLastSale};})
+      return{...p,totalStock,totalValue:quantiteValorisee(p,totalStock)*coutHT(p),daysSinceLastSale};})
       .filter(p=>p.totalStock>0).sort((a,b)=>b.daysSinceLastSale-a.daysSinceLastSale||b.totalValue-a.totalValue);
   },[derniereVente,products,stockAging,settings?.pricingMode]);// eslint-disable-line react-hooks/exhaustive-deps
   const[rcModal,setRcModal]=useState(false);const[rcProd,setRcProd]=useState("");const[rcVar,setRcVar]=useState("");const[rcQty,setRcQty]=useState("");const[rcSup,setRcSup]=useState("");
@@ -296,7 +301,7 @@ function StockScreen(){
         background:a.level==="rupture"?C.dangerLight:C.warnLight,border:`1.5px solid ${a.level==="rupture"?C.danger+"44":C.warn+"44"}`}}>
         <AlertTriangle size={16} color={a.level==="rupture"?C.danger:C.warn}/>
         <div style={{flex:1}}><div style={{fontSize:12,fontWeight:600}}>{a.product.name} — {a.variant.color}/{a.variant.size}</div>
-          <div style={{fontSize:10,color:C.textMuted}}>Stock: {a.variant.stock} | Seuil: {a.variant.stockAlert}{a.product.sku?` | Réf: ${a.product.sku}`:""}{a.variant.ean?` | EAN: ${a.variant.ean}`:""}</div></div>
+          <div style={{fontSize:10,color:C.textMuted}}>Stock: {affStock(a.product,a.variant.stock)} | Seuil: {affStock(a.product,a.variant.stockAlert)}{a.product.sku?` | Réf: ${a.product.sku}`:""}{a.variant.ean?` | EAN: ${a.variant.ean}`:""}</div></div>
         <Badge color={a.level==="rupture"?C.danger:C.warn}>{a.level==="rupture"?"RUPTURE":"BAS"}</Badge></div>))}</div>}
 
     {tab==="moves"&&<div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`}}>
@@ -413,7 +418,7 @@ function StockScreen(){
             <option value="">Sélectionner…</option>{optionsProduits(filtrerProduits(products,stSearchAdj,adjProd))}</select></div>
         {adjProd&&<div><label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>VARIANTE</label>
           <select value={adjVar} onChange={e=>{setAdjVar(e.target.value);const pr=products.find(x=>x.id===adjProd);const v=pr?.variants.find(x=>x.id===e.target.value);if(v)setAdjQty(String(v.stock));}} style={{width:"100%",padding:10,borderRadius:10,border:`2px solid ${C.border}`,fontSize:12,fontFamily:"inherit"}}>
-            <option value="">Sélectionner…</option>{products.find(x=>x.id===adjProd)?.variants.map(v=>(<option key={v.id} value={v.id}>{v.color}/{v.size} (stock: {v.stock})</option>))}</select></div>}
+            <option value="">Sélectionner…</option>{products.find(x=>x.id===adjProd)?.variants.map(v=>(<option key={v.id} value={v.id}>{detailVariante(v.color,v.size)||"—"} (stock: {affStock(products.find(x=>x.id===adjProd),v.stock)})</option>))}</select></div>}
         <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>NOUVEAU STOCK</label>
           <Input type="number" value={adjQty} onChange={e=>setAdjQty(e.target.value)} placeholder="Quantité réelle"/></div>
         <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>MOTIF</label>
@@ -424,7 +429,7 @@ function StockScreen(){
       {adjProd&&adjVar&&adjQty&&(()=>{const pr=products.find(x=>x.id===adjProd);const v=pr?.variants.find(x=>x.id===adjVar);
         const diff=parseInt(adjQty)-v.stock;
         return diff!==0?<div style={{padding:8,borderRadius:8,background:diff>0?C.primaryLight:C.dangerLight,marginBottom:10,fontSize:11,fontWeight:600,
-          color:diff>0?C.primary:C.danger}}>{diff>0?`+${diff}`:diff} unité(s) — Stock actuel: {v.stock} → Nouveau: {adjQty}</div>:
+          color:diff>0?C.primary:C.danger}}>{diff>0?"+":""}{venduAuPoids(pr)?`${diff} g`:`${diff} unité(s)`} — Stock actuel: {affStock(pr,v.stock)} → Nouveau: {affStock(pr,parseInt(adjQty)||0)}</div>:
           <div style={{padding:8,borderRadius:8,background:C.surfaceAlt,marginBottom:10,fontSize:11,color:C.textMuted}}>Aucun changement</div>;})()}
       <Btn onClick={()=>{if(adjProd&&adjVar&&adjQty!==""){adjustStock(adjProd,adjVar,parseInt(adjQty),adjReason);setAdjProd("");setAdjVar("");setAdjQty("");}}}
         disabled={!adjProd||!adjVar||adjQty===""} style={{width:"100%",height:40,background:C.primary}}>
@@ -455,7 +460,7 @@ function StockScreen(){
                 <td style={{padding:6,fontWeight:600}}>{p.name} <span style={{color:C.textMuted,fontSize:9}}>({p.sku})</span></td>
                 <td style={{padding:6}}>{v.color}/{v.size}</td>
                 <td style={{padding:6,fontFamily:"monospace",fontSize:9}}>{v.ean||"—"}</td>
-                <td style={{padding:6,fontWeight:700}}>{v.stock}</td>
+                <td style={{padding:6,fontWeight:700}}>{affStock(p,v.stock)}</td>
                 <td style={{padding:6}}><input type="number" min="0" value={invCounts[key]??""}
                   onChange={e=>{const val=e.target.value;setInvCounts(prev=>({...prev,[key]:val}));
                     // stock vu au moment du comptage : à la validation, une vente faite depuis
@@ -509,7 +514,7 @@ function StockScreen(){
         <select value={rcProd} onChange={e=>{setRcProd(e.target.value);setRcVar("");}} style={{padding:10,borderRadius:10,border:`2px solid ${C.border}`,fontSize:12,fontFamily:"inherit"}}>
           <option value="">Sélectionner un produit</option>{optionsProduits(filtrerProduits(products,stSearchReceipt,rcProd))}</select>
         {rcProd&&<select value={rcVar} onChange={e=>setRcVar(e.target.value)} style={{padding:10,borderRadius:10,border:`2px solid ${C.border}`,fontSize:12,fontFamily:"inherit"}}>
-          <option value="">Variante</option>{products.find(x=>x.id===rcProd)?.variants.map(v=>(<option key={v.id} value={v.id}>{v.color}/{v.size} (stock: {v.stock})</option>))}</select>}
+          <option value="">Variante</option>{products.find(x=>x.id===rcProd)?.variants.map(v=>(<option key={v.id} value={v.id}>{detailVariante(v.color,v.size)||"—"} (stock: {affStock(products.find(x=>x.id===rcProd),v.stock)})</option>))}</select>}
         <Input type="number" value={rcQty} onChange={e=>setRcQty(e.target.value)} placeholder="Quantité reçue"/>
         <Input value={rcSup} onChange={e=>setRcSup(e.target.value)} placeholder="Fournisseur"/></div>
       <Btn onClick={()=>{if(rcProd&&rcVar&&rcQty){receiveStock(rcProd,rcVar,parseInt(rcQty),rcSup||"Non spécifié");setRcModal(false);setRcQty("");setRcSup("");}}}

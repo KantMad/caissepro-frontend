@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { detailVariante, SANS_COULEUR } from "./lib/formatters.js";
-import { estEpicerie, produitParDefaut, couleurVariante, tailleVariante, libelleTaille, venduAuPoids, prixPese, libellePrixPoids } from "./metier.js";
+import { estEpicerie, produitParDefaut, couleurVariante, tailleVariante, libelleTaille, venduAuPoids, prixPese, libellePrixPoids, affStock, sortieStock, quantiteValorisee } from "./metier.js";
 import { ligneDepuisAttente } from "./context.jsx";
 
 describe("detailVariante (tickets et apercus)", () => {
@@ -58,5 +58,24 @@ describe("vente au poids (thé en vrac)", () => {
     const l = ligneDepuisAttente({ productId: "p1", variantId: "v1", productName: "Cannelle", variantSize: "85 g", poidsG: 85, price: 6.8, quantity: 1 }, [prod]);
     expect(l.product.price).toBe(6.8);
     expect(l.variant).toMatchObject({ id: "v1", size: "85 g", poidsG: 85 });
+  });
+});
+
+describe("stock du vrac en grammes (lot 2)", () => {
+  const the = { price: 8, costPrice: 2.4, poidsRefG: 100 };
+  const pot = { price: 12, costPrice: 6 };
+  it("affichage : grammes, puis kilos au-delà de 1 000 g ; à l'unité inchangé", () => {
+    expect(affStock(the, 850)).toBe("850 g");
+    expect(affStock(the, 1250)).toBe("1,25 kg");
+    expect(affStock(the, 0)).toBe("0 g");
+    expect(affStock(pot, 7)).toBe("7");
+  });
+  it("une ligne pesée retire ses grammes, une ligne à l'unité sa quantité", () => {
+    expect(sortieStock({ quantity: 1, variant: { poidsG: 85 } })).toBe(85);
+    expect(sortieStock({ quantity: 3, variant: { size: "250 g" } })).toBe(3);
+  });
+  it("valorisation : 1 500 g à 2,40 € les 100 g = 15 quantités de référence", () => {
+    expect(quantiteValorisee(the, 1500) * the.costPrice).toBeCloseTo(36, 5);
+    expect(quantiteValorisee(pot, 4)).toBe(4);
   });
 });

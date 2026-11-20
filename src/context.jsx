@@ -7,7 +7,7 @@ import { CO, DEFAULT_TVA_RATES, PERMS, initUsers, LOYALTY_TIERS, C, categories a
 import { hashPin, hashPinFort, verifyPin, sha256, norm, loadVariantOrderFromSettings, autoImportSizesFromProducts, generateEAN13, DEFAULT_CAT_ICONS } from "./utils.jsx";
 import { computeTotals, lineNetTTC } from "./lib/totals.js";
 import { detailVariante } from "./lib/formatters.js";
-import { estEpicerie, CATEGORIES_EPICERIE, venduAuPoids, prixPese, libellePoids } from "./metier.js";
+import { estEpicerie, CATEGORIES_EPICERIE, venduAuPoids, prixPese, libellePoids, sortieStock } from "./metier.js";
 import { dayKey } from "./lib/dates.js";
 import { getLoyaltyTier as loyaltyTierOf } from "./lib/loyalty.js";
 import { calcPromoDiscount as calcPromos } from "./lib/promos.js";
@@ -1032,7 +1032,7 @@ function AppProvider({children}){
       setProducts(prev=>prev.map(p=>{
         const lines=cart.filter(c=>c.product.id===p.id&&!c.isCustom);
         if(!lines.length)return p;
-        return{...p,variants:(p.variants||[]).map(v=>{const cv=lines.find(c=>c.variant?.id===v.id);return cv?{...v,stock:(v.stock||0)-cv.quantity}:v;})};
+        return{...p,variants:(p.variants||[]).map(v=>{const cv=lines.find(c=>c.variant?.id===v.id);return cv?{...v,stock:(v.stock||0)-sortieStock(cv)}:v;})};
       }));
       // FE-12: use Math.round for consistency between add (checkout) and deduct (return)
       if(selCust){setCustomers(prev=>prev.map(c=>c.id===selCust.id?{...c,points:(c.points||0)+Math.round(parseFloat(ticket.totalTTC)),totalSpent:(c.totalSpent||0)+parseFloat(ticket.totalTTC)}:c));}
@@ -1083,7 +1083,7 @@ function AppProvider({children}){
       // Décrémenter stock local (autorise négatif)
       setProducts(prev=>prev.map(p=>{const ci=cart.find(c=>c.product.id===p.id);if(!ci)return p;
         return{...p,variants:p.variants.map(v=>{const cv=cart.find(c=>c.product.id===p.id&&c.variant?.id===v.id);
-          return cv?{...v,stock:v.stock-cv.quantity}:v;})};}));
+          return cv?{...v,stock:v.stock-sortieStock(cv)}:v;})};}));
       // Fidélité
       // FE-12: use Math.round for consistency between add (checkout) and deduct (return)
       if(selCust){setCustomers(prev=>prev.map(c=>c.id===selCust.id?{...c,points:(c.points||0)+Math.floor(venteTTC),totalSpent:(c.totalSpent||0)+venteTTC}:c));}

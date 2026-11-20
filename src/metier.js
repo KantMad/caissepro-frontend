@@ -38,3 +38,15 @@ export const prixPese = (p, grammes) =>
   Math.round((Number(p?.price) || 0) * (Number(grammes) || 0) / Number(p.poidsRefG) * 100) / 100;
 export const libellePoids = (grammes) => `${grammes} g`;
 export const libellePrixPoids = (p) => `${(Number(p?.price) || 0).toFixed(2)}€ / ${p.poidsRefG} g`;
+
+// ── Stock du vrac (lot 2) : pour un produit au poids, variant.stock compte des GRAMMES ──
+// Affichage : « 850 g », « 1,25 kg » ; a l'unite : le nombre tel quel.
+export const affStock = (p, n) => {
+  const v = Number(n) || 0;
+  if (!venduAuPoids(p)) return String(v);
+  return Math.abs(v) >= 1000 ? `${(v / 1000).toLocaleString("fr-FR", { maximumFractionDigits: 2 })} kg` : `${v} g`;
+};
+// Ce qu'une ligne de panier retire du stock : ses grammes si elle est pesee, sinon sa quantite
+export const sortieStock = (ligne) => Number(ligne?.variant?.poidsG) || Number(ligne?.quantity) || 0;
+// Valorisation : le prix d'achat d'un produit au poids est celui de poidsRefG grammes
+export const quantiteValorisee = (p, stock) => venduAuPoids(p) ? (Number(stock) || 0) / Number(p.poidsRefG) : (Number(stock) || 0);

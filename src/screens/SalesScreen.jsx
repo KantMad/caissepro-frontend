@@ -4,7 +4,7 @@ import printer from "../printer.js";
 import * as API from "../api.js";
 import { CO, C, CAT_COLORS } from "../constants.jsx";
 import { catIcon, EAN13Svg, ean13SvgHtml, norm } from "../utils.jsx";
-import { estEpicerie, venduAuPoids, prixPese, libellePrixPoids } from "../metier.js";
+import { estEpicerie, venduAuPoids, prixPese, libellePrixPoids, affStock } from "../metier.js";
 import { ProductIcon, colorHex } from "../ProductIcon.jsx";
 import { Modal, Btn, Input, Badge, Numpad } from "../ui.jsx";
 import { useApp } from "../context.jsx";
@@ -875,9 +875,15 @@ function SalesScreen(){
     {/* Pesée (thé en vrac) : le vendeur pèse sur sa balance et tape le poids, la caisse calcule */}
     <Modal open={!!pesee} onClose={()=>{setPesee(null);setPoidsSaisi("");}} title={pesee?`Peser — ${pesee.product.name}`:"Pesée"}>
       {pesee&&(()=>{const g=Math.round(parseFloat(poidsSaisi)||0);const deja=cart.find(c=>c.product.id===pesee.product.id&&c.variant?.id===pesee.variant?.id)?.variant?.poidsG||0;
+        // Stock du vrac en grammes (lot 2) : affiche s'il a deja ete renseigne
+        const vStock=products.find(x=>x.id===pesee.product.id)?.variants?.find(x=>x.id===pesee.variant?.id);
+        const stockVrac=vStock&&(vStock.stock>0||vStock.deja_stocke!==false)?Number(vStock.stock)||0:null;
         const valider=()=>{if(g>0&&addPeseeAuPanier(pesee.product,pesee.variant,g))setPoidsSaisi("");};
         return<div>
-          <div style={{fontSize:13,color:C.textMuted,marginBottom:10}}>Prix : <b style={{color:C.text}}>{libellePrixPoids(pesee.product)}</b>{deja>0&&<> — déjà {deja} g au panier (le poids s'ajoute)</>}</div>
+          <div style={{fontSize:13,color:C.textMuted,marginBottom:10}}>Prix : <b style={{color:C.text}}>{libellePrixPoids(pesee.product)}</b>{deja>0&&<> — déjà {deja} g au panier (le poids s'ajoute)</>}
+            {stockVrac!=null&&<> — stock : <b style={{color:C.text}}>{affStock(pesee.product,stockVrac)}</b></>}</div>
+          {stockVrac!=null&&g>0&&deja+g>stockVrac&&<div data-testid="pesee-stock-court" style={{fontSize:12,fontWeight:600,color:C.warn,background:C.warnLight,padding:"6px 10px",borderRadius:8,marginBottom:8}}>
+            Plus que le stock enregistré ({affStock(pesee.product,stockVrac)}) : la vente reste possible, pensez à la réception.</div>}
           <Numpad value={poidsSaisi} onChange={v=>setPoidsSaisi(v.replace(/\./g,""))} onEnter={valider} label="Poids en grammes" unit="g"/>
           <div data-testid="prix-pese" style={{display:"flex",justifyContent:"space-between",alignItems:"center",margin:"12px 0",fontSize:16,fontWeight:800}}>
             <span>{g>0?`${deja+g} g`:"—"}</span><span style={{color:C.primary}}>{g>0?`${prixPese(pesee.product,deja+g).toFixed(2)}€`:""}</span></div>
