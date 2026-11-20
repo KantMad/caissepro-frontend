@@ -6,6 +6,8 @@ import hardwareManager, { BrowserPrintAdapter } from "./hardware.js";
 import { CO, DEFAULT_TVA_RATES, PERMS, initUsers, LOYALTY_TIERS, C, categories as defaultCategories } from "./constants.jsx";
 import { hashPin, hashPinFort, verifyPin, sha256, norm, loadVariantOrderFromSettings, autoImportSizesFromProducts, generateEAN13, DEFAULT_CAT_ICONS } from "./utils.jsx";
 import { computeTotals, lineNetTTC } from "./lib/totals.js";
+import { detailVariante } from "./lib/formatters.js";
+import { estEpicerie, CATEGORIES_EPICERIE } from "./metier.js";
 import { dayKey } from "./lib/dates.js";
 import { getLoyaltyTier as loyaltyTierOf } from "./lib/loyalty.js";
 import { calcPromoDiscount as calcPromos } from "./lib/promos.js";
@@ -1455,10 +1457,11 @@ function AppProvider({children}){
   const allCategories=useMemo(()=>{
     const customCats=(settings.customCategories||[]).map(c=>c.name);
     const productCats=[...new Set(products.map(p=>p.category).filter(Boolean))];
-    const base=defaultCategories.filter(c=>c!=="Tous");
+    // Categories proposees selon le metier de l'instance (textile par defaut, epicerie sinon)
+    const base=estEpicerie(settings)?CATEGORIES_EPICERIE:defaultCategories.filter(c=>c!=="Tous");
     const merged=["Tous",...new Set([...base,...customCats,...productCats])];
     return merged;
-  },[settings.customCategories,products]);
+  },[settings.customCategories,settings.metier,products]);
 
   // Find by EAN
   const findByEAN=useCallback((ean)=>{for(const p of products)for(const v of p.variants)if(v.ean===ean)return{product:p,variant:v};return null;},[products]);
@@ -2177,7 +2180,7 @@ function AppProvider({children}){
         customer:selCust?{name:`${selCust.firstName||""} ${selCust.lastName||selCust.name||""}`.trim(),loyalty:getLoyaltyTier(selCust.points||0)?.name||""}:null,
         promos:activePromos.map(p=>p.name).filter(Boolean),
         appliedPromos:promoResult.applied,
-        items:cart.map(i=>({name:i.product.name+(i.variant?` (${i.variant.color}/${i.variant.size})`:""),qty:i.quantity,
+        items:cart.map(i=>({name:i.product.name+(i.variant&&detailVariante(i.variant.color,i.variant.size)?` (${detailVariante(i.variant.color,i.variant.size)})`:""),qty:i.quantity,
           price:lineNetTTC({price:i.product.price,quantity:i.quantity,taxRate:i.product.taxRate,discount:i.discountPercent||i.discount||0,discountType:"percent",
             discountPercent:i.discountPercent||0,discountAmount:i.discountAmount||0},settings.pricingMode||"TTC").toFixed(2)+"EUR"})),
         total:cart.length>0?totalAfterPromo:"0.00EUR",

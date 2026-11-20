@@ -309,3 +309,10 @@ export const tauxMarque = (p, pricingMode = "TTC") => {
 
 // Libelle d'un role (le role « manager » existait cote serveur mais l'ecran ne le proposait pas)
 export const libelleRole = (role) => role === "admin" ? "Administrateur" : role === "manager" ? "Gérant(e)" : "Caissier(e)";
+
+// Detail d'une variante sur les tickets et apercus : « Noir/M » en textile, « 250 g » en epicerie.
+// En mode epicerie la couleur vaut SANS_COULEUR (« — ») : elle n'est jamais imprimee. Une valeur
+// vide est sautee (plus de « /250 g »). Textile avec couleur ET taille : sortie identique a avant.
+export const SANS_COULEUR = "—";
+export const detailVariante = (color, size, sep = "/") =>
+  [color, size].map(v => String(v ?? "").trim()).filter(v => v && v !== SANS_COULEUR).join(sep);

@@ -4,11 +4,12 @@ import printer from "../printer.js";
 import * as API from "../api.js";
 import { CO, C, CAT_COLORS } from "../constants.jsx";
 import { catIcon, EAN13Svg, ean13SvgHtml, norm } from "../utils.jsx";
+import { estEpicerie } from "../metier.js";
 import { ProductIcon, colorHex } from "../ProductIcon.jsx";
 import { Modal, Btn, Input, Badge, Numpad } from "../ui.jsx";
 import { useApp } from "../context.jsx";
 import { nomClient, texteRechercheClient } from "../clientPro.jsx";
-import { getPaymentLabel, getAvoirRemaining, lineDiscountEuro, globalDiscountTTC, tvaParTaux, libelleTaux, libellePaiementTicket, pointsFidelite } from "../lib/formatters.js";
+import { getPaymentLabel, getAvoirRemaining, lineDiscountEuro, globalDiscountTTC, tvaParTaux, libelleTaux, libellePaiementTicket, pointsFidelite, detailVariante, SANS_COULEUR } from "../lib/formatters.js";
 import { lineNetTTC, round2, montantsEspeces } from "../lib/totals.js";
 import { dayKey } from "../lib/dates.js";
 import { useViewport } from "../useViewport.js";
@@ -365,9 +366,9 @@ function SalesScreen(){
               <div style={{flex:1,minWidth:0}}>
                 <div style={{fontSize:14,fontWeight:700,lineHeight:1.25,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{i.product.name}{i.isCustom?" (divers)":""}</div>
                 {!i.isCustom&&<><div style={{display:"flex",gap:4,marginTop:3,flexWrap:"wrap"}}>
-                  <span style={{fontSize:12,color:cc,fontWeight:700,background:`${cc}10`,padding:"1px 6px",borderRadius:4}}>{i.variant?.color}</span>
+                  {i.variant?.color&&i.variant.color!==SANS_COULEUR&&<span style={{fontSize:12,color:cc,fontWeight:700,background:`${cc}10`,padding:"1px 6px",borderRadius:4}}>{i.variant?.color}</span>}
                   {i.variant?.colorCode&&<span style={{fontSize:11,color:C.accent,fontWeight:600,background:C.accentLight,padding:"1px 5px",borderRadius:4,fontFamily:"monospace"}}>{i.variant.colorCode}</span>}
-                  <span style={{fontSize:12,color:C.info,fontWeight:700,background:`${C.info}10`,padding:"1px 6px",borderRadius:4}}>{i.variant?.size}</span>
+                  {i.variant?.size&&i.variant.size!==SANS_COULEUR&&<span style={{fontSize:12,color:C.info,fontWeight:700,background:`${C.info}10`,padding:"1px 6px",borderRadius:4}}>{i.variant?.size}</span>}
                   {lastP&&<span style={{fontSize:11,color:C.textMuted,background:C.surfaceAlt,padding:"1px 5px",borderRadius:4}}>Préc. {lastP.toFixed(2)}€</span>}</div>
                 <div style={{display:"flex",gap:6,marginTop:2,flexWrap:"wrap"}}>
                   {i.product.sku&&<span style={{fontSize:10,fontFamily:"monospace",color:C.textMuted}}>Réf: {i.product.sku}</span>}
@@ -429,7 +430,7 @@ function SalesScreen(){
           style={{width:"100%",height:36,fontSize:12,borderRadius:8,gap:6,marginBottom:4,borderColor:"#D97706",color:"#92400E",background:"#FEF3C7"}}>
           <CreditCard size={14}/> CB déjà passée sur le TPE</Btn>
         <div style={{display:"flex",gap:4}}>
-          <Btn variant="outline" onClick={()=>setRetoucheModal(true)} style={{flex:1,height:36,fontSize:12,borderRadius:8,gap:4}}><Edit size={14}/> Retouche</Btn>
+          {!estEpicerie(settings)&&<Btn variant="outline" onClick={()=>setRetoucheModal(true)} style={{flex:1,height:36,fontSize:12,borderRadius:8,gap:4}}><Edit size={14}/> Retouche</Btn>}
           <Btn variant="outline" onClick={()=>{if(!cart.length)return;if(!perm().canVoid){notify("Vider le panier : réservé au gérant (ou supprimez les lignes une à une)","error");return;}setConfirmClear(true);}} style={{flex:1,borderColor:`${C.danger}20`,color:C.danger,height:36,fontSize:12,borderRadius:8}}><RotateCcw size={9}/> Vider</Btn>
         </div>
       </div>
@@ -463,11 +464,11 @@ function SalesScreen(){
               style={{padding:12,borderRadius:14,border:`1.5px solid ${v.stock<=0?C.danger+"30":C.border}`,background:v.stock<=0?C.dangerLight+"15":"transparent",
                 cursor:"pointer",textAlign:"left",transition:"all 0.15s"}}
               onMouseEnter={e=>e.currentTarget.style.borderColor=cc} onMouseLeave={e=>e.currentTarget.style.borderColor=v.stock<=0?C.danger+"30":C.border}>
-              <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:6}}>
+              {v.color!==SANS_COULEUR&&<div style={{display:"flex",alignItems:"center",gap:6,marginBottom:6}}>
                 <div style={{width:14,height:14,borderRadius:7,background:colorHex(v.color,cc+"30"),border:`1.5px solid ${C.border}`,flexShrink:0}}/>
                 <span style={{fontSize:12,fontWeight:700}}>{v.color}</span>
-                {v.colorCode&&<span style={{fontSize:9,fontFamily:"monospace",color:C.accent,background:C.accentLight,padding:"1px 5px",borderRadius:4}}>{v.colorCode}</span>}</div>
-              <div style={{fontSize:16,fontWeight:800,color:v.stock>0?C.text:C.danger,marginBottom:4}}>{v.size}</div>
+                {v.colorCode&&<span style={{fontSize:9,fontFamily:"monospace",color:C.accent,background:C.accentLight,padding:"1px 5px",borderRadius:4}}>{v.colorCode}</span>}</div>}
+              <div style={{fontSize:16,fontWeight:800,color:v.stock>0?C.text:C.danger,marginBottom:4}}>{v.size===SANS_COULEUR?vm.name:v.size}</div>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                 <span style={{fontSize:11,fontWeight:600,color:v.stock>0?(v.stock<=(v.stockAlert||5)?C.warn:cc):C.danger,
                   background:v.stock>0?(v.stock<=(v.stockAlert||5)?C.warnLight:`${cc}10`):C.dangerLight,padding:"2px 7px",borderRadius:6}}>
@@ -696,7 +697,7 @@ function SalesScreen(){
         <div style={{fontWeight:600}}>Caissier: {lastTk.userName}{lastTk.customerName?` — Client: ${lastTk.customerName}`:""}</div>
         <div style={{borderTop:"1px dashed #999",margin:"4px 0"}}/>
         {(lastTk.items||[]).map((i,k)=>{const sku=i.product?.sku||i.product_sku||"";const ean=i.variant?.ean||i.variant_ean||"";const colorCode=i.variant?.colorCode||i.variant_color_code||i.color_code||"";const isC=i.isCustom||i.is_custom;return(<div key={k}>
-          <div style={{display:"flex",justifyContent:"space-between",gap:8}}><span style={{flex:1,wordBreak:"break-word",lineHeight:1.3,fontWeight:600}}>{i.product?.name||i.product_name}{isC?"":`(${i.variant?.color||i.variant_color}/${i.variant?.size||i.variant_size})`} x{i.quantity}{lineDiscountEuro(i)>0?` (-${lineDiscountEuro(i).toFixed(2)}€)`:""}</span><span style={{whiteSpace:"nowrap",fontWeight:800}}>{(i.lineTTC||i.line_ttc||((i.unit_price||0)*(i.quantity||1))||0).toFixed(2)}€</span></div>
+          <div style={{display:"flex",justifyContent:"space-between",gap:8}}><span style={{flex:1,wordBreak:"break-word",lineHeight:1.3,fontWeight:600}}>{i.product?.name||i.product_name}{isC||!detailVariante(i.variant?.color||i.variant_color,i.variant?.size||i.variant_size)?"":`(${detailVariante(i.variant?.color||i.variant_color,i.variant?.size||i.variant_size)})`} x{i.quantity}{lineDiscountEuro(i)>0?` (-${lineDiscountEuro(i).toFixed(2)}€)`:""}</span><span style={{whiteSpace:"nowrap",fontWeight:800}}>{(i.lineTTC||i.line_ttc||((i.unit_price||0)*(i.quantity||1))||0).toFixed(2)}€</span></div>
           {!isC&&(sku||ean||colorCode)&&<div style={{fontSize:9,color:"#888",fontWeight:600}}>{sku?`Réf: ${sku}`:""}{sku&&colorCode?" — ":""}{colorCode||""}{(sku||colorCode)&&ean?" — ":""}{ean?`EAN: ${ean}`:""}</div>}
         </div>);})}
         <div style={{borderTop:"1px dashed #999",margin:"4px 0"}}/>
@@ -756,7 +757,7 @@ function SalesScreen(){
             w.document.write(`<html><head><title>Ticket cadeau</title><style>body{font-family:'Courier New',monospace;font-size:12px;padding:10px;max-width:300px;margin:0 auto;}h2{text-align:center;font-size:14px;margin:4px 0;}hr{border:none;border-top:1px dashed #333;margin:6px 0;}.center{text-align:center;}</style></head><body>`+
             `<h2>${settings.name||CO.name}</h2><div class="center">${settings.address||""}, ${settings.postalCode||""} ${settings.city||""}</div><hr>`+
             `<h2>TICKET CADEAU</h2><div class="center">N° ${lastTk.ticketNumber}</div><div class="center">${new Date(lastTk.date||lastTk.createdAt||"").toLocaleString("fr-FR")}</div><hr>`+
-            (lastTk.items||[]).map(i=>`<div>${i.product?.name||i.product_name}${i.isCustom||i.is_custom?"":" ("+((i.variant?.color||i.variant_color)||"")+"/"+((i.variant?.size||i.variant_size)||"")+")"} x${i.quantity}</div>`).join("")+
+            (lastTk.items||[]).map(i=>`<div>${i.product?.name||i.product_name}${i.isCustom||i.is_custom||!detailVariante(i.variant?.color||i.variant_color,i.variant?.size||i.variant_size)?"":" ("+detailVariante(i.variant?.color||i.variant_color,i.variant?.size||i.variant_size)+")"} x${i.quantity}</div>`).join("")+
             `<hr><div class="center" style="font-size:10px;">${settings.footerMsg||CO.footerMsg||""}</div>`+
             `<div class="center" style="font-size:10px;margin-top:4px;">Échange possible sous ${settings.returnPolicy?.days||30} jours sur présentation de ce ticket</div>`+
             (lastTk.barcode?ean13SvgHtml(lastTk.barcode,160,45):"")+

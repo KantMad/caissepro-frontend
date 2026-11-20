@@ -5,6 +5,7 @@ import * as API from "../api.js";
 import { C } from "../constants.jsx";
 import { norm, setProductVariantOrder } from "../utils.jsx";
 import { Modal, Btn, Badge } from "../ui.jsx";
+import { couleurVariante, tailleVariante } from "../metier.js";
 
 const CSV_TARGET_FIELDS=[
   {key:"name",label:"Nom produit",required:true},{key:"sku",label:"Référence / SKU",required:true},
@@ -44,7 +45,8 @@ export function reparerAccents(v){const t=String(v??"");
   try{return new TextDecoder("utf-8",{fatal:true}).decode(Uint8Array.from(t,c=>c.charCodeAt(0)));}catch(e){return v;}}
 function csvParseTax(v){const n=csvNum(v);if(isNaN(n))return 0.20;return n>1?n/100:n;}
 
-function CSVImportWizard({open,onClose,existingProducts,onImportComplete}){
+function CSVImportWizard({open,onClose,existingProducts,onImportComplete,settings}){
+  // settings.metier : en epicerie, couleur masquee et contenance dans « size »
   const[step,setStep]=useState(0);
   const[rawData,setRawData]=useState([]);
   const[csvHeaders,setCsvHeaders]=useState([]);
@@ -123,7 +125,7 @@ function CSVImportWizard({open,onClose,existingProducts,onImportComplete}){
           // accents abimes) : avant, deux variantes sous un seul code-barres (32 doublons chez MCS).
           const vm=new Map(),parEan=new Map();let order=0;
           group.rows.forEach((r)=>{const gv=(f)=>r[mapping[f]]||"";
-            const color=gv("color")||"Défaut",size=gv("size")||"TU";
+            const color=couleurVariante(settings,gv("color")),size=tailleVariante(settings,gv("size"));
             const key=`${color.toLowerCase().trim()}|${size.toLowerCase().trim()}`;
             const stock=Math.max(0,parseInt(gv("stock"))||0);
             // Stock FOURNI par le fichier ? (colonne mappée et cellule non vide). Sinon, en mise à

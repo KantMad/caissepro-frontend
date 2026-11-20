@@ -4,7 +4,7 @@
 // ═══════════════════════════════════════
 
 // ESC/POS Command Constants
-import { lineDiscountEuro, globalDiscountTTC, libelleCloture, tvaParTaux, libelleTaux, pointsFidelite, libellePaiementTicket, donneesAvoir } from './lib/formatters.js';
+import { lineDiscountEuro, globalDiscountTTC, libelleCloture, tvaParTaux, libelleTaux, pointsFidelite, libellePaiementTicket, donneesAvoir, detailVariante } from './lib/formatters.js';
 
 const ESC = 0x1B;
 const GS = 0x1D;
@@ -492,8 +492,8 @@ class ThermalPrinter {
 
         // Variant details + ref + colorCode
         const colorCode = item.variant?.colorCode || item.variant_color_code || item.color_code || '';
-        if (!isCustom && (color || size)) {
-          let detail = `  ${color}/${size}`;
+        if (!isCustom && detailVariante(color, size)) {
+          let detail = `  ${detailVariante(color, size)}`;
           if (!isGift && sku) detail += ` | Ref: ${sku}`;
           if (!isGift && colorCode) detail += ` | ${colorCode}`;
           await this.bold(true); await this.text(detail); await this.newline(); await this.bold(false);
@@ -715,8 +715,8 @@ class ThermalPrinter {
       // Items
       for (const it of a.items) {
         await this.bold(true); await this.text(it.name); await this.newline(); await this.bold(false);
-        if (it.color || it.size) {
-          let detail = `  ${it.color}/${it.size}`;
+        if (detailVariante(it.color, it.size)) {
+          let detail = `  ${detailVariante(it.color, it.size)}`;
           if (it.sku) detail += ` | Ref: ${it.sku}`;
           if (it.colorCode) detail += ` | ${it.colorCode}`;
           await this.bold(true); await this.text(detail); await this.newline(); await this.bold(false);
@@ -1256,8 +1256,8 @@ class ThermalPrinter {
         const color = item.variantColor || ''; const sz = item.variantSize || '';
         const sku = item.sku || ''; const ean = item.ean || '';
         await this.bold(true); await this.text(nm); await this.newline(); await this.bold(false);
-        if (color || sz) {
-          let d = `  ${color}/${sz}`; if (sku) d += ` | Ref: ${sku}`;
+        if (detailVariante(color, sz)) {
+          let d = `  ${detailVariante(color, sz)}`; if (sku) d += ` | Ref: ${sku}`;
           await this.text(d); await this.newline();
           if (ean) { await this.fontSmall(); await this.text(`  EAN: ${ean}`); await this.newline(); await this.fontNormal(); }
         }
@@ -1352,7 +1352,7 @@ class ThermalPrinter {
     await this.separator('-');
     for (const it of (t.items || [])) {
       await this.bold(true); await this.text(it.productName || '?'); await this.newline(); await this.bold(false);
-      await this.line(`  ${it.color || ''}/${it.size || ''}${it.sku ? ' | Ref: ' + it.sku : ''}`, `x${it.quantity}`);
+      await this.line(`  ${detailVariante(it.color, it.size)}${it.sku ? ' | Ref: ' + it.sku : ''}`, `x${it.quantity}`);
       if (it.ean) { await this.fontSmall(); await this.text(`  EAN: ${it.ean}`); await this.newline(); await this.fontNormal(); }
     }
     await this.separator('-');

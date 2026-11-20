@@ -1,3 +1,5 @@
+import { detailVariante } from "./lib/formatters.js";
+import { ICONES_EPICERIE } from "./metier.js";
 import * as API from "./api.js";
 
 /* ══════════ SECURITY — HTML sanitization ══════════ */
@@ -34,7 +36,7 @@ export async function sha256(str){
 
 /* ══════════ CATEGORY ICON ══════════ */
 export const DEFAULT_CAT_ICONS={"T-shirts":"👕","Jeans":"👖","Robes":"👗","Pulls":"🧶","Chemises":"👔","Vestes":"🧥","Pantalons":"👖","Chaussures":"👟","Accessoires":"👜","Divers":"📦"};
-export const catIcon=(cat,settingsIcons)=>{const ic={...DEFAULT_CAT_ICONS,...(settingsIcons||{})};return ic[cat]||"📦";};
+export const catIcon=(cat,settingsIcons)=>{const ic={...DEFAULT_CAT_ICONS,...ICONES_EPICERIE,...(settingsIcons||{})};return ic[cat]||"📦";};
 
 /* ══════════ DATA NORMALIZERS ══════════ */
 /*
@@ -346,7 +348,7 @@ export function buildLabelsHtml(lignes, opts = {}) {
     if (!isValidEAN13(l.ean)) { ignorees += Math.max(1, l.qty || 1); continue; }
     const bcH = Math.max(8, h * 0.45), bcW = w - 6;
     const rects = ean13Rects(l.ean, 100, 30);
-    const variante = [l.color, l.size].filter(Boolean).join(" / ") + (l.colorCode ? ` (${l.colorCode})` : "");
+    const variante = detailVariante(l.color, l.size, " / ") + (l.colorCode ? ` (${l.colorCode})` : "");
     const card = `<div class="lbl">
       ${opts.name && l.productName ? `<div class="nom">${escapeHtml(l.productName)}</div>` : ""}
       ${opts.colorSize && variante.trim() ? `<div class="var">${escapeHtml(variante)}</div>` : ""}

@@ -464,3 +464,37 @@ describe("Écrans — chaque clic mène quelque part (explorateur)", () => {
   }
 });
 
+
+describe("Métier épicerie (METIER=epicerie sur le serveur)", () => {
+  const avecEpicerie = async (fn) => {
+    const API = await import("./api.js");
+    const avant = API.settings.get;
+    API.settings.get = () => Promise.resolve({ name: "Épicerie", pricingMode: "TTC", metier: "epicerie" });
+    try { await fn(); } finally { API.settings.get = avant; }
+  };
+
+  it("Produits : contenance au lieu de couleur/taille, TVA 5,5 % et catégorie Café proposées", () => avecEpicerie(async () => {
+    const { findByText, getByText, queryByText, container } = render(<AppProvider><ProductsScreen /></AppProvider>);
+    fireEvent.click(await findByText(/Nouveau/));
+    await waitFor(() => expect(getByText("CONTENANCE")).toBeTruthy());
+    expect(queryByText("COULEUR")).toBeNull();
+    expect(queryByText("TAILLE")).toBeNull();
+    const selects = [...container.ownerDocument.querySelectorAll("select")];
+    expect(selects.some(s => s.value === "0.055")).toBe(true);
+    expect(selects.some(s => s.value === "Café")).toBe(true);
+  }));
+
+  it("Vente : pas de bouton Retouche", () => avecEpicerie(async () => {
+    let ctx; const Harness = () => { ctx = useApp(); return null; };
+    const { queryByText } = render(<AppProvider><Harness /><SalesScreen /></AppProvider>);
+    await waitFor(() => expect(ctx?.settings?.metier).toBe("epicerie"));
+    expect(queryByText("Retouche")).toBeNull();
+    expect(ctx.allCategories).toContain("Café");
+    expect(ctx.allCategories).not.toContain("T-shirts");
+  }));
+
+  it("Textile (défaut) : bouton Retouche toujours présent", async () => {
+    const { findByText } = render(<AppProvider><SalesScreen /></AppProvider>);
+    expect(await findByText("Retouche")).toBeTruthy();
+  });
+});

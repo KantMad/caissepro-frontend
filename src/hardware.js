@@ -4,7 +4,7 @@
 // ═══════════════════════════════════════════════════════
 
 import { ean13SvgHtml, escapeHtml } from './utils.jsx';
-import { lineDiscountEuro, globalDiscountTTC, libelleCloture, tvaParTaux, libelleTaux, pointsFidelite, libellePaiementTicket, donneesAvoir } from './lib/formatters.js';
+import { lineDiscountEuro, globalDiscountTTC, libelleCloture, tvaParTaux, libelleTaux, pointsFidelite, libellePaiementTicket, donneesAvoir, detailVariante } from './lib/formatters.js';
 
 const HARDWARE_PROFILES = {
   sunmi: {
@@ -267,8 +267,8 @@ class SunmiPrinterAdapter {
       bold(true);
       text(`${name}\n`);
       bold(false);
-      if (!isCustom && (color || sz)) {
-        text(`  ${color}/${sz}`);
+      if (!isCustom && detailVariante(color, sz)) {
+        text(`  ${detailVariante(color, sz)}`);
         if (sku) text(` | Ref: ${sku}`);
         if (colorCode) text(` | ${colorCode}`);
         text('\n');
@@ -392,8 +392,8 @@ class SunmiPrinterAdapter {
     cmds.push({ cmd: 'line', char: '-', len: 32 });
     for (const it of a.items) {
       bold(true); text(`${it.name}\n`); bold(false);
-      if (it.color || it.size) {
-        text(`  ${it.color}/${it.size}`);
+      if (detailVariante(it.color, it.size)) {
+        text(`  ${detailVariante(it.color, it.size)}`);
         if (it.sku) text(` | Ref: ${it.sku}`);
         if (it.colorCode) text(` | ${it.colorCode}`);
         text('\n');
@@ -670,7 +670,7 @@ class SunmiPrinterAdapter {
       const qty = parseInt(item.quantity, 10) || 1;
       totalQty += qty;
       bold(true); text(`${name}\n`); bold(false);
-      if (color || sz) { text(`  ${color}/${sz}`); if (sku) text(` | Ref: ${sku}`); text('\n'); }
+      if (detailVariante(color, sz)) { text(`  ${detailVariante(color, sz)}`); if (sku) text(` | Ref: ${sku}`); text('\n'); }
       if (ean) { size(20); text(`  EAN: ${ean}\n`); size(24); }
       bold(true); text(`  x${qty}\n`); bold(false);
     }
@@ -709,7 +709,7 @@ class SunmiPrinterAdapter {
       await this._cap('printerInit', {});
       await this.printText('BON DE TENUE EMPLOYE\n');
       await this.printText(`N: ${tenue?.num || '?'}\nEmploye: ${tenue?.employee || '?'}\n`);
-      for (const item of (tenue?.items || [])) { await this.printText(`${item.productName || ''} ${item.variantColor || ''}/${item.variantSize || ''} x${item.quantity || 1}\n`); }
+      for (const item of (tenue?.items || [])) { await this.printText(`${item.productName || ''} ${detailVariante(item.variantColor, item.variantSize)} x${item.quantity || 1}\n`); }
       await this._cap('lineWrap', { lines: 4 });
       try { await this._cap('cutPaper', {}); } catch (e) {}
       return true;
@@ -826,7 +826,7 @@ class SunmiPrinterAdapter {
 
     for (const it of (t.items || [])) {
       bold(true); text(`${it.productName || '?'}\n`); bold(false);
-      let d = `  ${it.color || ''}/${it.size || ''}`;
+      let d = `  ${detailVariante(it.color, it.size)}`;
       if (it.sku) d += ` | Ref: ${it.sku}`;
       text(d + '\n');
       if (it.ean) { size(20); text(`  EAN: ${it.ean}\n`); size(24); }
@@ -856,7 +856,7 @@ class SunmiPrinterAdapter {
     }
     await this._cap('printerInit', {});
     await this.printText(`BON DE TRANSFERT ${t?.number || ''}\nDestination: ${t?.destination || '-'}\nRef/Motif: ${t?.note || '-'}\n`);
-    for (const it of (t?.items || [])) await this.printText(`${it.productName} ${it.color}/${it.size} x${it.quantity}\n`);
+    for (const it of (t?.items || [])) await this.printText(`${it.productName} ${detailVariante(it.color, it.size)} x${it.quantity}\n`);
     await this.printText(`Total pieces: ${t?.totalQty || 0}\n`);
     await this._cap('lineWrap', { lines: 4 });
     try { await this._cap('cutPaper', {}); } catch (e) {}
@@ -1403,7 +1403,7 @@ class BrowserPrintAdapter {
     for (const item of (tenue.items || [])) {
       const qty = parseInt(item.quantity, 10) || 1; tq += qty;
       const nm = item.productName || item.product_name || item.name || '?';
-      const cs = [item.variantColor || item.variant_color || '', item.variantSize || item.variant_size || ''].filter(Boolean).join('/');
+      const cs = detailVariante(item.variantColor || item.variant_color, item.variantSize || item.variant_size);
       h += `<div class="row"><span>${nm}${cs ? ' (' + cs + ')' : ''}</span><span>x${qty}</span></div>`;
     }
     h += `<div class="sep"></div><div class="row bold"><span>TOTAL</span><span>${tq} piece(s)</span></div>`;
@@ -1447,7 +1447,7 @@ class BrowserPrintAdapter {
     h += `<div>Ref/Motif: ${e(t.note || '-')}</div><div class="sep"></div>`;
     for (const it of (t.items || [])) {
       h += `<div class="bold">${e(it.productName)}</div>`;
-      h += `<div class="row"><span>${e(it.color)}/${e(it.size)}${it.sku ? ' | Ref: ' + e(it.sku) : ''}</span><span class="bold">x${it.quantity}</span></div>`;
+      h += `<div class="row"><span>${e(detailVariante(it.color, it.size))}${it.sku ? ' | Ref: ' + e(it.sku) : ''}</span><span class="bold">x${it.quantity}</span></div>`;
       if (it.ean) h += `<div class="small">EAN: ${e(it.ean)}</div>`;
     }
     h += `<div class="sep"></div><div class="row bold big"><span>TOTAL PIECES</span><span>${t.totalQty || 0}</span></div><div class="sep"></div>`;
@@ -1604,8 +1604,8 @@ async function _textBasedPrint(adapter, type, data, settings, companyInfo, width
       const ttc = Number(item.lineTTC || item.line_ttc || (item.unit_price * qty)) || 0;
       const isCustom = item.isCustom || item.is_custom;
       lines.push(isGift ? `${name} x${qty}` : pad(`${name} x${qty}`, `${ttc.toFixed(2)}E`));
-      if (!isCustom && (color || sz)) {
-        let detail = `  ${color}/${sz}`;
+      if (!isCustom && detailVariante(color, sz)) {
+        let detail = `  ${detailVariante(color, sz)}`;
         if (!isGift && sku) detail += ` Ref:${sku}`;
         if (!isGift && colorCode) detail += ` ${colorCode}`;
         lines.push(detail);
@@ -1655,7 +1655,7 @@ async function _textBasedPrint(adapter, type, data, settings, companyInfo, width
     lines.push(dsep);
     for (const it of a.items) {
       lines.push(pad(`${it.name} x${it.qty}`, `-${it.ttc.toFixed(2)}E`));
-      if (it.color || it.size) { let d = `  ${it.color}/${it.size}`; if (it.sku) d += ` Ref:${it.sku}`; if (it.colorCode) d += ` ${it.colorCode}`; lines.push(d); }
+      if (detailVariante(it.color, it.size)) { let d = `  ${detailVariante(it.color, it.size)}`; if (it.sku) d += ` Ref:${it.sku}`; if (it.colorCode) d += ` ${it.colorCode}`; lines.push(d); }
     }
     lines.push(dsep);
     lines.push(pad('TOTAL AVOIR', `-${a.total.toFixed(2)}E`));
@@ -1703,7 +1703,7 @@ async function _textBasedPrint(adapter, type, data, settings, companyInfo, width
     for (const item of (data.items || [])) {
       const qty = parseInt(item.quantity, 10) || 1; tq += qty;
       const nm = item.productName || item.product_name || item.name || '?';
-      const cs = [item.variantColor || item.variant_color || '', item.variantSize || item.variant_size || ''].filter(Boolean).join('/');
+      const cs = detailVariante(item.variantColor || item.variant_color, item.variantSize || item.variant_size);
       lines.push(pad(`${nm}${cs ? ' ' + cs : ''}`, `x${qty}`));
       if (item.ean) lines.push(`  EAN: ${item.ean}`);
     }
@@ -1741,7 +1741,7 @@ async function _textBasedPrint(adapter, type, data, settings, companyInfo, width
     lines.push(dsep);
     for (const it of (data.items || [])) {
       lines.push(`${it.productName || '?'}`);
-      lines.push(pad(`  ${it.color || ''}/${it.size || ''}${it.sku ? ' ' + it.sku : ''}`, `x${it.quantity}`));
+      lines.push(pad(`  ${detailVariante(it.color, it.size)}${it.sku ? ' ' + it.sku : ''}`, `x${it.quantity}`));
       if (it.ean) lines.push(`  EAN: ${it.ean}`);
     }
     lines.push(dsep);
@@ -1885,7 +1885,7 @@ function _generateReceiptHTML(ticket, settings, companyInfo) {
     const sz = item.variant?.size || item.variant_size || '';
     const qty = item.quantity || 1;
     const ttc = Number(item.lineTTC || item.line_ttc || ((item.unit_price || 0) * qty)) || 0;
-    const nom = `${e(name)}${!isC && (color || sz) ? ` (${e(color)}/${e(sz)})` : ''} x${qty}`;
+    const nom = `${e(name)}${!isC && detailVariante(color, sz) ? ` (${e(detailVariante(color, sz))})` : ''} x${qty}`;
     if (isGift) { h += `<div>${nom}</div>`; continue; }
     h += `<div class="row"><span>${nom}</span><span>${f(ttc)}EUR</span></div>`;
     if (qty > 1) h += `<div class="small">&nbsp;&nbsp;${qty} x ${f(ttc / qty)}EUR</div>`;
@@ -1935,7 +1935,7 @@ function _generateAvoirHTML(avoir, settings, companyInfo) {
   if (a.client) h += `<div>Client: ${e(a.client)}</div>`;
   h += `<div class="bold">Motif: ${e(a.motif)}</div><div class="sep"></div>`;
   for (const it of a.items) {
-    h += `<div class="row"><span>${e(it.name)}${it.color || it.size ? ` (${e(it.color)}/${e(it.size)})` : ''} x${it.qty}</span><span>-${f(it.ttc)}EUR</span></div>`;
+    h += `<div class="row"><span>${e(it.name)}${detailVariante(it.color, it.size) ? ` (${e(detailVariante(it.color, it.size))})` : ''} x${it.qty}</span><span>-${f(it.ttc)}EUR</span></div>`;
     if (it.sku || it.ean) h += `<div class="small">&nbsp;&nbsp;${it.sku ? `Ref: ${e(it.sku)}` : ''}${it.sku && it.ean ? ' - ' : ''}${it.ean ? `EAN: ${e(it.ean)}` : ''}</div>`;
   }
   h += '<div class="sep"></div>';
