@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { detailVariante, SANS_COULEUR } from "./lib/formatters.js";
-import { estEpicerie, produitParDefaut, couleurVariante, tailleVariante, libelleTaille, venduAuPoids, prixPese, libellePrixPoids, affStock, sortieStock, quantiteValorisee } from "./metier.js";
+import { estEpicerie, produitParDefaut, couleurVariante, tailleVariante, libelleTaille, venduAuPoids, prixPese, libellePrixPoids, affStock, sortieStock, quantiteValorisee, etatLot, joursRestants, repartirLots, lotDlcDepassee, libelleDate } from "./metier.js";
 import { ligneDepuisAttente } from "./context.jsx";
 
 describe("detailVariante (tickets et apercus)", () => {
@@ -77,5 +77,28 @@ describe("stock du vrac en grammes (lot 2)", () => {
   it("valorisation : 1 500 g à 2,40 € les 100 g = 15 quantités de référence", () => {
     expect(quantiteValorisee(the, 1500) * the.costPrice).toBeCloseTo(36, 5);
     expect(quantiteValorisee(pot, 4)).toBe(4);
+  });
+});
+
+describe("Lots et dates limites", () => {
+  const L = (id, date, type, quantite, retire = 0) => ({ id, variant_id: "v1", date_limite: date, type_date: type, quantite, retire, created_at: "2026-11-01" });
+  it("état : DLC passée interdite, DDM passée vendable, seuils 7 j / 30 j", () => {
+    const auj = "2026-11-20";
+    expect(joursRestants("2026-11-27", auj)).toBe(7);
+    expect(etatLot(L("a", "2026-11-19", "DLC", 1), auj)).toBe("depassee");
+    expect(etatLot(L("a", "2026-11-19", "DDM", 1), auj)).toBe("ddm_passee");
+    expect(etatLot(L("a", "2026-11-27", "DLC", 1), auj)).toBe("proche");
+    expect(etatLot(L("a", "2026-11-28", "DLC", 1), auj)).toBe("ok");
+    expect(etatLot(L("a", "2026-12-20", "DDM", 1), auj)).toBe("proche");
+    expect(libelleDate("2026-01-31")).toBe("31/01/2026");
+  });
+  it("répartition FEFO : le stock reste sur les lots les plus tardifs", () => {
+    expect(repartirLots([L("b", "2027-01-01", "DDM", 4), L("a", "2026-12-01", "DLC", 5)], 6).map(l => [l.id, l.restant])).toEqual([["a", 2], ["b", 4]]);
+  });
+  it("alerte caisse seulement si le lot qui part en premier a une DLC passée et du stock", () => {
+    const lots = [L("a", "2026-11-01", "DLC", 3), L("b", "2027-01-01", "DLC", 4)];
+    expect(lotDlcDepassee(lots, { id: "v1", stock: 6 }, "2026-11-20")?.id).toBe("a");
+    expect(lotDlcDepassee(lots, { id: "v1", stock: 4 }, "2026-11-20")).toBeNull();   // lot périmé déjà écoulé
+    expect(lotDlcDepassee(lots, { id: "v2", stock: 6 }, "2026-11-20")).toBeNull();
   });
 });

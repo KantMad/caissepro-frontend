@@ -164,6 +164,9 @@ export const stock = {
   movements: (params) => api('/api/stock/movements?' + new URLSearchParams(params || {})),
   receive: (data) => api('/api/stock/receive', { method: 'POST', body: JSON.stringify(data) }),
   receiveBatch: (data) => api('/api/stock/receive-batch', { method: 'POST', body: JSON.stringify(data) }),
+  // Lots avec date limite encore en stock (epicerie) ; retirer = sortir du stock ce qui reste d'un lot
+  lots: () => api('/api/stock/lots'),
+  retirerLot: (id, motif) => api(`/api/stock/lots/${id}/retirer`, { method: 'POST', body: JSON.stringify({ motif }) }),
   adjust: (data) => api('/api/stock/adjust', { method: 'POST', body: JSON.stringify(data) }),
   // { reason, items:[{variantId,newStock,expectedStock?}] } (500 lignes max) -> { results:[{variantId,ok,error}] }
   adjustBatch: (data) => api('/api/stock/adjust-batch', { method: 'POST', body: JSON.stringify(data) }),

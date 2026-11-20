@@ -517,6 +517,33 @@ describe("Métier épicerie (METIER=epicerie sur le serveur)", () => {
     expect(getByTestId("ligne-pesee").textContent).toMatch(/125 g/);
   }));
 
+  it("Dates limites : DLC dépassée signalée en caisse, onglet Dates limites avec bouton Retirer", () => avecEpicerie(async () => {
+    const API = await import("./api.js");
+    const avant = API.stock.lots;
+    API.stock.lots = () => Promise.resolve([{ id: "l1", product_id: "p1", variant_id: "v1", numero: "A7", date_limite: "2020-01-31",
+      type_date: "DLC", quantite: 4, retire: 0, created_at: "2019-12-01", product_name: "Jean droit coupe mom", color: "Bleu", size: "38", restant: 4 }]);
+    try {
+      let ctx; const Harness = () => { ctx = useApp(); return null; };
+      const { getAllByText, findAllByTestId, findByText } = render(<AppProvider><Harness /><StockScreen /></AppProvider>);
+      await waitFor(() => expect(ctx?.lots?.length).toBe(1));
+      await waitFor(() => expect(ctx.products.length).toBeGreaterThan(0));
+      const p = ctx.products.find(x => x.id === "p1");
+      act(() => { ctx.addToCart(p, p.variants.find(v => v.id === "v1")); });
+      await waitFor(() => expect(ctx.notifications.some(n => /DLC dépassée \(lot A7, 31\/01\/2020\)/.test(n.msg))).toBe(true));
+      const b = getAllByText("Dates limites"); fireEvent.click(b[b.length - 1]);
+      expect((await findAllByTestId("lot-date")).length).toBe(1);
+      expect(await findByText("DLC dépassée — ne plus vendre")).toBeTruthy();
+    } finally { API.stock.lots = avant; }
+  }));
+
+  it("Textile : ni onglet Dates limites, ni chargement des lots", async () => {
+    let ctx; const Harness = () => { ctx = useApp(); return null; };
+    const { queryByText, findAllByText } = render(<AppProvider><Harness /><StockScreen /></AppProvider>);
+    await findAllByText("Inventaire");
+    expect(queryByText("Dates limites")).toBeNull();
+    expect(ctx.lots).toEqual([]);
+  });
+
   it("Textile (défaut) : bouton Retouche toujours présent", async () => {
     const { findByText } = render(<AppProvider><SalesScreen /></AppProvider>);
     expect(await findByText("Retouche")).toBeTruthy();

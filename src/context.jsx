@@ -7,7 +7,7 @@ import { CO, DEFAULT_TVA_RATES, PERMS, initUsers, LOYALTY_TIERS, C, categories a
 import { hashPin, hashPinFort, verifyPin, sha256, norm, loadVariantOrderFromSettings, autoImportSizesFromProducts, generateEAN13, DEFAULT_CAT_ICONS } from "./utils.jsx";
 import { computeTotals, lineNetTTC } from "./lib/totals.js";
 import { detailVariante } from "./lib/formatters.js";
-import { estEpicerie, CATEGORIES_EPICERIE, venduAuPoids, prixPese, libellePoids, sortieStock } from "./metier.js";
+import { estEpicerie, CATEGORIES_EPICERIE, venduAuPoids, prixPese, libellePoids, sortieStock, lotDlcDepassee, libelleDate } from "./metier.js";
 import { dayKey } from "./lib/dates.js";
 import { getLoyaltyTier as loyaltyTierOf } from "./lib/loyalty.js";
 import { calcPromoDiscount as calcPromos } from "./lib/promos.js";
@@ -764,7 +764,11 @@ function AppProvider({children}){
   // Produit vendu au poids (the en vrac) : pas d'ajout direct, la caisse demande d'abord le poids
   // (fenetre de pesee de l'ecran Vente). Vaut pour la grille, le scan et les favoris.
   const[pesee,setPesee]=useState(null);
-  const addToCart=(p,v)=>{if(venduAuPoids(p)){setPesee({product:p,variant:v});return;}
+  const addToCart=(p,v)=>{
+    // Epicerie : le lot qui part en premier a sa DLC passee -> interdit a la vente, on prévient
+    const perime=estEpicerie(settings)?lotDlcDepassee(lots,v):null;
+    if(perime)notify(`⚠ ${p.name} : DLC dépassée (lot ${perime.numero||"sans n°"}, ${libelleDate(perime.date_limite)}). Ne pas vendre : retirez le lot dans Stock > Dates limites.`,"error");
+    if(venduAuPoids(p)){setPesee({product:p,variant:v});return;}
     setCart(prev=>{const i=prev.findIndex(c=>c.product.id===p.id&&c.variant?.id===v?.id);
     if(i>=0){const n=[...prev];n[i]={...n[i],quantity:n[i].quantity+1};return n;}return[...prev,{product:p,variant:v,quantity:1,discount:0,isCustom:false}];});};
   // Ligne pesee : quantite 1, prix = prix catalogue x poids / poids de reference, poids dans la
@@ -1134,22 +1138,37 @@ function AppProvider({children}){
   // Stock receipt - via API
   // Renvoie true/false (l'import CSV comptait chaque ligne comme réussie). opts.lot : pas de
   // rechargement du catalogue à chaque ligne. Audit écrit par le serveur (pas de doublon).
+  // ══ Lots et dates limites (epicerie, API migration 053) ══
+  const[lots,setLots]=useState([]);
+  const loadLots=useCallback(async()=>{
+    if(!estEpicerie(settings)||!currentUser)return;
+    try{const data=await API.stock.lots();setLots(Array.isArray(data)?data:[]);}catch(e){console.warn("Lots:",e.message);}
+  },[settings.metier,currentUser?.id]);// eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(()=>{loadLots();},[loadLots,currentStore?.id]);
+  const retirerLot=useCallback(async(lot,motif="Périmé")=>{
+    try{const r=await API.stock.retirerLot(lot.id,motif);
+      setProducts(prev=>prev.map(x=>x.id===lot.product_id?{...x,variants:x.variants.map(vr=>vr.id===lot.variant_id?{...vr,stock:r.stock}:vr)}:x));
+      await loadLots();return r;}catch(e){notify("Retrait refusé : "+e.message,"error");return null;}
+  },[loadLots,notify]);
+
   const receiveStock=useCallback(async(productId,variantId,qty,supplier,opts={})=>{
-    try{await API.stock.receive({productId,variantId,quantity:qty,supplier});
+    try{await API.stock.receive({productId,variantId,quantity:qty,supplier,...(opts.dateLimite?{dateLimite:opts.dateLimite,typeDate:opts.typeDate,lot:opts.numeroLot}:{})});
+      if(opts.dateLimite)loadLots();
       if(opts.lot)setProducts(prev=>prev.map(x=>x.id===productId?{...x,variants:x.variants.map(vr=>vr.id===variantId?{...vr,stock:(vr.stock||0)+qty}:vr)}:x));
       else{const prods=await API.products.list();setProducts(norm.products(prods));}
       return true;}catch(e){if(!opts.lot)notify("Réception refusée : "+e.message,"error");return false;}
-  },[]);
+  },[loadLots]);
 
   // Stock batch receipt - via API
   const receiveBatchStock=useCallback(async(items,supplier)=>{
     try{const res=await API.stock.receiveBatch({items,supplier});
+      if(items.some(i=>i.dateLimite))loadLots();
       const prods=await API.products.list();
       setProducts(norm.products(prods));
       const totalQty=items.reduce((s,i)=>s+i.quantity,0);
       // audit écrit par le serveur (pas de doublon local)
       return res;}catch(e){notify("Erreur: "+e.message,"error");throw e;}
-  },[addAudit,notify]);
+  },[addAudit,notify,loadLots]);
 
   // ══ P2: Clock in/out — via API ══
   const clockIn=useCallback(async()=>{try{await API.auth.clock("IN");addAudit("CLOCK_IN",`${currentUser?.name} a pointé`);}catch(e){console.error(e);}},[currentUser,addAudit]);
@@ -2268,7 +2287,7 @@ function AppProvider({children}){
     checkout,createClosure,exportArchive,exportFEC,exportCSVReport,exportCustomerRGPD,addAudit,addJET,
     pesee,setPesee,addPeseeAuPanier,
     promos,setPromos,activePromos,parked,parkCart,restoreCart,removeParked,retoucheBons,addRetoucheBon,updateRetoucheStatus,tenues,addTenue,reloadTenues,cashMovements,addCashMovement,reloadCashMovements,selCust,setSelCust,
-    stockAlerts,stockMoves,addStockMove,receiveStock,receiveBatchStock,
+    stockAlerts,stockMoves,addStockMove,receiveStock,receiveBatchStock,lots,loadLots,retirerLot,
     refreshProducts,findByEAN,perm,settings,setSettings,saveSettingsToAPI,saveSettingsNotify,getLoyaltyTier,avoirPayment,selectedAvoir,setSelectedAvoir,
     bestSellers,salesBySeller,salesByVariant,caEvolution,salesByCollection,
     saleNote,setSaleNote,clockIn,clockOut,clockEntries,verifyChain,exportCatalog,

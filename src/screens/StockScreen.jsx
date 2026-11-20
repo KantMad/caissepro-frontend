@@ -8,7 +8,7 @@ import { Modal, Btn, Input, Badge } from "../ui.jsx";
 import { useApp } from "../context.jsx";
 import { tauxMarque } from "../lib/formatters.js";
 import { sortSizes } from "./_shared.js";
-import { affStock, venduAuPoids, quantiteValorisee } from "../metier.js";
+import { affStock, venduAuPoids, quantiteValorisee, estEpicerie, etatLot, joursRestants, libelleDate } from "../metier.js";
 import { detailVariante } from "../lib/formatters.js";
 
 // Catalogue importe (gestlog/TIO : ~50 000 variantes chez MCS) : une liste deroulante de
@@ -29,7 +29,7 @@ const optionsProduits=r=><>{r.liste.map(p=>(<option key={p.id} value={p.id}>{p.n
 const champRecherche={marginBottom:4,height:28,fontSize:10,padding:"2px 8px"};
 
 function StockScreen(){
-  const{products,setProducts,stockAlerts,stockMoves,receiveStock,receiveBatchStock,adjustStockLot,receiveStockLot,stockAging,reorderSuggestions,adjustStock,notify,findByEAN,users,addStockMove,addAudit,settings,perm,defectiveStock,loadDefectiveStock,receiveDefectiveStock,adjustDefectiveStock,setScanOverride,clearScanOverride,mode,thermalPrint,printReceiptOnly,currentStore,currentUser,stores,refreshProducts}=useApp();
+  const{products,setProducts,stockAlerts,stockMoves,receiveStock,receiveBatchStock,adjustStockLot,receiveStockLot,stockAging,reorderSuggestions,adjustStock,notify,findByEAN,users,addStockMove,addAudit,settings,perm,defectiveStock,loadDefectiveStock,lots,loadLots,retirerLot,receiveDefectiveStock,adjustDefectiveStock,setScanOverride,clearScanOverride,mode,thermalPrint,printReceiptOnly,currentStore,currentUser,stores,refreshProducts}=useApp();
   // Valorisation du stock au PRIX D'ACHAT (cost_price de l'import) — DASHBOARD uniquement
   // Prix d'achat : saisi HT (confirmé le 27/10/2026), utilisé tel quel.
   const coutHT=(p)=>parseFloat(p.costPrice)||0;
@@ -43,6 +43,13 @@ function StockScreen(){
   const isDashboard=mode!=="cashier";
   if(!perm().canCreateProduct)return<div style={{padding:40,textAlign:"center",color:"#94a3b8",fontSize:16,fontWeight:600}}>Accès réservé aux administrateurs</div>;
   const[sel,setSel]=useState(products[0]?.id||"");const[tab,setTab]=useState("matrix");
+  const epicerie=estEpicerie(settings);
+  // Dates limites (epicerie) : lots encore en stock, du plus urgent au plus lointain
+  const[datesTout,setDatesTout]=useState(false);
+  useEffect(()=>{if(tab==="dates")loadLots();},[tab]);// eslint-disable-line react-hooks/exhaustive-deps
+  const lotsAffiches=useMemo(()=>(lots||[]).map(l=>({...l,etat:etatLot(l),jours:joursRestants(l.date_limite)}))
+    .filter(l=>datesTout||l.etat!=="ok"),[lots,datesTout]);
+  const majLigne=(i,champ,val)=>setBatchItems(prev=>{const next=[...prev];next[i]={...next[i],[champ]:val};return next;});
   const[invVu,setInvVu]=useState({});   // inventaire : stock affiché au moment de la saisie du comptage
   // Ouverture de l'Inventaire : catalogue rechargé (stocks à jour avant de compter)
   useEffect(()=>{if(tab==="inventory")refreshProducts();},[tab]);// eslint-disable-line react-hooks/exhaustive-deps
@@ -201,7 +208,7 @@ function StockScreen(){
       {stockValuation.unvalued>0&&<div style={{fontSize:10,color:C.warn||"#B45309",fontWeight:600,maxWidth:220}}>⚠ {stockValuation.unvalued} unité(s) sans prix d'achat renseigné (non valorisées). Complétez le coût à l'import.</div>}
     </div>}
     <div style={{display:"flex",gap:6,marginBottom:12}}>
-      {[{id:"matrix",l:"Matrice"},{id:"reception",l:"Réception"},{id:"alerts",l:"Alertes"},{id:"moves",l:"Mouvements"},{id:"inventory",l:"Inventaire"},{id:"adjust",l:"Ajustement"},{id:"defective",l:"Défectueux"},{id:"tenues",l:"Tenues"},{id:"transfers",l:"Transferts"},{id:"aging",l:"Vieillissement"}].map(t=>(
+      {[{id:"matrix",l:"Matrice"},{id:"reception",l:"Réception"},{id:"alerts",l:"Alertes"},{id:"moves",l:"Mouvements"},{id:"inventory",l:"Inventaire"},{id:"adjust",l:"Ajustement"},{id:"defective",l:"Défectueux"},{id:"tenues",l:"Tenues"},{id:"transfers",l:"Transferts"},{id:"aging",l:"Vieillissement"},...(epicerie?[{id:"dates",l:"Dates limites"}]:[])].map(t=>(
         <button key={t.id} onClick={()=>setTab(t.id)} style={{padding:"0 14px",minHeight:34,borderRadius:8,border:`1.5px solid ${tab===t.id?C.primary:C.border}`,
           background:tab===t.id?C.primary:"transparent",color:tab===t.id?"#fff":C.text,fontSize:12,fontWeight:600,cursor:"pointer"}}>{t.l}</button>))}</div>
 
@@ -252,7 +259,7 @@ function StockScreen(){
       {batchItems.length>0&&<div style={{maxHeight:400,overflowY:"auto",marginBottom:12}}>
         <table className="rtable" style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
           <thead><tr style={{borderBottom:`2px solid ${C.border}`,position:"sticky",top:0,background:C.surface}}>
-            {["Produit","Variante","EAN","Prix TTC","Stock actuel","Qté reçue",""].map(h=>(
+            {["Produit","Variante","EAN","Prix TTC","Stock actuel","Qté reçue",...(epicerie?["Date limite","N° de lot"]:[]),""].map(h=>(
               <th key={h} style={{padding:6,textAlign:"left",fontSize:9,fontWeight:700,color:C.textMuted}}>{h}</th>))}</tr></thead>
           <tbody>{batchItems.map((item,i)=>(<tr key={item.variantId} style={{borderBottom:`1px solid ${C.border}`,background:i===batchItems.length-1?`${C.primary}08`:"transparent"}}>
             <td data-label="Produit" style={{padding:6,fontWeight:600}}>{item.name} <span style={{color:C.textMuted,fontSize:9}}>({item.sku})</span></td>
@@ -270,6 +277,17 @@ function StockScreen(){
                 <button onClick={()=>setBatchItems(prev=>{const next=[...prev];next[i]={...next[i],qty:next[i].qty+1};return next;})}
                   style={{width:24,height:24,borderRadius:6,border:`1.5px solid ${C.primary}`,background:`${C.primary}10`,cursor:"pointer",fontSize:14,fontWeight:700,color:C.primary,display:"flex",alignItems:"center",justifyContent:"center"}}>+</button>
               </div></td>
+            {epicerie&&<td data-label="Date limite" style={{padding:6}}>
+              <div style={{display:"flex",gap:4,alignItems:"center"}}>
+                <select value={item.typeDate||"DDM"} onChange={e=>majLigne(i,"typeDate",e.target.value)} data-testid="reception-type-date"
+                  title="DLC : à consommer jusqu'au (plus vendable après). DDM : de préférence avant (reste vendable)."
+                  style={{padding:4,borderRadius:6,border:`1.5px solid ${C.border}`,fontSize:11,fontFamily:"inherit"}}>
+                  <option value="DDM">DDM</option><option value="DLC">DLC</option></select>
+                <input type="date" value={item.dateLimite||""} onChange={e=>majLigne(i,"dateLimite",e.target.value)} data-testid="reception-date-limite"
+                  style={{padding:4,borderRadius:6,border:`1.5px solid ${C.border}`,fontSize:11,fontFamily:"inherit"}}/></div></td>}
+            {epicerie&&<td data-label="N° de lot" style={{padding:6}}>
+              <input value={item.lot||""} onChange={e=>majLigne(i,"lot",e.target.value)} placeholder="Facultatif"
+                style={{width:90,padding:4,borderRadius:6,border:`1.5px solid ${C.border}`,fontSize:11,fontFamily:"inherit"}}/></td>}
             <td style={{padding:6}}>
               <button onClick={()=>setBatchItems(prev=>prev.filter((_,j)=>j!==i))}
                 style={{background:"transparent",border:"none",cursor:"pointer",color:C.danger,fontSize:14}}>✕</button></td>
@@ -282,7 +300,8 @@ function StockScreen(){
           <div style={{fontSize:10,color:C.textMuted}}>{batchSupplier?`Fournisseur: ${batchSupplier}`:"Aucun fournisseur renseigné"}</div></div>
         <Btn onClick={async()=>{
           setBatchSaving(true);
-          try{const payload=batchItems.map(i=>({productId:i.productId,variantId:i.variantId,quantity:i.qty}));
+          try{const payload=batchItems.map(i=>({productId:i.productId,variantId:i.variantId,quantity:i.qty,
+              ...(epicerie&&i.dateLimite?{dateLimite:i.dateLimite,typeDate:i.typeDate||"DDM",lot:i.lot||""}:{})}));
             const res=await receiveBatchStock(payload,batchSupplier||"Non spécifié");
             const totalQty=batchItems.reduce((s,i)=>s+i.qty,0);
             notify(`Réception validée: ${totalQty} pièces, ${batchItems.length} réf`,"success");
@@ -292,6 +311,33 @@ function StockScreen(){
         }} disabled={batchSaving} style={{height:40,minWidth:160,background:C.primary,fontSize:13,fontWeight:700}}>
           {batchSaving?"Enregistrement...":"Valider la réception"}</Btn>
       </div>}
+    </div>}
+
+    {tab==="dates"&&epicerie&&<div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`}}>
+      <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:6}}>
+        <h3 style={{fontSize:14,fontWeight:700,margin:0}}>Dates limites</h3>
+        <div style={{flex:1}}/>
+        <label style={{fontSize:11,display:"flex",gap:4,alignItems:"center",cursor:"pointer"}}>
+          <input type="checkbox" checked={datesTout} onChange={e=>setDatesTout(e.target.checked)}/> Tous les lots en stock</label></div>
+      <div style={{fontSize:10,color:C.textMuted,marginBottom:10}}>
+        DLC dépassée = interdit à la vente : retirez le lot. DDM dépassée = encore vendable. Alerte 7 jours avant une DLC, 30 jours avant une DDM.
+        Le reste de chaque lot est estimé à partir du stock : le lot qui expire en premier est supposé vendu en premier.</div>
+      {lotsAffiches.length===0&&<div style={{textAlign:"center",padding:30,color:C.textLight,fontSize:12}} data-testid="dates-vide">
+        {datesTout?"Aucun lot en stock. Saisissez la date limite à la réception.":"Aucune date limite proche ou dépassée."}</div>}
+      {lotsAffiches.map(l=>{const coul=l.etat==="depassee"?C.danger:l.etat==="ok"?C.textMuted:(C.warn||"#B45309");
+        const p0={poidsRefG:l.poids_ref_g};
+        return(<div key={l.id} data-testid="lot-date" style={{display:"flex",alignItems:"center",gap:10,padding:"8px 10px",borderBottom:`1px solid ${C.border}`}}>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{fontSize:12,fontWeight:700}}>{l.product_name} <span style={{fontWeight:400,color:C.textMuted}}>{detailVariante(l.color,l.size)}</span></div>
+            <div style={{fontSize:10,color:C.textMuted}}>Lot {l.numero||"sans n°"} — reste {affStock(p0,l.restant)} sur {affStock(p0,l.quantite)}</div></div>
+          <div style={{textAlign:"right"}}>
+            <div style={{fontSize:12,fontWeight:800,color:coul}}>{l.type_date} {libelleDate(l.date_limite)}</div>
+            <div style={{fontSize:10,fontWeight:600,color:coul}}>{l.etat==="depassee"?"DLC dépassée — ne plus vendre":l.etat==="ddm_passee"?"DDM dépassée — vendable":l.jours===0?"Aujourd'hui":`Dans ${l.jours} j`}</div></div>
+          <Btn variant="outline" data-testid="retirer-lot" style={{fontSize:10,padding:"4px 10px",color:C.danger,borderColor:C.danger}}
+            onClick={async()=>{if(!confirm(`Retirer du stock ${affStock(p0,l.restant)} de ${l.product_name} (lot ${l.numero||"sans n°"}) ?`))return;
+              const r=await retirerLot(l,l.etat==="depassee"||l.etat==="ddm_passee"?"Périmé":"Retrait lot");
+              if(r)notify(`Lot retiré : ${affStock(p0,r.retire)} sortis du stock`,"success");}}>Retirer</Btn>
+        </div>);})}
     </div>}
 
     {tab==="alerts"&&<div style={{display:"flex",flexDirection:"column",gap:6}}>
