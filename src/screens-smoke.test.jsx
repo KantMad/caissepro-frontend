@@ -536,11 +536,32 @@ describe("Métier épicerie (METIER=epicerie sur le serveur)", () => {
     } finally { API.stock.lots = avant; }
   }));
 
+  it("Coffrets : composition affichée, nombre possible calculé, Monter appelle l'API", () => avecEpicerie(async () => {
+    const API = await import("./api.js");
+    const sauve = { coffrets: API.stock.coffrets, monter: API.stock.monterCoffrets };
+    const appels = [];
+    API.stock.coffrets = () => Promise.resolve([{ product_id: "p1", variant_id: "v1", quantite: 2 }]);
+    API.stock.monterCoffrets = (variantId, nombre) => { appels.push([variantId, nombre]); return Promise.resolve({ ok: true }); };
+    try {
+      const { getAllByText, findByTestId, getByTestId, findAllByTestId } = render(<AppProvider><StockScreen /></AppProvider>);
+      await waitFor(() => expect(getAllByText("Coffrets").length).toBeGreaterThan(0));
+      const b = getAllByText("Coffrets"); fireEvent.click(b[b.length - 1]);
+      const choix = await findByTestId("coffret-choix");
+      await waitFor(() => expect([...choix.options].some(o => o.value === "p1")).toBe(true));
+      fireEvent.change(choix, { target: { value: "p1" } });
+      expect((await findAllByTestId("coffret-ligne")).length).toBe(1);
+      expect(getByTestId("coffrets-possibles").textContent).toBe("2");   // stock 4 / 2 par coffret
+      fireEvent.click(getByTestId("coffret-monter"));
+      await waitFor(() => expect(appels).toEqual([["v1", 1]]));
+    } finally { API.stock.coffrets = sauve.coffrets; API.stock.monterCoffrets = sauve.monter; }
+  }));
+
   it("Textile : ni onglet Dates limites, ni chargement des lots", async () => {
     let ctx; const Harness = () => { ctx = useApp(); return null; };
     const { queryByText, findAllByText } = render(<AppProvider><Harness /><StockScreen /></AppProvider>);
     await findAllByText("Inventaire");
     expect(queryByText("Dates limites")).toBeNull();
+    expect(queryByText("Coffrets")).toBeNull();
     expect(ctx.lots).toEqual([]);
   });
 

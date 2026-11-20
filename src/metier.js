@@ -85,3 +85,11 @@ export function lotDlcDepassee(lots, variant, aujourdhui) {
   if (!siens.length) return null;
   return repartirLots(siens, variant.stock).find(l => l.restant > 0 && etatLot(l, aujourdhui) === "depassee") || null;
 }
+
+// ── Coffrets composés, montés à l'avance (migration API 054) ──
+// Combien de coffrets peut-on monter avec le stock actuel ? compo = [{variant_id, quantite}],
+// stockDe(variantId) -> stock actuel (pièces ou grammes)
+export function coffretsPossibles(compo, stockDe) {
+  if (!compo?.length) return 0;
+  return Math.max(0, Math.min(...compo.map(c => Math.floor((Number(stockDe(c.variant_id)) || 0) / Math.max(1, Number(c.quantite) || 1)))));
+}

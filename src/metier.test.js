@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { detailVariante, SANS_COULEUR } from "./lib/formatters.js";
-import { estEpicerie, produitParDefaut, couleurVariante, tailleVariante, libelleTaille, venduAuPoids, prixPese, libellePrixPoids, affStock, sortieStock, quantiteValorisee, etatLot, joursRestants, repartirLots, lotDlcDepassee, libelleDate } from "./metier.js";
+import { estEpicerie, produitParDefaut, couleurVariante, tailleVariante, libelleTaille, venduAuPoids, prixPese, libellePrixPoids, affStock, sortieStock, quantiteValorisee, etatLot, joursRestants, repartirLots, lotDlcDepassee, libelleDate, coffretsPossibles } from "./metier.js";
 import { ligneDepuisAttente } from "./context.jsx";
 
 describe("detailVariante (tickets et apercus)", () => {
@@ -100,5 +100,15 @@ describe("Lots et dates limites", () => {
     expect(lotDlcDepassee(lots, { id: "v1", stock: 6 }, "2026-11-20")?.id).toBe("a");
     expect(lotDlcDepassee(lots, { id: "v1", stock: 4 }, "2026-11-20")).toBeNull();   // lot périmé déjà écoulé
     expect(lotDlcDepassee(lots, { id: "v2", stock: 6 }, "2026-11-20")).toBeNull();
+  });
+});
+
+describe("Coffrets", () => {
+  it("nombre de coffrets montables = l'article le plus limitant", () => {
+    const stock = { the: 750, conf: 5, boite: 3 };
+    const compo = [{ variant_id: "the", quantite: 100 }, { variant_id: "conf", quantite: 1 }, { variant_id: "boite", quantite: 1 }];
+    expect(coffretsPossibles(compo, id => stock[id])).toBe(3);
+    expect(coffretsPossibles(compo, id => (id === "the" ? 250 : stock[id]))).toBe(2);
+    expect(coffretsPossibles([], () => 10)).toBe(0);
   });
 });

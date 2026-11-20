@@ -166,6 +166,10 @@ export const stock = {
   receiveBatch: (data) => api('/api/stock/receive-batch', { method: 'POST', body: JSON.stringify(data) }),
   // Lots avec date limite encore en stock (epicerie) ; retirer = sortir du stock ce qui reste d'un lot
   lots: () => api('/api/stock/lots'),
+  // Coffrets composés montés à l'avance (épicerie) : compositions, remplacer une composition, monter (+N) / défaire (-N)
+  coffrets: () => api('/api/stock/coffrets'),
+  definirCoffret: (productId, items) => api(`/api/stock/coffrets/${productId}`, { method: 'PUT', body: JSON.stringify({ items }) }),
+  monterCoffrets: (variantId, nombre) => api('/api/stock/coffrets/monter', { method: 'POST', body: JSON.stringify({ variantId, nombre }) }),
   retirerLot: (id, motif) => api(`/api/stock/lots/${id}/retirer`, { method: 'POST', body: JSON.stringify({ motif }) }),
   adjust: (data) => api('/api/stock/adjust', { method: 'POST', body: JSON.stringify(data) }),
   // { reason, items:[{variantId,newStock,expectedStock?}] } (500 lignes max) -> { results:[{variantId,ok,error}] }

@@ -8,7 +8,7 @@ import { Modal, Btn, Input, Badge } from "../ui.jsx";
 import { useApp } from "../context.jsx";
 import { tauxMarque } from "../lib/formatters.js";
 import { sortSizes } from "./_shared.js";
-import { affStock, venduAuPoids, quantiteValorisee, estEpicerie, etatLot, joursRestants, libelleDate } from "../metier.js";
+import { affStock, venduAuPoids, quantiteValorisee, estEpicerie, etatLot, joursRestants, libelleDate, coffretsPossibles } from "../metier.js";
 import { detailVariante } from "../lib/formatters.js";
 
 // Catalogue importe (gestlog/TIO : ~50 000 variantes chez MCS) : une liste deroulante de
@@ -208,7 +208,7 @@ function StockScreen(){
       {stockValuation.unvalued>0&&<div style={{fontSize:10,color:C.warn||"#B45309",fontWeight:600,maxWidth:220}}>⚠ {stockValuation.unvalued} unité(s) sans prix d'achat renseigné (non valorisées). Complétez le coût à l'import.</div>}
     </div>}
     <div style={{display:"flex",gap:6,marginBottom:12}}>
-      {[{id:"matrix",l:"Matrice"},{id:"reception",l:"Réception"},{id:"alerts",l:"Alertes"},{id:"moves",l:"Mouvements"},{id:"inventory",l:"Inventaire"},{id:"adjust",l:"Ajustement"},{id:"defective",l:"Défectueux"},{id:"tenues",l:"Tenues"},{id:"transfers",l:"Transferts"},{id:"aging",l:"Vieillissement"},...(epicerie?[{id:"dates",l:"Dates limites"}]:[])].map(t=>(
+      {[{id:"matrix",l:"Matrice"},{id:"reception",l:"Réception"},{id:"alerts",l:"Alertes"},{id:"moves",l:"Mouvements"},{id:"inventory",l:"Inventaire"},{id:"adjust",l:"Ajustement"},{id:"defective",l:"Défectueux"},{id:"tenues",l:"Tenues"},{id:"transfers",l:"Transferts"},{id:"aging",l:"Vieillissement"},...(epicerie?[{id:"dates",l:"Dates limites"},{id:"coffrets",l:"Coffrets"}]:[])].map(t=>(
         <button key={t.id} onClick={()=>setTab(t.id)} style={{padding:"0 14px",minHeight:34,borderRadius:8,border:`1.5px solid ${tab===t.id?C.primary:C.border}`,
           background:tab===t.id?C.primary:"transparent",color:tab===t.id?"#fff":C.text,fontSize:12,fontWeight:600,cursor:"pointer"}}>{t.l}</button>))}</div>
 
@@ -721,6 +721,7 @@ function StockScreen(){
           style={{width:"100%",height:40,background:C.primary}}>Fermer</Btn></div>}
     </Modal>
 
+    {tab==="coffrets"&&epicerie&&<CoffretsTab products={products} notify={notify} refreshProducts={refreshProducts}/>}
     {tab==="tenues"&&<TenuesTab products={products} setProducts={setProducts} users={users} tenUser={tenUser} setTenUser={setTenUser}
       tenItems={tenItems} setTenItems={setTenItems} tenSaving={tenSaving} setTenSaving={setTenSaving}
       tenHistoryFilter={tenHistoryFilter} setTenHistoryFilter={setTenHistoryFilter}
@@ -810,6 +811,82 @@ function StockScreen(){
 }
 
 /* ══════════ TENUES TAB ══════════ */
+/* ══════════ COFFRETS (épicerie) : composition + montage à l'avance ══════════ */
+// Un coffret est un produit normal de la catégorie « Coffrets ». On décrit ce qu'il contient, puis
+// « Monter » retire les articles du stock et ajoute les coffrets ; en caisse il se vend comme un autre.
+function CoffretsTab({products,notify,refreshProducts}){
+  const[compos,setCompos]=useState(null);const[sel,setSel]=useState("");const[lignes,setLignes]=useState([]);
+  const[modifie,setModifie]=useState(false);const[busy,setBusy]=useState(false);
+  const[q,setQ]=useState("");const[ajP,setAjP]=useState("");const[ajV,setAjV]=useState("");const[ajQ,setAjQ]=useState("");
+  const[varCoffret,setVarCoffret]=useState("");const[nombre,setNombre]=useState("1");
+  const charger=useCallback(async()=>{try{setCompos(await API.stock.coffrets()||[]);}catch(e){notify("Coffrets : "+e.message,"error");setCompos([]);}},[notify]);
+  useEffect(()=>{charger();},[charger]);
+  const composes=useMemo(()=>new Set((compos||[]).map(c=>c.product_id)),[compos]);
+  const coffrets=useMemo(()=>products.filter(p=>!venduAuPoids(p)&&(p.category==="Coffrets"||composes.has(p.id)))
+    .sort((a,b)=>a.name.localeCompare(b.name)),[products,composes]);
+  const coffret=products.find(p=>p.id===sel);
+  const stockDe=useCallback((variantId)=>{for(const p of products){const v=p.variants?.find(x=>x.id===variantId);if(v)return v.stock||0;}return 0;},[products]);
+  const trouve=useCallback((variantId)=>{for(const p of products){const v=p.variants?.find(x=>x.id===variantId);if(v)return{p,v};}return null;},[products]);
+  useEffect(()=>{if(!sel)return;setLignes((compos||[]).filter(c=>c.product_id===sel).map(c=>({variant_id:c.variant_id,quantite:c.quantite})));
+    setModifie(false);setVarCoffret(products.find(p=>p.id===sel)?.variants?.[0]?.id||"");},[sel,compos]);// eslint-disable-line react-hooks/exhaustive-deps
+  const possibles=coffretsPossibles(lignes,stockDe);
+  const unite=(p)=>venduAuPoids(p)?"g":"pièce(s)";
+  const ajouter=()=>{const n=parseInt(ajQ,10);if(!ajV||!(n>0))return;
+    if(products.find(p=>p.id===sel)?.variants?.some(v=>v.id===ajV)){notify("Un coffret ne peut pas se contenir lui-même","warn");return;}
+    setLignes(prev=>{const i=prev.findIndex(l=>l.variant_id===ajV);if(i>=0){const n2=[...prev];n2[i]={...n2[i],quantite:n2[i].quantite+n};return n2;}return[...prev,{variant_id:ajV,quantite:n}];});
+    setModifie(true);setAjV("");setAjQ("");};
+  const enregistrer=async()=>{setBusy(true);
+    try{await API.stock.definirCoffret(sel,lignes.map(l=>({variantId:l.variant_id,quantite:l.quantite})));await charger();notify("Composition enregistrée","success");}
+    catch(e){notify("Composition refusée : "+e.message,"error");}finally{setBusy(false);}};
+  const monter=async(signe)=>{const n=parseInt(nombre,10);if(!(n>0)||!varCoffret)return;
+    if(signe<0&&!confirm(`Défaire ${n} coffret(s) ? Les articles reviennent en stock.`))return;
+    setBusy(true);
+    try{await API.stock.monterCoffrets(varCoffret,signe*n);await refreshProducts();
+      notify(signe>0?`${n} coffret(s) monté(s) : articles retirés du stock`:`${n} coffret(s) défait(s) : articles remis en stock`,"success");}
+    catch(e){notify(e.message,"error");}finally{setBusy(false);}};
+  const sty={padding:8,borderRadius:8,border:`1.5px solid ${C.border}`,fontSize:12,fontFamily:"inherit"};
+  return(<div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`}}>
+    <h3 style={{fontSize:14,fontWeight:700,margin:"0 0 4px"}}>Coffrets</h3>
+    <div style={{fontSize:10,color:C.textMuted,marginBottom:10}}>Créez d'abord le coffret comme un produit de la catégorie « Coffrets ». Indiquez ici ce qu'il contient,
+      puis « Monter » retire les articles du stock et ajoute les coffrets. En caisse, le coffret se vend comme un produit normal.</div>
+    {compos===null?<div style={{fontSize:12,color:C.textLight}}>Chargement…</div>:<>
+    <select value={sel} onChange={e=>setSel(e.target.value)} data-testid="coffret-choix" style={{...sty,width:"100%",marginBottom:12}}>
+      <option value="">{coffrets.length?"Choisir un coffret":"Aucun produit dans la catégorie Coffrets"}</option>
+      {coffrets.map(p=>(<option key={p.id} value={p.id}>{p.name} ({p.sku}){composes.has(p.id)?"":" — sans composition"}</option>))}</select>
+    {coffret&&<>
+      <div style={{fontSize:12,fontWeight:700,marginBottom:6}}>Contenu d'un coffret</div>
+      {lignes.length===0&&<div style={{fontSize:11,color:C.textLight,marginBottom:8}}>Aucun article : ajoutez-les ci-dessous.</div>}
+      {lignes.map((l,i)=>{const t=trouve(l.variant_id);return(<div key={l.variant_id} data-testid="coffret-ligne" style={{display:"flex",alignItems:"center",gap:8,padding:"6px 0",borderBottom:`1px solid ${C.border}`}}>
+        <div style={{flex:1,fontSize:12}}><b>{t?.p.name||"Article supprimé"}</b> <span style={{color:C.textMuted}}>{t?detailVariante(t.v.color,t.v.size):""}</span>
+          <div style={{fontSize:10,color:C.textMuted}}>Stock : {t?affStock(t.p,t.v.stock||0):"—"}</div></div>
+        <input type="number" min="1" value={l.quantite} onChange={e=>{const n=parseInt(e.target.value,10);if(n>0){setLignes(prev=>{const x=[...prev];x[i]={...x[i],quantite:n};return x;});setModifie(true);}}}
+          style={{width:70,padding:4,borderRadius:6,border:`1.5px solid ${C.border}`,textAlign:"center"}}/>
+        <span style={{fontSize:10,color:C.textMuted,width:50}}>{t?unite(t.p):""}</span>
+        <button onClick={()=>{setLignes(prev=>prev.filter((_,j)=>j!==i));setModifie(true);}} style={{background:"transparent",border:"none",cursor:"pointer",color:C.danger,fontSize:14}}>✕</button></div>);})}
+      <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center",margin:"10px 0"}}>
+        <Input value={q} onChange={e=>setQ(e.target.value)} placeholder="Rechercher un article…" style={{width:160,height:34,fontSize:11}}/>
+        <select value={ajP} onChange={e=>{setAjP(e.target.value);setAjV(products.find(p=>p.id===e.target.value)?.variants?.[0]?.id||"");}} style={{...sty,flex:1,minWidth:160}}>
+          <option value="">Article</option>{optionsProduits(filtrerProduits(products.filter(p=>p.id!==sel),q,ajP))}</select>
+        {ajP&&(products.find(p=>p.id===ajP)?.variants?.length||0)>1&&<select value={ajV} onChange={e=>setAjV(e.target.value)} style={sty}>
+          {products.find(p=>p.id===ajP).variants.map(v=>(<option key={v.id} value={v.id}>{detailVariante(v.color,v.size)||"—"}</option>))}</select>}
+        <Input type="number" value={ajQ} onChange={e=>setAjQ(e.target.value)} placeholder={ajP&&venduAuPoids(products.find(p=>p.id===ajP))?"Grammes":"Quantité"} style={{width:90,height:34,fontSize:11}}/>
+        <Btn variant="outline" onClick={ajouter} disabled={!ajV||!(parseInt(ajQ,10)>0)} style={{fontSize:11}}>Ajouter</Btn></div>
+      <Btn onClick={enregistrer} disabled={busy||!modifie} data-testid="coffret-enregistrer" style={{width:"100%",height:38,background:C.primary,marginBottom:14}}>
+        <Save size={14}/> Enregistrer la composition</Btn>
+      <div style={{padding:12,borderRadius:10,background:C.primaryLight,border:`1.5px solid ${C.primary}33`}}>
+        <div style={{fontSize:12,fontWeight:700,color:C.primary,marginBottom:6}}>
+          Coffrets en stock : {(coffret.variants||[]).reduce((s,v)=>s+(v.stock||0),0)} — possibles avec le stock actuel : <span data-testid="coffrets-possibles">{possibles}</span></div>
+        {modifie&&<div style={{fontSize:10,color:C.warn||"#B45309",marginBottom:6}}>Enregistrez la composition avant de monter.</div>}
+        <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
+          {(coffret.variants||[]).length>1&&<select value={varCoffret} onChange={e=>setVarCoffret(e.target.value)} style={sty}>
+            {coffret.variants.map(v=>(<option key={v.id} value={v.id}>{detailVariante(v.color,v.size)||"—"}</option>))}</select>}
+          <Input type="number" value={nombre} onChange={e=>setNombre(e.target.value)} style={{width:80,height:36}}/>
+          <Btn onClick={()=>monter(1)} disabled={busy||modifie||!composes.has(sel)||!(parseInt(nombre,10)>0)} data-testid="coffret-monter" style={{background:C.primary}}>Monter</Btn>
+          <Btn variant="outline" onClick={()=>monter(-1)} disabled={busy||modifie||!composes.has(sel)||!(parseInt(nombre,10)>0)}>Défaire</Btn></div></div>
+    </>}</>}
+  </div>);
+}
+
 function TenuesTab({products,setProducts,users,tenUser,setTenUser,tenItems,setTenItems,tenSaving,setTenSaving,
   tenHistoryFilter,setTenHistoryFilter,tenScanRef,tenAddByEAN,resolveEAN,
   stockMoves,addStockMove,addAudit,notify,setScanOverride,clearScanOverride,findByEAN}){
