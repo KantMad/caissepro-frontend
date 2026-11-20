@@ -4,7 +4,7 @@ import printer from "../printer.js";
 import * as API from "../api.js";
 import { CO, C, CAT_COLORS } from "../constants.jsx";
 import { catIcon, EAN13Svg, ean13SvgHtml, norm } from "../utils.jsx";
-import { estEpicerie } from "../metier.js";
+import { estEpicerie, venduAuPoids, prixPese, libellePrixPoids } from "../metier.js";
 import { ProductIcon, colorHex } from "../ProductIcon.jsx";
 import { Modal, Btn, Input, Badge, Numpad } from "../ui.jsx";
 import { useApp } from "../context.jsx";
@@ -22,7 +22,8 @@ function SalesScreen(){
     gDiscPct,gDiscAmt,setCartGD,promoCode,setPromoCode,calcPromoDiscount,isOnline,findByEAN,offlineMode,
     parked,parkCart,restoreCart,removeParked,customers,addCustomer,selCust,setSelCust,perm,notify,
     stockAlerts,activePromos,avoirPayment,selectedAvoir,setSelectedAvoir,getLoyaltyTier,tickets,saleNote,setSaleNote,favorites,toggleFavorite,getLastPriceForCustomer,settings,
-    printerConnected,thermalPrint,pendingSync,clearPendingSync,users,vendeurs,currentUser,currentStore,avoirs,consumeAvoir,checkGiftCard,setScanOverride,clearScanOverride,isAvoirExpired,addAudit,addJET,trainingMode,cartTotals,retoucheBons,addRetoucheBon,cashReg,closures,allCategories,getVariantPhotos}=useApp();
+    printerConnected,thermalPrint,pendingSync,clearPendingSync,users,vendeurs,currentUser,currentStore,avoirs,consumeAvoir,checkGiftCard,setScanOverride,clearScanOverride,isAvoirExpired,addAudit,addJET,trainingMode,cartTotals,retoucheBons,addRetoucheBon,cashReg,closures,allCategories,getVariantPhotos,pesee,setPesee,addPeseeAuPanier}=useApp();
+  const[poidsSaisi,setPoidsSaisi]=useState("");   // fenetre de pesee (the en vrac), en grammes
   const categories=allCategories;
   const[search,setSearch]=useState("");const[cat,setCat]=useState("Tous");const[vm,setVm]=useState(null);const[selSeller,setSelSeller]=useState(null);
   // Remises cumulables : pourcentage d'abord, puis euros TTC sur le reste
@@ -277,7 +278,7 @@ function SalesScreen(){
               <span style={{fontSize:11,color:cc,fontWeight:600,background:`${cc}10`,padding:"1px 6px",borderRadius:4}}>{p.category}</span>
               <span style={{fontSize:11,color:C.textLight}}>{p.variants.length} var.</span></div>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-              <span style={{fontSize:16,fontWeight:800,color:cc,letterSpacing:"-0.5px"}}>{p.price.toFixed(2)}€</span>
+              <span style={{fontSize:16,fontWeight:800,color:cc,letterSpacing:"-0.5px"}}>{venduAuPoids(p)?libellePrixPoids(p):`${p.price.toFixed(2)}€`}</span>
               <span style={{fontSize:10,fontWeight:600,color:ts>5?C.primary:ts>0?C.warn:C.danger,background:ts>5?C.primaryLight:ts>0?C.warnLight:C.dangerLight,padding:"2px 7px",borderRadius:6}}>{ts}</span></div>
           </div></div>);})}</div></div></div>
 
@@ -378,10 +379,13 @@ function SalesScreen(){
                 onMouseEnter={e=>e.currentTarget.style.background=C.danger} onMouseLeave={e=>e.currentTarget.style.background=C.dangerLight}>
                 <Trash2 size={16} color={C.danger} style={{transition:"color 0.15s"}}/></button></div>
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-              <div style={{display:"flex",alignItems:"center",gap:2,background:C.surfaceAlt,borderRadius:20,padding:2}}>
+              {i.variant?.poidsG?<button data-testid="ligne-pesee" onClick={()=>{setPoidsSaisi("");setPesee({product:products.find(x=>x.id===i.product.id)||i.product,variant:i.variant});}}
+                title="Peser à nouveau : le poids s'ajoute à la ligne"
+                style={{padding:"0 12px",minHeight:36,borderRadius:18,border:`1px solid ${C.border}`,background:C.surfaceAlt,cursor:"pointer",fontSize:13,fontWeight:700}}>⚖️ {i.variant.poidsG} g +</button>
+              :<div style={{display:"flex",alignItems:"center",gap:2,background:C.surfaceAlt,borderRadius:20,padding:2}}>
                 <button onClick={()=>updateQty(i.product.id,i.variant?.id,i.quantity-1)} style={{width:36,height:36,borderRadius:18,border:"none",background:C.surface,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:`0 1px 2px ${C.shadow}`,transition:"all 0.1s"}} aria-label="Diminuer la quantité"><Minus size={16}/></button>
                 <span style={{minWidth:28,textAlign:"center",fontSize:15,fontWeight:800}}>{i.quantity}</span>
-                <button onClick={()=>updateQty(i.product.id,i.variant?.id,i.quantity+1)} style={{width:36,height:36,borderRadius:18,border:"none",background:C.surface,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:`0 1px 2px ${C.shadow}`,transition:"all 0.1s"}} aria-label="Augmenter la quantité"><Plus size={16}/></button></div>
+                <button onClick={()=>updateQty(i.product.id,i.variant?.id,i.quantity+1)} style={{width:36,height:36,borderRadius:18,border:"none",background:C.surface,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:`0 1px 2px ${C.shadow}`,transition:"all 0.1s"}} aria-label="Augmenter la quantité"><Plus size={16}/></button></div>}
               <button onClick={()=>{setDm({pid:i.product.id,vid:i.variant?.id,item:i});
                 setDPct(String(i.discountPercent??(i.discountType==="amount"?0:i.discount)??""));
                 setDEur(String(i.discountAmount??(i.discountType==="amount"?(i.discount||0)*i.quantity:0)??""));}} style={{padding:"0 12px",minHeight:32,borderRadius:8,border:`1px solid ${d>0?cc:C.border}`,background:d>0?`${cc}08`:"transparent",cursor:"pointer",fontSize:12,fontWeight:700,color:d>0?cc:C.textMuted,transition:"all 0.15s"}}>
@@ -868,6 +872,18 @@ function SalesScreen(){
     </Modal>
 
     {/* RETOUCHE MODAL */}
+    {/* Pesée (thé en vrac) : le vendeur pèse sur sa balance et tape le poids, la caisse calcule */}
+    <Modal open={!!pesee} onClose={()=>{setPesee(null);setPoidsSaisi("");}} title={pesee?`Peser — ${pesee.product.name}`:"Pesée"}>
+      {pesee&&(()=>{const g=Math.round(parseFloat(poidsSaisi)||0);const deja=cart.find(c=>c.product.id===pesee.product.id&&c.variant?.id===pesee.variant?.id)?.variant?.poidsG||0;
+        const valider=()=>{if(g>0&&addPeseeAuPanier(pesee.product,pesee.variant,g))setPoidsSaisi("");};
+        return<div>
+          <div style={{fontSize:13,color:C.textMuted,marginBottom:10}}>Prix : <b style={{color:C.text}}>{libellePrixPoids(pesee.product)}</b>{deja>0&&<> — déjà {deja} g au panier (le poids s'ajoute)</>}</div>
+          <Numpad value={poidsSaisi} onChange={v=>setPoidsSaisi(v.replace(/\./g,""))} onEnter={valider} label="Poids en grammes" unit="g"/>
+          <div data-testid="prix-pese" style={{display:"flex",justifyContent:"space-between",alignItems:"center",margin:"12px 0",fontSize:16,fontWeight:800}}>
+            <span>{g>0?`${deja+g} g`:"—"}</span><span style={{color:C.primary}}>{g>0?`${prixPese(pesee.product,deja+g).toFixed(2)}€`:""}</span></div>
+          <Btn onClick={valider} disabled={!(g>0)} style={{width:"100%",height:44,background:C.primary}}>Ajouter au panier</Btn>
+        </div>;})()}
+    </Modal>
     <Modal open={retoucheModal} onClose={()=>{setRetoucheModal(false);setRetCustQ("");}} title="Bon de retouche" wide>
       {/* Quick-pick retouche options */}
       <div style={{marginBottom:14}}>

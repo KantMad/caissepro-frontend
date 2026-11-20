@@ -473,7 +473,7 @@ describe("Métier épicerie (METIER=epicerie sur le serveur)", () => {
     try { await fn(); } finally { API.settings.get = avant; }
   };
 
-  it("Produits : contenance au lieu de couleur/taille, TVA 5,5 % et catégorie Café proposées", () => avecEpicerie(async () => {
+  it("Produits : contenance au lieu de couleur/taille, TVA 5,5 %, catégorie Thés natures et choix « au poids » proposés", () => avecEpicerie(async () => {
     const { findByText, getByText, queryByText, container } = render(<AppProvider><ProductsScreen /></AppProvider>);
     fireEvent.click(await findByText(/Nouveau/));
     await waitFor(() => expect(getByText("CONTENANCE")).toBeTruthy());
@@ -481,7 +481,8 @@ describe("Métier épicerie (METIER=epicerie sur le serveur)", () => {
     expect(queryByText("TAILLE")).toBeNull();
     const selects = [...container.ownerDocument.querySelectorAll("select")];
     expect(selects.some(s => s.value === "0.055")).toBe(true);
-    expect(selects.some(s => s.value === "Café")).toBe(true);
+    expect(selects.some(s => s.value === "Thés natures")).toBe(true);
+    expect(container.ownerDocument.querySelector('[data-testid="mode-vente"]')).toBeTruthy();
   }));
 
   it("Vente : pas de bouton Retouche", () => avecEpicerie(async () => {
@@ -489,8 +490,31 @@ describe("Métier épicerie (METIER=epicerie sur le serveur)", () => {
     const { queryByText } = render(<AppProvider><Harness /><SalesScreen /></AppProvider>);
     await waitFor(() => expect(ctx?.settings?.metier).toBe("epicerie"));
     expect(queryByText("Retouche")).toBeNull();
-    expect(ctx.allCategories).toContain("Café");
+    expect(ctx.allCategories).toContain("Thés parfumés");
     expect(ctx.allCategories).not.toContain("T-shirts");
+  }));
+
+  it("Vente au poids : le thé en vrac ouvre la pesée, 85 g à 8 €/100 g = 6,80 €, une ligne en quantité 1, poids envoyé à l'API", () => avecEpicerie(async () => {
+    let ctx; const Harness = () => { ctx = useApp(); return null; };
+    const { findByText, getByTestId, getByText } = render(<AppProvider><Harness /><SalesScreen /></AppProvider>);
+    await waitFor(() => expect(ctx?.settings?.metier).toBe("epicerie"));
+    const the = { id: "p9", name: "Cannelle", sku: "TH-1", price: 8, costPrice: 2, taxRate: 0.055, category: "Thés parfumés", poidsRefG: 100 };
+    const vrac = { id: "v9", color: "—", size: "Vrac", ean: "" };
+    act(() => { ctx.addToCart(the, vrac); });
+    expect(ctx.cart.length).toBe(0);                     // rien d'ajouté avant la pesée
+    await findByText("Peser — Cannelle");
+    for (const k of ["8", "5"]) fireEvent.click(getByText(k, { selector: "button" }));
+    expect(getByTestId("prix-pese").textContent).toMatch(/85 g.*6\.80€/);
+    act(() => { ctx.addPeseeAuPanier(the, vrac, 85); });
+    await waitFor(() => expect(ctx.cart.length).toBe(1));
+    expect(ctx.cart[0]).toMatchObject({ quantity: 1, product: { price: 6.8 }, variant: { size: "85 g", poidsG: 85 } });
+    act(() => { ctx.addPeseeAuPanier(the, vrac, 40); });   // même thé repesé : poids additionnés
+    await waitFor(() => expect(ctx.cart[0].variant.poidsG).toBe(125));
+    expect(ctx.cart.length).toBe(1);
+    expect(ctx.cart[0].product.price).toBe(10);
+    act(() => { ctx.updateQty("p9", "v9", 3); });          // quantité figée à 1 sur une ligne pesée
+    expect(ctx.cart[0].quantity).toBe(1);
+    expect(getByTestId("ligne-pesee").textContent).toMatch(/125 g/);
   }));
 
   it("Textile (défaut) : bouton Retouche toujours présent", async () => {

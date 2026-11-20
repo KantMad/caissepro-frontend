@@ -60,13 +60,13 @@ export const SC=({icon:I,label,value,color:c,sub})=>(<div style={{background:C.s
   <div style={{fontSize:24,fontWeight:700,letterSpacing:"-0.5px",color:C.text}}>{value}</div>
   {sub&&<div style={{fontSize:11,color:C.textMuted,marginTop:4}}>{sub}</div>}</div>);
 
-export const Numpad=({value,onChange,onEnter,label})=>{
+export const Numpad=({value,onChange,onEnter,label,unit="€"})=>{
   const press=(k)=>{if(k==="C")onChange("");else if(k==="⌫")onChange(value.slice(0,-1));
     else if(k==="."&&value.includes("."))return;else onChange(value+k);};
   return(<div style={{background:C.surfaceAlt,borderRadius:14,padding:14,border:`1px solid ${C.border}`}}>
     {label&&<div style={{fontSize:11,fontWeight:500,color:C.textMuted,marginBottom:8,letterSpacing:"-0.01em"}}>{label}</div>}
     <div style={{background:C.surface,borderRadius:10,padding:"10px 14px",marginBottom:10,textAlign:"right",fontSize:24,fontWeight:700,
-      minHeight:40,display:"flex",alignItems:"center",justifyContent:"flex-end",border:`1.5px solid ${C.border}`,letterSpacing:"-0.5px",color:C.text}}>{value||"0"}<span style={{fontSize:14,color:C.textLight,marginLeft:3,fontWeight:500}}>€</span></div>
+      minHeight:40,display:"flex",alignItems:"center",justifyContent:"flex-end",border:`1.5px solid ${C.border}`,letterSpacing:"-0.5px",color:C.text}}>{value||"0"}<span style={{fontSize:14,color:C.textLight,marginLeft:3,fontWeight:500}}>{unit}</span></div>
     <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:5}}>
       {["7","8","9","4","5","6","1","2","3",".","0","⌫"].map(k=>(
         <button key={k} onClick={()=>press(k)} style={{height:42,borderRadius:10,border:`1px solid ${k==="⌫"?C.danger+"22":C.border}`,background:k==="⌫"?C.dangerLight:C.surface,

@@ -8,7 +8,14 @@ import { useApp } from "../context.jsx";
 import { tauxMarque } from "../lib/formatters.js";
 import { sortVariantsBySize } from "./_shared.js";
 import CSVImportWizard from "./CSVImportWizard.jsx";
-import { estEpicerie, produitParDefaut, couleurVariante, tailleVariante, libelleTaille } from "../metier.js";
+import { estEpicerie, produitParDefaut, couleurVariante, tailleVariante, libelleTaille, libelleCollection, venduAuPoids, libellePrixPoids } from "../metier.js";
+
+// Mode de vente (epicerie) : a l'unite, ou au poids avec le prix pour N grammes
+const MODES_VENTE=[{v:"",l:"À l'unité"},{v:"100",l:"Au poids — prix pour 100 g"},{v:"50",l:"Au poids — prix pour 50 g"},{v:"1000",l:"Au poids — prix au kg"}];
+const libellePrix=(ref,pm)=>ref?`PRIX ${pm} POUR ${Number(ref)>=1000?"1 KG":`${ref} G`} (€)`:`PRIX VENTE ${pm} (€)`;
+const ChoixVente=({value,onChange})=>(<div><label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>VENTE</label>
+  <select data-testid="mode-vente" value={value||""} onChange={e=>onChange(e.target.value)} style={{width:"100%",padding:10,borderRadius:10,border:`2px solid ${C.border}`,fontSize:12,fontFamily:"inherit"}}>
+    {MODES_VENTE.map(m=>(<option key={m.v} value={m.v}>{m.l}</option>))}</select></div>);
 import { detailVariante } from "../lib/formatters.js";
 
 function ProductsScreen(){
@@ -32,7 +39,7 @@ function ProductsScreen(){
   const filtered=products.filter(q=>!search||q.name.toLowerCase().includes(search.toLowerCase())||q.sku.toLowerCase().includes(search.toLowerCase()));
 
   const openEdit=(prod)=>{setEp({name:prod.name,sku:prod.sku,price:String(prod.price),costPrice:String(prod.costPrice||""),
-    taxRate:String(prod.taxRate),category:prod.category,collection:prod.collection||""});setEditModal(prod);};
+    taxRate:String(prod.taxRate),category:prod.category,collection:prod.collection||"",poidsRefG:prod.poidsRefG?String(prod.poidsRefG):""});setEditModal(prod);};
 
   return(<div style={{height:"100%",overflowY:"auto",padding:"var(--pad,16px)",background:C.bg}}>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
@@ -57,14 +64,14 @@ function ProductsScreen(){
     <div style={{background:C.surface,borderRadius:14,border:`1.5px solid ${C.border}`,overflow:"hidden"}}>
       <table className="rtable" style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
         <thead><tr style={{background:C.surfaceAlt}}>
-          {["Produit","SKU",epi?"Marque / origine":"Collection",`Prix ${pm}`,"Coût","Marge","TVA","Stock",epi?"Cont.":"Var.","Actions"].map(h=>(
+          {["Produit","SKU",epi?"Type / origine":"Collection",`Prix ${pm}`,"Coût","Marge","TVA","Stock",epi?"Cont.":"Var.","Actions"].map(h=>(
             <th key={h} style={{padding:"8px 10px",textAlign:"left",fontWeight:700,color:C.textMuted,fontSize:11,borderBottom:`2px solid ${C.border}`}}>{h}</th>))}</tr></thead>
         <tbody>{filtered.map(q=>{const ts=q.variants.reduce((s,v)=>s+v.stock,0);const mg=tauxMarque(q,pm)??0;
           return(<tr key={q.id} style={{borderBottom:`1px solid ${C.border}`,cursor:"pointer"}} onClick={()=>openEdit(q)}>
             <td data-label="Produit" style={{padding:"6px 10px",fontWeight:600}}>{q.name}</td>
             <td data-label="SKU" style={{padding:"6px 10px",fontFamily:"monospace",color:C.textMuted}}>{q.sku}</td>
             <td data-label="Collection" style={{padding:"6px 10px"}}><Badge color={C.info}>{q.collection||"—"}</Badge></td>
-            <td data-label={`Prix ${pm}`} style={{padding:"6px 10px",fontWeight:700,color:C.primary}}>{q.price.toFixed(2)}€</td>
+            <td data-label={`Prix ${pm}`} style={{padding:"6px 10px",fontWeight:700,color:C.primary}}>{venduAuPoids(q)?libellePrixPoids(q):`${q.price.toFixed(2)}€`}</td>
             <td data-label="Coût" style={{padding:"6px 10px",color:C.textMuted}}>{q.costPrice?.toFixed(2)||"—"}€</td>
             <td data-label="Marge" style={{padding:"6px 10px"}}><Badge color={mg>50?"#059669":mg>30?C.accent:C.danger}>{mg.toFixed(0)}%</Badge></td>
             <td data-label="TVA" style={{padding:"6px 10px"}}>{(q.taxRate*100).toFixed(0)}%</td>
@@ -83,7 +90,7 @@ function ProductsScreen(){
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}>
           <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>NOM</label><Input value={ep.name||""} onChange={e=>setEp(p=>({...p,name:e.target.value}))}/></div>
           <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>SKU</label><Input value={ep.sku||""} onChange={e=>setEp(p=>({...p,sku:e.target.value}))}/></div>
-          <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>PRIX VENTE {pm} (€)</label><Input type="number" step="0.01" value={ep.price||""} onChange={e=>setEp(p=>({...p,price:e.target.value}))}/></div>
+          <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>{libellePrix(ep.poidsRefG,pm)}</label><Input type="number" step="0.01" value={ep.price||""} onChange={e=>setEp(p=>({...p,price:e.target.value}))}/></div>
           <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>PRIX ACHAT (€)</label><Input type="number" step="0.01" value={ep.costPrice||""} onChange={e=>setEp(p=>({...p,costPrice:e.target.value}))}/></div>
           <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>TVA</label>
             <select value={ep.taxRate||"0.20"} onChange={e=>setEp(p=>({...p,taxRate:e.target.value}))} style={{width:"100%",padding:10,borderRadius:10,border:`2px solid ${C.border}`,fontSize:12,fontFamily:"inherit"}}>
@@ -91,7 +98,8 @@ function ProductsScreen(){
           <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>CATÉGORIE</label>
             <select value={ep.category||""} onChange={e=>setEp(p=>({...p,category:e.target.value}))} style={{width:"100%",padding:10,borderRadius:10,border:`2px solid ${C.border}`,fontSize:12,fontFamily:"inherit"}}>
               {categories.filter(c=>c!=="Tous").map(c=>(<option key={c} value={c}>{c}</option>))}</select></div>
-          <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>{epi?"MARQUE / ORIGINE":"COLLECTION"}</label><Input value={ep.collection||""} onChange={e=>setEp(p=>({...p,collection:e.target.value}))}/></div></div>
+          <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>{libelleCollection(settings)}</label><Input value={ep.collection||""} onChange={e=>setEp(p=>({...p,collection:e.target.value}))}/></div>
+          {(epi||ep.poidsRefG)&&<ChoixVente value={ep.poidsRefG} onChange={v=>setEp(p=>({...p,poidsRefG:v}))}/>}</div>
 
         {/* Variants list */}
         <div style={{fontSize:12,fontWeight:700,marginBottom:8,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
@@ -132,7 +140,7 @@ function ProductsScreen(){
           <Btn variant="success" onClick={async()=>{
             const newPrice=parseFloat(ep.price);const oldPrice=editModal.price;
             const okFiche=await updateProduct(editModal.id,{name:ep.name,sku:ep.sku,costPrice:parseFloat(ep.costPrice)||0,
-              taxRate:parseFloat(ep.taxRate),category:ep.category,collection:ep.collection});
+              taxRate:parseFloat(ep.taxRate),category:ep.category,collection:ep.collection,poidsRefG:parseInt(ep.poidsRefG)||null});
             if(okFiche===false)return;   // refus serveur (message déjà affiché) : on garde la fiche ouverte
             // Le prix part separement : la route enregistre aussi l'historique et l'audit
             if(newPrice&&newPrice!==oldPrice){
@@ -170,7 +178,7 @@ function ProductsScreen(){
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}>
         <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>NOM</label><Input value={np.name} onChange={e=>setNp(p=>({...p,name:e.target.value}))}/></div>
         <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>SKU</label><Input value={np.sku} onChange={e=>setNp(p=>({...p,sku:e.target.value}))}/></div>
-        <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>PRIX VENTE {pm} (€)</label><Input type="number" step="0.01" value={np.price} onChange={e=>setNp(p=>({...p,price:e.target.value}))}/></div>
+        <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>{libellePrix(np.poidsRefG,pm)}</label><Input type="number" step="0.01" value={np.price} onChange={e=>setNp(p=>({...p,price:e.target.value}))}/></div>
         <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>PRIX ACHAT (€)</label><Input type="number" step="0.01" value={np.costPrice} onChange={e=>setNp(p=>({...p,costPrice:e.target.value}))}/></div>
         <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>TVA</label>
           <select value={np.taxRate} onChange={e=>setNp(p=>({...p,taxRate:e.target.value}))} style={{width:"100%",padding:10,borderRadius:10,border:`2px solid ${C.border}`,fontSize:12,fontFamily:"inherit"}}>
@@ -178,7 +186,8 @@ function ProductsScreen(){
         <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>CATÉGORIE</label>
           <select value={np.category} onChange={e=>setNp(p=>({...p,category:e.target.value}))} style={{width:"100%",padding:10,borderRadius:10,border:`2px solid ${C.border}`,fontSize:12,fontFamily:"inherit"}}>
             {categories.filter(c=>c!=="Tous").map(c=>(<option key={c} value={c}>{c}</option>))}</select></div>
-        <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>{epi?"MARQUE / ORIGINE":"COLLECTION"}</label><Input value={np.collection} onChange={e=>setNp(p=>({...p,collection:e.target.value}))}/></div></div>
+        <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>{libelleCollection(settings)}</label><Input value={np.collection} onChange={e=>setNp(p=>({...p,collection:e.target.value}))}/></div>
+        {epi&&<ChoixVente value={np.poidsRefG} onChange={v=>setNp(p=>({...p,poidsRefG:v}))}/>}</div>
       <div style={{fontSize:12,fontWeight:700,marginBottom:8}}>{epi?"Première contenance":"Première variante"}</div>
       <div style={{display:"grid",gridTemplateColumns:epi?"1fr 1fr 1fr 1fr":"1fr 1fr 1fr 1fr 1fr 1fr",gap:6,marginBottom:14}}>
         {!epi&&<div><label style={{fontSize:9,color:C.textMuted}}>COULEUR</label><Input value={nv.color} onChange={e=>setNv(v=>({...v,color:e.target.value}))}/></div>}
@@ -189,8 +198,8 @@ function ProductsScreen(){
         <div><label style={{fontSize:9,color:C.textMuted}}>ALERTE</label><Input type="number" value={nv.stockAlert} onChange={e=>setNv(v=>({...v,stockAlert:e.target.value}))}/></div></div>
       <Btn onClick={()=>{if(np.name&&np.sku&&np.price){
         addProduct({name:np.name,sku:np.sku,price:parseFloat(np.price),costPrice:parseFloat(np.costPrice)||0,
-          taxRate:parseFloat(np.taxRate),category:np.category,collection:np.collection,
-          variants:[{id:`v${Date.now()}`,color:couleurVariante(settings,nv.color),colorCode:epi?"":(nv.colorCode||""),size:tailleVariante(settings,nv.size),ean:nv.ean||"",
+          taxRate:parseFloat(np.taxRate),category:np.category,collection:np.collection,poidsRefG:parseInt(np.poidsRefG)||null,
+          variants:[{id:`v${Date.now()}`,color:couleurVariante(settings,nv.color),colorCode:epi?"":(nv.colorCode||""),size:np.poidsRefG&&!nv.size.trim()?"Vrac":tailleVariante(settings,nv.size),ean:nv.ean||"",
             stock:parseInt(nv.stock)||0,defective:0,stockAlert:parseInt(nv.stockAlert)||5}]});
         setCreateModal(false);setNp(npVide());
         setNv({color:"",colorCode:"",size:"",ean:"",stock:"",stockAlert:"5"});}}}

@@ -6,18 +6,20 @@ import { SANS_COULEUR } from "./lib/formatters.js";
 
 export const estEpicerie = (settings) => settings?.metier === "epicerie";
 
-export const CATEGORIES_EPICERIE = ["Café", "Thé", "Infusions", "Huiles", "Vinaigres", "Épices",
-  "Condiments", "Épicerie salée", "Épicerie sucrée", "Confiserie", "Chocolat", "Vins", "Spiritueux",
-  "Coffrets", "Accessoires"];
+// Rayons d'une maison de the / epicerie fine (calques sur le premier client, Happy Blue Tea).
+// La couleur ou l'origine du the (vert, noir, Chine, Japon...) va dans le second champ
+// (« Type / origine », colonne collection). Le gerant peut ajouter ses propres categories.
+export const CATEGORIES_EPICERIE = ["Thés natures", "Thés parfumés", "Infusions", "Matcha", "Cafés",
+  "Épicerie sucrée", "Chocolat", "Épicerie salée", "Huiles et vinaigres", "Coffrets",
+  "Bougies et encens", "Accessoires"];
 
-export const ICONES_EPICERIE = { "Café": "☕", "Thé": "🍵", "Infusions": "🌿", "Huiles": "🫒",
-  "Vinaigres": "🍶", "Épices": "🌶️", "Condiments": "🧂", "Épicerie salée": "🥫", "Épicerie sucrée": "🍯",
-  "Confiserie": "🍬", "Chocolat": "🍫", "Vins": "🍷", "Spiritueux": "🥃", "Coffrets": "🎁",
-  "Accessoires": "🫖" };
+export const ICONES_EPICERIE = { "Thés natures": "🍵", "Thés parfumés": "🫖", "Infusions": "🌿",
+  "Matcha": "🍃", "Cafés": "☕", "Épicerie sucrée": "🍯", "Chocolat": "🍫", "Épicerie salée": "🌶️",
+  "Huiles et vinaigres": "🫒", "Coffrets": "🎁", "Bougies et encens": "🕯️", "Accessoires": "🥄" };
 
 // Valeurs proposees a la creation d'un produit (le gerant peut toujours les changer).
 export const produitParDefaut = (settings) => estEpicerie(settings)
-  ? { taxRate: "0.055", category: "Café", collection: "" }
+  ? { taxRate: "0.055", category: "Thés natures", collection: "", poidsRefG: "" }
   : { taxRate: "0.20", category: "T-shirts", collection: "PE-2026" };
 
 // Variante enregistree : en epicerie la couleur est remplacee par SANS_COULEUR (la base l'exige,
@@ -26,3 +28,13 @@ export const couleurVariante = (settings, saisie) => estEpicerie(settings) ? SAN
 export const tailleVariante = (settings, saisie) => (saisie || "").trim() || (estEpicerie(settings) ? SANS_COULEUR : "TU");
 
 export const libelleTaille = (settings) => estEpicerie(settings) ? "CONTENANCE" : "TAILLE";
+export const libelleCollection = (settings) => estEpicerie(settings) ? "TYPE / ORIGINE" : "COLLECTION";
+
+// ── Vente au poids (the en vrac) ── produit.poidsRefG = grammes de reference du prix (100 =
+// « 8,00 € les 100 g »). La caisse vend UNE ligne en quantite 1 au prix calcule, le poids dans
+// la contenance (« 85 g ») : pas de quantite decimale, tables fiscales inchangees (API migration 052).
+export const venduAuPoids = (p) => Number(p?.poidsRefG) > 0;
+export const prixPese = (p, grammes) =>
+  Math.round((Number(p?.price) || 0) * (Number(grammes) || 0) / Number(p.poidsRefG) * 100) / 100;
+export const libellePoids = (grammes) => `${grammes} g`;
+export const libellePrixPoids = (p) => `${(Number(p?.price) || 0).toFixed(2)}€ / ${p.poidsRefG} g`;

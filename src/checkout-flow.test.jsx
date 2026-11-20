@@ -181,3 +181,18 @@ describe("Vente : identifiant unique (pas de doublon à la synchro)", () => {
     expect(file.clientSaleId).toBe(envoi.clientSaleId);
   });
 });
+
+describe("Paiement — ligne pesée (thé en vrac)", () => {
+  it("envoie quantité 1, le poids en contenance et poids_g pour le contrôle de remise de l'API", async () => {
+    API.sales.checkout.mockResolvedValue({ seq: 2, hash: "h", grandTotal: "6.8", ticket_number: "TK-2",
+      totalHT: 6.45, totalTVA: 0.35, totalTTC: 6.8, createdAt: "2026-11-20", items: [], payments: [] });
+    mount();
+    const the = prod({ id: "p9", name: "Cannelle", price: 8, costPrice: 2, taxRate: 0.055, poidsRefG: 100 });
+    const vrac = { id: "v9", color: "—", size: "Vrac", ean: "" };
+    act(() => { ctx.addPeseeAuPanier(the, vrac, 85); });
+    await act(async () => { await ctx.checkout([{ method: "cash", amount: 6.8 }], "Vendeur"); });
+    const l = API.sales.checkout.mock.calls[0][0].items[0];
+    expect(l).toMatchObject({ product_id: "p9", variant_id: "v9", quantity: 1, variant_size: "85 g", poids_g: 85 });
+    expect(l.lineTTC).toBe(6.8);
+  });
+});

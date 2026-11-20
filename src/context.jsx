@@ -7,7 +7,7 @@ import { CO, DEFAULT_TVA_RATES, PERMS, initUsers, LOYALTY_TIERS, C, categories a
 import { hashPin, hashPinFort, verifyPin, sha256, norm, loadVariantOrderFromSettings, autoImportSizesFromProducts, generateEAN13, DEFAULT_CAT_ICONS } from "./utils.jsx";
 import { computeTotals, lineNetTTC } from "./lib/totals.js";
 import { detailVariante } from "./lib/formatters.js";
-import { estEpicerie, CATEGORIES_EPICERIE } from "./metier.js";
+import { estEpicerie, CATEGORIES_EPICERIE, venduAuPoids, prixPese, libellePoids } from "./metier.js";
 import { dayKey } from "./lib/dates.js";
 import { getLoyaltyTier as loyaltyTierOf } from "./lib/loyalty.js";
 import { calcPromoDiscount as calcPromos } from "./lib/promos.js";
@@ -48,7 +48,8 @@ export function ligneDepuisAttente(it,products=[]){
   return{product:{...(prod||{}),id:it.productId||`custom-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,6)}`,
       name:it.productName||prod?.name||"Article",price,taxRate:it.taxRate??prod?.taxRate??0.20,sku:it.sku||prod?.sku||"DIVERS",
       category:it.category||prod?.category||"Divers",costPrice:it.costPrice??prod?.costPrice??0},
-    variant:vari||{id:it.variantId||`cv-${Math.random().toString(36).slice(2,8)}`,color:it.variantColor||"—",size:it.variantSize||"—",ean:it.ean||""},
+    variant:it.poidsG&&vari?{...vari,size:it.variantSize||vari.size,poidsG:Number(it.poidsG)}   // ligne pesee : poids conserve
+      :vari||{id:it.variantId||`cv-${Math.random().toString(36).slice(2,8)}`,color:it.variantColor||"—",size:it.variantSize||"—",ean:it.ean||""},
     quantity:parseInt(it.quantity)||1,discount:parseFloat(it.discountPercent??it.discount)||0,discountPercent:parseFloat(it.discountPercent)||0,
     discountAmount:parseFloat(it.discountAmount)||0,isCustom:!!it.isCustom||(!it.productId)};}
 
@@ -760,8 +761,21 @@ function AppProvider({children}){
   useEffect(()=>{setOnAuthExpired(()=>{notify("Session expirée — veuillez vous reconnecter","error");logout();});return()=>setOnAuthExpired(null);},[]);
 
   // Cart
-  const addToCart=(p,v)=>setCart(prev=>{const i=prev.findIndex(c=>c.product.id===p.id&&c.variant?.id===v?.id);
-    if(i>=0){const n=[...prev];n[i]={...n[i],quantity:n[i].quantity+1};return n;}return[...prev,{product:p,variant:v,quantity:1,discount:0,isCustom:false}];});
+  // Produit vendu au poids (the en vrac) : pas d'ajout direct, la caisse demande d'abord le poids
+  // (fenetre de pesee de l'ecran Vente). Vaut pour la grille, le scan et les favoris.
+  const[pesee,setPesee]=useState(null);
+  const addToCart=(p,v)=>{if(venduAuPoids(p)){setPesee({product:p,variant:v});return;}
+    setCart(prev=>{const i=prev.findIndex(c=>c.product.id===p.id&&c.variant?.id===v?.id);
+    if(i>=0){const n=[...prev];n[i]={...n[i],quantity:n[i].quantity+1};return n;}return[...prev,{product:p,variant:v,quantity:1,discount:0,isCustom:false}];});};
+  // Ligne pesee : quantite 1, prix = prix catalogue x poids / poids de reference, poids dans la
+  // contenance. Meme the pese deux fois = une seule ligne, poids additionnes.
+  const addPeseeAuPanier=(p,v,grammes)=>{const g=Math.round(Number(grammes));if(!(g>0)||!venduAuPoids(p))return false;
+    setCart(prev=>{const i=prev.findIndex(c=>c.product.id===p.id&&c.variant?.id===v?.id);
+      const total=g+(i>=0?Number(prev[i].variant?.poidsG)||0:0);
+      const ligne={...(i>=0?prev[i]:{discount:0,isCustom:false}),quantity:1,
+        product:{...p,price:prixPese(p,total)},variant:{...v,size:libellePoids(total),poidsG:total}};
+      if(i>=0){const n=[...prev];n[i]=ligne;return n;}return[...prev,ligne];});
+    setPesee(null);return true;};
   // Identifiant unique par ligne : une retouche a plusieurs prestations ajoute ses lignes dans le
   // meme instant -> avec Date.now() seul, elles partageaient l'id (suppression/remise sur toutes).
   const customSeq=useRef(0);
@@ -776,6 +790,8 @@ function AppProvider({children}){
     setCart(p=>p.filter(c=>!(c.product.id===pid&&(c.variant?.id===vid||(!vid&&!c.variant?.id)))));};
   const voidSale=(reason)=>{if(cart.length){addAudit("VOID_SALE",`Annulation panier: ${cart.length} articles — Motif: ${reason||"Non spécifié"}`);addJET("VOID_SALE",`Annulation panier ${cart.length} art. — ${reason||"Non spécifié"}`);setCart([]);setGDiscPct(0);setGDiscAmt(0);setSelCust(null);setSelectedAvoir(null);setPromoCode("");setSaleNote("");}};
   const updateQty=(pid,vid,q)=>{if(q<1)return removeFromCart(pid,vid);
+    // Ligne pesee : la quantite reste 1 (on repese pour changer le poids)
+    if(cart.some(c=>c.product.id===pid&&c.variant?.id===vid&&c.variant?.poidsG))return;
     // Baisse de quantité = retrait partiel : tracé comme une suppression de ligne (NF525)
     const ligne=cart.find(c=>c.product.id===pid&&c.variant?.id===vid);
     if(ligne&&q<ligne.quantity){const txt=`Quantité réduite ${ligne.quantity} → ${q} : ${decrireLigne(ligne,ligne.quantity-q)}`;addAudit("VOID_LINE",txt,pid);addJET("VOID_LINE",txt);}
@@ -797,7 +813,7 @@ function AppProvider({children}){
 
   // Park — backend-first avec cache localStorage
   const parkCart=useCallback(async()=>{if(!cart.length)return;
-    const parkedData={name:`Panier ${new Date().toLocaleString("fr-FR")}`,items:cart.map(i=>({productId:i.product?.id,variantId:i.variant?.id,productName:i.product?.name,variantColor:i.variant?.color,variantSize:i.variant?.size,quantity:i.quantity,price:i.product?.price,discount:i.discountPercent||i.discount||0,discountType:"percent",discountPercent:i.discountPercent||0,discountAmount:i.discountAmount||0,
+    const parkedData={name:`Panier ${new Date().toLocaleString("fr-FR")}`,items:cart.map(i=>({productId:i.product?.id,variantId:i.variant?.id,productName:i.product?.name,variantColor:i.variant?.color,variantSize:i.variant?.size,poidsG:i.variant?.poidsG||null,quantity:i.quantity,price:i.product?.price,discount:i.discountPercent||i.discount||0,discountType:"percent",discountPercent:i.discountPercent||0,discountAmount:i.discountAmount||0,
       // de quoi reconstruire la ligne a l'identique (articles divers / retouches compris)
       taxRate:i.product?.taxRate,isCustom:!!i.isCustom,sku:i.product?.sku||"",category:i.product?.category||"",costPrice:i.product?.costPrice||0,ean:i.variant?.ean||""})),
       // Le client et la remise panier etaient perdus au rechargement (pas envoyes / mauvais nom de champ)
@@ -922,6 +938,8 @@ function AppProvider({children}){
       quantity:i.quantity,unit_price:pm==="TTC"?i.product.price/(1+(i.product.taxRate??0.20)):i.product.price,cost_price:i.product.costPrice||0,// prix d'achat saisi HT (confirme 27/10/2026) : jamais divise par la TVA
       tax_rate:i.product.taxRate??0.20,discount_percent:i.discountPercent??(i.discountType==="amount"?0:i.discount)??0,
       discount_amount:i.discountAmount??(i.discountType==="amount"?(i.discount||0)*i.quantity:0),is_custom:i.isCustom||false,
+      // Vente au poids : grammes vendus (l'API en deduit le prix de reference, pas une remise)
+      ...(i.variant?.poidsG?{poids_g:i.variant.poidsG}:{}),
       lineHT,lineTVA,lineTTC,
       product:{id:i.product.id,name:i.product.name,sku:i.product.sku,price:i.product.price,costPrice:i.product.costPrice,taxRate:i.product.taxRate,collection:i.product.collection,category:i.product.category},
       variant:i.variant?{id:i.variant.id,color:i.variant.color,size:i.variant.size}:null,
@@ -2248,6 +2266,7 @@ function AppProvider({children}){
     promoCode,setPromoCode,calcPromoDiscount,
     cashReg,openReg,closeReg,isOnline,tickets,setTickets,tSeq,lastHash,gt,audit,jet,closures,avoirs,consumeAvoir,isAvoirExpired,
     checkout,createClosure,exportArchive,exportFEC,exportCSVReport,exportCustomerRGPD,addAudit,addJET,
+    pesee,setPesee,addPeseeAuPanier,
     promos,setPromos,activePromos,parked,parkCart,restoreCart,removeParked,retoucheBons,addRetoucheBon,updateRetoucheStatus,tenues,addTenue,reloadTenues,cashMovements,addCashMovement,reloadCashMovements,selCust,setSelCust,
     stockAlerts,stockMoves,addStockMove,receiveStock,receiveBatchStock,
     refreshProducts,findByEAN,perm,settings,setSettings,saveSettingsToAPI,saveSettingsNotify,getLoyaltyTier,avoirPayment,selectedAvoir,setSelectedAvoir,

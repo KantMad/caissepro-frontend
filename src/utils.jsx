@@ -141,7 +141,9 @@ export const norm={
         return 0;
       });
     return{...p,price:parseFloat(p.price),costPrice:parseFloat(p.cost_price||p.costPrice||0),
-    taxRate:parseFloat(p.tax_rate||p.taxRate||0.20),category:p.category||"",collection:p.collection||"",variants}},
+    taxRate:parseFloat(p.tax_rate||p.taxRate||0.20),category:p.category||"",collection:p.collection||"",
+    poidsRefG:parseInt(p.poids_ref_g??p.poidsRefG)||null,   // vente au poids (prix pour N g), null = a l'unite
+    variants}},
   customer(c){return{...c,firstName:c.first_name??c.firstName,lastName:c.last_name??c.lastName,
     customerType:c.customer_type||c.customerType||"particulier",companyName:c.company_name??c.companyName??"",
     legalForm:c.legal_form??c.legalForm??"",siren:c.siren||"",vatNumber:c.vat_number??c.vatNumber??"",
