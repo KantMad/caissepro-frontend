@@ -27,7 +27,7 @@ function ExportsScreen(){
     returns:"N° avoir, date, heure, ticket d'origine, responsable, client, motif, articles, total HT, TVA, total TTC, type, mode de remboursement, ticket d'utilisation, solde avoir, empreinte NF525.",
     refunds:"N° avoir, date, heure, ticket d'origine, responsable, client, motif, articles, total HT, TVA, total TTC, type, mode de remboursement, ticket d'utilisation, solde avoir, empreinte NF525.",
     exchanges:"N° avoir, date, heure, ticket d'origine, responsable, client, motif, articles, total HT, TVA, total TTC, type, mode de remboursement, ticket d'utilisation, solde avoir, empreinte NF525.",
-    clients:"Nom complet, prénom, nom, email, téléphone, ville, points fidélité, niveau, total dépensé, nb achats, panier moyen, premier achat, dernier achat, notes.",
+    clients:"Nom complet, prénom, nom, email, téléphone, adresse, code postal, ville, date de naissance, genre, taille, type, société, forme juridique, SIREN/SIRET, n° TVA, carte Tech in touch, client depuis, points fidélité, niveau, total dépensé, nb achats, panier moyen, premier achat, dernier achat, notes.",
   };
 
   // Field configuration per export type

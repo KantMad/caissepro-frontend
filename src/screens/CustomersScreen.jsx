@@ -10,7 +10,13 @@ import { formatAmount } from "../lib/formatters.js";
 import { ChampsClient, CLIENT_VIDE, erreurClient, corpsClient, nomClient, contactClient, estPro, texteRechercheClient } from "../clientPro.jsx";
 
 function CustomersScreen(){
-  const{customers,setCustomers,tickets,exportCustomerRGPD,getLoyaltyTier,updateCustomer,deleteCustomer,addCustomer,notify,settings,currentUser,perm}=useApp();
+  const{customers,setCustomers,tickets,exportCustomerRGPD,getLoyaltyTier,updateCustomer,deleteCustomer,addCustomer,notify,settings,currentUser,perm,addAudit}=useApp();
+  // Export de TOUTE la fiche client (20/11/2026) : fichier genere par le serveur (tous les clients,
+  // toutes les infos), meme route que l'onglet Exports > Clients. Gerant / admin (canExport).
+  const exporterClients=(format)=>{
+    window.open(API.exports.url("customers",{format}),"_blank");
+    addAudit&&addAudit("EXPORT",`Export clients (${format}) depuis l'écran Clients`);
+    notify("Export clients : téléchargement demandé (vérifiez le fichier reçu)","info");};
   // Correction manuelle des points (20/11/2026) : gérant/admin, motif obligatoire, journalisée
   const[corrPts,setCorrPts]=useState(null);const[corrBusy,setCorrBusy]=useState(false);
   const[sel,setSel]=useState(null);const[search,setSearch]=useState("");
@@ -63,6 +69,8 @@ function CustomersScreen(){
       <h2 style={{fontSize:22,fontWeight:800,margin:0}}>Clients & Fidélité ({customers.length})</h2>
       <div style={{display:"flex",gap:6}}>
         <Btn variant="outline" onClick={()=>{setCsvModal(true);setCsvStep(0);setCsvData([]);}} style={{fontSize:11}}><Upload size={12}/> Import CSV</Btn>
+        {perm?.().canExport&&<Btn variant="outline" data-testid="exporter-clients" onClick={()=>exporterClients("xlsx")} style={{fontSize:11}} title="Tous les clients avec toutes les infos de leur fiche (Excel)"><Download size={12}/> Exporter (Excel)</Btn>}
+        {perm?.().canExport&&<Btn variant="outline" data-testid="exporter-clients-csv" onClick={()=>exporterClients("csv")} style={{fontSize:11}} title="Même fichier au format CSV"><Download size={12}/> CSV</Btn>}
         <Btn onClick={()=>setNewCustModal(true)} style={{fontSize:11,background:C.primary}}><Plus size={12}/> Nouveau client</Btn></div></div>
     <div style={{display:"flex",gap:10}}>
       <div style={{flex:sel?`0 0 280px`:"1",transition:"flex 0.3s ease",maxHeight:"calc(100vh - 140px)",overflowY:"auto"}}>

@@ -570,3 +570,17 @@ describe("Métier épicerie (METIER=epicerie sur le serveur)", () => {
     expect(await findByText("Retouche")).toBeTruthy();
   });
 });
+
+describe("Clients : export de la fiche complète (20/11/2026)", () => {
+  it("le bouton Exporter ouvre le fichier généré par le serveur", async () => {
+    const ouvrir = vi.spyOn(window, "open").mockImplementation(() => null);
+    const { findByTestId } = render(<AppProvider><CustomersScreen /></AppProvider>);
+    fireEvent.click(await findByTestId("exporter-clients"));
+    expect(ouvrir).toHaveBeenCalledWith("http://x", "_blank");
+  });
+  it("caissier : pas de bouton Exporter", () => {
+    sessionStorage.setItem("caissepro_user", JSON.stringify({ id: "u2", name: "Caisse", role: "cashier" }));
+    const { queryByTestId } = render(<AppProvider><CustomersScreen /></AppProvider>);
+    expect(queryByTestId("exporter-clients")).toBeNull();
+  });
+});
