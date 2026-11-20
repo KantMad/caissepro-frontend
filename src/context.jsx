@@ -830,9 +830,21 @@ function AppProvider({children}){
   // ══ PROMO ENGINE ══
   // Bornes en JOUR local « AAAA-MM-JJ » : start_day/end_day (serveur), sinon les 10 premiers
   // caractères. Avant : startDate/endDate jamais renseignés -> les dates n'étaient pas contrôlées.
-  const activePromos=useMemo(()=>{const now=dayKey();const jour=(...v)=>{const x=v.find(y=>y);return x?String(x).slice(0,10):"";};
+  // Promos relues toutes les minutes et au retour sur l'appli (20/11/2026). Avant : chargées
+  // seulement à la connexion -> une promo créée/activée depuis un autre poste (ou la veille pour
+  // aujourd'hui) ne s'appliquait pas en caisse (« PROMO PAS MARCH », boutique MCS).
+  const[jourPromo,setJourPromo]=useState(()=>dayKey());
+  useEffect(()=>{if(!currentUser?.id||!isOnline||offlineMode)return;let fini=false;
+    const relire=async()=>{setJourPromo(dayKey());
+      try{const r=await API.settings.promos();if(!fini&&Array.isArray(r))setPromos(prev=>JSON.stringify(prev)===JSON.stringify(r)?prev:r);}catch(e){}};
+    const iv=setInterval(relire,60000);
+    const vis=()=>{if(document.visibilityState==="visible")relire();};
+    document.addEventListener("visibilitychange",vis);
+    return()=>{fini=true;clearInterval(iv);document.removeEventListener("visibilitychange",vis);};
+  },[currentUser?.id,currentStore?.id,isOnline,offlineMode]);
+  const activePromos=useMemo(()=>{const now=jourPromo;const jour=(...v)=>{const x=v.find(y=>y);if(!x)return"";const t=String(x);return t.length>10&&t.includes("T")?dayKey(new Date(t)):t.slice(0,10);};
     return promos.filter(p=>{const deb=jour(p.start_day,p.startDate,p.start_date);const fin=jour(p.end_day,p.endDate,p.end_date);
-      return p.active&&(!deb||deb<=now)&&(!fin||fin>=now);});},[promos]);
+      return p.active&&(!deb||deb<=now)&&(!fin||fin>=now);});},[promos,jourPromo]);
 
   const calcPromoDiscount=useCallback((cartItems)=>calcPromos(cartItems,activePromos,{pricingMode:settings.pricingMode,promoCode}),[activePromos,promoCode,settings.pricingMode]);
 

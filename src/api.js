@@ -153,6 +153,8 @@ export const customers = {
   remove: (id) => api(`/api/customers/${id}`, { method: 'DELETE' }),
   history: (id) => api(`/api/customers/${id}/history`),
   rgpd: (id) => api(`/api/customers/${id}/rgpd`),
+  // Correction manuelle du solde (gerant/admin, motif obligatoire, journal POINTS_ADJUST)
+  adjustPoints: (id, delta, reason) => api(`/api/customers/${id}/points`, { method: 'POST', body: JSON.stringify({ delta, reason }) }),
   tiers: () => api('/api/customers/loyalty/tiers'),
 };
 
@@ -237,6 +239,7 @@ export const settings = {
   promos: () => api('/api/settings/promos'),
   activePromos: () => api('/api/settings/promos/active'),
   createPromo: (data) => api('/api/settings/promos', { method: 'POST', body: JSON.stringify(data) }),
+  updatePromo: (id, data) => api(`/api/settings/promos/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   togglePromo: (id) => api(`/api/settings/promos/${id}/toggle`, { method: 'PUT' }),
   deletePromo: (id) => api(`/api/settings/promos/${id}`, { method: 'DELETE' }),
   taxRates: () => api('/api/settings/tax-rates'),
@@ -399,6 +402,7 @@ export const integrations = {
 // ══ Tech in touch (app de fidélité) — routes présentes seulement si la liaison est active ══
 export const tit = {
   status: () => api('/api/tit/status'),
+  members: (search) => api('/api/tit/members?' + new URLSearchParams(search ? { search } : {})),
   resync: () => api('/api/tit/resync', { method: 'POST' }),
   retry: () => api('/api/tit/retry', { method: 'POST' }),
   offers: () => api('/api/tit/offers'),

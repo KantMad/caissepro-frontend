@@ -6,20 +6,24 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, fireEvent, act, cleanup, waitFor } from "@testing-library/react";
 import React, { useState } from "react";
 
-const etat = { settings: { titEnabled: true, titShopId: "12" }, scan: null, appels: [] };
-vi.mock("./api.js", () => ({ tit: {
+const etat = { settings: { titEnabled: true, titShopId: "12" }, scan: null, appels: [], perm: { canVoid: true, canSettings: true }, points: [] };
+vi.mock("./api.js", () => ({ customers: {
+  adjustPoints: (id, delta, reason) => { etat.points.push({ id, delta, reason }); return Promise.resolve({ id, points: 360 + delta }); },
+}, tit: {
+  members: (q) => Promise.resolve([{ id: "c1", first_name: "Camille", last_name: "Dupont", tit_barcode: "TIT0001234567", phone: "0600000003", points: 360, tier: "vip", sync_status: "sent", sync_sent_at: "2026-11-19T10:00:00Z" }]
+    .filter(m => !q || /dupont|tit0001/i.test(q))),
   offers: () => Promise.resolve([{ id: "o1", title_fr: "Retouches offertes", cost_points: 400, active: true, envoyee: true }]),
   status: () => Promise.resolve({ shopId: "12", parStatut: { sent: 5, rejected: 1 }, erreurs: [{ client: "Carte Inconnue", kind: "loyalty", status: "rejected", attempts: 1, last_error: "Unknown barcode (barcode_not_found)" }] }),
   createOffer: (d) => { etat.appels.push(d); return Promise.resolve({ id: "o2", envoiImmediat: true }); },
   updateOffer: () => Promise.resolve({}), retry: () => Promise.resolve({ relances: 1 }), resync: () => Promise.resolve({ clients: 3 }),
 } }));
 vi.mock("./context.jsx", () => ({ useApp: () => ({ settings: etat.settings, setSettings: () => {}, saveSettingsNotify: () => {}, notify: () => {},
-  perm: () => ({ canVoid: true }), setScanOverride: (f) => { etat.scan = f; }, clearScanOverride: () => { etat.scan = null; } }) }));
+  perm: () => etat.perm, setCustomers: () => {}, setScanOverride: (f) => { etat.scan = f; }, clearScanOverride: () => { etat.scan = null; } }) }));
 import { ChampsClient, CLIENT_VIDE, corpsClient } from "./clientPro.jsx";
 import TechInTouchPanel from "./screens/TechInTouchPanel.jsx";
 import { norm } from "./utils.jsx";
 
-afterEach(() => { cleanup(); etat.settings = { titEnabled: true, titShopId: "12" }; etat.appels.length = 0; });
+afterEach(() => { cleanup(); etat.settings = { titEnabled: true, titShopId: "12" }; etat.appels.length = 0; etat.points.length = 0; etat.perm = { canVoid: true, canSettings: true }; });
 
 function Fiche({ onV }) { const [v, set] = useState(CLIENT_VIDE); onV(v); return <ChampsClient v={v} set={set} />; }
 
@@ -56,5 +60,26 @@ describe("Tech in touch", () => {
     fireEvent.change(r.getByPlaceholderText("400"), { target: { value: "150" } });
     await act(async () => { fireEvent.click(r.getByText(/Ajouter l'offre/)); });
     expect(etat.appels[0]).toMatchObject({ titleFr: "Café offert", costPoints: 150, active: true });
+  });
+
+  it("gérant : ID boutique en lecture seule, liste des clients TIT et correction des points", async () => {
+    etat.perm = { canVoid: true, canSettings: false };
+    const r = render(<TechInTouchPanel />);
+    expect(r.getByTestId("tit-shop-id").tagName).toBe("DIV");
+    expect(r.getByTestId("tit-shop-id").textContent).toBe("12");
+    expect(r.queryByText(/^ Enregistrer$/)).toBeNull();
+    await waitFor(() => expect(r.getByTestId("tit-clients").textContent).toMatch(/Camille Dupont.*TIT0001234567.*360 pts.*VIP · Envoyé le/s));
+    fireEvent.change(r.getByTestId("tit-clients-recherche"), { target: { value: "martin" } });
+    await waitFor(() => expect(r.getByTestId("tit-clients").textContent).toMatch(/Aucun client pour « martin »/));
+    fireEvent.change(r.getByTestId("tit-clients-recherche"), { target: { value: "dupont" } });
+    await waitFor(() => expect(r.getByTestId("tit-clients").textContent).toMatch(/Camille Dupont/));
+    fireEvent.click(r.getByText("Points"));
+    fireEvent.change(r.getByTestId("tit-points-delta"), { target: { value: "50" } });
+    await act(async () => { fireEvent.click(r.getByText("Valider")); });
+    expect(etat.points.length).toBe(0);   // motif obligatoire
+    fireEvent.change(r.getByTestId("tit-points-motif"), { target: { value: "Geste commercial" } });
+    await act(async () => { fireEvent.click(r.getByText("Valider")); });
+    expect(etat.points[0]).toEqual({ id: "c1", delta: 50, reason: "Geste commercial" });
+    await waitFor(() => expect(r.getByTestId("tit-clients").textContent).toMatch(/410 pts/));
   });
 });

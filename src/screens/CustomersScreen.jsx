@@ -10,7 +10,9 @@ import { formatAmount } from "../lib/formatters.js";
 import { ChampsClient, CLIENT_VIDE, erreurClient, corpsClient, nomClient, contactClient, estPro, texteRechercheClient } from "../clientPro.jsx";
 
 function CustomersScreen(){
-  const{customers,setCustomers,tickets,exportCustomerRGPD,getLoyaltyTier,updateCustomer,deleteCustomer,addCustomer,notify,settings,currentUser}=useApp();
+  const{customers,setCustomers,tickets,exportCustomerRGPD,getLoyaltyTier,updateCustomer,deleteCustomer,addCustomer,notify,settings,currentUser,perm}=useApp();
+  // Correction manuelle des points (20/11/2026) : gérant/admin, motif obligatoire, journalisée
+  const[corrPts,setCorrPts]=useState(null);const[corrBusy,setCorrBusy]=useState(false);
   const[sel,setSel]=useState(null);const[search,setSearch]=useState("");
   const[editMode,setEditMode]=useState(false);
   const[editData,setEditData]=useState({});
@@ -67,7 +69,7 @@ function CustomersScreen(){
         <Input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Rechercher nom, email, téléphone…" style={{marginBottom:10,height:36}}/>
         <div style={{display:sel?"flex":"grid",flexDirection:"column",gridTemplateColumns:sel?"1fr":"repeat(auto-fill,minmax(260px,1fr))",gap:sel?4:8}}>
         {filtered.map(c=>{const tier=getLoyaltyTier(c.points);return(
-          <div key={c.id} onClick={()=>{setSel(c);setEditMode(false);}} style={{display:"flex",alignItems:"center",gap:8,padding:sel?8:12,borderRadius:sel?8:12,
+          <div key={c.id} onClick={()=>{setSel(c);setEditMode(false);setCorrPts(null);}} style={{display:"flex",alignItems:"center",gap:8,padding:sel?8:12,borderRadius:sel?8:12,
             background:sel?.id===c.id?C.primaryLight:C.surface,border:`1.5px solid ${sel?.id===c.id?C.primary:C.border}`,cursor:"pointer",transition:"all 0.15s"}}
             onMouseEnter={e=>{if(sel?.id!==c.id)e.currentTarget.style.borderColor=C.primary+"66";}} onMouseLeave={e=>{if(sel?.id!==c.id)e.currentTarget.style.borderColor=C.border;}}>
             <div style={{width:sel?30:36,height:sel?30:36,borderRadius:sel?15:18,background:C.primary,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:700,fontSize:sel?10:12}}>{estPro(c)?<Building2 size={sel?14:16}/>:<>{c.firstName?.[0]}{c.lastName?.[0]}</>}</div>
@@ -110,6 +112,20 @@ function CustomersScreen(){
           <div style={{fontSize:12,fontWeight:700,marginBottom:6}}>Paliers de fidélité</div>
           <div style={{display:"flex",gap:6,marginBottom:10}}>
             {((settings?.loyaltyTiers?.length?settings.loyaltyTiers:LOYALTY_TIERS)).map(t=>(<Badge key={t.name} color={sel.points>=t.minPoints?C.primary:C.textLight}>{t.name} ({t.minPoints}pts)</Badge>))}</div>
+          {perm?.().canVoid&&<div style={{marginBottom:10}}>
+            {!corrPts?<Btn variant="outline" data-testid="corriger-points" onClick={()=>setCorrPts({delta:"",motif:""})} style={{fontSize:10,padding:"4px 10px"}}><Star size={11}/> Corriger les points</Btn>
+            :<div style={{display:"flex",gap:6,alignItems:"center"}}>
+              <Input data-testid="corriger-points-delta" type="number" value={corrPts.delta} onChange={e=>setCorrPts(c=>({...c,delta:e.target.value}))} placeholder="+50 / -50" style={{width:90}}/>
+              <Input data-testid="corriger-points-motif" value={corrPts.motif} onChange={e=>setCorrPts(c=>({...c,motif:e.target.value}))} placeholder="Motif (obligatoire)" style={{flex:1}}/>
+              <Btn disabled={corrBusy} onClick={async()=>{const d=parseInt(corrPts.delta,10);
+                if(!d){notify("Nombre de points : par ex. 50 ou -50","error");return;}
+                if(!corrPts.motif.trim()){notify("Motif obligatoire","error");return;}
+                setCorrBusy(true);
+                try{const r=await API.customers.adjustPoints(sel.id,d,corrPts.motif.trim());
+                  setCustomers(l=>l.map(c=>c.id===r.id?{...c,points:r.points}:c));setSel(x=>({...x,points:r.points}));
+                  notify(`Points corrigés : nouveau solde ${r.points} pts`,"success");setCorrPts(null);}
+                catch(e){notify(e.message,"error");}finally{setCorrBusy(false);}}} style={{fontSize:11,padding:"6px 12px"}}>Valider</Btn>
+              <Btn variant="ghost" onClick={()=>setCorrPts(null)} style={{fontSize:11,padding:"6px 8px"}}>Annuler</Btn></div>}</div>}
         </div>
         <div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`}}>
           <div style={{fontSize:14,fontWeight:700,marginBottom:8}}>Historique d'achat ({custTickets.length})</div>

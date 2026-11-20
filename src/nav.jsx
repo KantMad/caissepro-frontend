@@ -3,7 +3,7 @@ import {
   ShoppingCart, Lock, User as UserIcon, Store, LayoutDashboard, LogOut, Wallet,
   BarChart3, Package, Receipt, RotateCcw, Users, TrendingUp, DollarSign, Euro,
   Shield, Download, FileText, Settings, CheckCircle2, AlertTriangle, Save,
-  Archive, Activity, Bell, Plus, Trash2, HelpCircle, Grid, Gift, Percent, Zap, Truck, Tag
+  Archive, Activity, Bell, Plus, Trash2, HelpCircle, Grid, Gift, Percent, Zap, Truck, Tag, Heart
 } from "lucide-react";
 import * as API from "./api.js";
 import { CO, PERMS, C, initUsers } from "./constants.jsx";
@@ -24,6 +24,7 @@ import { ClosureScreen } from "./screens/ClosureScreen.jsx";
 import { CustomersScreen } from "./screens/CustomersScreen.jsx";
 import { GiftCardScreen } from "./screens/GiftCardScreen.jsx";
 import { PromosScreen } from "./screens/PromosScreen.jsx";
+import { TechInTouchScreen } from "./screens/TechInTouchScreen.jsx";
 import TiroirCaisseScreen from "./screens/TiroirCaisseScreen.jsx";
 import MobileStatsScreen from "./screens/MobileStatsScreen.jsx";
 
@@ -56,12 +57,12 @@ const RegisterSessionsScreen = differe(() => import("./screens/RegisterSessionsS
 const ChargementEcran = () => <div style={{padding:40,textAlign:"center",color:"#64748B",fontSize:13}}>Chargement…</div>;
 
 function CashierNav({active,onNav}){
-  const{currentUser,logout,isOnline,stockAlerts,clockIn,clockOut,pendingSync,clearPendingSync,openCustomerDisplay,currentStore}=useApp();
+  const{currentUser,logout,isOnline,stockAlerts,clockIn,clockOut,pendingSync,clearPendingSync,openCustomerDisplay,currentStore,settings,perm}=useApp();
   const vp=useViewport();
   const[moreOpen,setMoreOpen]=useState(false);
   const items=[{id:"sales",l:"Vente",i:ShoppingCart},{id:"returns",l:"Retours",i:RotateCcw},{id:"stats",l:"Stats",i:BarChart3},{id:"stock",l:"Stock",i:Grid},
     {id:"cashdrawer",l:"Tiroir-caisse",i:Wallet},{id:"history",l:"Tickets",i:Receipt},{id:"customers",l:"Clients",i:Users},{id:"giftcards",l:"Cadeaux",i:Gift},
-    {id:"promos",l:"Promos",i:Zap},{id:"closure",l:"Cloture",i:Lock},{id:"footfall",l:"Entrees",i:Activity},
+    {id:"promos",l:"Promos",i:Zap},...(settings?.titEnabled&&perm?.().canVoid?[{id:"tit",l:"Tech in touch",i:Heart}]:[]),{id:"closure",l:"Cloture",i:Lock},{id:"footfall",l:"Entrees",i:Activity},
     {id:"audit",l:"Audit",i:Activity},{id:"fiscal",l:"NF525",i:Shield},{id:"settings",l:"Reglages",i:Settings},{id:"help",l:"Aide",i:HelpCircle}];
 
   // ══ TÉLÉPHONE : barre d'onglets en bas (zone du pouce) + tiroir « Plus » ══
@@ -216,7 +217,7 @@ function CashierInterface(){
   const setSc=useCallback((v)=>{setScRaw(v);try{sessionStorage.setItem("caissepro_screen",v);}catch(e){}},[]);
   if(sr&&!cashReg)return<CashRegControl onSkip={()=>setSr(false)} onDone={()=>setSr(false)}/>;
   const S={sales:SalesScreen,returns:ReturnScreen,stats:StatsScreen,stock:StockScreen,history:HistoryScreen,customers:CustomersScreen,
-    giftcards:GiftCardScreen,promos:PromosScreen,cashdrawer:TiroirCaisseScreen,closure:ClosureScreen,footfall:FootfallScreen,audit:AuditScreen,fiscal:FiscalScreen,settings:SettingsScreen,help:HelpCashierScreen};
+    giftcards:GiftCardScreen,promos:PromosScreen,tit:TechInTouchScreen,cashdrawer:TiroirCaisseScreen,closure:ClosureScreen,footfall:FootfallScreen,audit:AuditScreen,fiscal:FiscalScreen,settings:SettingsScreen,help:HelpCashierScreen};
   const Sc=S[sc]||SalesScreen;
   return(<div style={{display:"flex",flexDirection:"column",height:"100vh",fontFamily:"'DM Sans',system-ui,sans-serif"}}>
     <TrainingBanner/><ClotureRappelBanner/>
@@ -312,7 +313,7 @@ function DashboardNav({active,onNav,vp,mobileOpen,onCloseMobile}){
     // ⛔ « Livraisons gestlog » : SPECIFIQUE MCS. settings.gestlogEnabled vient de l'API
     // (false des qu'aucun secret gestlog n'est configure) -> invisible chez un client.
     {title:"Commerce",items:[{id:"products",l:"Produits",i:Package},{id:"labels",l:"Étiquettes",i:Tag},{id:"stock",l:"Stock",i:Grid},...(settings?.gestlogEnabled?[{id:"gestlog",l:"Livraisons gestlog",i:Truck}]:[]),{id:"stats",l:"Statistiques",i:BarChart3},{id:"returns",l:"Retours & Avoirs",i:RotateCcw},{id:"cashmovements",l:"Tiroir-caisse",i:Wallet},{id:"registersessions",l:"Ouv./Ferm. caisse",i:Lock},{id:"exports",l:"Exports & Factures",i:Download}]},
-    {title:"Relations",items:[{id:"customers",l:"Clients",i:Users},{id:"users",l:"Utilisateurs",i:UserIcon},{id:"giftcards",l:"Cartes cadeaux",i:Gift},{id:"promos",l:"Promotions",i:Zap},{id:"footfall",l:"Entrees",i:Activity}]},
+    {title:"Relations",items:[{id:"customers",l:"Clients",i:Users},{id:"users",l:"Utilisateurs",i:UserIcon},{id:"giftcards",l:"Cartes cadeaux",i:Gift},{id:"promos",l:"Promotions",i:Zap},...(settings?.titEnabled?[{id:"tit",l:"Tech in touch",i:Heart}]:[]),{id:"footfall",l:"Entrees",i:Activity}]},
     {title:"Systeme",items:[{id:"storesMgmt",l:"Magasins",i:Store},{id:"tva",l:"Taux de TVA",i:Percent},{id:"settings",l:"Parametres",i:Settings},{id:"fiscal",l:"Fiscal NF525",i:Shield},{id:"audit",l:"Journal d'audit",i:Activity},{id:"help",l:"Aide",i:HelpCircle}]}];
   const inner=(<>
     <div style={{padding:"20px 20px 16px",borderBottom:"1px solid rgba(255,255,255,0.06)"}}>
@@ -672,9 +673,9 @@ function DashboardInterface(){
   const[sc,setScRaw]=useState(()=>{try{const saved=sessionStorage.getItem("caissepro_dash_screen");if(saved)return saved;}catch(e){}return(typeof window!=="undefined"&&window.innerWidth<=640)?"resume":"overview";});
   const setSc=useCallback((v)=>{setScRaw(v);try{sessionStorage.setItem("caissepro_dash_screen",v);}catch(e){}setDrawerOpen(false);},[]);
   const S={resume:MobileStatsScreen,overview:DashOverview,products:ProductsScreen,stock:StockScreen,gestlog:GestlogDeliveriesScreen,stats:StatsScreen,returns:ReturnsHistoryScreen,customers:CustomersScreen,
-    labels:LabelsScreen,users:UsersScreen,storesMgmt:StoresManagementScreen,tva:TVAScreen,giftcards:GiftCardScreen,promos:PromosScreen,footfall:FootfallScreen,settings:SettingsScreen,fiscal:FiscalScreen,audit:AuditScreen,help:HelpDashboardScreen,exports:ExportsScreen,cashmovements:CashMovementsScreen,registersessions:RegisterSessionsScreen};
+    labels:LabelsScreen,users:UsersScreen,storesMgmt:StoresManagementScreen,tva:TVAScreen,giftcards:GiftCardScreen,promos:PromosScreen,tit:TechInTouchScreen,footfall:FootfallScreen,settings:SettingsScreen,fiscal:FiscalScreen,audit:AuditScreen,help:HelpDashboardScreen,exports:ExportsScreen,cashmovements:CashMovementsScreen,registersessions:RegisterSessionsScreen};
   const Sc=S[sc]||DashOverview;
-  const titles={resume:"Résumé",overview:"Dashboard",products:"Produits",stock:"Stock",gestlog:"Livraisons gestlog",stats:"Statistiques",returns:"Retours & Avoirs",customers:"Clients",users:"Utilisateurs",storesMgmt:"Magasins",tva:"Taux de TVA",giftcards:"Cartes cadeaux",promos:"Promotions",footfall:"Entrées",settings:"Paramètres",fiscal:"Fiscal NF525",audit:"Journal d'audit",help:"Aide",exports:"Exports & Factures",cashmovements:"Tiroir-caisse",registersessions:"Ouvertures & fermetures de caisse"};
+  const titles={resume:"Résumé",overview:"Dashboard",products:"Produits",stock:"Stock",gestlog:"Livraisons gestlog",stats:"Statistiques",returns:"Retours & Avoirs",customers:"Clients",users:"Utilisateurs",storesMgmt:"Magasins",tva:"Taux de TVA",giftcards:"Cartes cadeaux",promos:"Promotions",tit:"Tech in touch",footfall:"Entrées",settings:"Paramètres",fiscal:"Fiscal NF525",audit:"Journal d'audit",help:"Aide",exports:"Exports & Factures",cashmovements:"Tiroir-caisse",registersessions:"Ouvertures & fermetures de caisse"};
   if(vp.isMobile){
     return(<div style={{display:"flex",flexDirection:"column",height:"100vh",fontFamily:"'DM Sans',system-ui,sans-serif"}}>
       <div style={{display:"flex",alignItems:"center",gap:12,padding:"10px 14px",background:"#0F172A",flexShrink:0,boxShadow:"0 2px 12px rgba(0,0,0,0.2)"}}>

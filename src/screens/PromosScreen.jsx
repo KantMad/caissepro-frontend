@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { ShoppingCart, Trash2, Plus, Package } from "lucide-react";
+import { ShoppingCart, Trash2, Plus, Package, Pencil } from "lucide-react";
 import * as API from "../api.js";
 import { categories, C } from "../constants.jsx";
 import { Modal, Btn, Input, Badge } from "../ui.jsx";
@@ -10,6 +10,16 @@ function PromosScreen(){
   const[createModal,setCreateModal]=useState(false);
   const defaultNp={name:"",type:"category_discount",value:"",discountType:"percent",collection:"",minQty:"",code:"",startDate:"",endDate:"",targetType:"category",targetValue:"",description:"",stockThreshold:"5"};
   const[np,setNp]=useState(defaultNp);
+  const[editId,setEditId]=useState(null);   // promo modifiée (20/11/2026), null = création
+  const fermer=()=>{setCreateModal(false);setEditId(null);setNp(defaultNp);};
+  const jourDe=(...v)=>{const x=v.find(y=>y);return x?String(x).slice(0,10):"";};
+  const modifier=(pm)=>{const t=pm.promo_type||pm.type||"category_discount";const tv=pm.target_value??pm.targetValue??"";const mq=pm.min_qty??pm.minQty;
+    setNp({...defaultNp,name:pm.name||"",type:t,value:String(pm.value??""),discountType:pm.discount_type||pm.discountType||"percent",
+      collection:pm.collection||"",minQty:mq!=null?String(mq):"",code:pm.code||"",
+      startDate:jourDe(pm.start_day,pm.startDate,pm.start_date),endDate:jourDe(pm.end_day,pm.endDate,pm.end_date),
+      targetType:pm.target_type||pm.targetType||"",targetValue:t==="low_stock_discount"?"":(tv||(t==="collection_discount"?pm.collection||"":"")),
+      description:pm.description||"",stockThreshold:t==="low_stock_discount"?String(tv||"5"):"5"});
+    setEditId(pm.id);setCreateModal(true);};
 
   if(!p().canManagePromos)return<div style={{padding:40,textAlign:"center",color:C.textMuted}}>Accès réservé aux administrateurs</div>;
 
@@ -26,7 +36,8 @@ function PromosScreen(){
   // Extract unique categories, colors, SKUs from products
   const categories=[...new Set(products.map(p=>p.category).filter(Boolean))].sort();
   const colors=[...new Set(products.flatMap(p=>(p.variants||[]).map(v=>v.color)).filter(Boolean))].sort();
-  const skuList=products.map(p=>({sku:p.sku,name:p.name})).filter(p=>p.sku).slice(0,200);
+  // Toutes les références (avant : 200 premières seulement -> produit introuvable sur un gros catalogue)
+  const skuList=products.map(p=>({sku:p.sku,name:p.name})).filter(p=>p.sku);
 
   const TYPES=[
     {id:"category_discount",label:"Remise par catégorie",targetType:"category",icon:"Tag",desc:"Applique une remise sur tous les produits d'une catégorie"},
@@ -63,10 +74,13 @@ function PromosScreen(){
       targetValue:np.type==="low_stock_discount"?np.stockThreshold:np.targetValue,
       description:np.description};
     try{
-      const res=await API.settings.createPromo(data);
-      setPromos(p=>[res,...p]);
-      addAudit("PROMO",`Nouvelle promo: ${np.name}`);notify(`Promo "${np.name}" créée`,"success");
-      setCreateModal(false);setNp(defaultNp);
+      if(editId){const{active,...sansActif}=data;
+        const res=await API.settings.updatePromo(editId,sansActif);
+        setPromos(p=>p.map(x=>x.id===editId?res:x));notify(`Promo "${np.name}" modifiée`,"success");}
+      else{const res=await API.settings.createPromo(data);
+        setPromos(p=>[res,...p]);
+        addAudit("PROMO",`Nouvelle promo: ${np.name}`);notify(`Promo "${np.name}" créée`,"success");}
+      fermer();
     }catch(e){notify(e.message,"error");}};
 
   const selectStyle={width:"100%",padding:10,borderRadius:10,border:`1.5px solid ${C.border}`,fontSize:12,fontFamily:"inherit",background:C.surface};
@@ -75,7 +89,7 @@ function PromosScreen(){
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
       <div><h2 style={{fontSize:22,fontWeight:800,margin:0}}>Promotions</h2>
         <p style={{fontSize:12,color:C.textMuted,marginTop:2}}>{promos.filter(p=>p.active).length} active{promos.filter(p=>p.active).length>1?"s":""} sur {promos.length}</p></div>
-      <Btn onClick={()=>setCreateModal(true)} style={{fontSize:11,background:C.warn}}><Plus size={12}/> Nouvelle promo</Btn></div>
+      <Btn onClick={()=>{setEditId(null);setNp(defaultNp);setCreateModal(true);}} style={{fontSize:11,background:C.warn}}><Plus size={12}/> Nouvelle promo</Btn></div>
 
     <div style={{display:"flex",flexDirection:"column",gap:6}}>
       {promos.map(pm=>{const t=pm.promo_type||pm.type;const dt=pm.discount_type||pm.discountType||"percent";
@@ -94,12 +108,13 @@ function PromosScreen(){
             </div></div>
           <Btn variant={pm.active?"success":"outline"} onClick={()=>togglePromo(pm.id)} style={{fontSize:10,padding:"4px 12px"}}>
             {pm.active?"Active":"Inactive"}</Btn>
+          <button onClick={()=>modifier(pm)} title="Modifier" data-testid={`modifier-promo-${pm.id}`} style={{background:"none",border:"none",cursor:"pointer",color:C.textMuted}}><Pencil size={14}/></button>
           <button onClick={()=>deletePromo(pm.id)} style={{background:"none",border:"none",cursor:"pointer",color:C.danger}}><Trash2 size={14}/></button>
         </div>);})}
       {promos.length===0&&<div style={{textAlign:"center",padding:30,color:C.textLight}}>Aucune promotion configurée</div>}
     </div>
 
-    <Modal open={createModal} onClose={()=>setCreateModal(false)} title="Nouvelle règle de promotion" wide>
+    <Modal open={createModal} onClose={fermer} title={editId?"Modifier la promotion":"Nouvelle règle de promotion"} wide>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>
         <div style={{gridColumn:"span 2"}}><label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>NOM DE LA PROMO</label>
           <Input value={np.name} onChange={e=>setNp(p=>({...p,name:e.target.value}))} placeholder="Ex: Soldes été -30% Robes"/></div>
@@ -128,10 +143,11 @@ function PromosScreen(){
 
         {/* SKU target */}
         {np.type==="sku_discount"&&<div><label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>RÉFÉRENCE PRODUIT</label>
-          <select value={np.targetValue} onChange={e=>setNp(p=>({...p,targetValue:e.target.value}))} style={selectStyle}>
-            <option value="">Choisir un produit...</option>
-            {skuList.map(s=>(<option key={s.sku} value={s.sku}>{s.sku} — {s.name}</option>))}
-          </select></div>}
+          {/* Saisie avec suggestions (référence ou nom) : la liste déroulante était limitée à 200 produits */}
+          <Input list="promo-skus" value={np.targetValue} onChange={e=>setNp(p=>({...p,targetValue:e.target.value.split(" — ")[0]}))} placeholder="Tapez une référence ou un nom…"/>
+          <datalist id="promo-skus">{skuList.map(s=>(<option key={s.sku} value={s.sku}>{s.sku} — {s.name}</option>))}</datalist>
+          {np.targetValue&&!skuList.some(s=>s.sku.toLowerCase()===np.targetValue.trim().toLowerCase())&&
+            <div style={{fontSize:10,color:C.danger,marginTop:3}}>Référence inconnue : la promo ne s'appliquera à aucun article</div>}</div>}
 
         {/* Color target */}
         {np.type==="color_discount"&&<div><label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>COULEUR</label>
@@ -176,7 +192,7 @@ function PromosScreen(){
           <Input value={np.description} onChange={e=>setNp(p=>({...p,description:e.target.value}))} placeholder="Remarque interne..."/></div>
       </div>
       <Btn onClick={createPromo} disabled={!np.name||!np.value}
-        style={{width:"100%",height:44,background:C.warn}}>Créer la promotion</Btn></Modal>
+        style={{width:"100%",height:44,background:C.warn}}>{editId?"Enregistrer les modifications":"Créer la promotion"}</Btn></Modal>
   </div>);
 }
 
