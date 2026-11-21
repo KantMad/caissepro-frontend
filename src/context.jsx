@@ -903,13 +903,13 @@ function AppProvider({children}){
 
   // ══ FE-05: Single source of truth for cart totals (used by both context and screens) ══
   const cartTotals=useMemo(()=>{
-    if(!cart.length)return{sHT:0,gd:0,gdTTC:0,promoDisc:0,applied:[],tHT:0,tTVA:0,tTTC:0};
-    const{promoDisc,applied}=calcPromoDiscount(cart);
+    if(!cart.length)return{sHT:0,gd:0,gdTTC:0,promoDisc:0,applied:[],parLigne:[],tHT:0,tTVA:0,tTTC:0};
+    const{promoDisc,applied,parLigne}=calcPromoDiscount(cart);
     const lines=cart.map(i=>({price:i.product.price,quantity:i.quantity,taxRate:i.product.taxRate,discount:i.discountPercent||i.discount||0,discountType:"percent",discountPercent:i.discountPercent||0,discountAmount:i.discountAmount||0}));
     const avant=computeTotals(lines,{pricingMode:settings.pricingMode,gDiscPct,gDiscAmt,promoDisc,avoirPayment:0});
     const avoirEffectif=Math.min(avoirDemande,Math.max(0,avant.tTTC));
     const t=computeTotals(lines,{pricingMode:settings.pricingMode,gDiscPct,gDiscAmt,promoDisc,avoirPayment:avoirEffectif});
-    return{...t,promoDisc,applied,avoirEffectif};
+    return{...t,promoDisc,applied,parLigne:parLigne||[],avoirEffectif};
   },[cart,gDiscPct,gDiscAmt,calcPromoDiscount,avoirDemande,settings.pricingMode]);
   const avoirPayment=Math.round((cartTotals.avoirEffectif||0)*100)/100;
 

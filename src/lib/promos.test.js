@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { calcPromoDiscount } from "./promos.js";
+import { calcPromoDiscount, articlesConcernes, codePromoConnu } from "./promos.js";
 
 const item = (over = {}) => ({
   product: { price: 100, taxRate: 0.20, category: "Jeans", sku: "SKU1", collection: "S26", stock: 50, name: "Jean" },
@@ -11,7 +11,7 @@ const HT_DUN = 100 / 1.2; // HT d'un article 100 TTC @20%
 
 describe("calcPromoDiscount", () => {
   it("aucune promo → 0", () => {
-    expect(calcPromoDiscount([item()], [], TTC)).toEqual({ promoDisc: 0, applied: [] });
+    expect(calcPromoDiscount([item()], [], TTC)).toEqual({ promoDisc: 0, applied: [], parLigne: [0] });
   });
   it("panier vide → 0", () => {
     expect(calcPromoDiscount([], [{ name: "X", targetType: "category", targetValue: "Jeans", value: 10 }], TTC).promoDisc).toBe(0);
@@ -108,5 +108,54 @@ describe("calcPromoDiscount", () => {
   it("supporte les clés snake_case (promo_type/target_type/min_qty)", () => {
     const promos = [{ name: "X", promo_type: "category_discount", target_type: "category", target_value: "Jeans", value: 10, discount_type: "percent", min_qty: 1 }];
     expect(calcPromoDiscount([item()], promos, TTC).promoDisc).toBeGreaterThan(0);
+  });
+
+  // ── Filtre de categories (21/11/2026) ──
+  const pull = (over = {}) => item({ product: { ...item().product, category: "Pulls", name: "Pull", sku: "SKU2" }, ...over });
+  const auto = (extra) => ({ name: "Auto", promo_type: "global_discount", value: 20, discount_type: "percent", ...extra });
+
+  it("remise automatique : tous les articles", () => {
+    const r = calcPromoDiscount([item(), pull()], [auto()], TTC);
+    expect(r.promoDisc).toBeCloseTo(2 * HT_DUN * 0.2, 3);
+    expect(r.parLigne[0]).toBeCloseTo(HT_DUN * 0.2, 3);
+  });
+  it("toutes les catégories SAUF Pulls", () => {
+    const r = calcPromoDiscount([item(), pull()], [auto({ category_mode: "except", categories: ["pulls"] })], TTC);
+    expect(r.parLigne[0]).toBeCloseTo(HT_DUN * 0.2, 3);
+    expect(r.parLigne[1]).toBe(0);
+  });
+  it("aucune catégorie SAUF Pulls (tableau pg en texte accepté)", () => {
+    const r = calcPromoDiscount([item(), pull()], [auto({ category_mode: "only", categories: "{Pulls}" })], TTC);
+    expect(r.parLigne[0]).toBe(0);
+    expect(r.parLigne[1]).toBeCloseTo(HT_DUN * 0.2, 3);
+  });
+  it("filtre sans catégorie cochée = toutes", () => {
+    expect(calcPromoDiscount([item()], [auto({ category_mode: "only", categories: [] })], TTC).promoDisc).toBeGreaterThan(0);
+  });
+  it("code promo limité à certaines catégories, saisi avec espaces", () => {
+    const promos = [{ name: "C", promo_type: "code", code: "NOEL", value: 10, category_mode: "except", categories: ["Pulls"] }];
+    const r = calcPromoDiscount([item(), pull()], promos, { ...TTC, promoCode: " noel " });
+    expect(r.parLigne[0]).toBeCloseTo(HT_DUN * 0.1, 3);
+    expect(r.parLigne[1]).toBe(0);
+  });
+  it("quantité : seuls les articles retenus comptent", () => {
+    const promos = [{ name: "Q", promo_type: "qty_discount", min_qty: 2, value: 10, category_mode: "only", categories: ["Jeans"] }];
+    expect(calcPromoDiscount([item(), pull()], promos, TTC).promoDisc).toBe(0);
+    expect(calcPromoDiscount([item({ quantity: 2 }), pull()], promos, TTC).parLigne[1]).toBe(0);
+  });
+  it("remise par quantité avec target_type par défaut « collection » : pas traitée comme une promo collection", () => {
+    const promos = [{ name: "Q", promo_type: "qty_discount", target_type: "collection", min_qty: 5, value: 10 }];
+    expect(calcPromoDiscount([item()], promos, TTC).promoDisc).toBe(0);
+  });
+  it("catégorie avec espaces / casse différente : appliquée quand même", () => {
+    const promos = [{ name: "X", promo_type: "category_discount", target_type: "category", target_value: " jeans ", value: 10 }];
+    expect(calcPromoDiscount([item()], promos, TTC).promoDisc).toBeGreaterThan(0);
+  });
+  it("aide à la saisie : nombre d'articles concernés et code connu", () => {
+    const cat = [{ category: "Jeans", sku: "A" }, { category: "Pulls", sku: "B" }];
+    expect(articlesConcernes(auto({ category_mode: "except", categories: ["Pulls"] }), cat)).toBe(1);
+    expect(articlesConcernes({ promo_type: "category_discount", target_value: "" }, cat)).toBe(0);
+    expect(codePromoConnu([{ promo_type: "code", code: "NOEL" }], "noel")).toBe(true);
+    expect(codePromoConnu([{ promo_type: "code", code: "NOEL" }], "faux")).toBe(false);
   });
 });

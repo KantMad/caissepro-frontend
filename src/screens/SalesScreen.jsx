@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect } from "react";
+import { codePromoConnu } from "../lib/promos.js";
 import { ShoppingCart, Search, Trash2, Percent, CreditCard, Banknote, Gift, Plus, Minus, Wallet, Package, RotateCcw, Users, FileText, CheckCircle2, AlertTriangle, WifiOff, Pause, Play, Printer, Star, Zap, ScanLine, Split, Mail, XOctagon, Edit, Landmark } from "lucide-react";
 import printer from "../printer.js";
 import * as API from "../api.js";
@@ -337,8 +338,15 @@ function SalesScreen(){
         {/* Promo code input */}
         <div style={{display:"flex",gap:4}}>
           <Input value={codeInput} onChange={e=>setCodeInput(e.target.value)} placeholder="Code promo…" style={{height:34,fontSize:12,padding:"3px 10px",borderRadius:8}}/>
-          <Btn variant="outline" onClick={()=>{setPromoCode(codeInput);}} style={{height:34,padding:"0 14px",fontSize:12,borderRadius:8}}>OK</Btn>
+          <Btn variant="outline" data-testid="valider-code-promo" onClick={()=>{const c=codeInput.trim();
+            // Retour immédiat (21/11/2026) : avant, un code faux ou inactif ne disait rien
+            if(!c){setPromoCode("");return;}
+            if(codePromoConnu(activePromos,c)){setPromoCode(c);notify(`Code ${c.toUpperCase()} appliqué`,"success");}
+            else{setPromoCode("");notify(`Code « ${c} » inconnu ou promo inactive`,"error");}}} style={{height:34,padding:"0 14px",fontSize:12,borderRadius:8}}>OK</Btn>
         </div>
+        {promoCode&&<div data-testid="code-promo-actif" style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginTop:4,padding:"4px 10px",borderRadius:8,background:"#05966914",color:"#059669",fontSize:12,fontWeight:700}}>
+          ✓ Code {promoCode.toUpperCase()} appliqué
+          <button onClick={()=>{setPromoCode("");setCodeInput("");}} style={{background:"none",border:"none",cursor:"pointer",color:"#059669",fontWeight:800}} aria-label="Retirer le code promo">×</button></div>}
       </div>
 
       {/* Cart items */}
@@ -348,7 +356,10 @@ function SalesScreen(){
             <ScanLine size={20} style={{opacity:.4}}/></div>
           <div style={{fontSize:12,fontWeight:600,marginBottom:2}}>Panier vide</div>
           <div style={{fontSize:10}}>Scannez ou sélectionnez un produit</div></div>
-        :cart.map(i=>{const t=i.product.price*i.quantity;const d=Math.max(0,t-lineNetTTC({price:i.product.price,quantity:i.quantity,taxRate:i.product.taxRate,discountPercent:i.discountPercent??i.discount,discountAmount:i.discountAmount,discount:i.discount,discountType:i.discountType},settings.pricingMode));
+        :cart.map((i,idx)=>{const t=i.product.price*i.quantity;
+          // Part de promo de la ligne (HT dans le calcul) affichée au prix affiché (TTC en mode TTC)
+          const promoL=(totals.parLigne?.[idx]||0)*(settings.pricingMode==="HT"?1:1+(i.product.taxRate??0.2));
+          const d=Math.max(0,t-lineNetTTC({price:i.product.price,quantity:i.quantity,taxRate:i.product.taxRate,discountPercent:i.discountPercent??i.discount,discountAmount:i.discountAmount,discount:i.discount,discountType:i.discountType},settings.pricingMode));
           const cc=CAT_COLORS[i.product.category]||C.primary;
           const lastP=selCust&&!i.isCustom?getLastPriceForCustomer(selCust.id,i.product.id):null;
           return(
@@ -392,15 +403,16 @@ function SalesScreen(){
                 {d>0?[(i.discountPercent??(i.discountType==="amount"?0:i.discount))>0?`-${i.discountPercent??i.discount}%`:null,
                       (i.discountAmount??(i.discountType==="amount"?(i.discount||0)*i.quantity:0))>0?`-${Number(i.discountAmount??((i.discount||0)*i.quantity)).toFixed(2)}€`:null]
                       .filter(Boolean).join(" ")||"Remise":"Remise"}</button>
-              <div style={{textAlign:"right"}}>{i.discount>0&&<div style={{fontSize:11,color:C.textLight,textDecoration:"line-through"}}>{t.toFixed(2)}€</div>}
-                <div style={{fontSize:16,fontWeight:800,color:cc,letterSpacing:"-0.3px"}}>{(t-d).toFixed(2)}€</div></div></div></div>);})}</div>
+              <div style={{textAlign:"right"}}>{(i.discount>0||promoL>=0.005)&&<div style={{fontSize:11,color:C.textLight,textDecoration:"line-through"}}>{t.toFixed(2)}€</div>}
+                {promoL>=0.005&&<div data-testid="promo-ligne" style={{fontSize:11,fontWeight:800,color:"#059669"}}>Promo -{promoL.toFixed(2)}€</div>}
+                <div style={{fontSize:16,fontWeight:800,color:promoL>=0.005?"#059669":cc,letterSpacing:"-0.3px"}}>{Math.max(0,t-d-promoL).toFixed(2)}€</div></div></div></div>);})}</div>
 
       {/* Totals & Payment */}
       <div style={{padding:"0 var(--pad-sm,12px) var(--pad-sm,12px)",borderTop:`1px solid ${C.border}`}}>
         <div style={{background:C.surfaceAlt,borderRadius:"var(--radius-sm,10px)",padding:"var(--total-pad,14px)",margin:"var(--gap-sm,6px) 0",fontSize:10}}>
           <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}><span style={{color:C.textMuted}}>Sous-total HT</span><span style={{fontWeight:600}}>{totals.sHT.toFixed(2)}€</span></div>
           {totals.gdTTC>0&&<div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}><span style={{color:"#059669",display:"flex",alignItems:"center",gap:3}}><Percent size={9}/> Remises & promos</span><span style={{fontWeight:700,color:"#059669"}}>-{totals.gdTTC.toFixed(2)}€</span></div>}
-          {totals.applied?.length>0&&<div style={{background:`${C.warn}10`,borderRadius:6,padding:"3px 6px",marginBottom:3,border:`1px solid ${C.warn}15`}}>{totals.applied.map((a,i)=><div key={i} style={{fontSize:8,color:"#92720E",fontWeight:600}}>✓ {a}</div>)}</div>}
+          {totals.applied?.length>0&&<div style={{background:`${C.warn}10`,borderRadius:6,padding:"3px 6px",marginBottom:3,border:`1px solid ${C.warn}15`}}>{totals.applied.map((a,i)=><div key={i} style={{fontSize:11,color:"#92720E",fontWeight:600}}>✓ {a}</div>)}</div>}
           <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}><span style={{color:C.textMuted}}>TVA</span><span style={{fontWeight:600}}>{totals.tTVA.toFixed(2)}€</span></div>
           {selectedAvoir&&avoirPayment>0&&<div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:3}}><span style={{color:C.fiscal,display:"flex",alignItems:"center",gap:3}}>
             <RotateCcw size={9}/> Avoir {selectedAvoir.avoirNumber}</span>
