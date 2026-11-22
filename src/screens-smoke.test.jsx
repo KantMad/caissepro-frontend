@@ -473,7 +473,7 @@ describe("Métier épicerie (METIER=epicerie sur le serveur)", () => {
     try { await fn(); } finally { API.settings.get = avant; }
   };
 
-  it("Produits : contenance au lieu de couleur/taille, TVA 5,5 %, catégorie Thés natures et choix « au poids » proposés", () => avecEpicerie(async () => {
+  it("Produits : contenance au lieu de couleur/taille, TVA 5,5 %, catégorie Thés et choix « au poids » proposés", () => avecEpicerie(async () => {
     const { findByText, getByText, queryByText, container } = render(<AppProvider><ProductsScreen /></AppProvider>);
     fireEvent.click(await findByText(/Nouveau/));
     await waitFor(() => expect(getByText("CONTENANCE")).toBeTruthy());
@@ -481,7 +481,7 @@ describe("Métier épicerie (METIER=epicerie sur le serveur)", () => {
     expect(queryByText("TAILLE")).toBeNull();
     const selects = [...container.ownerDocument.querySelectorAll("select")];
     expect(selects.some(s => s.value === "0.055")).toBe(true);
-    expect(selects.some(s => s.value === "Thés natures")).toBe(true);
+    expect(selects.some(s => s.value === "Thés")).toBe(true);
     expect(container.ownerDocument.querySelector('[data-testid="mode-vente"]')).toBeTruthy();
   }));
 
@@ -490,7 +490,7 @@ describe("Métier épicerie (METIER=epicerie sur le serveur)", () => {
     const { queryByText } = render(<AppProvider><Harness /><SalesScreen /></AppProvider>);
     await waitFor(() => expect(ctx?.settings?.metier).toBe("epicerie"));
     expect(queryByText("Retouche")).toBeNull();
-    expect(ctx.allCategories).toContain("Thés parfumés");
+    expect(ctx.allCategories).toContain("Confitures et miels");
     expect(ctx.allCategories).not.toContain("T-shirts");
   }));
 
@@ -563,6 +563,21 @@ describe("Métier épicerie (METIER=epicerie sur le serveur)", () => {
     expect(queryByText("Dates limites")).toBeNull();
     expect(queryByText("Coffrets")).toBeNull();
     expect(ctx.lots).toEqual([]);
+  });
+
+  it("Étiquette balance au prix : ligne pesée au prix imprimé ; logo de la boutique sur le panier", async () => {
+    const API = await import("./api.js");
+    const avant = API.settings.get;
+    API.settings.get = () => Promise.resolve({ name: "Épicerie", pricingMode: "TTC", metier: "epicerie", brandLogo: "data:image/png;base64,AAAA" });
+    try {
+      let ctx; const Harness = () => { ctx = useApp(); return null; };
+      const { findByTestId } = render(<AppProvider><Harness /><SalesScreen /></AppProvider>);
+      expect(await findByTestId("logo-panier")).toBeTruthy();
+      const the = { id: "p9", name: "Earl Grey", sku: "TH-1", price: 8, taxRate: 0.055, category: "Thés", poidsRefG: 100 };
+      act(() => { ctx.addPeseeAuPanier(the, { id: "v9", color: "—", size: "Vrac" }, 85, { prix: 6.79 }); });
+      await waitFor(() => expect(ctx.cart.length).toBe(1));
+      expect(ctx.cart[0]).toMatchObject({ quantity: 1, product: { price: 6.79 }, variant: { size: "85 g", poidsG: 85 } });
+    } finally { API.settings.get = avant; }
   });
 
   it("Textile (défaut) : bouton Retouche toujours présent", async () => {

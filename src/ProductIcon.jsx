@@ -1,3 +1,4 @@
+import { iconeEpicerie } from "./metier.js";
 // ════════════════════════════════════════════════════════════
 //  Visuel produit par défaut (quand l'article n'a pas de photo) :
 //  silhouette SVG du vêtement, déduite du nom puis de la catégorie,
@@ -98,7 +99,13 @@ const SHAPES = {
  *  - name/category : servent à choisir la silhouette
  *  - color : nom de couleur de la variante (ou hex) ; fallback = couleur de catégorie
  */
-export function ProductIcon({ name, category, color, fallbackColor, size = 48, style }) {
+export function ProductIcon({ name, category, color, fallbackColor, size = 48, style, epicerie = false }) {
+  // Épicerie fine : pas de silhouette de vêtement, l'icône du produit (thé, café, confiture…)
+  if (epicerie) return (
+    <span role="img" aria-hidden="true" data-icone-epicerie
+      style={{ display: "flex", alignItems: "center", justifyContent: "center", width: size, height: size,
+        fontSize: Math.round(size * 0.62), lineHeight: 1, ...style }}>{iconeEpicerie(name, category)}</span>
+  );
   const kind = productKind(name, category);
   const fill = colorHex(color, fallbackColor);
   const light = luminance(fill) > 0.72;

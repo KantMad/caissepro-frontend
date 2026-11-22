@@ -8,7 +8,7 @@ import { Btn, Input, Badge } from "../ui.jsx";
 import { useApp } from "../context.jsx";
 import hardwareManager from "../hardware.js";
 import TechInTouchPanel from "./TechInTouchPanel.jsx";
-import { estEpicerie } from "../metier.js";
+import { estEpicerie, prefixesBalance, csvBalance, venduAuPoids } from "../metier.js";
 // Copie dans le presse-papiers. navigator.clipboard est ABSENT hors HTTPS et refuse dans certaines
 // WebView Android : on retombe sur l'ancienne methode (zone de texte + copier) au lieu de planter.
 const copier=async(texte)=>{
@@ -1065,7 +1065,7 @@ function SettingsScreen(){
   return(<div style={{height:"100%",overflowY:"auto",padding:"var(--pad,16px)",background:C.bg}}>
     <h2 style={{fontSize:20,fontWeight:800,marginBottom:10}}>Paramètres</h2>
     <div style={{display:"flex",gap:6,marginBottom:14,flexWrap:"wrap"}}>
-      {[{id:"general",l:"Général"},...(estEpicerie(settings)?[]:[{id:"retouche",l:"✂️ Retouches"}]),{id:"pricing",l:"💰 Prix HT/TTC"},{id:"commission",l:"Commission"},{id:"printer",l:"Imprimante"},{id:"tpe",l:"Terminal paiement"},{id:"receipt",l:"Ticket"},{id:"invoice",l:"Facture"},{id:"screen2",l:"📺 Écran 2"},{id:"caticons",l:"🏷️ Catégories"},{id:"return",l:"Retours"},...(settings.titEnabled?[{id:"tit",l:"Tech in touch"}]:[]),{id:"sizes",l:estEpicerie(settings)?"📏 Ordre contenances":"📏 Ordre tailles"},{id:"clock",l:"Pointages"},{id:"prices",l:"Historique prix"},{id:"backup",l:"Backup"},{id:"debug",l:"Diagnostic"}].map(t=>(
+      {[{id:"general",l:"Général"},...(estEpicerie(settings)?[]:[{id:"retouche",l:"✂️ Retouches"}]),{id:"pricing",l:"💰 Prix HT/TTC"},{id:"commission",l:"Commission"},{id:"printer",l:"Imprimante"},{id:"tpe",l:"Terminal paiement"},{id:"receipt",l:"Ticket"},{id:"invoice",l:"Facture"},{id:"marque",l:"🎨 Image de marque"},...(estEpicerie(settings)?[{id:"balance",l:"⚖️ Balances"}]:[]),{id:"screen2",l:"📺 Écran 2"},{id:"caticons",l:"🏷️ Catégories"},{id:"return",l:"Retours"},...(settings.titEnabled?[{id:"tit",l:"Tech in touch"}]:[]),{id:"sizes",l:estEpicerie(settings)?"📏 Ordre contenances":"📏 Ordre tailles"},{id:"clock",l:"Pointages"},{id:"prices",l:"Historique prix"},{id:"backup",l:"Backup"},{id:"debug",l:"Diagnostic"}].map(t=>(
         <button key={t.id} onClick={()=>setTab(t.id)} style={{padding:"0 14px",minHeight:32,borderRadius:8,border:`1.5px solid ${tab===t.id?C.primary:C.border}`,
           background:tab===t.id?C.primary:"transparent",color:tab===t.id?"#fff":C.text,fontSize:12,fontWeight:600,cursor:"pointer"}}>{t.l}</button>))}</div>
 
@@ -1663,6 +1663,56 @@ function SettingsScreen(){
       <Btn onClick={()=>{saveSettingsNotify(settings,"Paramètres ticket");addAudit("CONFIG","Paramètres ticket mis à jour");}} style={{width:"100%",height:40,background:C.primary}}><Save size={14}/> Enregistrer</Btn>
     </div>}
 
+    {tab==="marque"&&<div style={{maxWidth:560}}>
+      <div style={{background:C.primaryLight,borderRadius:16,padding:20,border:`1.5px solid ${C.primary}22`,marginBottom:16}}>
+        <h3 style={{fontSize:16,fontWeight:800,margin:"0 0 4px"}}>Image de marque</h3>
+        <p style={{fontSize:11,color:C.textMuted,margin:0}}>Logo de la boutique affiché sur le panier, et couleurs de la caisse. Laisser vide pour garder les couleurs Tech in Cash.</p></div>
+      <div style={{marginBottom:12}}><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>Logo (panier)</label>
+        <div style={{display:"flex",alignItems:"center",gap:10}}>
+          {settings.brandLogo&&<img src={settings.brandLogo} alt="Logo" style={{height:56,maxWidth:140,objectFit:"contain",borderRadius:6,border:`1px solid ${C.border}`,padding:4}}/>}
+          <label style={{padding:"8px 12px",borderRadius:8,border:`1.5px solid ${C.border}`,cursor:"pointer",fontSize:11,fontWeight:600}}>Importer une image
+            <input type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" data-testid="logo-marque" style={{display:"none"}} onChange={e=>{const f=e.target.files?.[0];if(!f)return;
+              if(f.size>500*1024){notify("Logo trop lourd : 500 Ko au plus","error");return;}
+              const reader=new FileReader();reader.onload=ev=>{setSettings(s=>({...s,brandLogo:ev.target.result}));notify("Logo importé : pensez à enregistrer","success");};reader.readAsDataURL(f);}}/></label>
+          {settings.brandLogo&&<button onClick={()=>setSettings(s=>({...s,brandLogo:""}))} style={{padding:"6px 10px",borderRadius:8,border:`1px solid ${C.danger}30`,background:"transparent",cursor:"pointer",fontSize:10,fontWeight:600,color:C.danger}}>Supprimer</button>}</div></div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>
+        {[["brandPrimary","Couleur principale","#047857"],["brandAccent","Couleur secondaire","#D97706"]].map(([k,l,def])=>(
+          <div key={k}><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>{l}</label>
+            <div style={{display:"flex",gap:6,alignItems:"center"}}><input type="color" value={settings[k]||def} onChange={e=>setSettings(s=>({...s,[k]:e.target.value.toUpperCase()}))} style={{width:36,height:36,border:"none",borderRadius:8,cursor:"pointer"}}/>
+              <Input value={settings[k]||""} placeholder={def} onChange={e=>setSettings(s=>({...s,[k]:e.target.value.trim()}))} style={{flex:1}}/></div></div>))}</div>
+      <div style={{display:"flex",gap:8}}>
+        <Btn variant="outline" onClick={()=>setSettings(s=>({...s,brandPrimary:"",brandAccent:""}))} style={{flex:1,height:40}}>Couleurs Tech in Cash</Btn>
+        <Btn onClick={()=>{const ok=k=>!settings[k]||/^#[0-9a-fA-F]{6}$/.test(settings[k]);
+          if(!ok("brandPrimary")||!ok("brandAccent")){notify("Couleur au format #RRGGBB","error");return;}
+          saveSettingsNotify(settings,"Image de marque");addAudit("CONFIG","Image de marque mise à jour");}} style={{flex:2,height:40,background:C.primary}}><Save size={14}/> Enregistrer</Btn></div>
+    </div>}
+    {tab==="balance"&&estEpicerie(settings)&&<div style={{maxWidth:600}}>
+      <div style={{background:C.primaryLight,borderRadius:16,padding:20,border:`1.5px solid ${C.primary}22`,marginBottom:16}}>
+        <h3 style={{fontSize:16,fontWeight:800,margin:"0 0 4px"}}>Balances étiquetteuses</h3>
+        <p style={{fontSize:11,color:C.textMuted,margin:0,lineHeight:1.5}}>La balance imprime une étiquette à code-barres : <b>préfixe</b> (2 chiffres) + <b>code article</b> (5) + <b>poids en grammes ou prix en centimes</b> (5) + clé.
+          Scannée en caisse, l'étiquette ajoute le produit pesé au panier. Le code article est le « Code balance » de la fiche produit (produits vendus au poids).</p></div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
+        <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>Préfixes des étiquettes</label>
+          <Input data-testid="balance-prefixes" value={settings.balancePrefixes||""} placeholder="ex. 27, 28" onChange={e=>setSettings(s=>({...s,balancePrefixes:e.target.value}))}/>
+          <div style={{fontSize:9,color:C.textMuted,marginTop:3}}>Entre 22 et 28 (20, 21 et 29 sont pris par la caisse). Voir le réglage « code-barres » de la balance.</div></div>
+        <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>L'étiquette contient</label>
+          <select value={settings.balanceMode||"poids"} onChange={e=>setSettings(s=>({...s,balanceMode:e.target.value}))} style={{width:"100%",padding:10,borderRadius:10,border:`2px solid ${C.border}`,fontSize:12,fontFamily:"inherit"}}>
+            <option value="poids">Le poids (en grammes)</option><option value="prix">Le prix (en centimes)</option></select></div></div>
+      <Btn onClick={()=>{const lst=String(settings.balancePrefixes||"").split(/[\s,;]+/).filter(Boolean);
+          if(lst.some(x=>!/^2[2-8]$/.test(x))){notify("Préfixes : entre 22 et 28","error");return;}
+          saveSettingsNotify({...settings,balancePrefixes:lst.join(","),balanceMode:settings.balanceMode||"poids"},"Balances");addAudit("CONFIG","Balances étiquetteuses mises à jour");}}
+        style={{width:"100%",height:40,background:C.primary,marginBottom:16}}><Save size={14}/> Enregistrer</Btn>
+      {(()=>{const pes=(products||[]).filter(venduAuPoids);const avec=pes.filter(p=>p.codeBalance);
+        return(<div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`}}>
+          <div style={{fontSize:13,fontWeight:700,marginBottom:4}}>Articles à charger dans la balance</div>
+          <div style={{fontSize:11,color:C.textMuted,marginBottom:10}}>{avec.length} produit(s) au poids avec un code balance sur {pes.length}.
+            {prefixesBalance(settings).length===0&&" Aucun préfixe enregistré : les étiquettes ne seront pas reconnues."}
+            {" "}Le fichier (code article, libellé, prix au kilo TTC, TVA) s'importe dans le logiciel de la balance.</div>
+          {pes.length>avec.length&&<div style={{fontSize:10,color:C.warn,marginBottom:8}}>Sans code balance : {pes.filter(p=>!p.codeBalance).slice(0,8).map(p=>p.name).join(", ")}{pes.length-avec.length>8?"…":""}</div>}
+          <Btn variant="outline" disabled={!avec.length} onClick={()=>{const blob=new Blob(["\ufeff"+csvBalance(products)],{type:"text/csv;charset=utf-8"});
+            const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="articles-balance.csv";a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);}}
+            style={{width:"100%",height:38}}>Exporter les articles (CSV)</Btn></div>);})()}
+    </div>}
     {tab==="screen2"&&<div style={{maxWidth:600}}>
       <div style={{background:C.primaryLight,borderRadius:16,padding:20,border:`1.5px solid ${C.primary}22`,marginBottom:16}}>
         <h3 style={{fontSize:16,fontWeight:800,margin:"0 0 4px"}}>Personnalisation Écran 2</h3>

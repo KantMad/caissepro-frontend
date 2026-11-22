@@ -9,17 +9,51 @@ export const estEpicerie = (settings) => settings?.metier === "epicerie";
 // Rayons d'une maison de the / epicerie fine (calques sur le premier client, Happy Blue Tea).
 // La couleur ou l'origine du the (vert, noir, Chine, Japon...) va dans le second champ
 // (« Type / origine », colonne collection). Le gerant peut ajouter ses propres categories.
-export const CATEGORIES_EPICERIE = ["Thés natures", "Thés parfumés", "Infusions", "Matcha", "Cafés",
-  "Épicerie sucrée", "Chocolat", "Épicerie salée", "Huiles et vinaigres", "Coffrets",
-  "Bougies et encens", "Accessoires"];
+export const CATEGORIES_EPICERIE = ["Thés", "Infusions", "Cafés", "Chocolats", "Confiseries",
+  "Biscuits et gâteaux", "Confitures et miels", "Épices et sauces", "Huiles et vinaigres",
+  "Conserves et terrines", "Apéritif", "Pâtes, riz et céréales", "Vins et spiritueux",
+  "Coffrets cadeaux", "Arts de la table"];
 
-export const ICONES_EPICERIE = { "Thés natures": "🍵", "Thés parfumés": "🫖", "Infusions": "🌿",
-  "Matcha": "🍃", "Cafés": "☕", "Épicerie sucrée": "🍯", "Chocolat": "🍫", "Épicerie salée": "🌶️",
-  "Huiles et vinaigres": "🫒", "Coffrets": "🎁", "Bougies et encens": "🕯️", "Accessoires": "🥄" };
+export const ICONES_EPICERIE = { "Thés": "🍵", "Infusions": "🌿", "Cafés": "☕", "Chocolats": "🍫",
+  "Confiseries": "🍬", "Biscuits et gâteaux": "🍪", "Confitures et miels": "🍯", "Épices et sauces": "🌶️",
+  "Huiles et vinaigres": "🫒", "Conserves et terrines": "🥫", "Apéritif": "🥨", "Pâtes, riz et céréales": "🍝",
+  "Vins et spiritueux": "🍷", "Coffrets cadeaux": "🎁", "Arts de la table": "🫖",
+  // anciennes catégories (catalogues créés avant le 22/11/2026)
+  "Thés natures": "🍵", "Thés parfumés": "🍵", "Matcha": "🍵", "Épicerie sucrée": "🍯", "Chocolat": "🍫",
+  "Épicerie salée": "🌶️", "Coffrets": "🎁", "Bougies et encens": "🕯️", "Accessoires": "🫖" };
+
+// Visuel d'un produit d'épicerie sans photo : déduit du NOM puis de la catégorie (1er trouvé gagne).
+const sansAccent = (s) => String(s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+const PRODUITS_EPICERIE = [
+  ["🎁", /coffret|panier garni|calendrier|cadeau/],
+  ["🫖", /theiere|tasse|mug|infuseur|boite a the|filtre|accessoire|arts de la table|bol\b/],
+  ["🕯️", /bougie|encens/],
+  ["🌿", /infusion|tisane|rooibos|verveine|camomille|tilleul|menthe/],
+  ["🍵", /\bthes?\b|matcha|sencha|oolong|earl grey|darjeeling|chai|puerh|genmaicha/],
+  ["☕", /cafe|espresso|expresso|arabica|robusta/],
+  ["🍫", /chocolat|cacao|praline/],
+  ["🍬", /bonbon|confiserie|caramel|nougat|guimauve|calisson|pate de fruit|reglisse|dragee|marron glace/],
+  ["🍪", /biscuit|sable|gateau|madeleine|cookie|galette|financier|macaron|tuile|pain d.epices/],
+  ["🍯", /miel|confiture|gelee|marmelade|pate a tartiner|compote/],
+  ["🧂", /\bsel\b|fleur de sel/],
+  ["🫒", /huile|vinaigre|olive|balsamique/],
+  ["🌶️", /epice|poivre|piment|curry|safran|cannelle|paprika|sauce|moutarde|condiment|harissa/],
+  ["🥫", /conserve|terrine|rillette|foie gras|pate\b|sardine|thon|soupe|veloute/],
+  ["🥨", /aperitif|tapenade|crackers?|chips|olives|tartinable|biscuit sale/],
+  ["🥣", /granola|muesli|cereale|porridge/],
+  ["🍝", /pates|riz|risotto|quinoa|lentille|farine|semoule/],
+  ["🍷", /vin\b|vins|champagne|cidre|whisky|rhum|liqueur|cognac|armagnac|biere|spiritueux/],
+];
+export const iconeEpicerie = (nom, categorie) => {
+  const n = sansAccent(nom), c = sansAccent(categorie);
+  for (const [ic, re] of PRODUITS_EPICERIE) if (re.test(n)) return ic;
+  for (const [ic, re] of PRODUITS_EPICERIE) if (re.test(c)) return ic;
+  return ICONES_EPICERIE[categorie] || "🛍️";
+};
 
 // Valeurs proposees a la creation d'un produit (le gerant peut toujours les changer).
 export const produitParDefaut = (settings) => estEpicerie(settings)
-  ? { taxRate: "0.055", category: "Thés natures", collection: "", poidsRefG: "" }
+  ? { taxRate: "0.055", category: "Thés", collection: "", poidsRefG: "", codeBalance: "" }
   : { taxRate: "0.20", category: "T-shirts", collection: "PE-2026" };
 
 // Variante enregistree : en epicerie la couleur est remplacee par SANS_COULEUR (la base l'exige,
@@ -92,4 +126,37 @@ export function lotDlcDepassee(lots, variant, aujourdhui) {
 export function coffretsPossibles(compo, stockDe) {
   if (!compo?.length) return 0;
   return Math.max(0, Math.min(...compo.map(c => Math.floor((Number(stockDe(c.variant_id)) || 0) / Math.max(1, Number(c.quantite) || 1)))));
+}
+
+// ── Balances étiquetteuses (migration API 056) ──
+// Étiquette EAN-13 : préfixe (2 chiffres, ex. 27/28) + code article (5) + poids en g ou prix en
+// centimes (5) + clé. Réglages : settings.balancePrefixes (« 27,28 ») et settings.balanceMode
+// (« poids » par défaut, ou « prix »). Le code article = « Code balance » de la fiche produit.
+export const cleEan13Valide = (code) => {
+  if (!/^\d{13}$/.test(code)) return false;
+  const d = code.split("").map(Number);
+  const somme = d.slice(0, 12).reduce((s, x, i) => s + x * (i % 2 ? 3 : 1), 0);
+  return (10 - (somme % 10)) % 10 === d[12];
+};
+export const prefixesBalance = (settings) => String(settings?.balancePrefixes || "").split(/[\s,;]+/).filter(x => /^2[2-8]$/.test(x));
+export function lireEtiquetteBalance(code, settings) {
+  const c = String(code || "").trim();
+  if (!estEpicerie(settings) || !prefixesBalance(settings).includes(c.slice(0, 2)) || !cleEan13Valide(c)) return null;
+  return { codeArticle: String(parseInt(c.slice(2, 7), 10)), valeur: parseInt(c.slice(7, 12), 10),
+    mode: settings.balanceMode === "prix" ? "prix" : "poids" };
+}
+// Grammes d'une étiquette : lus directement (mode poids) ou recalculés depuis le prix (mode prix)
+export function grammesEtiquette(etiq, p) {
+  if (etiq.mode === "poids") return etiq.valeur;
+  const prix = Number(p?.price), ref = Number(p?.poidsRefG);
+  return prix > 0 && ref > 0 ? Math.round((etiq.valeur / 100) * ref / prix) : 0;
+}
+// Fichier à charger dans le logiciel de la balance : un article par produit ayant un code balance
+export function csvBalance(products) {
+  const lignes = (products || []).filter(p => p.codeBalance && venduAuPoids(p))
+    .sort((a, b) => Number(a.codeBalance) - Number(b.codeBalance))
+    .map(p => [p.codeBalance, `"${String(p.name).replace(/"/g, '""')}"`,
+      (Number(p.price) * 1000 / Number(p.poidsRefG)).toFixed(2).replace(".", ","),
+      (Number(p.taxRate) * 100).toFixed(1).replace(".", ",")].join(";"));
+  return ["code_article;libelle;prix_kg_ttc;tva", ...lignes].join("\r\n");
 }

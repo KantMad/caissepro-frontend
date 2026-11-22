@@ -26,6 +26,8 @@ function SalesScreen(){
     printerConnected,thermalPrint,pendingSync,clearPendingSync,users,vendeurs,currentUser,currentStore,avoirs,consumeAvoir,checkGiftCard,setScanOverride,clearScanOverride,isAvoirExpired,addAudit,addJET,trainingMode,cartTotals,retoucheBons,addRetoucheBon,cashReg,closures,allCategories,getVariantPhotos,pesee,setPesee,addPeseeAuPanier}=useApp();
   const[poidsSaisi,setPoidsSaisi]=useState("");   // fenetre de pesee (the en vrac), en grammes
   const categories=allCategories;
+  const epi=estEpicerie(settings);
+  const logoMarque=settings.brandLogo||"";   // logo de la boutique, affiché sur le panier (Paramètres > Image de marque)
   const[search,setSearch]=useState("");const[cat,setCat]=useState("Tous");const[vm,setVm]=useState(null);const[selSeller,setSelSeller]=useState(null);
   // Remises cumulables : pourcentage d'abord, puis euros TTC sur le reste
   const[dm,setDm]=useState(null);const[dPct,setDPct]=useState("");const[dEur,setDEur]=useState("");
@@ -264,7 +266,7 @@ function SalesScreen(){
             {(()=>{const firstV=p.variants[0];const photos=firstV?getVariantPhotos(p,firstV):[];
               return photos.length>0
                 ?<img src={photos[0].url} alt="" style={{width:"100%",height:"100%",objectFit:"cover",position:"absolute",inset:0}} loading="lazy"/>
-                :<ProductIcon name={p.name} category={p.category} color={firstV?.color} fallbackColor={cc} size={76} style={{filter:"drop-shadow(0 3px 6px rgba(15,23,42,0.12))"}}/>;
+                :<ProductIcon epicerie={epi} name={p.name} category={p.category} color={firstV?.color} fallbackColor={cc} size={76} style={{filter:"drop-shadow(0 3px 6px rgba(15,23,42,0.12))"}}/>;
             })()}
             {ts<=0&&<div style={{position:"absolute",top:6,left:6,zIndex:2}}>
               <Badge color={C.danger}>{ts<0?`Stock ${ts}`:"Rupture"}</Badge></div>}
@@ -311,6 +313,7 @@ function SalesScreen(){
             boxShadow:`0 4px 14px ${C.primary}25`,flexShrink:0}}><ShoppingCart size={16} color="#fff"/></div>
           <div style={{flex:1,minWidth:0}}><div style={{fontSize:14,fontWeight:800,letterSpacing:"-0.3px"}}>Panier</div>
             <div style={{fontSize:11,color:C.text,fontWeight:800}}>{cart.reduce((s,i)=>s+i.quantity,0)} pièce{cart.reduce((s,i)=>s+i.quantity,0)>1?"s":""}</div></div>
+          {logoMarque&&<img src={logoMarque} alt="" data-testid="logo-panier" style={{height:40,maxWidth:110,objectFit:"contain",flexShrink:0}}/>}
           {perm().canVoid&&<Btn variant="ghost" onClick={()=>{if(cart.length)setConfirmVoid(true);}} disabled={!cart.length} style={{padding:"4px 6px",color:C.danger,borderRadius:8}} title="Annuler"><XOctagon size={12}/></Btn>}
         </div>
 
@@ -352,8 +355,9 @@ function SalesScreen(){
       {/* Cart items */}
       <div style={{flex:1,overflowY:"auto",padding:"var(--pad-sm,8px) var(--pad-sm,12px)"}}>
         {!cart.length?<div style={{textAlign:"center",padding:"30px 0",color:C.textLight}}>
-          <div style={{width:44,height:44,borderRadius:12,background:C.surfaceAlt,display:"inline-flex",alignItems:"center",justifyContent:"center",marginBottom:8}}>
-            <ScanLine size={20} style={{opacity:.4}}/></div>
+          {logoMarque?<img src={logoMarque} alt="" style={{width:120,height:120,objectFit:"contain",opacity:.9,marginBottom:8}}/>
+          :<div style={{width:44,height:44,borderRadius:12,background:C.surfaceAlt,display:"inline-flex",alignItems:"center",justifyContent:"center",marginBottom:8}}>
+            <ScanLine size={20} style={{opacity:.4}}/></div>}
           <div style={{fontSize:12,fontWeight:600,marginBottom:2}}>Panier vide</div>
           <div style={{fontSize:10}}>Scannez ou sélectionnez un produit</div></div>
         :cart.map((i,idx)=>{const t=i.product.price*i.quantity;
@@ -373,7 +377,7 @@ function SalesScreen(){
                   ?<div style={{width:36,height:36,borderRadius:8,overflow:"hidden",flexShrink:0,border:`1px solid ${C.border}`}}>
                     <img src={photos[0].url} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}} loading="lazy"/></div>
                   :<div style={{width:34,height:34,borderRadius:8,background:`${cc}10`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-                    {i.isCustom?<span style={{fontSize:14}}>📝</span>:<ProductIcon name={i.product.name} category={i.product.category} color={i.variant?.color} fallbackColor={cc} size={24}/>}</div>;
+                    {i.isCustom?<span style={{fontSize:14}}>📝</span>:<ProductIcon epicerie={epi} name={i.product.name} category={i.product.category} color={i.variant?.color} fallbackColor={cc} size={24}/>}</div>;
               })()}
               <div style={{flex:1,minWidth:0}}>
                 <div style={{fontSize:14,fontWeight:700,lineHeight:1.25,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{i.product.name}{i.isCustom?" (divers)":""}</div>
@@ -469,7 +473,7 @@ function SalesScreen(){
     <Modal open={!!vm} onClose={()=>setVm(null)} title="Choisir une variante" sub={vm?`${vm.name} — ${vm.price.toFixed(2)}€`:""}>
       {vm&&<>
         <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:14,padding:"10px 12px",background:C.surfaceAlt,borderRadius:12}}>
-          <ProductIcon name={vm.name} category={vm.category} color={vm.variants?.[0]?.color} fallbackColor={CAT_COLORS[vm.category]||C.primary} size={40}/>
+          <ProductIcon epicerie={epi} name={vm.name} category={vm.category} color={vm.variants?.[0]?.color} fallbackColor={CAT_COLORS[vm.category]||C.primary} size={40}/>
           <div><div style={{fontSize:13,fontWeight:700}}>{vm.name}</div>
             <div style={{fontSize:11,color:C.textMuted}}>{vm.category} — {vm.collection||"Sans collection"} — TVA {(vm.taxRate*100).toFixed(0)}%</div>
             {vm.sku&&<div style={{fontSize:10,fontFamily:"monospace",color:C.textMuted,marginTop:1}}>Réf: {vm.sku}</div>}</div>

@@ -3,11 +3,11 @@ import * as API from "./api.js";
 import { setOnAuthExpired, setStoreId, clearStoreId } from "./api.js";
 import printer from "./printer.js";
 import hardwareManager, { BrowserPrintAdapter } from "./hardware.js";
-import { CO, DEFAULT_TVA_RATES, PERMS, initUsers, LOYALTY_TIERS, C, categories as defaultCategories } from "./constants.jsx";
+import { CO, DEFAULT_TVA_RATES, PERMS, initUsers, LOYALTY_TIERS, C, categories as defaultCategories, appliquerMarque } from "./constants.jsx";
 import { hashPin, hashPinFort, verifyPin, sha256, norm, loadVariantOrderFromSettings, autoImportSizesFromProducts, generateEAN13, DEFAULT_CAT_ICONS } from "./utils.jsx";
 import { computeTotals, lineNetTTC } from "./lib/totals.js";
 import { detailVariante } from "./lib/formatters.js";
-import { estEpicerie, CATEGORIES_EPICERIE, venduAuPoids, prixPese, libellePoids, sortieStock, lotDlcDepassee, libelleDate } from "./metier.js";
+import { estEpicerie, CATEGORIES_EPICERIE, venduAuPoids, prixPese, libellePoids, sortieStock, lotDlcDepassee, libelleDate, lireEtiquetteBalance, grammesEtiquette } from "./metier.js";
 import { dayKey } from "./lib/dates.js";
 import { getLoyaltyTier as loyaltyTierOf } from "./lib/loyalty.js";
 import { calcPromoDiscount as calcPromos } from "./lib/promos.js";
@@ -764,20 +764,23 @@ function AppProvider({children}){
   // Produit vendu au poids (the en vrac) : pas d'ajout direct, la caisse demande d'abord le poids
   // (fenetre de pesee de l'ecran Vente). Vaut pour la grille, le scan et les favoris.
   const[pesee,setPesee]=useState(null);
+  // Epicerie : le lot qui part en premier a sa DLC passee -> interdit a la vente, on prévient
+  const alerteDlc=(p,v)=>{const perime=estEpicerie(settings)?lotDlcDepassee(lots,v):null;
+    if(perime)notify(`⚠ ${p.name} : DLC dépassée (lot ${perime.numero||"sans n°"}, ${libelleDate(perime.date_limite)}). Ne pas vendre : retirez le lot dans Stock > Dates limites.`,"error");};
   const addToCart=(p,v)=>{
-    // Epicerie : le lot qui part en premier a sa DLC passee -> interdit a la vente, on prévient
-    const perime=estEpicerie(settings)?lotDlcDepassee(lots,v):null;
-    if(perime)notify(`⚠ ${p.name} : DLC dépassée (lot ${perime.numero||"sans n°"}, ${libelleDate(perime.date_limite)}). Ne pas vendre : retirez le lot dans Stock > Dates limites.`,"error");
+    alerteDlc(p,v);
     if(venduAuPoids(p)){setPesee({product:p,variant:v});return;}
     setCart(prev=>{const i=prev.findIndex(c=>c.product.id===p.id&&c.variant?.id===v?.id);
     if(i>=0){const n=[...prev];n[i]={...n[i],quantity:n[i].quantity+1};return n;}return[...prev,{product:p,variant:v,quantity:1,discount:0,isCustom:false}];});};
   // Ligne pesee : quantite 1, prix = prix catalogue x poids / poids de reference, poids dans la
   // contenance. Meme the pese deux fois = une seule ligne, poids additionnes.
-  const addPeseeAuPanier=(p,v,grammes)=>{const g=Math.round(Number(grammes));if(!(g>0)||!venduAuPoids(p))return false;
+  // opts.prix : prix imprimé par une balance étiquetteuse (étiquette « prix ») — ajouté tel quel
+  const addPeseeAuPanier=(p,v,grammes,opts={})=>{const g=Math.round(Number(grammes));if(!(g>0)||!venduAuPoids(p))return false;
     setCart(prev=>{const i=prev.findIndex(c=>c.product.id===p.id&&c.variant?.id===v?.id);
       const total=g+(i>=0?Number(prev[i].variant?.poidsG)||0:0);
+      const prix=opts.prix!=null?Math.round(((i>=0?Number(prev[i].product.price)||0:0)+Number(opts.prix))*100)/100:prixPese(p,total);
       const ligne={...(i>=0?prev[i]:{discount:0,isCustom:false}),quantity:1,
-        product:{...p,price:prixPese(p,total)},variant:{...v,size:libellePoids(total),poidsG:total}};
+        product:{...p,price:prix},variant:{...v,size:libellePoids(total),poidsG:total}};
       if(i>=0){const n=[...prev];n[i]=ligne;return n;}return[...prev,ligne];});
     setPesee(null);return true;};
   // Identifiant unique par ligne : une retouche a plusieurs prestations ajoute ses lignes dans le
@@ -1506,6 +1509,11 @@ function AppProvider({children}){
   // Barcode scanner auto-start — use refs to avoid re-subscribing on every cart change
   const addToCartRef=useRef(addToCart);addToCartRef.current=addToCart;
   const findByEANRef=useRef(findByEAN);findByEANRef.current=findByEAN;
+  // Etiquettes de balance (épicerie) : réglages, catalogue et ajout pesé à jour sans réabonner le lecteur
+  const settingsRef=useRef(settings);settingsRef.current=settings;
+  const productsRef=useRef(products);productsRef.current=products;
+  const addPeseeAuPanierRef=useRef(addPeseeAuPanier);addPeseeAuPanierRef.current=addPeseeAuPanier;
+  const alerteDlcRef=useRef(alerteDlc);alerteDlcRef.current=alerteDlc;
   const notifyRef=useRef(notify);notifyRef.current=notify;
   const ticketsRef=useRef(tickets);ticketsRef.current=tickets;
   const retoucheBonsRef=useRef(retoucheBons);retoucheBonsRef.current=retoucheBons;
@@ -1532,6 +1540,15 @@ function AppProvider({children}){
       // 1. Try product EAN
       const found=findByEANRef.current(code);
       if(found){addToCartRef.current(found.product,found.variant);notifyRef.current(found.product.name+" ajouté ("+code+")");return;}
+      // 1b. Etiquette de balance (épicerie) : 2X + code article + poids ou prix + clé
+      const etiq=lireEtiquetteBalance(code,settingsRef.current);
+      if(etiq){const p=productsRef.current.find(x=>x.codeBalance&&String(parseInt(x.codeBalance,10))===etiq.codeArticle);
+        if(!p){notifyRef.current(`Étiquette balance : code article ${etiq.codeArticle} inconnu (renseignez le « Code balance » sur la fiche du produit)`,"error");return;}
+        const v=p.variants?.[0];const g=grammesEtiquette(etiq,p);
+        if(!v||!(g>0)||!venduAuPoids(p)){notifyRef.current(`Étiquette balance : ${p.name} n'est pas vendu au poids`,"error");return;}
+        alerteDlcRef.current(p,v);
+        addPeseeAuPanierRef.current(p,v,g,etiq.mode==="prix"?{prix:etiq.valeur/100}:{});
+        notifyRef.current(`${p.name} ajouté (${g} g${etiq.mode==="prix"?`, ${(etiq.valeur/100).toFixed(2)} €`:""})`);return;}
       // 2. Try ticket/avoir/retouche barcode (EAN-13 starting with "200"/"201"/"203")
       // Only navigate to history if we're NOT on the sales screen (don't interrupt cart)
       const currentMode=sessionStorage.getItem("caissepro_mode")||"cashier";
@@ -2278,6 +2295,8 @@ function AppProvider({children}){
     }catch(e){console.warn("Reload photos echoue:",e.message);}
   },[]);
 
+  // Image de marque de l'instance (couleurs du client), appliquée avant le rendu des écrans
+  appliquerMarque(settings.brandPrimary,settings.brandAccent);
   return<AppCtx.Provider value={{currentUser,vendeurs,login,logout,mode,setMode,offlineMode,
     stores,setStores,currentStore,setCurrentStore,selectStore,viewingStoreId,switchViewingStore,effectiveStoreId,
     products,setProducts,addProduct,customers,setCustomers,addCustomer,openCustomerDisplay,footfall,addFootfall,

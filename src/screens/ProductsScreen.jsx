@@ -16,6 +16,10 @@ const libellePrix=(ref,pm)=>ref?`PRIX ${pm} POUR ${Number(ref)>=1000?"1 KG":`${r
 const ChoixVente=({value,onChange})=>(<div><label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>VENTE</label>
   <select data-testid="mode-vente" value={value||""} onChange={e=>onChange(e.target.value)} style={{width:"100%",padding:10,borderRadius:10,border:`2px solid ${C.border}`,fontSize:12,fontFamily:"inherit"}}>
     {MODES_VENTE.map(m=>(<option key={m.v} value={m.v}>{m.l}</option>))}</select></div>);
+// Balance étiquetteuse : code article du produit dans la balance (imprimé dans le code-barres de l'étiquette)
+const ChampCodeBalance=({value,onChange})=>(<div><label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>CODE BALANCE</label>
+  <Input data-testid="code-balance" inputMode="numeric" value={value||""} placeholder="ex. 123" onChange={e=>onChange(e.target.value.replace(/\D/g,"").slice(0,6))}/></div>);
+const codeBalanceEnvoye=(v)=>String(v||"").trim()||null;
 import { detailVariante } from "../lib/formatters.js";
 
 function ProductsScreen(){
@@ -39,7 +43,7 @@ function ProductsScreen(){
   const filtered=products.filter(q=>!search||q.name.toLowerCase().includes(search.toLowerCase())||q.sku.toLowerCase().includes(search.toLowerCase()));
 
   const openEdit=(prod)=>{setEp({name:prod.name,sku:prod.sku,price:String(prod.price),costPrice:String(prod.costPrice||""),
-    taxRate:String(prod.taxRate),category:prod.category,collection:prod.collection||"",poidsRefG:prod.poidsRefG?String(prod.poidsRefG):""});setEditModal(prod);};
+    taxRate:String(prod.taxRate),category:prod.category,collection:prod.collection||"",poidsRefG:prod.poidsRefG?String(prod.poidsRefG):"",codeBalance:prod.codeBalance||""});setEditModal(prod);};
 
   return(<div style={{height:"100%",overflowY:"auto",padding:"var(--pad,16px)",background:C.bg}}>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
@@ -99,7 +103,8 @@ function ProductsScreen(){
             <select value={ep.category||""} onChange={e=>setEp(p=>({...p,category:e.target.value}))} style={{width:"100%",padding:10,borderRadius:10,border:`2px solid ${C.border}`,fontSize:12,fontFamily:"inherit"}}>
               {categories.filter(c=>c!=="Tous").map(c=>(<option key={c} value={c}>{c}</option>))}</select></div>
           <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>{libelleCollection(settings)}</label><Input value={ep.collection||""} onChange={e=>setEp(p=>({...p,collection:e.target.value}))}/></div>
-          {(epi||ep.poidsRefG)&&<ChoixVente value={ep.poidsRefG} onChange={v=>setEp(p=>({...p,poidsRefG:v}))}/>}</div>
+          {(epi||ep.poidsRefG)&&<ChoixVente value={ep.poidsRefG} onChange={v=>setEp(p=>({...p,poidsRefG:v}))}/>}
+          {epi&&ep.poidsRefG&&<ChampCodeBalance value={ep.codeBalance} onChange={v=>setEp(p=>({...p,codeBalance:v}))}/>}</div>
 
         {/* Variants list */}
         <div style={{fontSize:12,fontWeight:700,marginBottom:8,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
@@ -140,7 +145,8 @@ function ProductsScreen(){
           <Btn variant="success" onClick={async()=>{
             const newPrice=parseFloat(ep.price);const oldPrice=editModal.price;
             const okFiche=await updateProduct(editModal.id,{name:ep.name,sku:ep.sku,costPrice:parseFloat(ep.costPrice)||0,
-              taxRate:parseFloat(ep.taxRate),category:ep.category,collection:ep.collection,poidsRefG:parseInt(ep.poidsRefG)||null});
+              taxRate:parseFloat(ep.taxRate),category:ep.category,collection:ep.collection,poidsRefG:parseInt(ep.poidsRefG)||null,
+              ...(epi?{codeBalance:ep.poidsRefG?codeBalanceEnvoye(ep.codeBalance):null}:{})});
             if(okFiche===false)return;   // refus serveur (message déjà affiché) : on garde la fiche ouverte
             // Le prix part separement : la route enregistre aussi l'historique et l'audit
             if(newPrice&&newPrice!==oldPrice){
@@ -187,7 +193,8 @@ function ProductsScreen(){
           <select value={np.category} onChange={e=>setNp(p=>({...p,category:e.target.value}))} style={{width:"100%",padding:10,borderRadius:10,border:`2px solid ${C.border}`,fontSize:12,fontFamily:"inherit"}}>
             {categories.filter(c=>c!=="Tous").map(c=>(<option key={c} value={c}>{c}</option>))}</select></div>
         <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>{libelleCollection(settings)}</label><Input value={np.collection} onChange={e=>setNp(p=>({...p,collection:e.target.value}))}/></div>
-        {epi&&<ChoixVente value={np.poidsRefG} onChange={v=>setNp(p=>({...p,poidsRefG:v}))}/>}</div>
+        {epi&&<ChoixVente value={np.poidsRefG} onChange={v=>setNp(p=>({...p,poidsRefG:v}))}/>}
+        {epi&&np.poidsRefG&&<ChampCodeBalance value={np.codeBalance} onChange={v=>setNp(p=>({...p,codeBalance:v}))}/>}</div>
       <div style={{fontSize:12,fontWeight:700,marginBottom:8}}>{epi?"Première contenance":"Première variante"}</div>
       <div style={{display:"grid",gridTemplateColumns:epi?"1fr 1fr 1fr 1fr":"1fr 1fr 1fr 1fr 1fr 1fr",gap:6,marginBottom:14}}>
         {!epi&&<div><label style={{fontSize:9,color:C.textMuted}}>COULEUR</label><Input value={nv.color} onChange={e=>setNv(v=>({...v,color:e.target.value}))}/></div>}
@@ -199,6 +206,7 @@ function ProductsScreen(){
       <Btn onClick={()=>{if(np.name&&np.sku&&np.price){
         addProduct({name:np.name,sku:np.sku,price:parseFloat(np.price),costPrice:parseFloat(np.costPrice)||0,
           taxRate:parseFloat(np.taxRate),category:np.category,collection:np.collection,poidsRefG:parseInt(np.poidsRefG)||null,
+          ...(epi&&np.poidsRefG&&codeBalanceEnvoye(np.codeBalance)?{codeBalance:codeBalanceEnvoye(np.codeBalance)}:{}),
           variants:[{id:`v${Date.now()}`,color:couleurVariante(settings,nv.color),colorCode:epi?"":(nv.colorCode||""),size:np.poidsRefG&&!nv.size.trim()?"Vrac":tailleVariante(settings,nv.size),ean:nv.ean||"",
             stock:parseInt(nv.stock)||0,defective:0,// vrac : seuil par defaut 250 g (5 grammes n'a pas de sens)
             stockAlert:np.poidsRefG&&String(nv.stockAlert)==="5"?250:(parseInt(nv.stockAlert)||5)}]});

@@ -34,7 +34,22 @@ const C_HIGH_CONTRAST={bg:"#FFFFFF",surface:"#FFFFFF",surfaceAlt:"#F3F4F6",surfa
   shadow:"rgba(0,0,0,0.08)",shadowMd:"rgba(0,0,0,0.15)",shadowLg:"rgba(0,0,0,0.2)"};
 let _highContrast=false;try{_highContrast=localStorage.getItem("caissepro_highcontrast")==="true";}catch(e){}
 export let C=_highContrast?{...C_HIGH_CONTRAST}:{...C_NORMAL};
-export function setHighContrast(on){_highContrast=on;Object.assign(C,on?C_HIGH_CONTRAST:C_NORMAL);try{localStorage.setItem("caissepro_highcontrast",String(on));}catch(e){}}
+// Image de marque de l'instance (Paramètres > Image de marque) : couleur principale et secondaire.
+// Appliquée par-dessus le thème normal (jamais en contraste élevé). Vide = couleurs Tech in Cash.
+let _marque={primary:"",accent:""};
+const hexOk=(h)=>/^#[0-9a-fA-F]{6}$/.test(h||"");
+export const melange=(hex,vers,t)=>{const a=parseInt(hex.slice(1),16),b=parseInt(vers.slice(1),16);
+  const m=(s)=>Math.round(((a>>s)&255)*(1-t)+((b>>s)&255)*t);return"#"+[16,8,0].map(m).map(x=>x.toString(16).padStart(2,"0")).join("");};
+function couleursMarque(){const c={};
+  if(hexOk(_marque.primary)){const p=_marque.primary;Object.assign(c,{primary:p,primaryLight:melange(p,"#FFFFFF",0.9),primaryDark:melange(p,"#000000",0.65),gradientB:melange(p,"#FFFFFF",0.18)});}
+  if(hexOk(_marque.accent)){Object.assign(c,{accent:_marque.accent,accentLight:melange(_marque.accent,"#FFFFFF",0.88)});}
+  return c;}
+export function appliquerMarque(primary,accent){
+  if((primary||"")===_marque.primary&&(accent||"")===_marque.accent)return false;
+  _marque={primary:primary||"",accent:accent||""};
+  if(!_highContrast)Object.assign(C,C_NORMAL,couleursMarque());
+  return true;}
+export function setHighContrast(on){_highContrast=on;Object.assign(C,on?C_HIGH_CONTRAST:{...C_NORMAL,...couleursMarque()});try{localStorage.setItem("caissepro_highcontrast",String(on));}catch(e){}}
 export function isHighContrast(){return _highContrast;}
 export const CAT_COLORS={"T-shirts":"#0369A1","Jeans":"#047857","Robes":"#D97706","Pulls":"#7C3AED","Chemises":"#CA8A04","Vestes":"#DC2626","Divers":"#64748B"};
 

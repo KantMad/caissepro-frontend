@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { detailVariante, SANS_COULEUR } from "./lib/formatters.js";
-import { estEpicerie, produitParDefaut, couleurVariante, tailleVariante, libelleTaille, venduAuPoids, prixPese, libellePrixPoids, affStock, sortieStock, quantiteValorisee, etatLot, joursRestants, repartirLots, lotDlcDepassee, libelleDate, coffretsPossibles } from "./metier.js";
+import { estEpicerie, produitParDefaut, couleurVariante, tailleVariante, libelleTaille, venduAuPoids, prixPese, libellePrixPoids, affStock, sortieStock, quantiteValorisee, etatLot, joursRestants, repartirLots, lotDlcDepassee, libelleDate, coffretsPossibles, lireEtiquetteBalance, grammesEtiquette, csvBalance, cleEan13Valide, iconeEpicerie, CATEGORIES_EPICERIE } from "./metier.js";
+import { C, appliquerMarque } from "./constants.jsx";
 import { ligneDepuisAttente } from "./context.jsx";
 
 describe("detailVariante (tickets et apercus)", () => {
@@ -31,7 +32,7 @@ describe("metier de l'instance", () => {
   });
   it("epicerie : contenance, TVA 5,5 %, couleur masquee", () => {
     expect(estEpicerie(epi)).toBe(true);
-    expect(produitParDefaut(epi)).toMatchObject({ taxRate: "0.055", category: "Thés natures" });
+    expect(produitParDefaut(epi)).toMatchObject({ taxRate: "0.055", category: "Thés" });
     expect(couleurVariante(epi, "Rouge")).toBe(SANS_COULEUR);
     expect(tailleVariante(epi, " 250 g ")).toBe("250 g");
     expect(tailleVariante(epi, "")).toBe(SANS_COULEUR);
@@ -110,5 +111,50 @@ describe("Coffrets", () => {
     expect(coffretsPossibles(compo, id => stock[id])).toBe(3);
     expect(coffretsPossibles(compo, id => (id === "the" ? 250 : stock[id]))).toBe(2);
     expect(coffretsPossibles([], () => 10)).toBe(0);
+  });
+});
+
+describe("Balances étiquetteuses", () => {
+  const epi = { metier: "epicerie", balancePrefixes: "27,28" };
+  it("lit une étiquette poids (préfixe 27, article 123, 85 g) et refuse clé fausse, préfixe absent, textile", () => {
+    expect(cleEan13Valide("2700123000854")).toBe(true);
+    expect(lireEtiquetteBalance("2700123000854", epi)).toEqual({ codeArticle: "123", valeur: 85, mode: "poids" });
+    expect(lireEtiquetteBalance("2700123000855", epi)).toBeNull();
+    expect(lireEtiquetteBalance("2700123000854", { ...epi, balancePrefixes: "28" })).toBeNull();
+    expect(lireEtiquetteBalance("2700123000854", { balancePrefixes: "27" })).toBeNull();
+  });
+  it("étiquette prix : grammes recalculés depuis le prix (6,80 € à 8 €/100 g = 85 g)", () => {
+    const e = lireEtiquetteBalance("2800123006808", { ...epi, balanceMode: "prix" });
+    expect(e).toEqual({ codeArticle: "123", valeur: 680, mode: "prix" });
+    expect(grammesEtiquette(e, { price: 8, poidsRefG: 100 })).toBe(85);
+  });
+  it("fichier pour la balance : produits au poids avec code, prix au kilo", () => {
+    const csv = csvBalance([{ name: "Earl Grey", codeBalance: "123", price: 8, poidsRefG: 100, taxRate: 0.055 },
+      { name: "Sans code", codeBalance: "", price: 5, poidsRefG: 100, taxRate: 0.055 }, { name: "Pot", codeBalance: "9", price: 5, taxRate: 0.055 }]);
+    expect(csv.split("\r\n")).toEqual(["code_article;libelle;prix_kg_ttc;tva", '123;"Earl Grey";80,00;5,5']);
+  });
+});
+
+describe("Épicerie fine : catégories et icônes", () => {
+  it("catégories d'épicerie fine, icône d'après le nom puis la catégorie", () => {
+    expect(CATEGORIES_EPICERIE).toEqual(expect.arrayContaining(["Thés", "Cafés", "Confitures et miels", "Huiles et vinaigres", "Coffrets cadeaux"]));
+    expect(iconeEpicerie("Earl Grey impérial", "Thés")).toBe("🍵");
+    expect(iconeEpicerie("Confiture de figues", "Coffrets cadeaux")).toBe("🍯");
+    expect(iconeEpicerie("Rillettes de canard", "")).toBe("🥫");
+    expect(iconeEpicerie("Huile d'olive", "")).toBe("🫒");
+    expect(iconeEpicerie("Produit X", "Cafés")).toBe("☕");
+    expect(iconeEpicerie("Produit X", "")).toBe("🛍️");
+  });
+});
+
+describe("Image de marque", () => {
+  it("applique la couleur du client puis revient aux couleurs Tech in Cash", () => {
+    const avant = C.primary;
+    appliquerMarque("#15718E", "#80B0E1");
+    expect(C.primary).toBe("#15718E");
+    expect(C.accent).toBe("#80B0E1");
+    expect(C.primaryLight).toMatch(/^#[0-9a-f]{6}$/);
+    appliquerMarque("", "");
+    expect(C.primary).toBe(avant);
   });
 });
