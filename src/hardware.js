@@ -2634,6 +2634,8 @@ class BarcodeScannerAdapter {
 
   onScan(fn) { this._listeners.add(fn); return () => this._listeners.delete(fn); }
   _emit(barcode) { this._listeners.forEach(fn => fn(barcode)); }
+  // Code lu par une autre source (appareil photo du telephone : CameraScanner.jsx) -> meme circuit
+  emitScan(barcode) { const c = String(barcode || '').trim(); if (c) this._emit(c); }
 
   // Start listening for scans (keyboard wedge mode — works with all USB/BT scanners)
   start() {

@@ -580,6 +580,22 @@ describe("Métier épicerie (METIER=epicerie sur le serveur)", () => {
     } finally { API.settings.get = avant; }
   });
 
+  it("Téléphone : bouton Scanner (appareil photo) seulement si l'écran est tactile et le navigateur sait lire", async () => {
+    const sans = render(<AppProvider><SalesScreen /></AppProvider>);
+    await sans.findByText("Retouche");
+    expect(sans.queryByTestId("bouton-scan-camera")).toBeNull();
+    cleanup();
+    const avantMM = window.matchMedia;
+    window.BarcodeDetector = class { static async getSupportedFormats() { return ["ean_13"]; } async detect() { return []; } };
+    Object.defineProperty(navigator, "mediaDevices", { configurable: true, value: { getUserMedia: vi.fn(() => new Promise(() => {})) } });
+    window.matchMedia = (q) => ({ matches: q === "(pointer: coarse)", media: q, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} });
+    try {
+      const { findByTestId, getByTestId } = render(<AppProvider><SalesScreen /></AppProvider>);
+      fireEvent.click(await findByTestId("bouton-scan-camera"));
+      expect(getByTestId("scan-camera")).toBeTruthy();
+    } finally { delete window.BarcodeDetector; delete navigator.mediaDevices; window.matchMedia = avantMM; }
+  });
+
   it("Textile (défaut) : bouton Retouche toujours présent", async () => {
     const { findByText } = render(<AppProvider><SalesScreen /></AppProvider>);
     expect(await findByText("Retouche")).toBeTruthy();

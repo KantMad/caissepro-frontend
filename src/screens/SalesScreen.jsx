@@ -9,6 +9,7 @@ import { estEpicerie, venduAuPoids, prixPese, libellePrixPoids, affStock } from 
 import { ProductIcon, colorHex } from "../ProductIcon.jsx";
 import { Modal, Btn, Input, Badge, Numpad } from "../ui.jsx";
 import { useApp } from "../context.jsx";
+import { CameraScanner, cameraScanDisponible } from "../CameraScanner.jsx";
 import { nomClient, texteRechercheClient } from "../clientPro.jsx";
 import { getPaymentLabel, getAvoirRemaining, lineDiscountEuro, globalDiscountTTC, tvaParTaux, libelleTaux, libellePaiementTicket, pointsFidelite, detailVariante, SANS_COULEUR } from "../lib/formatters.js";
 import { lineNetTTC, round2, montantsEspeces } from "../lib/totals.js";
@@ -24,6 +25,10 @@ function SalesScreen(){
     parked,parkCart,restoreCart,removeParked,customers,addCustomer,selCust,setSelCust,perm,notify,
     stockAlerts,activePromos,avoirPayment,selectedAvoir,setSelectedAvoir,getLoyaltyTier,tickets,saleNote,setSaleNote,favorites,toggleFavorite,getLastPriceForCustomer,settings,
     printerConnected,thermalPrint,pendingSync,clearPendingSync,users,vendeurs,currentUser,currentStore,avoirs,consumeAvoir,checkGiftCard,setScanOverride,clearScanOverride,isAvoirExpired,addAudit,addJET,trainingMode,cartTotals,retoucheBons,addRetoucheBon,cashReg,closures,allCategories,getVariantPhotos,pesee,setPesee,addPeseeAuPanier}=useApp();
+  // Scan a l'appareil photo (telephone sur un marche) : seulement sur ecran tactile, si le navigateur sait lire
+  const[scanCamera,setScanCamera]=useState(false);
+  const scanCameraPossible=useMemo(()=>cameraScanDisponible()&&(vp.isMobile||(typeof window!=="undefined"&&window.matchMedia?.("(pointer: coarse)")?.matches)),[vp.isMobile]);
+  const codeCamera=React.useCallback(code=>{const s=hardwareManager.scanner;if(s)s.emitScan(code);else notify("Lecteur de codes-barres indisponible","error");},[]);
   const[poidsSaisi,setPoidsSaisi]=useState("");   // fenetre de pesee (the en vrac), en grammes
   const categories=allCategories;
   const epi=estEpicerie(settings);
@@ -223,6 +228,8 @@ function SalesScreen(){
         <div style={{position:"relative",flex:1}}>
           <Search size={14} color={C.textMuted} style={{position:"absolute",left:12,top:"50%",transform:"translateY(-50%)"}}/>
           <Input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Rechercher produit, SKU ou scanner…" style={{paddingLeft:34,height:38,fontSize:"var(--font-base,13px)",borderRadius:"var(--radius,14px)"}}/></div>
+        {scanCameraPossible&&<Btn variant="outline" data-testid="bouton-scan-camera" onClick={()=>setScanCamera(true)} style={{height:38,padding:"0 12px",borderRadius:"var(--radius,14px)"}} title="Scanner avec l'appareil photo" aria-label="Scanner avec l'appareil photo">
+          <ScanLine size={16}/></Btn>}
         <Btn variant="outline" onClick={()=>setParkedModal(true)} style={{height:38,padding:"0 12px",position:"relative",borderRadius:"var(--radius,14px)"}} title="Paniers en attente">
           <Pause size={14}/>{parked.length>0&&<span style={{position:"absolute",top:-5,right:-5,width:16,height:16,borderRadius:8,
             background:C.danger,color:"#fff",fontSize:8,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",
@@ -855,6 +862,7 @@ function SalesScreen(){
     </Modal>
 
     {/* AVOIR SELECTION MODAL */}
+    <CameraScanner open={scanCamera} onClose={()=>setScanCamera(false)} onCode={codeCamera}/>
     <Modal open={avoirSelectModal} onClose={()=>{setAvoirSelectModal(false);setAvoirSearch("");}} title="Paiement par avoir" sub={`Total: ${totals.tTTC.toFixed(2)}EUR`}>
       {(()=>{const available=avoirs.filter(a=>!a.used&&getAvoirRemaining(a)>0&&!(isAvoirExpired?.(a)));
         const shown=avoirSearch?available.filter(a=>(a.avoirNumber||"").toLowerCase().includes(avoirSearch.toLowerCase())||
