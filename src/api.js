@@ -277,6 +277,9 @@ export const giftcards = {
   create: (data) => api('/api/giftcards', { method: 'POST', body: JSON.stringify(data) }),
   use: (code, amount, reference) => api(`/api/giftcards/${encodeURIComponent(code)}/use`, { method: 'POST', body: JSON.stringify({ amount, reference }) }),
   reload: (code, amount) => api(`/api/giftcards/${encodeURIComponent(code)}/reload`, { method: 'POST', body: JSON.stringify({ amount }) }),
+  // Carte dans le téléphone (wallet) : lien signé de la page client, envoi par email
+  wallet: (code) => api(`/api/giftcards/${encodeURIComponent(code)}/wallet`),
+  walletEmail: (code, to) => api(`/api/giftcards/${encodeURIComponent(code)}/wallet/email`, { method: 'POST', body: JSON.stringify({ to }) }),
 };
 
 // ══ Parked Carts ══

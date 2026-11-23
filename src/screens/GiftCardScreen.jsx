@@ -1,5 +1,6 @@
 import React, { useState } from "react";
-import { Search, Gift, Plus, Printer } from "lucide-react";
+import { Search, Gift, Plus, Printer, Smartphone } from "lucide-react";
+import { WalletCarteDialog } from "./WalletCarteDialog.jsx";
 import printer from "../printer.js";
 import { CO, C } from "../constants.jsx";
 import { ean13SvgHtml } from "../utils.jsx";
@@ -11,6 +12,8 @@ function GiftCardScreen(){
   if(!perm().canCreateProduct) return <div style={{padding:40,textAlign:"center",color:C.textMuted,fontSize:16,fontWeight:600}}>Accès refusé</div>;
   const[amount,setAmount]=useState("");const[custName,setCustName]=useState("");const[payMode,setPayMode]=useState("cash");
   const[checkCode,setCheckCode]=useState("");const[checkResult,setCheckResult]=useState(null);
+  // Carte dans le téléphone (option de l'instance : settings.walletEnabled)
+  const[walletCode,setWalletCode]=useState(null);const wallet=!!settings.walletEnabled;
   return(<div style={{height:"100%",overflowY:"auto",padding:20,background:C.bg}}>
     <h2 style={{fontSize:22,fontWeight:800,marginBottom:14}}>Cartes cadeaux</h2>
     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,marginBottom:16}}>
@@ -29,6 +32,7 @@ function GiftCardScreen(){
               {payMode==="cash"?"Un apport « Vente carte cadeau » est ajouté au tiroir-caisse : l'espèce attendue au Z reste juste. Hors chiffre d'affaires (TVA due à l'utilisation).":"Hors chiffre d'affaires (TVA due à l'utilisation de la carte)."}</div></div></div>
         <div style={{display:"flex",gap:6}}>
         <Btn onClick={async()=>{if(amount){const gc=await createGiftCard(parseFloat(amount),custName,payMode);setAmount("");setCustName("");
+          if(gc&&wallet)setWalletCode(gc.code);
           if(gc){const w=window.open("","_blank","width=400,height=400");if(w){w.document.write(`<html><head><title>Étiquette carte cadeau</title><style>body{font-family:'Courier New',monospace;font-size:12px;padding:10px;max-width:280px;margin:0 auto;text-align:center;}h2{font-size:16px;margin:8px 0;}h3{font-size:22px;margin:6px 0;}.code{font-size:18px;font-weight:bold;letter-spacing:2px;padding:8px;border:2px dashed #333;margin:8px 0;display:inline-block;}hr{border:none;border-top:1px dashed #333;margin:8px 0;}</style></head><body>`+
             `<h2>CARTE CADEAU</h2><div class="code">${gc.code}</div><hr>`+
             `<h3>${parseFloat(amount).toFixed(2)} EUR</h3>`+
@@ -39,7 +43,7 @@ function GiftCardScreen(){
             `</body></html>`);w.document.close();setTimeout(()=>w.print(),300);}}
           }}}
           disabled={!amount} style={{flex:1,height:40,background:C.accent}}><Gift size={14}/> Créer + Étiquette</Btn>
-        <Btn variant="outline" onClick={async()=>{if(amount){await createGiftCard(parseFloat(amount),custName,payMode);setAmount("");setCustName("");}}}
+        <Btn variant="outline" onClick={async()=>{if(amount){const gc=await createGiftCard(parseFloat(amount),custName,payMode);setAmount("");setCustName("");if(gc&&wallet)setWalletCode(gc.code);}}}
           disabled={!amount} style={{height:40}}><Plus size={14}/> Sans impression</Btn>
         </div>
       </div>
@@ -75,9 +79,12 @@ function GiftCardScreen(){
             (gc.barcode?ean13SvgHtml(gc.barcode,160,45):"")+
             `<div style="font-size:9px;">${settings.name||""}</div></body></html>`);w.document.close();setTimeout(()=>w.print(),300);}}}
             style={{padding:"4px 10px",borderRadius:8,border:`1px solid ${C.border}`,background:"transparent",cursor:"pointer",fontSize:9,fontWeight:600,color:C.textMuted}} title="Imprimer étiquette"><Printer size={12}/></button>
+          {wallet&&<button data-testid={`wallet-${gc.code}`} onClick={(e)=>{e.stopPropagation();setWalletCode(gc.code);}}
+            style={{padding:"4px 10px",borderRadius:8,border:`1px solid ${C.primary}`,background:"transparent",cursor:"pointer",fontSize:9,fontWeight:600,color:C.primary}} title="Carte dans le téléphone (QR code / email)"><Smartphone size={12}/></button>}
           {printerConnected&&<button onClick={(e)=>{e.stopPropagation();thermalPrint("giftcard",{code:gc.code,initial_amount:gc.initialAmount,remaining:gc.balance,customer_name:gc.customerName,created_at:gc.createdDate,barcode:gc.barcode});}}
             style={{padding:"4px 10px",borderRadius:8,border:`1px solid ${C.accent}`,background:"transparent",cursor:"pointer",fontSize:9,fontWeight:600,color:C.accent}} title="Impression thermique"><Printer size={12}/></button>}
         </div>))}</div></div>
+    <WalletCarteDialog code={walletCode} onClose={()=>setWalletCode(null)} notify={notify}/>
   </div>);
 }
 
