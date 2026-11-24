@@ -17,11 +17,25 @@ import { lineNetTTC } from "./totals.js";
 //    « except » (toutes sauf `categories`), « only » (aucune sauf `categories`) ;
 //  - « Remise automatique » (global_discount) : tous les articles retenus par le filtre ;
 //  - parLigne : part HT de remise promo de chaque ligne (affichee sur la ligne du panier).
+//  - RETOUCHES HORS PROMOS (24/11/2026, demande Quentin) : une retouche est un service, aucune
+//    promo ne la touche (ni ciblee, ni remise automatique, ni quantite, ni code). Elles ne comptent
+//    pas non plus dans le nombre d'articles d'une promo quantite. La remise panier manuelle du
+//    vendeur, elle, reste possible sur tout le ticket.
 // La remise panier manuelle (% puis EUR) s'applique ENSUITE, sur le reste (lib/totals.js).
 
 export const PROMO_TYPES_CIBLES = ["global_discount", "category_discount", "sku_discount", "color_discount", "collection_discount", "low_stock_discount"];
 const CIBLES_TT = ["category", "sku", "color", "collection", "low_stock"];
 const bas = (v) => String(v ?? "").trim().toLowerCase();
+
+// Ligne de retouche : ligne libre « Retouche: … » (bouton Retouche de la caisse), drapeau
+// isRetouche, ou article d'une categorie « Retouche(s) » du catalogue.
+export function estRetouche(ci) {
+  if (!ci) return false;
+  if (ci.isRetouche) return true;
+  const p = ci.product || {};
+  if (/^retouches?$/.test(bas(p.category))) return true;
+  return !!(ci.isCustom || String(p.id || "").startsWith("custom-")) && /^retouche/.test(bas(p.name));
+}
 
 // Liste des categories d'une promo (tableau pg, JSON ou texte separe par des virgules)
 export function categoriesPromo(p) {
@@ -100,7 +114,7 @@ export function calcPromoDiscount(cartItems, activePromos, opts = {}) {
     const col = bas(p.collection);
     const minQ = parseInt(p.min_qty || p.minQty) || 0;
     if (!(PROMO_TYPES_CIBLES.includes(t) || (!t && CIBLES_TT.includes(tt)))) return;
-    const idx = items.map((ci, k) => (categorieRetenue(p, ci.product.category) && matchItems(ci, t, tt, tv, col) ? k : -1)).filter((k) => k >= 0);
+    const idx = items.map((ci, k) => (!estRetouche(ci) && categorieRetenue(p, ci.product.category) && matchItems(ci, t, tt, tv, col) ? k : -1)).filter((k) => k >= 0);
     if (!idx.length) return;
     if (minQ > 0 && idx.reduce((s, k) => s + items[k].quantity, 0) < minQ) return;
     if (estMontant(p)) eur.push({ p, idx });
@@ -123,7 +137,7 @@ export function calcPromoDiscount(cartItems, activePromos, opts = {}) {
     const t = p.promo_type || p.type;
     if (t !== "qty_discount" && t !== "code") return;
     const minQ = parseInt(p.min_qty || p.minQty) || 0;
-    const idx = items.map((ci, k) => (categorieRetenue(p, ci.product.category) ? k : -1)).filter((k) => k >= 0);
+    const idx = items.map((ci, k) => (!estRetouche(ci) && categorieRetenue(p, ci.product.category) ? k : -1)).filter((k) => k >= 0);
     if (!idx.length) return;
     const appliquer = (label) => {
       const base = idx.reduce((s, k) => s + reste[k], 0);
@@ -154,6 +168,7 @@ export function articlesConcernes(promo, products) {
   const t = promo.promo_type || promo.type;
   const tv = bas(promo.target_value || promo.targetValue);
   return (products || []).filter((pr) => {
+    if (estRetouche({ product: pr })) return false;
     if (!categorieRetenue(promo, pr.category)) return false;
     if (t === "category_discount") return bas(pr.category) === tv;
     if (t === "sku_discount") return bas(pr.sku) === tv;

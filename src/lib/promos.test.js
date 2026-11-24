@@ -159,3 +159,35 @@ describe("calcPromoDiscount", () => {
     expect(codePromoConnu([{ promo_type: "code", code: "NOEL" }], "faux")).toBe(false);
   });
 });
+
+// 24/11/2026 : les retouches sont un service, aucune promo ne s'y applique
+describe("Retouches hors promos", () => {
+  const retouche = (prix = 20) => ({ product: { id: "custom-r1", name: "Retouche: ourlet", sku: "DIVERS", price: prix, taxRate: 0.20, category: "Divers" },
+    variant: { id: "cv-r1", color: "—", size: "—" }, quantity: 1, discount: 0, isCustom: true });
+  it("remise automatique : la robe est remisée, pas la retouche", () => {
+    const r = calcPromoDiscount([item(), retouche()], [{ name: "Soldes", promo_type: "global_discount", value: 20 }], TTC);
+    expect(r.parLigne[0]).toBeCloseTo(HT_DUN * 0.2, 3);
+    expect(r.parLigne[1]).toBe(0);
+  });
+  it("code promo et promo € : la retouche ne prend aucune part", () => {
+    const code = calcPromoDiscount([item(), retouche()], [{ name: "C", promo_type: "code", code: "NOEL", value: 10 }], { ...TTC, promoCode: "noel" });
+    expect(code.parLigne[1]).toBe(0);
+    expect(code.promoDisc).toBeCloseTo(HT_DUN * 0.1, 3);
+    const eur = calcPromoDiscount([item(), retouche()], [{ name: "E", promo_type: "global_discount", value: 12, discount_type: "amount" }], TTC);
+    expect(eur.parLigne[1]).toBe(0);
+    expect(eur.promoDisc * 1.2).toBeCloseTo(12, 2);
+  });
+  it("promo quantité : les retouches ne comptent pas dans le nombre d'articles", () => {
+    const r = calcPromoDiscount([item(), item({ product: { ...item().product, sku: "S2" } }), retouche()],
+      [{ name: "3 achetés", promo_type: "qty_discount", min_qty: 3, value: 10 }], TTC);
+    expect(r.promoDisc).toBe(0);
+  });
+  it("panier de retouches seules : aucune promo", () => {
+    expect(calcPromoDiscount([retouche(), retouche(15)], [{ name: "S", promo_type: "global_discount", value: 50 }], TTC).promoDisc).toBe(0);
+  });
+  it("catégorie « Retouches » du catalogue : exclue aussi, et pas comptée dans l'aperçu", () => {
+    const r = calcPromoDiscount([item({ product: { ...item().product, category: "Retouches", name: "Ourlet" } })], [{ name: "S", promo_type: "global_discount", value: 50 }], TTC);
+    expect(r.promoDisc).toBe(0);
+    expect(articlesConcernes({ promo_type: "global_discount" }, [{ category: "Jeans" }, { category: "Retouches" }])).toBe(1);
+  });
+});

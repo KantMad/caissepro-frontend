@@ -226,6 +226,7 @@ function PromosScreen(){
           {products.length>0&&!["qty_discount","code","low_stock_discount"].includes(np.type)&&(()=>{const n=articlesConcernes(apercu(np),products);
             return<div data-testid="promo-apercu" style={{fontSize:12,fontWeight:700,marginTop:8,color:n?"#059669":C.danger}}>
               {n?`✓ ${n} article${n>1?"s":""} du catalogue concerné${n>1?"s":""}`:"⚠ Aucun article concerné : la promo ne fera aucune remise"}</div>;})()}
+          <div data-testid="promo-sans-retouches" style={{fontSize:10,color:C.textMuted,marginTop:6}}>Les retouches ne sont jamais remisées par une promo.</div>
         </div>
 
         <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>DATE DÉBUT (optionnel)</label>
