@@ -126,6 +126,8 @@ export const sales = {
   lastSold: () => api('/api/sales/stats/last-sold'),
   // Quantites vendues d'un produit (nom, ref ou EAN) sur une periode — { rows, truncated }
   productSales: (params) => api('/api/sales/stats/products?' + new URLSearchParams(params || {})),
+  // Recap des produits vendus (Stock > Ventes) : une ligne par variante, du plus vendu au moins vendu
+  classement: (params) => api('/api/sales/stats/classement?' + new URLSearchParams(params || {})),
   // Recherche d'un ticket (n° ou code-barres) dans tout l'historique du magasin
   lookup: (q) => api('/api/sales/lookup?' + new URLSearchParams({ q })),
   emailTicket: (saleId, to) => api(`/api/sales/${saleId}/email`, { method: 'POST', body: JSON.stringify({ to }) }),

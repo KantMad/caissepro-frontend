@@ -11,6 +11,7 @@ const CSV_TARGET_FIELDS=[
   {key:"name",label:"Nom produit",required:true},{key:"sku",label:"Référence / SKU",required:true},
   {key:"price",label:"Prix vente",required:true},{key:"costPrice",label:"Prix achat",required:false},
   {key:"taxRate",label:"TVA",required:false},{key:"category",label:"Catégorie",required:false},
+  {key:"subcategory",label:"Sous-catégorie",required:false},
   {key:"collection",label:"Collection",required:false},{key:"color",label:"Couleur",required:false},
   {key:"colorCode",label:"Code couleur",required:false},
   {key:"size",label:"Taille",required:false},{key:"ean",label:"Code EAN",required:false},
@@ -23,6 +24,7 @@ const CSV_SYNONYMS={
   costPrice:["costprice","cost_price","prix_achat","pa","cost","cout","coût","prix_revient"],
   taxRate:["taxrate","tax_rate","tva","tax","vat","taux_tva"],
   category:["category","categorie","catégorie","cat","famille","type"],
+  subcategory:["subcategory","sub_category","sous_categorie","sous-categorie","sous categorie","sous-catégorie","sous catégorie","sous_famille","sous-famille","sous famille","sous_cat","souscat"],
   collection:["collection","saison","season"],
   color:["color","couleur","colour","coloris","libelle_couleur","libelle couleur"],
   colorCode:["colorcode","color_code","code_couleur","codecouleur","color code","code couleur","ref_couleur","refcouleur"],
@@ -115,7 +117,7 @@ function CSVImportWizard({open,onClose,existingProducts,onImportComplete,setting
         id:`imp-${Date.now()}-${Math.random().toString(36).slice(2,8)}`,
         name:get("name")||ref,sku:get("sku")||ref,
         price:csvNum(get("price"))||0,costPrice:csvNum(get("costPrice"))||0,
-        taxRate:csvParseTax(get("taxRate")),category:get("category")||"Divers",collection:get("collection")||"",
+        taxRate:csvParseTax(get("taxRate")),category:get("category")||"Divers",subcategory:get("subcategory")||"",collection:get("collection")||"",
         variants:(()=>{
           // Fusionne les lignes de même (couleur, taille) : un fichier livraison répète
           // le même article (même code-barres) sur plusieurs colis/commandes. Sans fusion,
@@ -181,7 +183,7 @@ function CSVImportWizard({open,onClose,existingProducts,onImportComplete,setting
           });
           updates.push({existing:existingMatch,incoming:product,newVariants,updatedVariants,mode:"update",stockMode,
             fieldsChanged:{name:product.name,price:product.price,costPrice:product.costPrice,
-              taxRate:product.taxRate,category:product.category,collection:product.collection}});
+              taxRate:product.taxRate,category:product.category,subcategory:product.subcategory,collection:product.collection}});
         }else skipped.push({existing:existingMatch,incoming:product});
       }else{newProducts.push(product);}
     });
@@ -209,7 +211,7 @@ function CSVImportWizard({open,onClose,existingProducts,onImportComplete,setting
     // Create new products
     for(const p of processed.newProducts){
       try{await API.products.create({name:p.name,sku:p.sku,price:p.price,costPrice:p.costPrice,taxRate:p.taxRate,
-        category:p.category,collection:p.collection,variants:p.variants.map((v,i)=>({color:v.color,colorCode:v.colorCode||"",size:v.size,ean:v.ean,stock:v.stock,defective:0,stockAlert:v.stockAlert,sort_order:i}))});
+        category:p.category,subcategory:p.subcategory||"",collection:p.collection,variants:p.variants.map((v,i)=>({color:v.color,colorCode:v.colorCode||"",size:v.size,ean:v.ean,stock:v.stock,defective:0,stockAlert:v.stockAlert,sort_order:i}))});
         results.created++;}catch(e){noter(p.name,e);}
     }
     // Update existing products — 3 steps: product fields, variant stock, new variants
@@ -222,7 +224,9 @@ function CSVImportWizard({open,onClose,existingProducts,onImportComplete,setting
         await API.products.update(u.existing.id,{
           name:fc.name||u.existing.name,price:fc.price||u.existing.price,
           costPrice:fc.costPrice||u.existing.costPrice,taxRate:fc.taxRate??u.existing.taxRate,
-          category:fc.category||u.existing.category,collection:fc.collection||u.existing.collection
+          category:fc.category||u.existing.category,collection:fc.collection||u.existing.collection,
+          // Sous-categorie : envoyee seulement si la colonne est remplie (une cellule vide ne l efface pas)
+          ...(fc.subcategory?{subcategory:fc.subcategory}:{})
         });
         anySuccess=true;
       }catch(e){noter(`${u.existing.name} (prix / infos)`,e);}

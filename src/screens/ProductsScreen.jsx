@@ -43,9 +43,11 @@ function ProductsScreen(){
   const filtered=products.filter(q=>!search||q.name.toLowerCase().includes(search.toLowerCase())||q.sku.toLowerCase().includes(search.toLowerCase()));
 
   const openEdit=(prod)=>{setEp({name:prod.name,sku:prod.sku,price:String(prod.price),costPrice:String(prod.costPrice||""),
-    taxRate:String(prod.taxRate),category:prod.category,collection:prod.collection||"",poidsRefG:prod.poidsRefG?String(prod.poidsRefG):"",codeBalance:prod.codeBalance||""});setEditModal(prod);};
+    taxRate:String(prod.taxRate),category:prod.category,subcategory:prod.subcategory||"",collection:prod.collection||"",poidsRefG:prod.poidsRefG?String(prod.poidsRefG):"",codeBalance:prod.codeBalance||""});setEditModal(prod);};
 
   return(<div style={{height:"100%",overflowY:"auto",padding:"var(--pad,16px)",background:C.bg}}>
+    {/* Sous-categories deja utilisees : proposees a la saisie (fiche et creation) */}
+    <datalist id="sous-categories">{[...new Set(products.map(x=>x.subcategory).filter(Boolean))].sort((x,y)=>x.localeCompare(y,"fr")).map(x=>(<option key={x} value={x}/>))}</datalist>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
       <h2 style={{fontSize:20,fontWeight:800,margin:0}}>Produits ({products.length})</h2>
       <div style={{display:"flex",gap:6}}>
@@ -102,6 +104,7 @@ function ProductsScreen(){
           <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>CATÉGORIE</label>
             <select value={ep.category||""} onChange={e=>setEp(p=>({...p,category:e.target.value}))} style={{width:"100%",padding:10,borderRadius:10,border:`2px solid ${C.border}`,fontSize:12,fontFamily:"inherit"}}>
               {categories.filter(c=>c!=="Tous").map(c=>(<option key={c} value={c}>{c}</option>))}</select></div>
+          <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>SOUS-CATÉGORIE</label><Input list="sous-categories" data-testid="edit-subcategory" value={ep.subcategory||""} placeholder="Ex. Chino" onChange={e=>setEp(p=>({...p,subcategory:e.target.value}))}/></div>
           <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>{libelleCollection(settings)}</label><Input value={ep.collection||""} onChange={e=>setEp(p=>({...p,collection:e.target.value}))}/></div>
           {(epi||ep.poidsRefG)&&<ChoixVente value={ep.poidsRefG} onChange={v=>setEp(p=>({...p,poidsRefG:v}))}/>}
           {epi&&ep.poidsRefG&&<ChampCodeBalance value={ep.codeBalance} onChange={v=>setEp(p=>({...p,codeBalance:v}))}/>}</div>
@@ -145,7 +148,7 @@ function ProductsScreen(){
           <Btn variant="success" onClick={async()=>{
             const newPrice=parseFloat(ep.price);const oldPrice=editModal.price;
             const okFiche=await updateProduct(editModal.id,{name:ep.name,sku:ep.sku,costPrice:parseFloat(ep.costPrice)||0,
-              taxRate:parseFloat(ep.taxRate),category:ep.category,collection:ep.collection,poidsRefG:parseInt(ep.poidsRefG)||null,
+              taxRate:parseFloat(ep.taxRate),category:ep.category,subcategory:(ep.subcategory||"").trim(),collection:ep.collection,poidsRefG:parseInt(ep.poidsRefG)||null,
               ...(epi?{codeBalance:ep.poidsRefG?codeBalanceEnvoye(ep.codeBalance):null}:{})});
             if(okFiche===false)return;   // refus serveur (message déjà affiché) : on garde la fiche ouverte
             // Le prix part separement : la route enregistre aussi l'historique et l'audit
@@ -192,6 +195,7 @@ function ProductsScreen(){
         <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>CATÉGORIE</label>
           <select value={np.category} onChange={e=>setNp(p=>({...p,category:e.target.value}))} style={{width:"100%",padding:10,borderRadius:10,border:`2px solid ${C.border}`,fontSize:12,fontFamily:"inherit"}}>
             {categories.filter(c=>c!=="Tous").map(c=>(<option key={c} value={c}>{c}</option>))}</select></div>
+        <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>SOUS-CATÉGORIE</label><Input list="sous-categories" data-testid="new-subcategory" value={np.subcategory||""} placeholder="Ex. Chino" onChange={e=>setNp(p=>({...p,subcategory:e.target.value}))}/></div>
         <div><label style={{fontSize:10,fontWeight:600,color:C.textMuted}}>{libelleCollection(settings)}</label><Input value={np.collection} onChange={e=>setNp(p=>({...p,collection:e.target.value}))}/></div>
         {epi&&<ChoixVente value={np.poidsRefG} onChange={v=>setNp(p=>({...p,poidsRefG:v}))}/>}
         {epi&&np.poidsRefG&&<ChampCodeBalance value={np.codeBalance} onChange={v=>setNp(p=>({...p,codeBalance:v}))}/>}</div>
@@ -205,7 +209,7 @@ function ProductsScreen(){
         <div><label style={{fontSize:9,color:C.textMuted}}>{np.poidsRefG?"ALERTE (g)":"ALERTE"}</label><Input type="number" value={nv.stockAlert} onChange={e=>setNv(v=>({...v,stockAlert:e.target.value}))}/></div></div>
       <Btn onClick={()=>{if(np.name&&np.sku&&np.price){
         addProduct({name:np.name,sku:np.sku,price:parseFloat(np.price),costPrice:parseFloat(np.costPrice)||0,
-          taxRate:parseFloat(np.taxRate),category:np.category,collection:np.collection,poidsRefG:parseInt(np.poidsRefG)||null,
+          taxRate:parseFloat(np.taxRate),category:np.category,subcategory:(np.subcategory||"").trim(),collection:np.collection,poidsRefG:parseInt(np.poidsRefG)||null,
           ...(epi&&np.poidsRefG&&codeBalanceEnvoye(np.codeBalance)?{codeBalance:codeBalanceEnvoye(np.codeBalance)}:{}),
           variants:[{id:`v${Date.now()}`,color:couleurVariante(settings,nv.color),colorCode:epi?"":(nv.colorCode||""),size:np.poidsRefG&&!nv.size.trim()?"Vrac":tailleVariante(settings,nv.size),ean:nv.ean||"",
             stock:parseInt(nv.stock)||0,defective:0,// vrac : seuil par defaut 250 g (5 grammes n'a pas de sens)

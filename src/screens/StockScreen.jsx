@@ -8,6 +8,7 @@ import { Modal, Btn, Input, Badge } from "../ui.jsx";
 import { useApp } from "../context.jsx";
 import { tauxMarque } from "../lib/formatters.js";
 import { sortSizes } from "./_shared.js";
+import VentesClassement from "./VentesClassement.jsx";
 import { affStock, venduAuPoids, quantiteValorisee, estEpicerie, etatLot, joursRestants, libelleDate, coffretsPossibles } from "../metier.js";
 import { detailVariante } from "../lib/formatters.js";
 
@@ -208,7 +209,7 @@ function StockScreen(){
       {stockValuation.unvalued>0&&<div style={{fontSize:10,color:C.warn||"#B45309",fontWeight:600,maxWidth:220}}>⚠ {stockValuation.unvalued} unité(s) sans prix d'achat renseigné (non valorisées). Complétez le coût à l'import.</div>}
     </div>}
     <div style={{display:"flex",gap:6,marginBottom:12}}>
-      {[{id:"matrix",l:"Matrice"},{id:"reception",l:"Réception"},{id:"alerts",l:"Alertes"},{id:"moves",l:"Mouvements"},{id:"inventory",l:"Inventaire"},{id:"adjust",l:"Ajustement"},{id:"defective",l:"Défectueux"},{id:"tenues",l:"Tenues"},{id:"transfers",l:"Transferts"},{id:"aging",l:"Vieillissement"},...(epicerie?[{id:"dates",l:"Dates limites"},{id:"coffrets",l:"Coffrets"}]:[])].map(t=>(
+      {[{id:"matrix",l:"Matrice"},{id:"reception",l:"Réception"},{id:"alerts",l:"Alertes"},{id:"moves",l:"Mouvements"},{id:"inventory",l:"Inventaire"},{id:"adjust",l:"Ajustement"},{id:"defective",l:"Défectueux"},{id:"tenues",l:"Tenues"},{id:"transfers",l:"Transferts"},{id:"aging",l:"Vieillissement"},{id:"ventes",l:"Ventes"},...(epicerie?[{id:"dates",l:"Dates limites"},{id:"coffrets",l:"Coffrets"}]:[])].map(t=>(
         <button key={t.id} onClick={()=>setTab(t.id)} style={{padding:"0 14px",minHeight:34,borderRadius:8,border:`1.5px solid ${tab===t.id?C.primary:C.border}`,
           background:tab===t.id?C.primary:"transparent",color:tab===t.id?"#fff":C.text,fontSize:12,fontWeight:600,cursor:"pointer"}}>{t.l}</button>))}</div>
 
@@ -366,6 +367,7 @@ function StockScreen(){
       {stockMoves.length===0&&<div style={{textAlign:"center",padding:20,color:C.textLight}}>Aucun mouvement</div>}
     </div>}
 
+    {tab==="ventes"&&<VentesClassement/>}
     {tab==="aging"&&<div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`}}>
       <h3 style={{fontSize:14,fontWeight:700,marginBottom:10}}>Vieillissement du stock</h3>
       <table className="rtable" style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>

@@ -141,7 +141,7 @@ export const norm={
         return 0;
       });
     return{...p,price:parseFloat(p.price),costPrice:parseFloat(p.cost_price||p.costPrice||0),
-    taxRate:parseFloat(p.tax_rate||p.taxRate||0.20),category:p.category||"",collection:p.collection||"",
+    taxRate:parseFloat(p.tax_rate||p.taxRate||0.20),category:p.category||"",subcategory:p.subcategory||"",collection:p.collection||"",
     poidsRefG:parseInt(p.poids_ref_g??p.poidsRefG)||null,   // vente au poids (prix pour N g), null = a l'unite
     codeBalance:(p.code_balance??p.codeBalance)||"",       // code article des balances etiqueteuses (epicerie)
     variants}},
