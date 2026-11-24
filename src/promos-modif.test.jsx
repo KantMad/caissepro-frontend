@@ -63,4 +63,16 @@ describe("Promotions : modification", () => {
     expect(etat.crees.length).toBe(0);
     expect(etat.notes.at(-1)[0]).toMatch(/Cochez au moins une catégorie/);
   });
+  it("boutons de la ligne espacés ; supprimer demande confirmation (24/11/2026)", async () => {
+    const r = render(<PromosScreen />);
+    expect(r.getByTestId("actions-promo-p1").style.gap).toBe("12px");
+    const conf = vi.spyOn(window, "confirm").mockReturnValueOnce(false).mockReturnValueOnce(true);
+    fireEvent.click(r.getByTestId("supprimer-promo-p1"));
+    await act(async () => {});
+    expect(r.queryByTestId("actions-promo-p1")).not.toBeNull();   // refus : la promo reste
+    fireEvent.click(r.getByTestId("supprimer-promo-p1"));
+    await waitFor(() => expect(r.queryByTestId("actions-promo-p1")).toBeNull());
+    expect(conf.mock.calls[0][0]).toMatch(/Robes -20/);
+    conf.mockRestore();
+  });
 });

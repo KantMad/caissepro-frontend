@@ -35,6 +35,8 @@ function PromosScreen(){
   // Suppression REELLE cote serveur : avant, la promo disparaissait de l'ecran mais restait
   // active en base et continuait de s'appliquer en caisse.
   const deletePromo=async(id)=>{
+    const pr=promos.find(x=>x.id===id);
+    if(!confirm(`Supprimer la promotion « ${pr?.name||""} » ?\n\nPour l'arrêter seulement, cliquez plutôt sur « Active ».`))return;
     try{await API.settings.deletePromo(id);setPromos(p=>p.filter(x=>x.id!==id));
       addAudit("PROMO","Suppression promo");notify("Promotion supprimée","success");}
     catch(e){notify("Suppression impossible : "+e.message,"error");}};
@@ -111,9 +113,9 @@ function PromosScreen(){
         <p style={{fontSize:12,color:C.textMuted,marginTop:2}}>{promos.filter(p=>p.active).length} active{promos.filter(p=>p.active).length>1?"s":""} sur {promos.length}</p></div>
       <Btn onClick={()=>{setEditId(null);setNp(defaultNp);setCreateModal(true);}} style={{fontSize:11,background:C.warn}}><Plus size={12}/> Nouvelle promo</Btn></div>
 
-    <div style={{display:"flex",flexDirection:"column",gap:6}}>
+    <div style={{display:"flex",flexDirection:"column",gap:10}}>
       {promos.map(pm=>{const t=pm.promo_type||pm.type;const dt=pm.discount_type||pm.discountType||"percent";
-        return(<div key={pm.id} style={{display:"flex",alignItems:"center",gap:10,padding:12,borderRadius:12,background:C.surface,
+        return(<div key={pm.id} style={{display:"flex",alignItems:"center",gap:16,padding:"14px 16px",borderRadius:12,background:C.surface,
           border:`1.5px solid ${pm.active?C.warn+"44":C.border}`,opacity:pm.active?1:0.6}}>
           <div style={{width:8,height:8,borderRadius:4,background:pm.active?"#059669":C.textLight}}/>
           <div style={{flex:1}}>
@@ -128,10 +130,15 @@ function PromosScreen(){
             </div>
             {pm.active&&products.length>0&&!["qty_discount","code","low_stock_discount"].includes(t)&&articlesConcernes(pm,products)===0&&
               <div data-testid={`promo-sans-effet-${pm.id}`} style={{fontSize:11,fontWeight:700,color:C.danger,marginTop:3}}>⚠ Aucun article du catalogue n'est concerné : cette promo ne fera aucune remise. Cliquez sur le crayon pour la corriger.</div>}</div>
-          <Btn variant={pm.active?"success":"outline"} onClick={()=>togglePromo(pm.id)} style={{fontSize:10,padding:"4px 12px"}}>
-            {pm.active?"Active":"Inactive"}</Btn>
-          <button onClick={()=>modifier(pm)} title="Modifier" data-testid={`modifier-promo-${pm.id}`} style={{background:"none",border:"none",cursor:"pointer",color:C.textMuted}}><Pencil size={14}/></button>
-          <button onClick={()=>deletePromo(pm.id)} style={{background:"none",border:"none",cursor:"pointer",color:C.danger}}><Trash2 size={14}/></button>
+          {/* Boutons espaces et assez grands pour le doigt (24/11/2026 : trop serres sur la tablette) */}
+          <div data-testid={`actions-promo-${pm.id}`} style={{display:"flex",alignItems:"center",gap:12,flexShrink:0}}>
+            <Btn variant={pm.active?"success":"outline"} onClick={()=>togglePromo(pm.id)} style={{fontSize:11,padding:"8px 14px",minWidth:84}}>
+              {pm.active?"Active":"Inactive"}</Btn>
+            <button onClick={()=>modifier(pm)} title="Modifier" data-testid={`modifier-promo-${pm.id}`} style={{width:38,height:38,display:"flex",alignItems:"center",justifyContent:"center",
+              background:"transparent",border:`1px solid ${C.border}`,borderRadius:10,cursor:"pointer",color:C.textMuted}}><Pencil size={16}/></button>
+            <button onClick={()=>deletePromo(pm.id)} title="Supprimer" data-testid={`supprimer-promo-${pm.id}`} style={{width:38,height:38,display:"flex",alignItems:"center",justifyContent:"center",
+              background:"transparent",border:`1px solid ${C.danger}44`,borderRadius:10,cursor:"pointer",color:C.danger}}><Trash2 size={16}/></button>
+          </div>
         </div>);})}
       {promos.length===0&&<div style={{textAlign:"center",padding:30,color:C.textLight}}>Aucune promotion configurée</div>}
     </div>
