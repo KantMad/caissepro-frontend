@@ -1089,6 +1089,30 @@ function TypesRetouche({settings,setSettings}){
   </div>);
 }
 
+
+// Envoi des tickets et factures par e-mail : etat du serveur + mail d'essai (admin). Une seule
+// adresse d'envoi pour toutes les boutiques (reglee sur le serveur, .env SMTP_*), affichee au
+// nom de la boutique ; les reponses des clients vont a l'e-mail de la boutique ci-dessus.
+export function EnvoiEmail(){
+  const[etat,setEtat]=useState(null);const[dest,setDest]=useState("");const[envoi,setEnvoi]=useState(false);const[res,setRes]=useState(null);
+  useEffect(()=>{let ok=true;API.settings.emailStatus().then(e=>{if(ok)setEtat(e);}).catch(()=>{if(ok)setEtat(false);});return()=>{ok=false;};},[]);
+  if(etat===null||etat===false)return null;   // chargement, ou compte non admin : rien a montrer
+  const tester=async()=>{if(!dest.trim()||envoi)return;setEnvoi(true);setRes(null);
+    try{await API.settings.emailTest(dest.trim());setRes({ok:true,m:`Mail d'essai envoyé à ${dest.trim()}. Vérifiez la boîte de réception (et les indésirables).`});}
+    catch(e){setRes({ok:false,m:e.message||"Échec de l'envoi"});}
+    finally{setEnvoi(false);}};
+  return(<div data-testid="envoi-email" style={{marginTop:16,padding:12,borderRadius:10,background:C.surfaceAlt,border:`1px solid ${C.border}`}}>
+    <div style={{fontSize:12,fontWeight:700,marginBottom:6}}>Envoi des tickets par e-mail</div>
+    {etat.configured
+      ?<div style={{fontSize:11,color:"#047857",marginBottom:8}}>Activé. Les mails partent de <strong>{etat.from}</strong>, au nom de la boutique.</div>
+      :<div style={{fontSize:11,color:C.danger,marginBottom:8,lineHeight:1.5}}>Pas encore activé sur le serveur : l'adresse d'envoi doit être réglée par Tech in Cash.</div>}
+    {etat.configured&&<div style={{display:"flex",gap:6}}>
+      <Input data-testid="email-essai" type="email" value={dest} onChange={e=>setDest(e.target.value)} placeholder="Votre adresse, pour un mail d'essai" style={{flex:1,height:36}}/>
+      <Btn onClick={tester} disabled={!dest.trim()||envoi} style={{height:36,background:C.primary}}>{envoi?"Envoi…":"Tester l'envoi"}</Btn></div>}
+    {res&&<div style={{fontSize:11,marginTop:6,color:res.ok?"#047857":C.danger}}>{res.m}</div>}
+  </div>);
+}
+
 function SettingsScreen(){
   const{settings,setSettings,saveSettingsToAPI,saveSettingsNotify,addAudit,theme,setTheme,clockEntries,priceHistory,printerConnected,printerType,connectPrinter,disconnectPrinter,thermalPrint,notify,users,hwId,hwProfile,switchHardware,hardwareProfiles,paymentId,paymentConfig,switchPayment,updatePaymentConfig,paymentProfiles,perm,effectiveStoreId,allCategories,products,updateProduct}=useApp();
   if(!perm().canSettings) return <div style={{padding:40,textAlign:"center",color:C.textMuted,fontSize:16,fontWeight:600}}>Accès refusé</div>;
@@ -1107,7 +1131,7 @@ function SettingsScreen(){
           background:tab===t.id?C.primary:"transparent",color:tab===t.id?"#fff":C.text,fontSize:12,fontWeight:600,cursor:"pointer"}}>{t.l}</button>))}</div>
 
     {tab==="general"&&<div style={{maxWidth:500}}>
-      {[{l:"Nom boutique",k:"name"},{l:"Adresse",k:"address"},{l:"Code postal",k:"postalCode"},{l:"Ville",k:"city"},{l:"SIRET",k:"siret"},{l:"N° TVA Intra",k:"tvaIntra"},{l:"Téléphone",k:"phone"},{l:"Forme juridique (factures)",k:"legalForm"},{l:"Capital social (factures)",k:"capital"},{l:"Message ticket",k:"footerMsg"}].map(f=>(
+      {[{l:"Nom boutique",k:"name"},{l:"Adresse",k:"address"},{l:"Code postal",k:"postalCode"},{l:"Ville",k:"city"},{l:"SIRET",k:"siret"},{l:"N° TVA Intra",k:"tvaIntra"},{l:"Téléphone",k:"phone"},{l:"E-mail de la boutique (les clients y répondent)",k:"replyEmail"},{l:"Forme juridique (factures)",k:"legalForm"},{l:"Capital social (factures)",k:"capital"},{l:"Message ticket",k:"footerMsg"}].map(f=>(
         <div key={f.k} style={{marginBottom:10}}><label style={{fontSize:10,fontWeight:600,color:C.textMuted,display:"block",marginBottom:3}}>{f.l}</label>
           <Input value={settings[f.k]||""} onChange={e=>setSettings(s=>({...s,[f.k]:e.target.value}))}/></div>))}
       {/* Borne basse des stats, FEC, exports et journees a cloturer (ventes d'essai d'avant).
@@ -1117,7 +1141,8 @@ function SettingsScreen(){
         <Input type="date" value={(settings.serviceStartDate||"").slice(0,10)} onChange={e=>setSettings(s=>({...s,serviceStartDate:e.target.value}))}/>
         <div style={{fontSize:10,color:C.textMuted,marginTop:4,lineHeight:1.5}}>Premier jour d'utilisation réelle. Les ventes d'essai antérieures sont
           écartées des statistiques, du FEC, des exports et des clôtures (elles restent conservées). Ne la changez pas sans l'accord de votre expert‑comptable.</div></div>
-      <Btn onClick={()=>{saveSettingsNotify(settings,"Paramètres");addAudit("CONFIG","Paramètres mis à jour");}} style={{width:"100%",height:40,marginTop:8,background:C.primary}}><Save size={14}/> Enregistrer</Btn></div>}
+      <Btn onClick={()=>{saveSettingsNotify(settings,"Paramètres");addAudit("CONFIG","Paramètres mis à jour");}} style={{width:"100%",height:40,marginTop:8,background:C.primary}}><Save size={14}/> Enregistrer</Btn>
+      <EnvoiEmail/></div>}
 
     {/* Facture A4 : identite du vendeur. Copiee sur chaque facture A SON EMISSION (API migration 048) :
         un changement ici ne modifie pas les factures deja emises. */}
