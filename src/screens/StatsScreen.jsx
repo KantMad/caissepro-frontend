@@ -10,6 +10,19 @@ import { dayKey, rangeToInstants, previousRange } from "../lib/dates.js";
 import { norm } from "../utils.jsx";
 import RechercheVentesProduit from "./RechercheVentesProduit.jsx";
 
+// Chiffres NETS des retours (MCS 26/11/2026 : un echange faisait une vente de plus et gonflait
+// le CA). Le serveur donne ventes, retours et echanges ; CA net = ventes - retours, et une vente
+// payee en totalite par l'avoir d'un echange n'est pas un ticket de plus. Repli sur le brut
+// (ancienne API sans net_*).
+export function statsNettes(s){
+  const n=(v)=>parseFloat(v)||0;const net=s.net_ttc!==undefined;
+  const count=net?n(s.net_ticket_count):n(s.ticket_count),pieces=net?n(s.net_pieces):n(s.total_pieces);
+  const tTTC=net?n(s.net_ttc):n(s.total_ttc);
+  return{tTTC,tHT:net?n(s.net_ht):n(s.total_ht),margin:net?n(s.net_margin):n(s.total_margin),
+    avg:count?tTTC/count:0,count,pieces,upt:count?pieces/count:0,
+    brutTTC:n(s.total_ttc),retoursTTC:n(s.returns_ttc),nbRetours:n(s.returns_count),echanges:n(s.exchange_count)};
+}
+
 function StatsScreen(){
   const{tickets,products,avoirs,bestSellers:allBestSellers,salesBySeller,salesByVariant,caEvolution,salesByCollection,exportCSVReport,perm,commissions,salesGoals,setSellerGoal,settings,mode}=useApp();
   const[tab,setTab]=useState("ca");
@@ -72,13 +85,10 @@ function StatsScreen(){
   const stats=useMemo(()=>{
     if(!srvStats||catFilter)return statsLocal;   // filtre categorie = calcul local assume
     const n=(v)=>parseFloat(v)||0;
-    const count=n(srvStats.ticket_count),pieces=n(srvStats.total_pieces);
-    return{tTTC:n(srvStats.total_ttc),tHT:n(srvStats.total_ht),margin:n(srvStats.total_margin),
-      avg:count?n(srvStats.total_ttc)/count:0,count,pieces,upt:count?pieces/count:0};
+    return statsNettes(srvStats);
   },[srvStats,statsLocal,catFilter]);
   const prevStats=useMemo(()=>{
-    if(srvPrev&&!catFilter){const n=(v)=>parseFloat(v)||0;const c=n(srvPrev.ticket_count);
-      return{tTTC:n(srvPrev.total_ttc),tHT:n(srvPrev.total_ht),count:c,upt:c?n(srvPrev.total_pieces)/c:0};}
+    if(srvPrev&&!catFilter)return statsNettes(srvPrev);
     const t=prevTickets.reduce((s,t)=>s+(t.totalTTC||parseFloat(t.total_ttc)||0),0);
     const h=prevTickets.reduce((s,t)=>s+(t.totalHT||parseFloat(t.total_ht)||0),0);
     return{tTTC:t,tHT:h,count:prevTickets.length,upt:salesIndex(prevTickets)};},[srvPrev,prevTickets,catFilter]);
@@ -169,9 +179,13 @@ function StatsScreen(){
        :srvErreur?"Totaux indisponibles côté serveur — chiffres calculés sur les 200 derniers tickets chargés."
        :"Chargement du détail de la période… (en attendant : 200 derniers tickets)"}</div>}
     <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:10,marginBottom:16}}>
-      <div><SC icon={Euro} label="CA TTC" value={`${formatAmount(stats.tTTC)}€`} color={C.primary} sub={<PctBadge cur={stats.tTTC} prev={prevStats.tTTC}/>}/></div>
-      <div><SC icon={Euro} label="CA HT" value={`${formatAmount(stats.tHT)}€`} color={C.primary} sub={<PctBadge cur={stats.tHT} prev={prevStats.tHT}/>}/></div>
-      <div><SC icon={Receipt} label="Tickets" value={stats.count} color={C.info} sub={<PctBadge cur={stats.count} prev={prevStats.count}/>}/></div>
+      <div data-testid="carte-ca"><SC icon={Euro} label={stats.retoursTTC?"CA TTC net":"CA TTC"} value={`${formatAmount(stats.tTTC)}€`} color={C.primary} sub={<span>
+        {stats.retoursTTC>0&&<span data-testid="detail-ca" style={{display:"block",marginBottom:2}}>Ventes {formatAmount(stats.brutTTC)}€ · Retours −{formatAmount(stats.retoursTTC)}€</span>}
+        <PctBadge cur={stats.tTTC} prev={prevStats.tTTC}/></span>}/></div>
+      <div><SC icon={Euro} label={stats.retoursTTC?"CA HT net":"CA HT"} value={`${formatAmount(stats.tHT)}€`} color={C.primary} sub={<PctBadge cur={stats.tHT} prev={prevStats.tHT}/>}/></div>
+      <div data-testid="carte-tickets"><SC icon={Receipt} label="Tickets" value={stats.count} color={C.info} sub={<span>
+        {stats.echanges>0&&<span style={{display:"block",marginBottom:2}}>dont {stats.echanges} échange{stats.echanges>1?"s":""}</span>}
+        <PctBadge cur={stats.count} prev={prevStats.count}/></span>}/></div>
       <SC icon={TrendingUp} label="Panier moy." value={`${stats.avg.toFixed(1)}€`} color={C.accent}/>
       <div><SC icon={Receipt} label="Indice de vente" value={stats.upt.toFixed(2)} color={C.info} sub={<span style={{fontSize:10,color:C.textMuted}}>pièces/ticket · {stats.pieces} pièces <PctBadge cur={stats.upt} prev={prevStats.upt}/></span>}/></div>
       {mode!=="cashier"&&<SC icon={BarChart2} label="Marge" value={`${formatAmount(stats.margin)}€`} color="#059669"/>}

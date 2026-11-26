@@ -408,13 +408,14 @@ function DashOverview({onNav}){
     API.sales.bestSellers().then(d=>setApiBest(Array.isArray(d)?d:[])).catch(()=>{});
   },[]);
   // Use backend stats if available, fallback to local computation
-  const margin=apiStats?parseFloat(apiStats.total_margin)||0:tickets.reduce((s,t)=>s+(parseFloat(t.margin)||0),0);
+  // Chiffres nets des retours et echanges (voir statsNettes, StatsScreen)
+  const margin=apiStats?parseFloat(apiStats.net_margin??apiStats.total_margin)||0:tickets.reduce((s,t)=>s+(parseFloat(t.margin)||0),0);
   const todayStr=dayKey();
   const todayTk=tickets.filter(t=>dayKey(new Date(t.date||t.createdAt||t.created_at||0))===todayStr);
-  const todayCA=apiToday?parseFloat(apiToday.total_ttc)||0:todayTk.reduce((s,t)=>s+(t.totalTTC||parseFloat(t.total_ttc)||0),0);
-  const todayCount=apiToday?parseInt(apiToday.ticket_count)||0:todayTk.length;
+  const todayCA=apiToday?parseFloat(apiToday.net_ttc??apiToday.total_ttc)||0:todayTk.reduce((s,t)=>s+(t.totalTTC||parseFloat(t.total_ttc)||0),0);
+  const todayCount=apiToday?parseInt(apiToday.net_ticket_count??apiToday.ticket_count)||0:todayTk.length;
   const todayAvg=todayCount?todayCA/todayCount:0;
-  const totalTickets=apiStats?parseInt(apiStats.ticket_count)||tickets.length:tickets.length;
+  const totalTickets=apiStats?parseInt(apiStats.net_ticket_count??apiStats.ticket_count)||tickets.length:tickets.length;
   const totalCA=apiStats?parseFloat(apiStats.grand_total)||parseFloat(gt)||0:parseFloat(gt)||0;
   const displayBest=apiBest&&apiBest.length?apiBest:bestSellers;
   return(<div style={{height:"100%",overflowY:"auto",padding:24,background:C.bg}}>
