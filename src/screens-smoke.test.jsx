@@ -100,7 +100,7 @@ vi.mock("./api.js", () => {
   };
   for (const n of ["auth", "stock", "giftcards", "parked", "pricehistory", "favorites",
                    "footfall", "retouches", "tenues", "barcodes", "customerDisplay", "backup",
-                   "productPhotos", "health"]) if (!mod[n]) mod[n] = ns();
+                   "productPhotos", "health", "prestataires"]) if (!mod[n]) mod[n] = ns();
   mod.settings = ns({ get: liste({ name: "Boutique", pricingMode: "TTC", gestlogEnabled: true }),
                       registerSessions: liste([SESSION]) });
   return mod;

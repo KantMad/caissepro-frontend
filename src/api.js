@@ -319,6 +319,21 @@ export const retouches = {
   updateStatus: (id, status) => api(`/api/retouches/${id}/status`, { method: 'PUT', body: JSON.stringify({ status }) }),
 };
 
+// ══ Prestataires (retoucheurs, lavage de vitres...) : sommes dues, releves A4, statistiques ══
+export const prestataires = {
+  list: () => api('/api/prestataires'),
+  create: (data) => api('/api/prestataires', { method: 'POST', body: JSON.stringify(data) }),
+  update: (id, data) => api(`/api/prestataires/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  prestations: (params) => api('/api/prestataires/prestations?' + new URLSearchParams(params || {})),
+  ajouterPrestation: (data) => api('/api/prestataires/prestations', { method: 'POST', body: JSON.stringify(data) }),
+  modifierPrestation: (id, data) => api(`/api/prestataires/prestations/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  retirerPrestation: (id) => api(`/api/prestataires/prestations/${id}`, { method: 'DELETE' }),
+  emettreReleve: (id) => api(`/api/prestataires/${id}/releves`, { method: 'POST' }),
+  releves: (params) => api('/api/prestataires/releves?' + new URLSearchParams(params || {})),
+  releveHtml: (rid) => api(`/api/prestataires/releves/${rid}/html`),
+  stats: (params) => api('/api/prestataires/stats?' + new URLSearchParams(params || {})),
+};
+
 // ══ Tenues employé ══
 export const tenues = {
   list: (params) => api('/api/tenues?' + new URLSearchParams(params || {})),

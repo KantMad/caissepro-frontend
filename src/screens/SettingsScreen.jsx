@@ -1052,6 +1052,43 @@ function BackupPanel({notify,addAudit}){
   </div>;
 }
 
+// Types de retouche (Reglages > Retouches) : prix de vente TTC, et depuis le 26/11/2026 le
+// prestataire qui fait le travail + son prix d'achat HT. A la creation d'un bon de retouche, le
+// serveur fige ces deux valeurs sur la ligne due au prestataire (ecran Prestataires).
+const RETOUCHES_DEFAUT=[{n:"Ourlet pantalon",p:15},{n:"Ourlet manches",p:10},{n:"Cintrer veste",p:20},{n:"Raccourcir robe",p:18},{n:"Changer fermeture",p:25},{n:"Reprendre taille",p:15},{n:"Doublure",p:30},{n:"Ajustement épaules",p:22}];
+function TypesRetouche({settings,setSettings}){
+  const[prestas,setPrestas]=useState(null);
+  useEffect(()=>{API.prestataires.list().then(l=>setPrestas((l||[]).filter(p=>p.active))).catch(()=>setPrestas([]));},[]);
+  const types=settings.retoucheTypes||RETOUCHES_DEFAUT;
+  const maj=(fn)=>setSettings(s=>{const t=[...(s.retoucheTypes||RETOUCHES_DEFAUT)];fn(t);return{...s,retoucheTypes:t};});
+  const champ=(i,k,v)=>maj(t=>{t[i]={...t[i],[k]:v};});
+  return(<div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`,marginBottom:14}}>
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}>
+      <h4 style={{fontSize:13,fontWeight:700,margin:0}}>Prestations ({(settings.retoucheTypes||[]).length || "8 par défaut"})</h4>
+      <Btn variant="outline" onClick={()=>maj(t=>{t.push({n:"",p:""});})} style={{fontSize:10,padding:"4px 12px"}}><Plus size={11}/> Ajouter</Btn></div>
+    <div style={{fontSize:11,color:C.textMuted,marginBottom:10,lineHeight:1.5}}>Prestataire et prix d'achat HT : chaque bon de retouche crée la somme due au prestataire (menu Prestataires du tableau de bord).
+      {prestas&&!prestas.length&&<> Aucun prestataire : créez-le d'abord dans le menu <b>Prestataires</b>.</>}</div>
+    <div style={{display:"grid",gridTemplateColumns:"24px 2fr 90px 1.4fr 100px 32px",gap:8,fontSize:9,fontWeight:700,color:C.textMuted,padding:"0 10px 4px"}}>
+      <span/><span>PRESTATION</span><span style={{textAlign:"right"}}>VENTE TTC</span><span>PRESTATAIRE</span><span style={{textAlign:"right"}}>ACHAT HT</span><span/></div>
+    <div style={{display:"flex",flexDirection:"column",gap:8}}>
+      {types.map((rt,i)=>(
+        <div key={i} data-testid={`type-retouche-${i}`} style={{display:"grid",gridTemplateColumns:"24px 2fr 90px 1.4fr 100px 32px",alignItems:"center",gap:8,padding:10,borderRadius:12,background:C.surfaceAlt,border:`1px solid ${C.border}`}}>
+          <span style={{fontSize:12,fontWeight:700,color:C.primary,textAlign:"center"}}>{i+1}</span>
+          <Input value={rt.n} onChange={e=>champ(i,"n",e.target.value)} placeholder="Nom de la prestation" style={{height:36}}/>
+          <Input type="number" step="0.5" value={rt.p} onChange={e=>champ(i,"p",parseFloat(e.target.value)||0)} style={{height:36,textAlign:"right"}}/>
+          <select data-testid={`type-retouche-presta-${i}`} value={rt.pid||""} onChange={e=>champ(i,"pid",e.target.value||undefined)}
+            style={{height:36,borderRadius:10,border:`1.5px solid ${C.border}`,padding:"0 8px",fontSize:12,fontFamily:"inherit",background:C.surface,minWidth:0}}>
+            <option value="">— aucun —</option>
+            {(prestas||[]).map(p=><option key={p.id} value={p.id}>{p.name}</option>)}
+            {rt.pid&&prestas&&!prestas.some(p=>p.id===rt.pid)&&<option value={rt.pid}>(prestataire retiré)</option>}</select>
+          <Input data-testid={`type-retouche-achat-${i}`} type="number" step="0.5" min="0" value={rt.a??""} placeholder="—"
+            onChange={e=>champ(i,"a",e.target.value===""?undefined:Math.max(0,parseFloat(e.target.value)||0))} style={{height:36,textAlign:"right"}}/>
+          <Btn variant="ghost" onClick={()=>maj(t=>{t.splice(i,1);})} style={{padding:"4px 6px",color:C.danger}}><Trash2 size={14}/></Btn>
+        </div>))}
+    </div>
+  </div>);
+}
+
 function SettingsScreen(){
   const{settings,setSettings,saveSettingsToAPI,saveSettingsNotify,addAudit,theme,setTheme,clockEntries,priceHistory,printerConnected,printerType,connectPrinter,disconnectPrinter,thermalPrint,notify,users,hwId,hwProfile,switchHardware,hardwareProfiles,paymentId,paymentConfig,switchPayment,updatePaymentConfig,paymentProfiles,perm,effectiveStoreId,allCategories,products,updateProduct}=useApp();
   if(!perm().canSettings) return <div style={{padding:40,textAlign:"center",color:C.textMuted,fontSize:16,fontWeight:600}}>Accès refusé</div>;
@@ -1101,33 +1138,14 @@ function SettingsScreen(){
           invoiceHeadOffice:settings.invoiceHeadOffice||"",invoiceFooterText:settings.invoiceFooterText||""},"Mentions de facture")}
         style={{width:"100%",height:40,marginTop:8,background:C.primary}}><Save size={14}/> Enregistrer</Btn></div>}
 
-    {tab==="retouche"&&<div style={{maxWidth:650}}>
+    {tab==="retouche"&&<div style={{maxWidth:860}}>
       <div style={{background:C.primaryLight,borderRadius:16,padding:20,border:`1.5px solid ${C.primary}22`,marginBottom:16}}>
         <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:6}}>
           <Scissors size={20} color={C.primary}/>
           <div><h3 style={{fontSize:16,fontWeight:800,margin:0}}>Types de retouches</h3>
             <p style={{fontSize:11,color:C.textMuted,margin:0}}>Configurez les prestations de retouche proposées en caisse. Ces types apparaissent comme boutons rapides dans le bon de retouche.</p></div></div></div>
 
-      <div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`,marginBottom:14}}>
-        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
-          <h4 style={{fontSize:13,fontWeight:700,margin:0}}>Prestations ({(settings.retoucheTypes||[]).length || "8 par défaut"})</h4>
-          <Btn variant="outline" onClick={()=>{const types=[...(settings.retoucheTypes||[{n:"Ourlet pantalon",p:15},{n:"Ourlet manches",p:10},{n:"Cintrer veste",p:20},{n:"Raccourcir robe",p:18},{n:"Changer fermeture",p:25},{n:"Reprendre taille",p:15},{n:"Doublure",p:30},{n:"Ajustement épaules",p:22}]),{n:"",p:""}];
-            setSettings(s=>({...s,retoucheTypes:types}));}} style={{fontSize:10,padding:"4px 12px"}}><Plus size={11}/> Ajouter</Btn></div>
-        <div style={{display:"flex",flexDirection:"column",gap:8}}>
-          {(settings.retoucheTypes||[{n:"Ourlet pantalon",p:15},{n:"Ourlet manches",p:10},{n:"Cintrer veste",p:20},{n:"Raccourcir robe",p:18},{n:"Changer fermeture",p:25},{n:"Reprendre taille",p:15},{n:"Doublure",p:30},{n:"Ajustement épaules",p:22}]).map((rt,i)=>(
-            <div key={i} style={{display:"flex",alignItems:"center",gap:8,padding:10,borderRadius:12,background:C.surfaceAlt,border:`1px solid ${C.border}`}}>
-              <span style={{fontSize:12,fontWeight:700,color:C.primary,width:24,textAlign:"center"}}>{i+1}</span>
-              <Input value={rt.n} onChange={e=>{const types=[...(settings.retoucheTypes||[{n:"Ourlet pantalon",p:15},{n:"Ourlet manches",p:10},{n:"Cintrer veste",p:20},{n:"Raccourcir robe",p:18},{n:"Changer fermeture",p:25},{n:"Reprendre taille",p:15},{n:"Doublure",p:30},{n:"Ajustement épaules",p:22}])];types[i]={...types[i],n:e.target.value};setSettings(s=>({...s,retoucheTypes:types}));}}
-                placeholder="Nom de la prestation" style={{flex:2,height:36}}/>
-              <div style={{display:"flex",alignItems:"center",gap:4}}>
-                <Input type="number" step="0.5" value={rt.p} onChange={e=>{const types=[...(settings.retoucheTypes||[{n:"Ourlet pantalon",p:15},{n:"Ourlet manches",p:10},{n:"Cintrer veste",p:20},{n:"Raccourcir robe",p:18},{n:"Changer fermeture",p:25},{n:"Reprendre taille",p:15},{n:"Doublure",p:30},{n:"Ajustement épaules",p:22}])];types[i]={...types[i],p:parseFloat(e.target.value)||0};setSettings(s=>({...s,retoucheTypes:types}));}}
-                  style={{width:80,height:36,textAlign:"right"}}/>
-                <span style={{fontSize:11,color:C.textMuted}}>€</span></div>
-              <Btn variant="ghost" onClick={()=>{const types=[...(settings.retoucheTypes||[{n:"Ourlet pantalon",p:15},{n:"Ourlet manches",p:10},{n:"Cintrer veste",p:20},{n:"Raccourcir robe",p:18},{n:"Changer fermeture",p:25},{n:"Reprendre taille",p:15},{n:"Doublure",p:30},{n:"Ajustement épaules",p:22}])];types.splice(i,1);setSettings(s=>({...s,retoucheTypes:types}));}}
-                style={{padding:"4px 8px",color:C.danger}}><Trash2 size={14}/></Btn>
-            </div>))}
-        </div>
-      </div>
+      <TypesRetouche settings={settings} setSettings={setSettings}/>
 
       <div style={{background:C.surface,borderRadius:14,padding:16,border:`1.5px solid ${C.border}`,marginBottom:14}}>
         <h4 style={{fontSize:13,fontWeight:700,marginBottom:8}}>Paramètres du bon de retouche</h4>

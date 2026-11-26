@@ -38,11 +38,11 @@ export function grilleVentes(rows, ordre = "desc") {
   return { produits: liste, tailles: [...tailles].sort(sortSizes), total: tot };
 }
 
-const PERIODES = [
+export const PERIODES = [
   { id: "jour", l: "Aujourd'hui" }, { id: "7j", l: "7 jours" }, { id: "mois", l: "Ce mois" },
   { id: "moisPrec", l: "Mois dernier" }, { id: "annee", l: "Cette année" }, { id: "perso", l: "Dates…" },
 ];
-function bornesPeriode(id) {
+export function bornesPeriode(id) {
   const n = new Date();
   const k = (y, m, d) => dayKey(new Date(y, m, d));
   switch (id) {
