@@ -7,11 +7,13 @@ import { EAN13Svg, ean13SvgHtml, norm } from "../utils.jsx";
 import { Modal, Btn, Input, Badge } from "../ui.jsx";
 import { useApp } from "../context.jsx";
 import FactureDialog from "../FactureDialog.jsx";
+import EmailTicketDialog from "./EmailTicketDialog.jsx";
 import { getPaymentLabel, getAvoirRemaining, isAvoirPartiallyUsed, lineDiscountEuro, globalDiscountTTC, ratioRemiseGlobale, tvaParTaux, libelleTaux, libellePaiementTicket, pointsFidelite, donneesAvoir, detailVariante } from "../lib/formatters.js";
 import { dayKey } from "../lib/dates.js";
 
 function HistoryScreen(){
   const{tickets,setTickets,avoirs,settings,processReturn,perm:p,printerConnected,thermalPrint,setSelectedAvoir,setMode,notify,customers,setCustomers,addCustomer,retoucheBons,updateRetoucheStatus,scanBarcode,setScanBarcode,trainingMode}=useApp();
+  const[emailTk,setEmailTk]=useState(null);
   const[tab,setTab]=useState("tickets");const[reprintTk,setReprintTk]=useState(null);const[reassignModal,setReassignModal]=useState(null);const[reassignCust,setReassignCust]=useState(null);
   // Changer le client d'un ticket : recherche + creation sur place (demande MCS, 03/11/2026 : relier
   // une vente deja encaissee a un client qui n'avait pas encore de fiche)
@@ -299,9 +301,10 @@ function HistoryScreen(){
         <Btn variant="outline" onClick={()=>{setReassignModal(tk);setReassignCust(null);setReassignQ("");setNouveauClient(null);}} style={{flex:1}}><UserIcon size={14}/> Client</Btn>
         {/* Facture (clients professionnels) : ouverte a tous les comptes, numero attribue par le serveur */}
         {!trainingMode&&<Btn variant="outline" onClick={()=>{setReprintTk(null);setFactureTk(tk);}} style={{flex:1}}><FileText size={14}/> Facture</Btn>}
-        <Btn variant="outline" onClick={()=>{const s=encodeURIComponent(`Ticket ${tkNum} — ${settings.name||CO.name}`);
-          const b=encodeURIComponent(`Bonjour,\n\nTicket N°${tkNum}\nDate: ${tkDateStr}\nTotal: ${tkTTC.toFixed(2)}€\n\n${settings.name||CO.name}\nSIRET: ${settings.siret||CO.siret}`);
-          window.open(`mailto:?subject=${s}&body=${b}`);}} style={{flex:1}}><Mail size={14}/> Email</Btn>
+        {/* Email : envoi par le serveur (ticket complet, au nom de la boutique). Avant : mailto vide. */}
+        {!trainingMode&&<Btn data-testid="historique-email" variant="outline" onClick={()=>{
+          const cid=tk.customerId||tk.customer_id;const cl=cid?(customers||[]).find(c=>String(c.id)===String(cid)):null;
+          setReprintTk(null);setEmailTk({tk,email:cl?.email||tk.customerEmail||tk.customer_email||""});}} style={{flex:1}}><Mail size={14}/> Email</Btn>}
         {p().canVoid&&<Btn variant="danger" onClick={()=>{setReprintTk(null);openReturn(tk);}} style={{flex:1}}><RotateCcw size={14}/> Retour</Btn>}
       </div></>);
       }catch(err){
@@ -314,6 +317,8 @@ function HistoryScreen(){
         </div>);
       }})()}
     </Modal>
+
+    {emailTk&&<EmailTicketDialog ticket={emailTk.tk} emailInitial={emailTk.email} notify={notify} onClose={()=>setEmailTk(null)}/>}
 
     {/* Return modal */}
     <Modal open={!!returnModal} onClose={()=>setReturnModal(null)} title={`Retour — Ticket ${returnModal?.ticketNumber}`} wide>
